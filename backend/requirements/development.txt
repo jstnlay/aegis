@@ -1,0 +1,2 @@
+# AEGIS Backend - Development Requirements
+-r base.txt
