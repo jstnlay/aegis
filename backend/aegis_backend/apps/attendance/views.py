@@ -23,6 +23,14 @@ from .serializers import (
     AttendanceSummarySerializer,
 )
 
+# ---------------------------------------------------------------------------
+# Attendance domain constants
+# ---------------------------------------------------------------------------
+
+# School policy: number of absences that triggers a parent notification.
+# Will be replaced by SystemSetting lookup when CMS module is built (Phase 7).
+ABSENCE_THRESHOLD = 3
+
 
 # ---------------------------------------------------------------------------
 # Helpers (duplicated from academics — see Decision G: no cross-phase refactoring)
@@ -227,6 +235,40 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
             status=data["status"],
             recorded_by=fp,
         )
+
+        # ATTENDANCE_THRESHOLD check (EVT-02)
+        if record.status == AttendanceRecord.Status.ABSENT:
+            academic_year = section.academic_year
+            absence_count = AttendanceRecord.objects.filter(
+                student=student,
+                section__academic_year=academic_year,
+                status=AttendanceRecord.Status.ABSENT,
+            ).count()
+
+            if absence_count >= ABSENCE_THRESHOLD:
+                from apps.notifications.events import dispatch_event
+                from apps.accounts.models import ParentStudentLink
+
+                parent_links = ParentStudentLink.objects.filter(
+                    student=student
+                ).select_related("parent__user")
+                recipients = [pl.parent.user for pl in parent_links]
+
+                dedup_key = f"attendance_threshold:{student.id}:{academic_year.id}"
+
+                dispatch_event(
+                    "ATTENDANCE_THRESHOLD",
+                    recipients=recipients,
+                    sender=None,
+                    title="Attendance Alert",
+                    message=(
+                        f"{student.user.get_full_name()} has reached "
+                        f"{absence_count} absences this academic year."
+                    ),
+                    link=f"/attendance/summary?student={student.id}",
+                    deduplication_key=dedup_key,
+                )
+
         output = AttendanceRecordSerializer(record, context={"request": request})
         return Response(output.data, status=status.HTTP_201_CREATED)
 

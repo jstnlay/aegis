@@ -556,6 +556,26 @@ class GradeViewSet(viewsets.ModelViewSet):
             )
         grade.status = Grade.StatusChoices.FINALIZED
         grade.save()
+
+        # GRADE_POSTED notification (EVT-01)
+        from apps.notifications.events import dispatch_event
+        from apps.accounts.models import ParentStudentLink
+
+        student_user = grade.student.user
+        parent_links = ParentStudentLink.objects.filter(
+            student=grade.student
+        ).select_related("parent__user")
+        recipients = [student_user] + [pl.parent.user for pl in parent_links]
+
+        dispatch_event(
+            "GRADE_POSTED",
+            recipients=recipients,
+            sender=None,
+            title="Grade Posted",
+            message=f"Your grade for {grade.subject_assignment.subject.name} has been finalized.",
+            link=f"/academics/grades/{grade.id}",
+        )
+
         output = GradeSerializer(grade, context={"request": request})
         return Response(output.data)
 

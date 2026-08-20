@@ -45,7 +45,7 @@ LOCAL_APPS = [
     # "apps.analytics",
     # "apps.cms",
     # "apps.data_import",
-    # "apps.notifications",
+    "apps.notifications",
     # "apps.audit",
 ]
 
