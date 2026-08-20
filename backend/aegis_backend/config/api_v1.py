@@ -9,4 +9,5 @@ from django.urls import path, include
 urlpatterns = [
     path("auth/", include("apps.accounts.urls.auth")),
     path("accounts/", include("apps.accounts.urls.accounts")),
+    path("academics/", include("apps.academics.urls.academics")),
 ]
