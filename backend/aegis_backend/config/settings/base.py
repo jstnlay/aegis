@@ -39,7 +39,7 @@ THIRD_PARTY_APPS = [
 LOCAL_APPS = [
     "apps.accounts",
     "apps.academics",  # Stub models needed by accounts FK references
-    # "apps.attendance",
+    "apps.attendance",
     # "apps.guidance",
     # "apps.assessments",
     # "apps.analytics",
