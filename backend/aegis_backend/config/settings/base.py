@@ -41,7 +41,7 @@ LOCAL_APPS = [
     "apps.academics",  # Stub models needed by accounts FK references
     "apps.attendance",
     "apps.guidance",
-    # "apps.assessments",
+    "apps.assessments",
     # "apps.analytics",
     # "apps.cms",
     # "apps.data_import",
