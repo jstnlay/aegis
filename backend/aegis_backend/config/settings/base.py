@@ -43,7 +43,7 @@ LOCAL_APPS = [
     "apps.guidance",
     "apps.assessments",
     # "apps.analytics",
-    # "apps.cms",
+    "apps.cms",  # Phase 7: Strapi integration adapter (webhook + read-through proxy)
     # "apps.data_import",
     "apps.notifications",
     # "apps.audit",
@@ -196,6 +196,18 @@ SIMPLE_JWT = {
 
 CORS_ALLOWED_ORIGINS = config("CORS_ALLOWED_ORIGINS", default="", cast=Csv())
 CORS_ALLOW_CREDENTIALS = True
+
+# ---------------------------------------------------------------------------
+# Strapi CMS integration (Phase 7)
+#
+# STRAPI_API_TOKEN and STRAPI_WEBHOOK_SECRET are server-side-only
+# credentials. In development they are loaded from cms/.env (see
+# development.py); in production set them via the environment.
+# ---------------------------------------------------------------------------
+
+STRAPI_BASE_URL = config("STRAPI_BASE_URL", default="http://localhost:1337")
+STRAPI_API_TOKEN = config("STRAPI_API_TOKEN", default="")
+STRAPI_WEBHOOK_SECRET = config("STRAPI_WEBHOOK_SECRET", default="")
 
 # ---------------------------------------------------------------------------
 # Logging

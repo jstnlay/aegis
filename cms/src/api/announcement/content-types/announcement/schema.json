@@ -1,0 +1,56 @@
+{
+  "kind": "collectionType",
+  "collectionName": "announcements",
+  "info": {
+    "singularName": "announcement",
+    "pluralName": "announcements",
+    "displayName": "Announcement",
+    "description": "School announcements published to AEGIS roles/sections"
+  },
+  "options": {
+    "draftAndPublish": true,
+    "comment": ""
+  },
+  "attributes": {
+    "title": {
+      "type": "string",
+      "required": true,
+      "maxLength": 255
+    },
+    "content": {
+      "type": "richtext",
+      "required": true
+    },
+    "announcement_type": {
+      "type": "enumeration",
+      "enum": [
+        "news",
+        "event",
+        "alert",
+        "academic"
+      ],
+      "default": "news",
+      "required": true
+    },
+    "priority": {
+      "type": "enumeration",
+      "enum": [
+        "normal",
+        "high",
+        "urgent"
+      ],
+      "default": "normal",
+      "required": true
+    },
+    "target_roles": {
+      "type": "json",
+      "default": ["all"]
+    },
+    "target_sections": {
+      "type": "json"
+    },
+    "expires_at": {
+      "type": "datetime"
+    }
+  }
+}

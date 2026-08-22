@@ -14,4 +14,7 @@ urlpatterns = [
     path("guidance/", include("apps.guidance.urls.guidance")),
     path("notifications/", include("apps.notifications.urls")),
     path("assessments/", include("apps.assessments.urls")),
+    # CMS read-through proxy (Phase 7): content lives in Strapi,
+    # access rules stay in Django.
+    path("cms/", include("apps.cms.urls")),
 ]

@@ -1,0 +1,54 @@
+{
+  "kind": "collectionType",
+  "collectionName": "resources",
+  "info": {
+    "singularName": "resource",
+    "pluralName": "resources",
+    "displayName": "Resource",
+    "description": "School resources (documents, links, videos) for AEGIS audiences"
+  },
+  "options": {
+    "draftAndPublish": false,
+    "comment": ""
+  },
+  "attributes": {
+    "title": {
+      "type": "string",
+      "required": true,
+      "maxLength": 255
+    },
+    "description": {
+      "type": "text"
+    },
+    "resource_type": {
+      "type": "enumeration",
+      "enum": [
+        "document",
+        "link",
+        "video",
+        "other"
+      ],
+      "default": "document",
+      "required": true
+    },
+    "file": {
+      "type": "media",
+      "multiple": false,
+      "required": false,
+      "allowedTypes": [
+        "files"
+      ]
+    },
+    "url": {
+      "type": "string"
+    },
+    "target_audience": {
+      "type": "json",
+      "default": ["all"]
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true
+    }
+  }
+}

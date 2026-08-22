@@ -44,3 +44,11 @@ htmlcov/
 # Local development artifacts
 *.local
 local_settings.py
+
+# Strapi CMS (Phase 7)
+cms/node_modules/
+cms/.env
+cms/dist/
+cms/.strapi/
+cms/public/uploads/
+cms/*.log
