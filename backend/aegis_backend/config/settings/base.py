@@ -171,8 +171,19 @@ REST_FRAMEWORK = {
         "rest_framework.renderers.JSONRenderer",
         "rest_framework.renderers.BrowsableAPIRenderer",
     ],
-    "DEFAULT_THROTTLE_CLASSES": [],
-    "DEFAULT_THROTTLE_RATES": {},
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        # Global ceilings (defense against runaway clients/scanners).
+        "anon": "120/min",
+        "user": "600/min",
+        # Endpoint-specific high-risk caps (core/throttling.py scopes).
+        "login": "15/min",
+        "token_refresh": "30/min",
+        "webhook": "60/min",
+    },
     "EXCEPTION_HANDLER": "core.exceptions.custom_exception_handler",
 }
 

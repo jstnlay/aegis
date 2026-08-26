@@ -4,6 +4,7 @@ from .views import (
     CmsAnnouncementDetail,
     CmsAnnouncementList,
     CmsResourceDetail,
+    CmsResourceFileDownload,
     CmsResourceList,
 )
 
@@ -21,5 +22,11 @@ urlpatterns = [
         "resources/<str:document_id>/",
         CmsResourceDetail.as_view(),
         name="cms-resource-detail",
+    ),
+    # SEC-007: authorized download proxy for Strapi-hosted Resource files.
+    path(
+        "resources/<str:document_id>/file/",
+        CmsResourceFileDownload.as_view(),
+        name="cms-resource-file",
     ),
 ]

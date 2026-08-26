@@ -517,6 +517,25 @@ class GradeViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
+        # SEC-013: Grading period must belong to same academic year
+        if gp.academic_year_id != sa.academic_year_id:
+            return Response(
+                {"detail": "Grading period does not belong to the same academic year as the subject assignment."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # SEC-013: Student must have valid enrollment for this section/academic year
+        if not Enrollment.objects.filter(
+            student=student,
+            section=sa.section,
+            academic_year=sa.academic_year,
+            is_active=True,
+        ).exists():
+            return Response(
+                {"detail": "Student is not enrolled in the section for this subject assignment's academic year."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         # Check uniqueness
         if Grade.objects.filter(
             student=student,

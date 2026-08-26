@@ -214,6 +214,44 @@ class GradeSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"score": "A finalized grade must have a score."}
             )
+
+        # SEC-013: Enrollment / section integrity validation
+        student = data.get("student") or (
+            self.instance.student if self.instance else None
+        )
+        sa = data.get("subject_assignment") or (
+            self.instance.subject_assignment if self.instance else None
+        )
+        gp = data.get("grading_period") or (
+            self.instance.grading_period if self.instance else None
+        )
+
+        if student and sa and gp:
+            if gp.academic_year_id != sa.academic_year_id:
+                raise serializers.ValidationError(
+                    {
+                        "grading_period": (
+                            "Grading period does not belong to the same "
+                            "academic year as the subject assignment."
+                        )
+                    }
+                )
+
+            if not Enrollment.objects.filter(
+                student=student,
+                section=sa.section,
+                academic_year=sa.academic_year,
+                is_active=True,
+            ).exists():
+                raise serializers.ValidationError(
+                    {
+                        "student": (
+                            "Student is not enrolled in the section for "
+                            "this subject assignment's academic year."
+                        )
+                    }
+                )
+
         return data
 
 

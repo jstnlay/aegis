@@ -26,7 +26,16 @@ from apps.academics.models import AcademicYear, GradeLevel, Section, Enrollment 
 
 User = get_user_model()
 
-PASSWORD = "Phase7Demo!2026"
+# ---------------------------------------------------------------------------
+# SEC-012: password is never stored in tracked source code.
+# ---------------------------------------------------------------------------
+PASSWORD = os.environ.get("PHASE7_E2E_PASSWORD")
+if not PASSWORD or not PASSWORD.strip():
+    print(
+        "ERROR: PHASE7_E2E_PASSWORD environment variable is not set or empty.\n"
+        "Set it before running this script."
+    )
+    sys.exit(1)
 
 USERS = [
     ("e2e.admin@aegis.dev", "admin"),

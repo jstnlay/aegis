@@ -503,7 +503,11 @@ class ParentScopedQuerysetTest(AcademicsTestBase):
         self.assertEqual(response.data["count"], 1)
 
     def test_parent_does_not_see_other_student(self):
-        # Create grade for student2
+        # Create grade for student2 — must have enrollment in section_a
+        Enrollment.objects.get_or_create(
+            student=self.student2_profile, section=self.section_a,
+            academic_year=self.ay, defaults={"date_enrolled": "2025-06-01"},
+        )
         Grade.objects.create(
             student=self.student2_profile, subject_assignment=self.sa_science,
             grading_period=self.gp1, score=Decimal("75.00"),
@@ -534,7 +538,7 @@ class GradeEncodeActionTest(AcademicsTestBase):
         response = self.client.post(
             "/api/v1/academics/grades/encode/",
             {
-                "student": str(self.student2_profile.id),
+                "student": str(self.student_profile.id),
                 "subject_assignment": str(self.sa_math.id),
                 "grading_period": str(self.gp2.id),
                 "score": "92.50",
@@ -751,3 +755,269 @@ class GuidanceReadOnlyTest(AcademicsTestBase):
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+# ---------------------------------------------------------------------------
+# SEC-013 regression tests: grade encoding enrollment / section integrity
+# ---------------------------------------------------------------------------
+
+
+class SEC013GradeEnrollmentIntegrityTest(AcademicsTestBase):
+    """
+    Regression tests for SEC-013.
+
+    Grade records must not be created/encoded without verifying that the
+    student is enrolled in the relevant section and academic year.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {self._get_token(self.faculty_user)}"
+        )
+
+    @staticmethod
+    def _get_token(user):
+        from rest_framework_simplejwt.tokens import RefreshToken
+        return str(RefreshToken.for_user(user).access_token)
+
+    # A — valid active enrollment → grade creation succeeds
+    def test_A_valid_enrollment_succeeds(self):
+        response = self.client.post(
+            "/api/v1/academics/grades/encode/",
+            {
+                "student": str(self.student_profile.id),
+                "subject_assignment": str(self.sa_math.id),
+                "grading_period": str(self.gp2.id),
+                "score": "88.00",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    # B — no enrollment → grade creation rejected
+    def test_B_no_enrollment_rejected(self):
+        # student2_profile is enrolled in section_b, not section_a
+        response = self.client.post(
+            "/api/v1/academics/grades/encode/",
+            {
+                "student": str(self.student2_profile.id),
+                "subject_assignment": str(self.sa_math.id),
+                "grading_period": str(self.gp1.id),
+                "score": "75.00",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Grade.objects.count(), 1)
+
+    # C — inactive enrollment → rejected
+    def test_C_inactive_enrollment_rejected(self):
+        self.enrollment1.is_active = False
+        self.enrollment1.save()
+        response = self.client.post(
+            "/api/v1/academics/grades/encode/",
+            {
+                "student": str(self.student_profile.id),
+                "subject_assignment": str(self.sa_math.id),
+                "grading_period": str(self.gp2.id),
+                "score": "88.00",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    # D — enrollment from wrong academic year → rejected
+    def test_D_wrong_academic_year_rejected(self):
+        ay2 = AcademicYear.objects.create(
+            name="2024-2025", start_date="2024-06-01",
+            end_date="2025-03-31", is_current=False,
+        )
+        # Remove the correct-year enrollment so only the wrong-year one exists
+        Enrollment.objects.filter(
+            student=self.student_profile, section=self.section_a,
+            academic_year=self.ay,
+        ).delete()
+        Enrollment.objects.create(
+            student=self.student_profile, section=self.section_a,
+            academic_year=ay2, date_enrolled="2024-06-01",
+        )
+        response = self.client.post(
+            "/api/v1/academics/grades/encode/",
+            {
+                "student": str(self.student_profile.id),
+                "subject_assignment": str(self.sa_math.id),
+                "grading_period": str(self.gp1.id),
+                "score": "80.00",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    # E — wrong section for the student's enrollment → rejected
+    def test_E_wrong_section_rejected(self):
+        # student2 is enrolled in section_b, sa_math is section_a
+        response = self.client.post(
+            "/api/v1/academics/grades/encode/",
+            {
+                "student": str(self.student2_profile.id),
+                "subject_assignment": str(self.sa_math.id),
+                "grading_period": str(self.gp2.id),
+                "score": "70.00",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    # F — grading period from wrong academic year → rejected
+    def test_F_wrong_grading_period_year_rejected(self):
+        ay2 = AcademicYear.objects.create(
+            name="2024-2025", start_date="2024-06-01",
+            end_date="2025-03-31", is_current=False,
+        )
+        gp_other = GradingPeriod.objects.create(
+            academic_year=ay2, name="1st Quarter", order=1,
+            start_date="2024-06-01", end_date="2024-08-31",
+        )
+        response = self.client.post(
+            "/api/v1/academics/grades/encode/",
+            {
+                "student": str(self.student_profile.id),
+                "subject_assignment": str(self.sa_math.id),
+                "grading_period": str(gp_other.id),
+                "score": "85.00",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    # G — valid historical enrollment for the grade's academic year → succeeds
+    def test_G_valid_historical_enrollment_succeeds(self):
+        ay_prev = AcademicYear.objects.create(
+            name="2024-2025", start_date="2024-06-01",
+            end_date="2025-03-31", is_current=False,
+        )
+        g7_prev = GradeLevel.objects.create(name="Grade 7 (Prev)", level_number=70)
+        sec_prev = Section.objects.create(
+            name="PrevSection", grade_level=g7_prev, academic_year=ay_prev,
+        )
+        math_prev = Subject.objects.create(
+            name="Math Prev", code="MATH7P", grade_level=g7_prev,
+        )
+        sa_prev = SubjectAssignment.objects.create(
+            subject=math_prev, faculty=self.faculty_profile,
+            section=sec_prev, academic_year=ay_prev,
+        )
+        gp_prev = GradingPeriod.objects.create(
+            academic_year=ay_prev, name="1st Quarter", order=1,
+            start_date="2024-06-01", end_date="2024-08-31",
+        )
+        Enrollment.objects.create(
+            student=self.student_profile, section=sec_prev,
+            academic_year=ay_prev, date_enrolled="2024-06-01",
+        )
+        response = self.client.post(
+            "/api/v1/academics/grades/encode/",
+            {
+                "student": str(self.student_profile.id),
+                "subject_assignment": str(sa_prev.id),
+                "grading_period": str(gp_prev.id),
+                "score": "90.00",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    # H — valid grade update remains allowed
+    def test_H_valid_grade_update_allowed(self):
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {self._get_token(self.admin_user)}"
+        )
+        response = self.client.patch(
+            f"/api/v1/academics/grades/{self.grade1.id}/",
+            {"score": "88.00"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    # I — update attempting to move grade to invalid combination → rejected
+    def test_I_invalid_update_rejected(self):
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {self._get_token(self.admin_user)}"
+        )
+        new_section = Section.objects.create(
+            name="NewSection", grade_level=self.g8, academic_year=self.ay,
+        )
+        math8 = Subject.objects.create(
+            name="Math 8", code="MATH8", grade_level=self.g8,
+        )
+        sa_new = SubjectAssignment.objects.create(
+            subject=math8, faculty=self.faculty_profile,
+            section=new_section, academic_year=self.ay,
+        )
+        response = self.client.patch(
+            f"/api/v1/academics/grades/{self.grade1.id}/",
+            {"subject_assignment": str(sa_new.id)},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    # J — client cannot bypass validation by supplying different combination
+    def test_J_cannot_bypass_enrollment_validation(self):
+        response = self.client.post(
+            "/api/v1/academics/grades/encode/",
+            {
+                "student": str(self.student2_profile.id),
+                "subject_assignment": str(self.sa_math.id),
+                "grading_period": str(self.gp2.id),
+                "score": "77.00",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    # K — authorized faculty can still encode grades
+    def test_K_authorized_faculty_can_encode(self):
+        response = self.client.post(
+            "/api/v1/academics/grades/encode/",
+            {
+                "student": str(self.student_profile.id),
+                "subject_assignment": str(self.sa_math.id),
+                "grading_period": str(self.gp2.id),
+                "score": "91.00",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    # L — unauthorized faculty cannot encode outside scope
+    def test_L_unauthorized_faculty_cannot_encode(self):
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {self._get_token(self.faculty2_user)}"
+        )
+        response = self.client.post(
+            "/api/v1/academics/grades/encode/",
+            {
+                "student": str(self.student_profile.id),
+                "subject_assignment": str(self.sa_math.id),
+                "grading_period": str(self.gp2.id),
+                "score": "80.00",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    # M — existing grade-reading permissions remain unchanged
+    def test_M_grade_reading_permissions_unchanged(self):
+        response = self.client.get("/api/v1/academics/grades/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    # N — existing academic tests remain green (spot-check model validation)
+    def test_N_model_score_validation_intact(self):
+        g = Grade(
+            student=self.student_profile, subject_assignment=self.sa_math,
+            grading_period=self.gp1, score=Decimal("150.00"),
+            encoded_by=self.faculty_profile, status=Grade.StatusChoices.DRAFT,
+        )
+        with self.assertRaises(ValidationError):
+            g.full_clean()

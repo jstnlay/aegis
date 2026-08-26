@@ -1,7 +1,10 @@
 import type { Core } from '@strapi/strapi';
 
 const config = ({ env }: Core.Config.Shared.ConfigParams): Core.Config.Server => ({
-  host: env('HOST', '0.0.0.0'),
+  // SEC-006: bind narrowly by default so Strapi stays an internal CMS
+  // service. Production deployments that must accept external traffic
+  // set HOST explicitly (e.g. behind a reverse proxy / private network).
+  host: env('HOST', 'localhost'),
   port: env.int('PORT', 1337),
   app: {
     keys: env.array('APP_KEYS')!,

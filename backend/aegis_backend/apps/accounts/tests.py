@@ -2,19 +2,30 @@
 Phase 1 test suite for AEGIS accounts.
 
 Covers: user creation, password hashing, role choices, JWT login,
-role permission classes, and parent/student relationships.
+role permission classes, parent/student relationships, SEC-001
+self-service privilege escalation, SEC-002 auth throttling, and
+SEC-003 logout / refresh-token revocation.
 """
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.core.cache import cache
+from django.test import TestCase, override_settings
+from pathlib import Path
 from rest_framework import status
 from rest_framework.test import APIClient
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken
+from unittest import mock
+import os
+import re
+import subprocess
+import sys
 
 from apps.accounts.models import (
     ParentProfile,
     ParentStudentLink,
     StudentProfile,
 )
+from core.throttling import LoginRateThrottle, TokenRefreshRateThrottle
 
 User = get_user_model()
 
@@ -408,3 +419,717 @@ class ParentStudentRelationshipTest(TestCase):
         expected = {"mother", "father", "guardian", "other"}
         actual = {c[0] for c in ParentProfile.RelationshipType.choices}
         self.assertEqual(actual, expected)
+
+
+# ---------------------------------------------------------------------------
+# SEC-001 regression tests: self-service privilege escalation
+# ---------------------------------------------------------------------------
+
+
+class SEC001SelfServicePrivilegeEscalationTest(TestCase):
+    """
+    Regression tests for SEC-001.
+
+    PATCH /api/v1/accounts/me/ must accept only legitimate profile fields.
+    role, is_active, email and username are server-controlled and must be
+    ignored (and never persisted) when submitted by any authenticated user.
+    """
+
+    def setUp(self):
+        self.client = APIClient()
+        self.me_url = "/api/v1/accounts/me/"
+        self.login_url = "/api/v1/auth/login/"
+        self.users = {}
+        for role in ("student", "parent", "faculty", "guidance"):
+            self.users[role] = User.objects.create_user(
+                email=f"sec001_{role}@example.com",
+                password="pass12345",
+                first_name="Sec",
+                last_name=role.title(),
+                role=role,
+            )
+
+    def _authenticate(self, user, password="pass12345"):
+        """Log in through the real JWT endpoint to prove end-to-end behavior."""
+        response = self.client.post(
+            self.login_url,
+            {"email": user.email, "password": password},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {response.data['access']}")
+
+    # A-D: no non-admin role can escalate to admin via PATCH /me/
+
+    def test_student_cannot_self_assign_admin_role(self):
+        user = self.users["student"]
+        self._authenticate(user)
+        response = self.client.patch(self.me_url, {"role": "admin"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        user.refresh_from_db()
+        self.assertEqual(user.role, "student")
+        self.assertEqual(response.data["role"], "student")
+
+    def test_parent_cannot_self_assign_admin_role(self):
+        user = self.users["parent"]
+        self._authenticate(user)
+        response = self.client.patch(self.me_url, {"role": "admin"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        user.refresh_from_db()
+        self.assertEqual(user.role, "parent")
+        self.assertEqual(response.data["role"], "parent")
+
+    def test_faculty_cannot_self_assign_admin_role(self):
+        user = self.users["faculty"]
+        self._authenticate(user)
+        response = self.client.patch(self.me_url, {"role": "admin"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        user.refresh_from_db()
+        self.assertEqual(user.role, "faculty")
+        self.assertEqual(response.data["role"], "faculty")
+
+    def test_guidance_cannot_self_assign_admin_role(self):
+        user = self.users["guidance"]
+        self._authenticate(user)
+        response = self.client.patch(self.me_url, {"role": "admin"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        user.refresh_from_db()
+        self.assertEqual(user.role, "guidance")
+        self.assertEqual(response.data["role"], "guidance")
+
+    # E: account-state fields cannot be modified by self-service
+
+    def test_cannot_deactivate_own_account_via_me(self):
+        user = self.users["student"]
+        self._authenticate(user)
+        response = self.client.patch(
+            self.me_url, {"is_active": False}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        user.refresh_from_db()
+        self.assertTrue(user.is_active)
+        self.assertTrue(response.data["is_active"])
+
+    def test_combined_escalation_payload_is_rejected(self):
+        user = self.users["student"]
+        self._authenticate(user)
+        response = self.client.patch(
+            self.me_url,
+            {"role": "admin", "is_active": True},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        user.refresh_from_db()
+        self.assertEqual(user.role, "student")
+        self.assertNotEqual(response.data["role"], "admin")
+
+    def test_cannot_change_login_email_via_me(self):
+        user = self.users["student"]
+        self._authenticate(user)
+        response = self.client.patch(
+            self.me_url,
+            {
+                "email": "hijacked@example.com",
+                "first_name": "Still",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        user.refresh_from_db()
+        self.assertEqual(user.email, "sec001_student@example.com")
+        self.assertEqual(user.first_name, "Still")
+        self.assertEqual(response.data["email"], "sec001_student@example.com")
+
+    def test_privilege_fields_still_visible_on_get(self):
+        """Users may SEE their role/status; they just cannot change them."""
+        user = self.users["student"]
+        self._authenticate(user)
+        response = self.client.get(self.me_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["email"], user.email)
+        self.assertEqual(response.data["role"], "student")
+        self.assertIn("is_active", response.data)
+
+    def test_anonymous_patch_denied(self):
+        response = self.client.patch(self.me_url, {"role": "admin"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    # F: legitimate self-service profile editing still works
+
+    def test_legitimate_profile_fields_update(self):
+        user = self.users["student"]
+        self._authenticate(user)
+        payload = {
+            "first_name": "UpdatedFirst",
+            "last_name": "UpdatedLast",
+            "phone_number": "+63 917 000 0000",
+            "address": "123 Remediation St., Quezon City",
+            "language_preference": "en",
+        }
+        response = self.client.patch(self.me_url, payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        user.refresh_from_db()
+        for field, expected in payload.items():
+            self.assertEqual(getattr(user, field), expected)
+            self.assertEqual(response.data[field], expected)
+
+    def test_profile_edit_survives_with_malicious_fields_present(self):
+        """Profile fields persist even when the same request smuggles
+        privilege/account-state fields."""
+        user = self.users["faculty"]
+        self._authenticate(user)
+        response = self.client.patch(
+            self.me_url,
+            {
+                "phone_number": "+63 918 111 2222",
+                "role": "admin",
+                "is_active": False,
+                "email": "evil@example.com",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        user.refresh_from_db()
+        self.assertEqual(user.phone_number, "+63 918 111 2222")
+        self.assertEqual(user.role, "faculty")
+        self.assertTrue(user.is_active)
+        self.assertEqual(user.email, "sec001_faculty@example.com")
+
+    # G: existing administrator paths still work
+
+    def test_admin_can_create_user_with_role_via_api(self):
+        admin = User.objects.create_superuser(
+            email="sec001_admin@example.com",
+            password="adminpass123",
+            first_name="Sec",
+            last_name="Admin",
+        )
+        self._authenticate(admin, password="adminpass123")
+        response = self.client.post(
+            "/api/v1/accounts/users/create/",
+            {
+                "email": "new_faculty@example.com",
+                "username": "",
+                "first_name": "New",
+                "last_name": "Faculty",
+                "role": "faculty",
+                "password": "securepass123",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        created = User.objects.get(email="new_faculty@example.com")
+        self.assertEqual(created.role, "faculty")
+
+    def test_admin_user_list_and_detail_still_work(self):
+        admin = User.objects.create_superuser(
+            email="sec001_admin2@example.com",
+            password="adminpass123",
+            first_name="Sec",
+            last_name="Admin",
+        )
+        self._authenticate(admin, password="adminpass123")
+        list_response = self.client.get("/api/v1/accounts/users/")
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+
+        target = self.users["student"]
+        detail_response = self.client.get(f"/api/v1/accounts/users/{target.id}/")
+        self.assertEqual(detail_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(detail_response.data["role"], "student")
+
+
+# ---------------------------------------------------------------------------
+# SEC-002 regression tests: authentication throttling
+# ---------------------------------------------------------------------------
+
+
+@mock.patch.dict("core.throttling.LoginRateThrottle.THROTTLE_RATES", {"login": "3/min"})
+class SEC002AuthThrottlingTest(TestCase):
+    """
+    Regression tests for SEC-002.
+
+    Login and token refresh are rate-limited per client IP. DRF throttle
+    classes bind their rate dicts at import time, so tests tighten them
+    via mock.patch.dict on the class attributes; throttle state lives in
+    the default cache, which each test clears for determinism.
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.client = APIClient()
+        self.login_url = "/api/v1/auth/login/"
+        self.refresh_url = "/api/v1/auth/token/refresh/"
+        self.user = User.objects.create_user(
+            email="sec002@example.com",
+            password="pass12345",
+            first_name="Sec",
+            last_name="Two",
+            role="student",
+        )
+
+    def tearDown(self):
+        cache.clear()
+
+    def _login(self, password, ip="192.0.2.10"):
+        return self.client.post(
+            self.login_url,
+            {"email": self.user.email, "password": password},
+            format="json",
+            REMOTE_ADDR=ip,
+        )
+
+    def test_login_throttled_after_repeated_attempts(self):
+        """Three attempts fill the 3/min bucket; the fourth is rejected."""
+        for _ in range(3):
+            response = self._login("wrong-password")
+            self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+        fourth = self._login("wrong-password")
+        self.assertEqual(fourth.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+    def test_throttled_login_returns_rate_limit_code_and_retry_after(self):
+        for _ in range(3):
+            self._login("wrong-password")
+
+        blocked = self._login("wrong-password")
+        self.assertEqual(blocked.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+        self.assertIn("Retry-After", blocked)
+        self.assertEqual(
+            blocked.data["error"]["code"], "RATE_LIMIT_EXCEEDED"
+        )
+
+    def test_successful_login_not_blocked_by_other_ips_attempts(self):
+        """Bucket exhaustion from one IP must not lock the account itself:
+        correct credentials from a different IP still succeed."""
+        for _ in range(3):
+            self._login("wrong-password", ip="192.0.2.10")
+        exhausted = self._login("wrong-password", ip="192.0.2.10")
+        self.assertEqual(exhausted.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+        response = self._login("pass12345", ip="203.0.113.77")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("access", response.data)
+        self.assertIn("refresh", response.data)
+
+    def test_legitimate_logins_below_threshold_succeed(self):
+        first = self._login("pass12345")
+        second = self._login("pass12345")
+        self.assertEqual(first.status_code, status.HTTP_200_OK)
+        self.assertEqual(second.status_code, status.HTTP_200_OK)
+
+    def test_token_refresh_throttled(self):
+        """Each attempt uses a fresh, valid refresh token (rotation
+        blacklists used ones, which would 401 before the throttle).
+        The bucket is per client IP, so three valid refreshes from one
+        IP trip the 2/min cap."""
+        refresh_tokens = []
+        for _ in range(3):
+            login_response = self._login("pass12345")
+            self.assertEqual(login_response.status_code, status.HTTP_200_OK)
+            refresh_tokens.append(login_response.data["refresh"])
+
+        with mock.patch.dict(
+            TokenRefreshRateThrottle.THROTTLE_RATES, {"token_refresh": "2/min"}
+        ):
+            cache.clear()
+            first = self.client.post(
+                self.refresh_url,
+                {"refresh": refresh_tokens[0]},
+                format="json",
+                REMOTE_ADDR="192.0.2.10",
+            )
+            second = self.client.post(
+                self.refresh_url,
+                {"refresh": refresh_tokens[1]},
+                format="json",
+                REMOTE_ADDR="192.0.2.10",
+            )
+            third = self.client.post(
+                self.refresh_url,
+                {"refresh": refresh_tokens[2]},
+                format="json",
+                REMOTE_ADDR="192.0.2.10",
+            )
+
+        self.assertEqual(first.status_code, status.HTTP_200_OK)
+        self.assertEqual(second.status_code, status.HTTP_200_OK)
+        self.assertEqual(third.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+
+# ---------------------------------------------------------------------------
+# SEC-003 regression tests: logout / refresh-token revocation
+# ---------------------------------------------------------------------------
+
+
+class SEC003LogoutTest(TestCase):
+    """
+    Regression tests for SEC-003 (logout / refresh-token revocation).
+
+    POST /api/v1/auth/logout/ requires an authenticated user and
+    blacklists the caller's own refresh token via the existing
+    SimpleJWT blacklist infrastructure. After logout the token can no
+    longer be used or rotated; every failure mode returns a generic
+    400 without token reflection.
+    """
+
+    def setUp(self):
+        self.client = APIClient()
+        self.login_url = "/api/v1/auth/login/"
+        self.logout_url = "/api/v1/auth/logout/"
+        self.refresh_url = "/api/v1/auth/token/refresh/"
+        self.user = User.objects.create_user(
+            email="logout@example.com",
+            password="logoutpass123",
+            first_name="Log",
+            last_name="Out",
+            role="student",
+        )
+        response = self.client.post(
+            self.login_url,
+            {"email": "logout@example.com", "password": "logoutpass123"},
+            format="json",
+        )
+        self.refresh_token = response.data["refresh"]
+        self.access_token = response.data["access"]
+
+    def _authenticate(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.access_token}")
+
+    def _login(self, email):
+        return self.client.post(
+            self.login_url,
+            {"email": email, "password": "logoutpass123"},
+            format="json",
+        )
+
+    def test_logout_with_valid_refresh_token_succeeds(self):
+        """A. Authenticated user can logout with a valid refresh token."""
+        self._authenticate()
+        response = self.client.post(
+            self.logout_url,
+            {"refresh": self.refresh_token},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(BlacklistedToken.objects.exists())
+
+    def test_logout_response_does_not_reflect_token(self):
+        """The response must never echo token material back."""
+        self._authenticate()
+        response = self.client.post(
+            self.logout_url,
+            {"refresh": self.refresh_token},
+            format="json",
+        )
+        self.assertNotIn(self.refresh_token, str(response.content))
+        self.assertNotIn("access", response.data)
+        self.assertNotIn("refresh", response.data)
+
+    def test_refresh_rejected_after_logout(self):
+        """B. The logged-out refresh token can no longer be used."""
+        self._authenticate()
+        logout_response = self.client.post(
+            self.logout_url,
+            {"refresh": self.refresh_token},
+            format="json",
+        )
+        self.assertEqual(logout_response.status_code, status.HTTP_200_OK)
+
+        response = self.client.post(
+            self.refresh_url,
+            {"refresh": self.refresh_token},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_post_logout_refresh_reports_token_not_valid(self):
+        """C. Blacklisted token yields SimpleJWT's standard auth error."""
+        self._authenticate()
+        self.client.post(self.logout_url, {"refresh": self.refresh_token}, format="json")
+
+        response = self.client.post(
+            self.refresh_url,
+            {"refresh": self.refresh_token},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        # Project-wide error envelope wraps SimpleJWT's code (see
+        # core/exceptions.custom_exception_handler).
+        details = response.data["error"]["details"]
+        self.assertEqual(details.get("code"), "token_not_valid")
+
+    def test_invalid_signature_token_handled_safely(self):
+        """D. A structurally valid but tampered token is rejected safely."""
+        self._authenticate()
+        tampered = self.refresh_token[:-4] + "AAAA"
+        response = self.client.post(
+            self.logout_url,
+            {"refresh": tampered},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_malformed_tokens_handled_safely(self):
+        """E. Malformed payloads never produce a server error."""
+        self._authenticate()
+        for payload in (
+            {},
+            {"refresh": ""},
+            {"refresh": "not-a-jwt"},
+            {"refresh": "a.b.c"},
+        ):
+            response = self.client.post(self.logout_url, payload, format="json")
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_already_blacklisted_token_no_server_error(self):
+        """F. Logging out twice with the same token stays safe (no 500),
+        and cannot resurrect or duplicate blacklist state."""
+        self._authenticate()
+        first = self.client.post(
+            self.logout_url,
+            {"refresh": self.refresh_token},
+            format="json",
+        )
+        second = self.client.post(
+            self.logout_url,
+            {"refresh": self.refresh_token},
+            format="json",
+        )
+        self.assertEqual(first.status_code, status.HTTP_200_OK)
+        self.assertEqual(second.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(BlacklistedToken.objects.count(), 1)
+
+    def test_anonymous_logout_rejected_and_revokes_nothing(self):
+        """G. Unauthenticated requests are rejected and revoke nothing."""
+        response = self.client.post(
+            self.logout_url,
+            {"refresh": self.refresh_token},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertFalse(BlacklistedToken.objects.exists())
+
+        # The token was untouched by the rejected request.
+        still_works = self.client.post(
+            self.refresh_url,
+            {"refresh": self.refresh_token},
+            format="json",
+        )
+        self.assertEqual(still_works.status_code, status.HTTP_200_OK)
+
+    def test_newer_refresh_token_still_works_after_logout(self):
+        """H. A newly issued refresh token for the same account survives
+        revocation of an older one."""
+        other_session = self._login("logout@example.com")
+        newer_refresh = other_session.data["refresh"]
+
+        self._authenticate()
+        self.client.post(
+            self.logout_url,
+            {"refresh": self.refresh_token},
+            format="json",
+        )
+
+        response = self.client.post(
+            self.refresh_url,
+            {"refresh": newer_refresh},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("access", response.data)
+
+    def test_other_users_token_cannot_be_revoked(self):
+        """Another authenticated user gets the generic rejection for a
+        token they do not own, and the target token keeps working."""
+        attacker = User.objects.create_user(
+            email="attacker@example.com",
+            password="logoutpass123",
+            first_name="At",
+            last_name="Tacker",
+            role="student",
+        )
+        self.assertIsNotNone(attacker)
+
+        attack_response = self._login("attacker@example.com")
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {attack_response.data['access']}"
+        )
+        response = self.client.post(
+            self.logout_url,
+            {"refresh": self.refresh_token},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(BlacklistedToken.objects.exists())
+
+        # Victim's session is intact.
+        self.client.credentials()
+        victim_refresh = self.client.post(
+            self.refresh_url,
+            {"refresh": self.refresh_token},
+            format="json",
+        )
+        self.assertEqual(victim_refresh.status_code, status.HTTP_200_OK)
+
+
+# ---------------------------------------------------------------------------
+# SEC-012 regression tests: hardcoded seed password in tracked source
+# ---------------------------------------------------------------------------
+
+_SEED_SCRIPT = (
+    Path(__file__).resolve().parents[3] / "scripts" / "seed_phase7_e2e.py"
+)
+_ENV_EXAMPLE = Path(__file__).resolve().parents[3] / ".env.example"
+_ROOT_GITIGNORE = Path(__file__).resolve().parents[4] / ".gitignore"
+_HARDcoded_PATTERNS = re.compile(
+    r'PASSWORD\s*=\s*["\'][^"\']{4,}["\']', re.IGNORECASE
+)
+
+
+class SEC012HardcodedSeedPasswordTest(TestCase):
+    """
+    Regression tests for SEC-012.
+
+    The Phase 7 E2E seed script must never contain a hardcoded password
+    in tracked source code.  The password is read from the
+    PHASE7_E2E_PASSWORD environment variable; if absent the script exits
+    non-zero without creating any accounts.
+    """
+
+    # A — seed script source contains no hardcoded password assignment
+    def test_A_seed_script_has_no_hardcoded_password(self):
+        source = _SEED_SCRIPT.read_text(encoding="utf-8")
+        matches = _HARDcoded_PATTERNS.findall(source)
+        self.assertEqual(
+            matches, [], f"Hardcoded password patterns found: {matches}"
+        )
+
+    # B — missing PHASE7_E2E_PASSWORD fails clearly
+    def test_B_missing_env_var_fails(self):
+        env = {**os.environ}
+        env.pop("PHASE7_E2E_PASSWORD", None)
+        env.pop("DJANGO_SETTINGS_MODULE", None)
+        result = subprocess.run(
+            [sys.executable, str(_SEED_SCRIPT)],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            cwd=str(_SEED_SCRIPT.parent.parent),
+            env=env,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("PHASE7_E2E_PASSWORD", result.stdout + result.stderr)
+
+    # C — missing password does not create or partially mutate E2E accounts
+    def test_C_missing_password_no_db_mutation(self):
+        from apps.accounts.models import StudentProfile
+
+        before = set(
+            User.objects.filter(email__startswith="e2e.").values_list(
+                "email", flat=True
+            )
+        )
+        env = {**os.environ}
+        env.pop("PHASE7_E2E_PASSWORD", None)
+        env.pop("DJANGO_SETTINGS_MODULE", None)
+        subprocess.run(
+            [sys.executable, str(_SEED_SCRIPT)],
+            capture_output=True,
+            timeout=15,
+            cwd=str(_SEED_SCRIPT.parent.parent),
+            env=env,
+        )
+        after = set(
+            User.objects.filter(email__startswith="e2e.").values_list(
+                "email", flat=True
+            )
+        )
+        self.assertEqual(before, after)
+
+    # D — supplied environment variable is used successfully
+    def test_D_supplied_env_var_succeeds(self):
+        test_password = "SEC012_Test_Pass_2026!"
+        env = {**os.environ}
+        env["PHASE7_E2E_PASSWORD"] = test_password
+        env.pop("DJANGO_SETTINGS_MODULE", None)
+        result = subprocess.run(
+            [sys.executable, str(_SEED_SCRIPT)],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            cwd=str(_SEED_SCRIPT.parent.parent),
+            env=env,
+        )
+        self.assertEqual(
+            result.returncode, 0, f"Script failed: {result.stdout} {result.stderr}"
+        )
+        self.assertIn("SEEDED", result.stdout)
+
+    # E — supplied password is never printed
+    def test_E_password_never_printed(self):
+        test_password = "SEC012_Secret_NotPrinted!"
+        env = {**os.environ}
+        env["PHASE7_E2E_PASSWORD"] = test_password
+        env.pop("DJANGO_SETTINGS_MODULE", None)
+        result = subprocess.run(
+            [sys.executable, str(_SEED_SCRIPT)],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            cwd=str(_SEED_SCRIPT.parent.parent),
+            env=env,
+        )
+        combined = result.stdout + result.stderr
+        self.assertNotIn(test_password, combined)
+
+    # F — .env.example contains only a placeholder/non-secret
+    def test_F_env_example_has_placeholder_only(self):
+        content = _ENV_EXAMPLE.read_text(encoding="utf-8")
+        for line in content.splitlines():
+            if line.startswith("PHASE7_E2E_PASSWORD="):
+                value = line.split("=", 1)[1]
+                self.assertTrue(
+                    value.startswith("your-") or value == "",
+                    f".env.example value looks like a real secret: {value[:8]}...",
+                )
+                return
+        self.fail("PHASE7_E2E_PASSWORD not found in .env.example")
+
+    # G — real .env remains ignored by Git
+    def test_G_env_ignored_by_git(self):
+        content = _ROOT_GITIGNORE.read_text(encoding="utf-8")
+        self.assertIn(".env", content)
+
+    # H — seed script works end-to-end with env var (subprocess)
+    def test_H_seed_script_end_to_end_with_env(self):
+        test_password = "SEC012_E2E_EndToEnd!"
+        env = {**os.environ}
+        env["PHASE7_E2E_PASSWORD"] = test_password
+        env.pop("DJANGO_SETTINGS_MODULE", None)
+        result = subprocess.run(
+            [sys.executable, str(_SEED_SCRIPT)],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            cwd=str(_SEED_SCRIPT.parent.parent),
+            env=env,
+        )
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("e2e.admin@aegis.dev", result.stdout)
+        self.assertIn("e2e.student@aegis.dev", result.stdout)
+
+    # I — existing account/authentication behaviour remains intact
+    def test_I_account_auth_smoke_test(self):
+        from django.test import Client
+
+        client = Client()
+        user = User.objects.create_user(
+            email="sec012_smoke@example.com",
+            password="smokepass123",
+            first_name="Smoke",
+            last_name="Test",
+            role="student",
+        )
+        self.assertTrue(user.check_password("smokepass123"))
+        self.assertFalse(user.check_password("wrong"))
+        self.assertEqual(user.role, "student")

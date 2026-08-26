@@ -344,6 +344,35 @@ class AssessmentResultViewSet(viewsets.ModelViewSet):
         
         return AssessmentResult.objects.none()
     
+    def _assert_not_completed(self, result):
+        """Raise if the result is completed (SEC-008 immutability boundary).
+
+        Admins are exempt — they retain full data-management access consistent
+        with their existing permission model across all assessment endpoints.
+        """
+        if result.status == AssessmentResult.Status.COMPLETED:
+            if self.request.user.role != "admin":
+                raise serializers.ValidationError({
+                    "detail": "Completed assessment results cannot be modified or deleted."
+                })
+
+    def update(self, request, *args, **kwargs):
+        """Block update on completed results (SEC-008)."""
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        self._assert_not_completed(instance)
+        return super().update(request, *args, partial=partial, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        """Block patch on completed results (SEC-008)."""
+        kwargs['partial'] = True
+        return self.update(request, *args, **kwargs)
+
+    def perform_destroy(self, instance):
+        """Block deletion of completed results (SEC-008)."""
+        self._assert_not_completed(instance)
+        instance.delete()
+
     @transaction.atomic
     def perform_create(self, serializer):
         """

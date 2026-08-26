@@ -11,7 +11,9 @@ and the authenticated CMS read-through proxy endpoints.
 from datetime import date, timedelta
 from unittest import mock
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -27,7 +29,11 @@ from apps.accounts.models import (
 from apps.academics.models import AcademicYear, GradeLevel, Section
 from apps.cms.models import CmsWebhookEvent
 from apps.cms.services.recipients import resolve_announcement_recipients
-from apps.cms.services.strapi_client import normalize_announcement, normalize_resource
+from apps.cms.services.strapi_client import (
+    StrapiClient,
+    normalize_announcement,
+    normalize_resource,
+)
 from apps.notifications.models import Notification
 
 User = get_user_model()
@@ -587,7 +593,9 @@ class NormalizationTest(TestCase):
         self.assertEqual(result["file_or_url"], "/uploads/handbook.pdf")
         self.assertEqual(result["target_audience"], ["student"])
 
-    def test_resource_media_file_resolved_against_base_url(self):
+    def test_resource_media_file_becomes_authorized_proxy_path(self):
+        """SEC-007: uploaded media is exposed only via the Django proxy
+        path — never as a direct, unrestricted Strapi URL."""
         result = normalize_resource(
             {
                 "documentId": "r2",
@@ -597,8 +605,88 @@ class NormalizationTest(TestCase):
             },
             base_url="http://localhost:1337",
         )
-        self.assertEqual(result["file_or_url"], "http://localhost:1337/uploads/video.mp4")
+        self.assertEqual(result["file_or_url"], "/api/v1/cms/resources/r2/file/")
+        self.assertEqual(result["file_source"], "proxy")
+        self.assertEqual(result["strapi_file_path"], "/uploads/video.mp4")
         self.assertEqual(result["target_audience"], ["all"])
+        self.assertNotIn("localhost:1337", result["file_or_url"])
+
+    def test_resource_media_absolute_same_host_url_proxied(self):
+        result = normalize_resource(
+            {
+                "documentId": "r2b",
+                "title": "Deck",
+                "resource_type": "document",
+                "file": {"url": "http://localhost:1337/uploads/deck.pdf"},
+            },
+            base_url="http://localhost:1337",
+        )
+        self.assertEqual(result["file_source"], "proxy")
+        self.assertEqual(result["strapi_file_path"], "/uploads/deck.pdf")
+
+    def test_resource_media_foreign_host_treated_as_external(self):
+        result = normalize_resource(
+            {
+                "documentId": "r2c",
+                "title": "CDN file",
+                "resource_type": "document",
+                "file": {"url": "https://cdn.example.com/files/deck.pdf"},
+            },
+            base_url="http://localhost:1337",
+        )
+        self.assertEqual(result["file_source"], "external")
+        self.assertIsNone(result["strapi_file_path"])
+        self.assertEqual(
+            result["file_or_url"], "https://cdn.example.com/files/deck.pdf"
+        )
+
+    def test_resource_media_traversal_path_rejected(self):
+        with self.assertRaises(ValueError):
+            normalize_resource(
+                {
+                    "documentId": "r2d",
+                    "title": "Evil",
+                    "resource_type": "document",
+                    "file": {"url": "/uploads/../private/secrets.pdf"},
+                },
+                base_url="http://localhost:1337",
+            )
+
+    def test_resource_media_protocol_relative_url_rejected(self):
+        with self.assertRaises(ValueError):
+            normalize_resource(
+                {
+                    "documentId": "r2e",
+                    "title": "Evil",
+                    "resource_type": "document",
+                    "file": {"url": "//evil.example.com/uploads/x.pdf"},
+                },
+                base_url="http://localhost:1337",
+            )
+
+    def test_resource_media_backslash_path_rejected(self):
+        with self.assertRaises(ValueError):
+            normalize_resource(
+                {
+                    "documentId": "r2f",
+                    "title": "Evil",
+                    "resource_type": "document",
+                    "file": {"url": "\\\\fileserver\\share\\x.pdf"},
+                },
+                base_url="http://localhost:1337",
+            )
+
+    def test_resource_media_encoded_traversal_rejected(self):
+        with self.assertRaises(ValueError):
+            normalize_resource(
+                {
+                    "documentId": "r2g",
+                    "title": "Evil",
+                    "resource_type": "document",
+                    "file": {"url": "/uploads/%2e%2e/secret.pem"},
+                },
+                base_url="http://localhost:1337",
+            )
 
     def test_resource_invalid_type_rejected(self):
         with self.assertRaises(ValueError):
@@ -683,7 +771,7 @@ class CmsProxyEndpointsTest(CmsTestBase):
                     "title": "For Students",
                     "description": None,
                     "resource_type": "document",
-                    "file_or_url": "http://localhost:1337/uploads/a.pdf",
+                    "file_or_url": "/api/v1/cms/resources/res-1/file/",
                     "target_audience": ["student"],
                     "is_active": True,
                 },
@@ -717,7 +805,7 @@ class CmsProxyEndpointsTest(CmsTestBase):
                 "title": "Handbook",
                 "description": "The student handbook.",
                 "resource_type": "document",
-                "file_or_url": "http://localhost:1337/uploads/hb.pdf",
+                "file_or_url": "/api/v1/cms/resources/res-9/file/",
                 "target_audience": ["all"],
                 "is_active": True,
             }
@@ -725,3 +813,342 @@ class CmsProxyEndpointsTest(CmsTestBase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["resource_type"], "document")
         self.assertEqual(response.data["title"], "Handbook")
+
+
+# ---------------------------------------------------------------------------
+# SEC-007 regression tests: authorized Resource file proxy
+# ---------------------------------------------------------------------------
+
+
+class _FakeUpstreamMedia:
+    """Minimal stand-in for a requests streaming Response from Strapi."""
+
+    def __init__(self, chunks=(b"%PDF-1.7 aegis-test-bytes",), content_type="application/pdf"):
+        self.status_code = 200
+        self.headers = {"Content-Type": content_type}
+        self._chunks = list(chunks)
+        self.closed = False
+
+    def iter_content(self, chunk_size=None):
+        for chunk in self._chunks:
+            yield chunk
+
+    def close(self):
+        self.closed = True
+
+
+def raw_resource(document_id="res-doc-1", **overrides):
+    """A raw Strapi-shaped resource payload (transport-level fixture)."""
+    entry = {
+        "id": 9,
+        "documentId": document_id,
+        "title": "Faculty Handbook",
+        "description": "Internal handbook",
+        "resource_type": "document",
+        "target_audience": ["faculty"],
+        "is_active": True,
+        "file": {"url": "/uploads/handbook.pdf"},
+    }
+    entry.update(overrides)
+    return {"data": entry}
+
+
+@override_settings(STRAPI_WEBHOOK_SECRET=SECRET)
+class Sec007ResourceFileProxyTest(CmsTestBase):
+    """
+    SEC-007 regression: Strapi-hosted Resource files are reachable only
+    through Django's authorized proxy — never via an unrestricted Strapi
+    media URL, and only for viewers authorized on the Resource metadata.
+
+    Transport is mocked at the Strapi REST boundary (_get) and the media
+    HTTP boundary (requests.get) so the real normalizer, authorization,
+    path validation, and streaming code all execute.
+    """
+
+    DOC_ID = "res-doc-1"
+    PROXY_PATH = f"/api/v1/cms/resources/{DOC_ID}/file/"
+    STRAPI_MEDIA_URL = f"{settings.STRAPI_BASE_URL}/uploads/handbook.pdf"
+
+    def setUp(self):
+        self.client = APIClient()
+
+    def _get_detail(self, user, raw=None):
+        self.client.force_authenticate(user=user)
+        with mock.patch.object(StrapiClient, "_get", return_value=raw or raw_resource()):
+            return self.client.get(f"/api/v1/cms/resources/{self.DOC_ID}/")
+
+    def _get_file(self, user, raw=None):
+        self.client.force_authenticate(user=user)
+        with mock.patch.object(
+            StrapiClient, "_get", return_value=raw or raw_resource()
+        ), mock.patch(
+            "apps.cms.services.strapi_client.requests.get",
+            return_value=_FakeUpstreamMedia(),
+        ) as fake_media_get:
+            response = self.client.get(f"/api/v1/cms/resources/{self.DOC_ID}/file/")
+        return response, fake_media_get
+
+    # -- A: public/all-audience -------------------------------------------
+
+    def test_all_audience_metadata_uses_proxy_path_not_strapi_url(self):
+        raw = raw_resource(target_audience=["all"])
+        response = self._get_detail(self.student_user, raw)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["file_or_url"], self.PROXY_PATH)
+        self.assertNotIn("localhost:1337", response.content.decode())
+
+    def test_all_audience_student_can_download_file(self):
+        raw = raw_resource(target_audience=["all"])
+        response, fake_media_get = self._get_file(self.student_user, raw)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(b"".join(response.streaming_content), b"%PDF-1.7 aegis-test-bytes")
+        self.assertIn('attachment; filename="handbook.pdf"', response["Content-Disposition"])
+        fake_media_get.assert_called_once()
+        self.assertEqual(fake_media_get.call_args.args[0], self.STRAPI_MEDIA_URL)
+        self.assertFalse(fake_media_get.call_args.kwargs["allow_redirects"])
+
+    # -- B: faculty-only ---------------------------------------------------
+
+    def test_faculty_can_retrieve_protected_metadata_and_file(self):
+        response = self._get_detail(self.faculty_user)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["file_or_url"], self.PROXY_PATH)
+
+        file_response, fake_media_get = self._get_file(self.faculty_user)
+        self.assertEqual(file_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            b"".join(file_response.streaming_content), b"%PDF-1.7 aegis-test-bytes"
+        )
+        fake_media_get.assert_called_once_with(
+            self.STRAPI_MEDIA_URL,
+            headers=mock.ANY,
+            timeout=mock.ANY,
+            stream=True,
+            allow_redirects=False,
+        )
+
+    # -- C/D/E: unauthorized roles cannot reach metadata or bytes ---------
+
+    def test_student_cannot_retrieve_protected_metadata(self):
+        response = self._get_detail(self.student_user)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_student_cannot_download_protected_file_and_no_fetch_occurs(self):
+        response, fake_media_get = self._get_file(self.student_user)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        fake_media_get.assert_not_called()
+
+    def test_parent_cannot_bypass_via_direct_file_access(self):
+        detail = self._get_detail(self.parent_user)
+        self.assertEqual(detail.status_code, status.HTTP_404_NOT_FOUND)
+        file_response, fake_media_get = self._get_file(self.parent_user)
+        self.assertEqual(file_response.status_code, status.HTTP_404_NOT_FOUND)
+        fake_media_get.assert_not_called()
+
+    def test_inactive_user_cannot_download(self):
+        file_response, _ = self._get_file(self.inactive_student)
+        self.assertIn(
+            file_response.status_code,
+            {status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND},
+        )
+
+    def test_anonymous_access_to_metadata_and_file_rejected(self):
+        anon = APIClient()
+        self.assertEqual(
+            anon.get(f"/api/v1/cms/resources/{self.DOC_ID}/").status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+        self.assertEqual(
+            anon.get(f"/api/v1/cms/resources/{self.DOC_ID}/file/").status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+
+    def test_download_authorization_matches_metadata_visibility_for_every_role(self):
+        """
+        The file endpoint delegates to the exact same _visible_resources
+        rule as metadata, per role (role-exact: no implicit staff bypass).
+        Resources currently carry no section targeting in the CMS schema;
+        if scope rules are added to that one shared function, this matrix
+        keeps files bound to them.
+        """
+        allowed = {self.faculty_user}
+        denied = {
+            self.student_user,
+            self.student2_user,
+            self.parent_user,
+            self.guidance_user,
+            self.admin_user,
+        }
+        for user in allowed:
+            self.assertEqual(self._get_detail(user).status_code, 200, user.role)
+            file_response, _ = self._get_file(user)
+            self.assertEqual(file_response.status_code, 200, user.role)
+        for user in denied:
+            self.assertEqual(self._get_detail(user).status_code, 404, user.role)
+            file_response, fake_media_get = self._get_file(user)
+            self.assertEqual(file_response.status_code, 404, user.role)
+            fake_media_get.assert_not_called()
+
+    # -- H: authored external URLs stay external --------------------------
+
+    def test_external_url_returned_as_authored_and_never_proxied(self):
+        raw = raw_resource(
+            document_id=self.DOC_ID,
+            target_audience=["all"],
+            url="https://example.edu/handbook.pdf",
+            file=None,
+        )
+        response = self._get_detail(self.student_user, raw)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["file_or_url"], "https://example.edu/handbook.pdf")
+
+        file_response, fake_media_get = self._get_file(self.student_user, raw)
+        self.assertEqual(file_response.status_code, status.HTTP_404_NOT_FOUND)
+        fake_media_get.assert_not_called()
+
+    # -- I: malformed media paths handled safely --------------------------
+
+    def test_malformed_upload_paths_are_skipped_by_list_endpoint(self):
+        self.client.force_authenticate(user=self.faculty_user)
+        payload = {"data": [raw_resource()["data"], raw_resource(document_id="res-bad", **{"file": {"url": "/uploads/../etc/passwd"}})["data"]]}
+        with mock.patch.object(
+            StrapiClient,
+            "_get",
+            return_value=payload,
+        ):
+            response = self.client.get("/api/v1/cms/resources/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        titles = [item["title"] for item in response.data["results"]]
+        self.assertEqual(titles, ["Faculty Handbook"])
+
+    def test_download_refuses_unsafe_internal_path_even_if_normalized(self):
+        """Belt-and-braces: get_media_stream re-validates; a hand-crafted
+        traversal path can never become a fetch target."""
+        from apps.cms.services.strapi_client import StrapiError
+
+        client = StrapiClient()
+        with mock.patch(
+            "apps.cms.services.strapi_client.requests.get"
+        ) as fake_get:
+            with self.assertRaises(StrapiError):
+                client.get_media_stream("/uploads/../../etc/passwd")
+            fake_get.assert_not_called()
+
+    # -- J: no unrestricted Strapi media URL leaks -------------------------
+
+    def test_no_strapi_media_url_exposed_in_list_or_detail(self):
+        resources = [
+            raw_resource(document_id="res-doc-all", target_audience=["all"])["data"],
+            raw_resource(document_id="res-doc-fac")["data"],
+            {
+                "id": 10,
+                "documentId": "res-doc-link",
+                "title": "External link",
+                "resource_type": "link",
+                "target_audience": ["all"],
+                "is_active": True,
+                "url": "https://example.edu/page",
+            },
+        ]
+        self.client.force_authenticate(user=self.admin_user)
+        with mock.patch.object(
+            StrapiClient,
+            "_get",
+            return_value={"data": resources},
+        ):
+            response = self.client.get("/api/v1/cms/resources/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        body = response.content.decode()
+        self.assertNotIn("localhost:1337/uploads", body)
+        values = [item["file_or_url"] for item in response.data["results"]]
+        for value in values:
+            self.assertTrue(
+                value is None or value.startswith("/api/v1/cms/") or value.startswith("https://"),
+                value,
+            )
+
+
+# ---------------------------------------------------------------------------
+# SEC-002 regression tests: webhook rate limiting
+# ---------------------------------------------------------------------------
+
+
+@override_settings(STRAPI_WEBHOOK_SECRET=SECRET)
+@mock.patch.dict("core.throttling.WebhookRateThrottle.THROTTLE_RATES", {"webhook": "2/min"})
+class WebhookRateLimitTest(CmsTestBase):
+    """
+    Regression tests for SEC-002 (webhook defense-in-depth cap).
+
+    The per-source-IP cap applies before the secret check, so a flooded
+    endpoint returns 429 without evaluating deliveries at all. Existing
+    authentication behavior is verified under normal (unexhausted) load.
+    DRF throttle classes bind rate dicts at import time, so the cap is
+    tightened via mock.patch.dict on the class attribute.
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.client = APIClient()
+
+    def tearDown(self):
+        cache.clear()
+
+    def _post_publish(self, document_id="doc-throttle-1", ip="198.51.100.7"):
+        with mock.patch("apps.cms.services.webhook.StrapiClient") as mock_client:
+            mock_client.return_value.get_announcement.return_value = (
+                canonical_announcement(document_id=document_id)
+            )
+            return self.client.post(
+                WEBHOOK_URL,
+                publish_payload(document_id=document_id),
+                format="json",
+                HTTP_X_AEGIS_WEBHOOK_SECRET=SECRET,
+                REMOTE_ADDR=ip,
+            )
+
+    def test_webhook_throttled_after_cap(self):
+        first = self._post_publish()
+        second = self._post_publish(document_id="doc-throttle-2")
+        third = self._post_publish(document_id="doc-throttle-3")
+
+        self.assertEqual(first.status_code, status.HTTP_200_OK)
+        self.assertEqual(second.status_code, status.HTTP_200_OK)
+        self.assertEqual(third.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+    def test_under_limit_deliveries_still_process(self):
+        response = self._post_publish()
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["status"], "processed")
+        self.assertTrue(Notification.objects.exists())
+
+    def test_wrong_secret_rejected_while_under_limit(self):
+        response = self.client.post(
+            WEBHOOK_URL,
+            publish_payload(),
+            format="json",
+            HTTP_X_AEGIS_WEBHOOK_SECRET="not-the-secret",
+            REMOTE_ADDR="198.51.100.8",
+        )
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_exhausted_bucket_blocks_even_valid_secret(self):
+        """Once the IP bucket is full the cap wins regardless of header
+        validity — bounding notification fan-out amplification."""
+        for n in range(2):
+            self._post_publish(document_id=f"doc-fill-{n}")
+
+        blocked = self.client.post(
+            WEBHOOK_URL,
+            publish_payload(document_id="doc-blocked"),
+            format="json",
+            HTTP_X_AEGIS_WEBHOOK_SECRET=SECRET,
+            REMOTE_ADDR="198.51.100.7",
+        )
+        self.assertEqual(blocked.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+    def test_other_source_ip_not_blocked_by_first_ip_traffic(self):
+        for _ in range(2):
+            self._post_publish(document_id="doc-ip-a")
+
+        response = self._post_publish(document_id="doc-ip-b", ip="198.51.100.9")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)

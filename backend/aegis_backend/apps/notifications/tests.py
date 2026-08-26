@@ -132,6 +132,10 @@ class NotificationsTestBase(TestCase):
             student=self.student_profile, section=self.section,
             academic_year=self.academic_year, date_enrolled=date(2026, 6, 1),
         )
+        self.enrollment2 = Enrollment.objects.create(
+            student=self.student2_profile, section=self.section,
+            academic_year=self.academic_year, date_enrolled=date(2026, 6, 1),
+        )
 
         # --- Submitted grade (for finalize integration) ---
         self.submitted_grade = Grade.objects.create(

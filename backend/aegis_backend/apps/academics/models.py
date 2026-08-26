@@ -222,6 +222,40 @@ class Grade(TimestampedModel):
         if self.score is not None and (self.score < 0 or self.score > 100):
             raise ValidationError({"score": "Score must be between 0 and 100."})
 
+        # SEC-013: Enrollment / section integrity validation
+        if self.student_id and self.subject_assignment_id and self.grading_period_id:
+            sa = SubjectAssignment.objects.select_related(
+                "section", "academic_year"
+            ).get(pk=self.subject_assignment_id)
+            gp = GradingPeriod.objects.select_related("academic_year").get(
+                pk=self.grading_period_id
+            )
+
+            if gp.academic_year_id != sa.academic_year_id:
+                raise ValidationError(
+                    {
+                        "grading_period": (
+                            "Grading period does not belong to the same "
+                            "academic year as the subject assignment."
+                        )
+                    }
+                )
+
+            if not Enrollment.objects.filter(
+                student_id=self.student_id,
+                section_id=sa.section_id,
+                academic_year_id=sa.academic_year_id,
+                is_active=True,
+            ).exists():
+                raise ValidationError(
+                    {
+                        "student": (
+                            "Student is not enrolled in the section for "
+                            "this subject assignment's academic year."
+                        )
+                    }
+                )
+
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)

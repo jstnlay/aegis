@@ -235,7 +235,17 @@ class AssessmentResultSerializer(serializers.ModelSerializer):
         read_only_fields = ("id", "student", "status", "score", "total_possible", "percentage", "started_at", "completed_at", "created_at", "updated_at")
     
     def validate(self, data):
-        """Validate answers structure."""
+        """Validate answers structure and completed immutability (SEC-008)."""
+        # SEC-008: Completed results are immutable — block any mutation attempt
+        # Admins are exempt (consistent with existing full-access permission model)
+        if self.instance and self.instance.status == "completed":
+            request = self.context.get('request')
+            is_admin = request and hasattr(request, 'user') and request.user.role == "admin"
+            if not is_admin:
+                raise serializers.ValidationError({
+                    "detail": "Completed assessment results cannot be modified."
+                })
+
         answers = data.get('answers')
         
         if answers is not None:

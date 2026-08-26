@@ -951,3 +951,282 @@ class AssessmentTargetScopingTests(AssessmentsTestBase):
         self.client.force_authenticate(user=self.student_user)
         response = self.client.get("/api/v1/assessments/assessments/")
         self.assertEqual(len(response.data["results"]), 1)
+
+
+# ---------------------------------------------------------------------------
+# SEC-008 — Completed result immutability tests
+# ---------------------------------------------------------------------------
+
+
+class SEC008ResultImmutabilityTests(AssessmentsTestBase):
+    """SEC-008: Completed assessment results must be immutable."""
+
+    def setUp(self):
+        super().setUp()
+        self.assessment = Assessment.objects.create(
+            title="Math Quiz",
+            assessment_type="academic",
+            created_by=self.faculty_user,
+            is_published=True,
+        )
+        self.assessment.target_sections.add(self.section)
+        self.q1 = AssessmentQuestion.objects.create(
+            assessment=self.assessment,
+            question_text="What is 2+2?",
+            question_type="multiple_choice",
+            order=1,
+            options=["3", "4", "5"],
+            correct_answer="4",
+        )
+        self.q2 = AssessmentQuestion.objects.create(
+            assessment=self.assessment,
+            question_text="Is Python a language?",
+            question_type="true_false",
+            order=2,
+            correct_answer="True",
+        )
+
+    def _create_completed_result(self):
+        """Helper: create a completed result for student_profile."""
+        return AssessmentResult.objects.create(
+            assessment=self.assessment,
+            student=self.student_profile,
+            answers={str(self.q1.id): "4", str(self.q2.id): "True"},
+            status=AssessmentResult.Status.COMPLETED,
+            score=Decimal("2"),
+            total_possible=Decimal("2"),
+            percentage=Decimal("100.00"),
+        )
+
+    def _create_in_progress_result(self):
+        """Helper: create an in-progress result for student_profile."""
+        return AssessmentResult.objects.create(
+            assessment=self.assessment,
+            student=self.student_profile,
+            answers={str(self.q1.id): "3"},
+            status=AssessmentResult.Status.IN_PROGRESS,
+        )
+
+    # --- A. Draft result can be updated by authorized role ---
+    def test_in_progress_result_can_be_updated(self):
+        """In-progress result can still be updated by the owning student."""
+        result = self._create_in_progress_result()
+        self.client.force_authenticate(user=self.student_user)
+        data = {"answers": {str(self.q1.id): "4", str(self.q2.id): "False"}}
+        response = self.client.patch(
+            f"/api/v1/assessments/assessment-results/{result.id}/",
+            data, format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        result.refresh_from_db()
+        self.assertEqual(result.answers[str(self.q1.id)], "4")
+
+    # --- B. Draft result can be deleted where previously allowed ---
+    def test_in_progress_result_can_be_deleted(self):
+        """In-progress result can be deleted by the owning student."""
+        result = self._create_in_progress_result()
+        self.client.force_authenticate(user=self.student_user)
+        response = self.client.delete(
+            f"/api/v1/assessments/assessment-results/{result.id}/"
+        )
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(AssessmentResult.objects.filter(id=result.id).exists())
+
+    # --- C. Completion/finalization succeeds through legitimate workflow ---
+    @patch("apps.assessments.views.notify_assessment_completion")
+    def test_finalization_succeeds_via_submit(self, mock_notify):
+        """Student submission auto-completes the result."""
+        self.client.force_authenticate(user=self.student_user)
+        data = {
+            "assessment": str(self.assessment.id),
+            "answers": {str(self.q1.id): "4", str(self.q2.id): "True"},
+        }
+        response = self.client.post(
+            "/api/v1/assessments/assessment-results/", data, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["status"], "completed")
+        self.assertIsNotNone(response.data["completed_at"])
+
+    # --- D. Completed result PATCH is rejected ---
+    def test_completed_result_patch_rejected(self):
+        """PATCH on a completed result returns 400."""
+        result = self._create_completed_result()
+        self.client.force_authenticate(user=self.student_user)
+        data = {"answers": {str(self.q1.id): "3", str(self.q2.id): "False"}}
+        response = self.client.patch(
+            f"/api/v1/assessments/assessment-results/{result.id}/",
+            data, format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    # --- E. Completed result PUT is rejected (if PUT exists) ---
+    def test_completed_result_put_rejected(self):
+        """PUT on a completed result returns 400."""
+        result = self._create_completed_result()
+        self.client.force_authenticate(user=self.student_user)
+        data = {
+            "assessment": str(self.assessment.id),
+            "answers": {str(self.q1.id): "3"},
+        }
+        response = self.client.put(
+            f"/api/v1/assessments/assessment-results/{result.id}/",
+            data, format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    # --- F. Completed result DELETE is rejected ---
+    def test_completed_result_delete_rejected(self):
+        """DELETE on a completed result returns 400."""
+        result = self._create_completed_result()
+        self.client.force_authenticate(user=self.student_user)
+        response = self.client.delete(
+            f"/api/v1/assessments/assessment-results/{result.id}/"
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue(AssessmentResult.objects.filter(id=result.id).exists())
+
+    # --- G. Cannot change completed -> draft via PATCH ---
+    def test_cannot_reopen_completed_via_patch(self):
+        """Client cannot change status from completed back to in_progress."""
+        result = self._create_completed_result()
+        self.client.force_authenticate(user=self.student_user)
+        data = {"status": "in_progress"}
+        response = self.client.patch(
+            f"/api/v1/assessments/assessment-results/{result.id}/",
+            data, format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        result.refresh_from_db()
+        self.assertEqual(result.status, AssessmentResult.Status.COMPLETED)
+
+    # --- H. Cannot change protected historical fields after completion ---
+    def test_cannot_change_answers_after_completion(self):
+        """Answers must remain unchanged on a completed result."""
+        result = self._create_completed_result()
+        original_answers = dict(result.answers)
+        self.client.force_authenticate(user=self.student_user)
+        data = {"answers": {str(self.q1.id): "3"}}
+        response = self.client.patch(
+            f"/api/v1/assessments/assessment-results/{result.id}/",
+            data, format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        result.refresh_from_db()
+        self.assertEqual(result.answers, original_answers)
+
+    # --- I. Authorized users can still READ completed results ---
+    def test_student_can_read_own_completed_result(self):
+        """Student can read their own completed result."""
+        result = self._create_completed_result()
+        self.client.force_authenticate(user=self.student_user)
+        response = self.client.get(
+            f"/api/v1/assessments/assessment-results/{result.id}/"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["status"], "completed")
+
+    def test_creator_can_read_completed_result(self):
+        """Assessment creator can read completed results."""
+        result = self._create_completed_result()
+        self.client.force_authenticate(user=self.faculty_user)
+        response = self.client.get(
+            f"/api/v1/assessments/assessment-results/{result.id}/"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_parent_can_read_child_completed_result(self):
+        """Parent can read their child's completed result."""
+        result = self._create_completed_result()
+        self.client.force_authenticate(user=self.parent_user)
+        response = self.client.get(
+            f"/api/v1/assessments/assessment-results/{result.id}/"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    # --- J. Unauthorized users remain blocked from reading results ---
+    def test_other_student_cannot_read_result(self):
+        """A different student cannot read another student's result."""
+        result = self._create_completed_result()
+        self.client.force_authenticate(user=self.student2_user)
+        response = self.client.get(
+            f"/api/v1/assessments/assessment-results/{result.id}/"
+        )
+        self.assertIn(
+            response.status_code,
+            [status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND],
+        )
+
+    # --- K. Repeated mutation attempts do not alter the stored result ---
+    def test_repeated_patch_attempts_do_not_alter_result(self):
+        """Multiple PATCH attempts on a completed result leave it unchanged."""
+        result = self._create_completed_result()
+        original_answers = dict(result.answers)
+        original_score = result.score
+        self.client.force_authenticate(user=self.student_user)
+        for _ in range(3):
+            data = {"answers": {str(self.q1.id): "999"}}
+            self.client.patch(
+                f"/api/v1/assessments/assessment-results/{result.id}/",
+                data, format="json",
+            )
+        result.refresh_from_db()
+        self.assertEqual(result.answers, original_answers)
+        self.assertEqual(result.score, original_score)
+
+    # --- L. Admin can still mutate completed results (admin override) ---
+    def test_admin_can_update_completed_result(self):
+        """Admin can update a completed result (admin override)."""
+        result = self._create_completed_result()
+        self.client.force_authenticate(user=self.admin_user)
+        data = {"answers": {str(self.q1.id): "999"}}
+        response = self.client.patch(
+            f"/api/v1/assessments/assessment-results/{result.id}/",
+            data, format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_admin_can_delete_completed_result(self):
+        """Admin can delete a completed result (admin override)."""
+        result = self._create_completed_result()
+        self.client.force_authenticate(user=self.admin_user)
+        response = self.client.delete(
+            f"/api/v1/assessments/assessment-results/{result.id}/"
+        )
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+
+    # --- M. Faculty/guidance cannot mutate completed results ---
+    def test_faculty_cannot_update_completed_result(self):
+        """Faculty cannot update a completed result."""
+        result = self._create_completed_result()
+        self.client.force_authenticate(user=self.faculty_user)
+        data = {"answers": {str(self.q1.id): "999"}}
+        response = self.client.patch(
+            f"/api/v1/assessments/assessment-results/{result.id}/",
+            data, format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_faculty_cannot_delete_completed_result(self):
+        """Faculty cannot delete a completed result."""
+        result = self._create_completed_result()
+        self.client.force_authenticate(user=self.faculty_user)
+        response = self.client.delete(
+            f"/api/v1/assessments/assessment-results/{result.id}/"
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    # --- N. No unexpected migration introduced (verified by no model change) ---
+    def test_completed_at_auto_set(self):
+        """completed_at is set when status transitions to completed."""
+        result = AssessmentResult.objects.create(
+            assessment=self.assessment,
+            student=self.student_profile,
+            answers={},
+            status=AssessmentResult.Status.IN_PROGRESS,
+        )
+        self.assertIsNone(result.completed_at)
+        result.status = AssessmentResult.Status.COMPLETED
+        result.save()
+        result.refresh_from_db()
+        self.assertIsNotNone(result.completed_at)
