@@ -17,4 +17,6 @@ urlpatterns = [
     # CMS read-through proxy (Phase 7): content lives in Strapi,
     # access rules stay in Django.
     path("cms/", include("apps.cms.urls")),
+    # Data import (Phase 8): /data-import/jobs/ exposed by the app router.
+    path("data-import/", include("apps.data_import.urls")),
 ]

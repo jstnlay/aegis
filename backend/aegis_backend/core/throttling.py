@@ -43,3 +43,49 @@ class WebhookRateThrottle(SimpleRateThrottle):
             "scope": self.scope,
             "ident": self.get_ident(request),
         }
+
+
+class DataImportRateThrottle(SimpleRateThrottle):
+    """
+    Per-client-IP cap on data-import job uploads (scope: "data_import").
+
+    Import workflows parse untrusted files row-by-row, so they are more
+    expensive than typical API calls. A dedicated, lower-than-global cap
+    bounds resource use against runaway/scanner clients as defense-in-depth
+    behind authentication and role authorization.
+
+    SimpleRateThrottle is used (like WebhookRateThrottle) so the cap applies
+    regardless of authentication state, keyed by client IP. An
+    AnonRateThrottle would never fire here because every import upload is
+    authenticated.
+    """
+
+    scope = "data_import"
+
+    def get_cache_key(self, request, view):
+        return self.cache_format % {
+            "scope": self.scope,
+            "ident": self.get_ident(request),
+        }
+
+
+class ExportRateThrottle(SimpleRateThrottle):
+    """
+    Per-client-IP cap on controlled-export file downloads (scope: "data_export").
+
+    Export endpoints generate complete file responses (CSV/XLSX) that can be
+    computationally expensive for large datasets. A dedicated, lower-than-global
+    cap bounds resource use as defense-in-depth behind authentication and
+    role authorization.
+
+    SimpleRateThrottle is used so the cap applies regardless of authentication
+    state, keyed by client IP.
+    """
+
+    scope = "data_export"
+
+    def get_cache_key(self, request, view):
+        return self.cache_format % {
+            "scope": self.scope,
+            "ident": self.get_ident(request),
+        }

@@ -44,7 +44,7 @@ LOCAL_APPS = [
     "apps.assessments",
     # "apps.analytics",
     "apps.cms",  # Phase 7: Strapi integration adapter (webhook + read-through proxy)
-    # "apps.data_import",
+    "apps.data_import",  # Phase 8: CSV/XLSX data import + controlled export
     "apps.notifications",
     # "apps.audit",
 ]
@@ -149,6 +149,17 @@ MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 # ---------------------------------------------------------------------------
+# Upload limits (Phase 8: data import)
+#
+# Uploaded files are untrusted input. DATA_UPLOAD_MAX_MEMORY_SIZE bounds the
+# request body at the server level before any app-level validation. It is
+# sized to match apps.data_import.constants.MAX_IMPORT_FILE_SIZE (10 MB) so
+# legitimate CSVs/XLSXs are accepted while runaway bodies are rejected (413).
+# ---------------------------------------------------------------------------
+
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
+
+# ---------------------------------------------------------------------------
 # Default primary key field type
 # ---------------------------------------------------------------------------
 
@@ -160,7 +171,9 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        # Extended SimpleJWT pipeline: identical token semantics, plus the
+        # PH8.7 initial-password-change onboarding gate (must_change_password).
+        "core.authentication.AegisJWTAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
@@ -183,6 +196,11 @@ REST_FRAMEWORK = {
         "login": "15/min",
         "token_refresh": "30/min",
         "webhook": "60/min",
+        # Data-import uploads are expensive (parsing + row validation).
+        # Lower-than-global cap to bound resource use (Phase 8).
+        "data_import": "30/min",
+        # Controlled-export file downloads (PH8.8).
+        "data_export": "60/min",
     },
     "EXCEPTION_HANDLER": "core.exceptions.custom_exception_handler",
 }

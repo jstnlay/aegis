@@ -13,7 +13,9 @@ from core.throttling import LoginRateThrottle, TokenRefreshRateThrottle
 
 from .models import User
 from .serializers import (
+    AegisTokenObtainPairSerializer,
     LogoutSerializer,
+    PasswordChangeSerializer,
     UserSerializer,
     UserCreateSerializer,
     UserProfileSerializer,
@@ -21,8 +23,13 @@ from .serializers import (
 
 
 class LoginView(TokenObtainPairView):
-    """JWT login, rate-limited per client IP (SEC-002)."""
+    """JWT login, rate-limited per client IP (SEC-002).
 
+    Adds the PH8.7 ``must_change_password`` onboarding flag to the
+    standard token-pair response for provisioned accounts.
+    """
+
+    serializer_class = AegisTokenObtainPairSerializer
     throttle_classes = [LoginRateThrottle]
 
 
@@ -103,3 +110,25 @@ class CurrentUserView(generics.RetrieveUpdateAPIView):
 
     def get_object(self):
         return self.request.user
+
+
+class PasswordChangeView(APIView):
+    """
+    POST /api/v1/accounts/password/change/ — self-service password change.
+
+    Verifies the current password, validates the new password against the
+    standard Django validators, and clears the PH8.7 initial-password
+    state when present.  This is the ONLY route a provisioned account
+    may use while ``must_change_password`` is set (enforced by the
+    authentication gate in core/authentication.py).
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        serializer = PasswordChangeSerializer(
+            data=request.data, context={"request": request}
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({"detail": "Password changed."})

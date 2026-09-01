@@ -49,6 +49,8 @@ REST_FRAMEWORK = {
         "login": "1000000/min",
         "token_refresh": "1000000/min",
         "webhook": "1000000/min",
+        "data_import": "1000000/min",
+        "data_export": "1000000/min",
     },
 }
 

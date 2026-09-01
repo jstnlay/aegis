@@ -34,6 +34,13 @@ class User(AbstractUser):
     language_preference = models.CharField(max_length=10, blank=True, null=True)
     privacy_policy_accepted = models.BooleanField(default=False)
     privacy_policy_accepted_at = models.DateTimeField(blank=True, null=True)
+    must_change_password = models.BooleanField(
+        default=False,
+        help_text=(
+            "True until the user completes the required initial "
+            "password change (provisioned temporary credentials)."
+        ),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

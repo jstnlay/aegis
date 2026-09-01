@@ -7,3 +7,5 @@ python-decouple>=3.8,<4.0
 django-cors-headers>=4.3,<5.0
 Pillow>=10.0,<13.0
 requests>=2.32,<3.0
+# Phase 8: single Excel format dependency (XLSX-only decision).
+openpyxl>=3.1,<4.0

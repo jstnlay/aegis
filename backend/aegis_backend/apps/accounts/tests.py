@@ -1133,3 +1133,119 @@ class SEC012HardcodedSeedPasswordTest(TestCase):
         self.assertTrue(user.check_password("smokepass123"))
         self.assertFalse(user.check_password("wrong"))
         self.assertEqual(user.role, "student")
+
+
+# ---------------------------------------------------------------------------
+# PH8.7 — Account provisioning onboarding (initial password change)
+# ---------------------------------------------------------------------------
+
+
+class PH87OnboardingTest(TestCase):
+    """Tests the PH8.7 provisioned-account onboarding lifecycle.
+
+    A provisioned account authenticates with the temporary credential via
+    the existing JWT flow, but every protected route except the
+    password-change / logout endpoints is gated until the initial password
+    change clears ``must_change_password``.
+    """
+
+    def setUp(self):
+        self.client = APIClient()
+        self.email = "onboarding@example.com"
+        self.temp_password = "SeedTemp_2026_Ab1!"
+        self.new_password = "NewSecurePass_2026!"
+        self.user = User.objects.create_user(
+            email=self.email,
+            password=self.temp_password,
+            first_name="On", last_name="Board", role="student",
+        )
+        self.user.must_change_password = True
+        self.user.save(update_fields=["must_change_password"])
+
+    def _login(self, password):
+        return self.client.post(
+            "/api/v1/auth/login/",
+            {"email": self.email, "password": password},
+            format="json",
+        )
+
+    def test_login_response_includes_must_change_password_flag(self):
+        resp = self._login(self.temp_password)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn("access", resp.data)
+        self.assertIn("must_change_password", resp.data)
+        self.assertTrue(resp.data["must_change_password"])
+
+    def test_login_flag_false_for_normal_account(self):
+        self.user.must_change_password = False
+        self.user.save(update_fields=["must_change_password"])
+        resp = self._login(self.temp_password)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertFalse(resp.data["must_change_password"])
+
+    def test_flagged_user_is_gated_outside_onboarding_route(self):
+        login = self._login(self.temp_password)
+        self.assertEqual(login.status_code, status.HTTP_200_OK)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {login.data['access']}")
+        me = self.client.get("/api/v1/accounts/me/")
+        self.assertEqual(me.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_password_change_correct_flow_clears_flag(self):
+        login = self._login(self.temp_password)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {login.data['access']}")
+        changed = self.client.post(
+            "/api/v1/accounts/password/change/",
+            {"current_password": self.temp_password, "new_password": self.new_password},
+            format="json",
+        )
+        self.assertEqual(changed.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.must_change_password)
+        self.assertTrue(self.user.check_password(self.new_password))
+        self.assertFalse(self.user.check_password(self.temp_password))
+        self.assertEqual(self.user.role, "student")
+
+    def test_password_change_wrong_current_rejected(self):
+        login = self._login(self.temp_password)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {login.data['access']}")
+        resp = self.client.post(
+            "/api/v1/accounts/password/change/",
+            {"current_password": "WrongPass_2026!", "new_password": self.new_password},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.must_change_password)
+        self.assertTrue(self.user.check_password(self.temp_password))
+
+    def test_password_change_enforces_validators(self):
+        login = self._login(self.temp_password)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {login.data['access']}")
+        resp = self.client.post(
+            "/api/v1/accounts/password/change/",
+            {"current_password": self.temp_password, "new_password": "short"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.must_change_password)
+
+    def test_password_change_works_for_normal_account(self):
+        self.user.must_change_password = False
+        self.user.save(update_fields=["must_change_password"])
+        login = self._login(self.temp_password)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {login.data['access']}")
+        resp = self.client.post(
+            "/api/v1/accounts/password/change/",
+            {"current_password": self.temp_password, "new_password": self.new_password},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.must_change_password)
+        self.assertTrue(self.user.check_password(self.new_password))
+
+    def test_temporary_credential_never_echoed(self):
+        login = self._login(self.temp_password)
+        body = str(login.data)
+        self.assertNotIn(self.temp_password, body)
