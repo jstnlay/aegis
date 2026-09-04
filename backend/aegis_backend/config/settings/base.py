@@ -42,12 +42,17 @@ LOCAL_APPS = [
     "apps.attendance",
     "apps.guidance",
     "apps.assessments",
-    # "apps.analytics",
+    "apps.analytics",  # PH9: role-controlled analytics aggregation API
     "apps.cms",  # Phase 7: Strapi integration adapter (webhook + read-through proxy)
     "apps.data_import",  # Phase 8: CSV/XLSX data import + controlled export
     "apps.notifications",
+    "apps.chatbot",  # PH9: chatbot service boundary + deterministic layer
     # "apps.audit",
 ]
+
+# AI Engine: pure computation layer (feature/label/risk/benchmark/recommend).
+# Registered as an installed app so its management commands are discoverable.
+LOCAL_APPS.append("ai_engine")
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 

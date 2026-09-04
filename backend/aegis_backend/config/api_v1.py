@@ -19,4 +19,8 @@ urlpatterns = [
     path("cms/", include("apps.cms.urls")),
     # Data import (Phase 8): /data-import/jobs/ exposed by the app router.
     path("data-import/", include("apps.data_import.urls")),
+    # Analytics (Phase 9): /analytics/ role-controlled aggregation API.
+    path("analytics/", include("apps.analytics.urls")),
+    # Chatbot (Phase 9): /chatbot/ deterministic service boundary.
+    path("chatbot/", include("apps.chatbot.urls")),
 ]

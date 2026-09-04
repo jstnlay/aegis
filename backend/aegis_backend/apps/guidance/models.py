@@ -153,12 +153,101 @@ class ConsultationRecord(TimestampedModel):
         super().save(*args, **kwargs)
 
 
+class RiskScore(TimestampedModel):
+    """
+    Machine-generated risk computation result/history.
+
+    Each computation produces a RiskScore record. RiskScore is the
+    authoritative computation log. RiskAlert is the actionable Guidance
+    alert state derived from RiskScore when warranted.
+
+    PH9 architecture: RiskScore ≠ RiskAlert.
+    RiskScore = computation result/history
+    RiskAlert = actionable Guidance alert
+    """
+
+    class ComputationStatus(models.TextChoices):
+        READY = "ready", "Ready"
+        INSUFFICIENT_DATA = "insufficient_data", "Insufficient Data"
+
+    student = models.ForeignKey(
+        "accounts.StudentProfile",
+        on_delete=models.PROTECT,
+        related_name="risk_scores",
+    )
+    computation_status = models.CharField(
+        max_length=20,
+        choices=ComputationStatus.choices,
+        default=ComputationStatus.READY,
+    )
+    risk_score = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Severity/prioritization index 0-100. Null when INSUFFICIENT_DATA.",
+    )
+    risk_level = models.CharField(
+        max_length=10,
+        choices=(
+            ("low", "Low"),
+            ("moderate", "Moderate"),
+            ("high", "High"),
+        ),
+        null=True,
+        blank=True,
+        help_text="Operational risk class. Null when INSUFFICIENT_DATA.",
+    )
+    model_version = models.CharField(
+        max_length=50,
+        blank=True,
+        default="",
+        help_text="Identifier for the model/version that produced this score.",
+    )
+    feature_snapshot = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Feature values used for this computation.",
+    )
+    explanation = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text=(
+            "Student-specific explanation: decision path, contributing "
+            "factors, rule traces."
+        ),
+    )
+    computed_at = models.DateTimeField()
+
+    class Meta(TimestampedModel.Meta):
+        verbose_name = "risk score"
+        verbose_name_plural = "risk scores"
+        ordering = ["-computed_at", "-created_at"]
+
+    def __str__(self):
+        score_display = f"{self.risk_score}" if self.risk_score is not None else "N/A"
+        return (
+            f"Risk Score: {self.student} — "
+            f"{score_display} ({self.get_computation_status_display()})"
+        )
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+
 class RiskAlert(TimestampedModel):
     """
-    A manually-created risk alert for a student.
+    Actionable Guidance risk alert for a student.
 
-    In Phase 5, only manual alerts are supported.
-    AI-generated alerts (source=decision_tree) are deferred to Phase 9.
+    Created/updated when a RiskScore computation produces a meaningful
+    risk-state change. Manual alerts are also supported.
+
+    PH9 architecture: RiskAlert is created/updated only when actionable
+    state changes. Unchanged daily computation does NOT create duplicate
+    alerts.
+
+    Status transitions: acknowledge, under_monitoring, resolved, escalated.
     """
 
     class RiskLevel(models.TextChoices):
@@ -168,6 +257,7 @@ class RiskAlert(TimestampedModel):
 
     class Source(models.TextChoices):
         MANUAL = "manual", "Manual"
+        DECISION_TREE = "decision_tree", "Decision Tree"
 
     class Status(models.TextChoices):
         ACTIVE = "active", "Active"
@@ -184,7 +274,7 @@ class RiskAlert(TimestampedModel):
     risk_factors = models.JSONField(
         default=list,
         blank=True,
-        help_text="Array of manually-entered risk factor observations.",
+        help_text="Array of risk factor observations (manual or DT-derived).",
     )
     source = models.CharField(
         max_length=20,
@@ -202,6 +292,14 @@ class RiskAlert(TimestampedModel):
         null=True,
         blank=True,
         related_name="risk_alerts",
+    )
+    risk_score_ref = models.ForeignKey(
+        RiskScore,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="risk_alerts",
+        help_text="The RiskScore that triggered this alert (null for manual).",
     )
     generated_at = models.DateTimeField()
     last_updated = models.DateTimeField(auto_now=True)
