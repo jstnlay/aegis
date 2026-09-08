@@ -47,7 +47,7 @@ LOCAL_APPS = [
     "apps.data_import",  # Phase 8: CSV/XLSX data import + controlled export
     "apps.notifications",
     "apps.chatbot",  # PH9: chatbot service boundary + deterministic layer
-    # "apps.audit",
+    "apps.audit",  # PH10: audit trail domain model
 ]
 
 # AI Engine: pure computation layer (feature/label/risk/benchmark/recommend).
@@ -67,6 +67,12 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    # PH10.6: request-scoped audit context. Runs after AuthenticationMiddleware
+    # so the actor cell can safely read request.user lazily (DRF JWT auth is
+    # performed inside the view cycle; the ContextVar is reset in a finally
+    # block, so placement after session/CSRF/auth middleware is safe while
+    # the resolved context always reflects the authenticated DRF user).
+    "apps.audit.middleware.AuditContextMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]

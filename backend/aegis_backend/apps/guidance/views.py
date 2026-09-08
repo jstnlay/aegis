@@ -19,6 +19,8 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.audit.access import record_object_access
+
 from core.permissions import (
     IsFacultyUser,
     IsGuidanceUser,
@@ -147,6 +149,9 @@ class BehavioralNoteViewSet(viewsets.ModelViewSet):
     - Parent: read linked children's notes only.
 
     No PUT/PATCH/DELETE — BehavioralNote is immutable after creation.
+
+    Sensitive read: ``retrieve`` emits one PH10.8 ACCESS audit event per
+    successful authorized retrieval (behavioral narrative content).
     """
 
     serializer_class = BehavioralNoteSerializer
@@ -195,6 +200,13 @@ class BehavioralNoteViewSet(viewsets.ModelViewSet):
                 return BehavioralNote.objects.none()
             return qs.filter(student_id__in=student_ids)
         return BehavioralNote.objects.none()
+
+    def retrieve(self, request, *args, **kwargs):
+        """Authorized sensitive read — emits one ACCESS audit event."""
+        instance = self.get_object()
+        record_object_access(instance)
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
 
     def create(self, request, *args, **kwargs):
         """Create a behavioral note. Faculty only."""
@@ -297,6 +309,9 @@ class ConsultationRecordViewSet(viewsets.ModelViewSet):
     - Student: read consultations where they are the subject.
     - Parent: read consultations for linked children.
     - Faculty/Admin: no access.
+
+    Sensitive read: ``retrieve`` emits one PH10.8 ACCESS audit event per
+    successful authorized retrieval (session notes / recommendations).
     """
 
     serializer_class = ConsultationRecordSerializer
@@ -331,6 +346,13 @@ class ConsultationRecordViewSet(viewsets.ModelViewSet):
                 return ConsultationRecord.objects.none()
             return qs.filter(student_id__in=student_ids)
         return ConsultationRecord.objects.none()
+
+    def retrieve(self, request, *args, **kwargs):
+        """Authorized sensitive read — emits one ACCESS audit event."""
+        instance = self.get_object()
+        record_object_access(instance)
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
 
     def perform_create(self, serializer):
         gp = _get_guidance_profile(self.request.user)
@@ -439,6 +461,11 @@ class RiskAlertViewSet(viewsets.ModelViewSet):
     - Parent: read linked children's alerts.
 
     Custom actions: acknowledge, escalate, resolve.
+
+    Sensitive read: ``retrieve`` emits one PH10.8 ACCESS audit event per
+    successful authorized retrieval (risk factors / risk level).  The
+    state-transition actions are WRITES (already audited by PH10.5
+    signals), not reads, so they emit no ACCESS event.
     """
 
     serializer_class = RiskAlertSerializer
@@ -486,6 +513,13 @@ class RiskAlertViewSet(viewsets.ModelViewSet):
                 return RiskAlert.objects.none()
             return qs.filter(student_id__in=student_ids)
         return RiskAlert.objects.none()
+
+    def retrieve(self, request, *args, **kwargs):
+        """Authorized sensitive read — emits one ACCESS audit event."""
+        instance = self.get_object()
+        record_object_access(instance)
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
 
     def perform_create(self, serializer):
         serializer.save(
@@ -555,6 +589,12 @@ class InterventionViewSet(viewsets.ModelViewSet):
     - GET/PATCH /interventions/{id}/steps/{step_id}/
     - GET/POST /interventions/{id}/notes/
     - POST /interventions/{id}/complete/
+
+    Sensitive read: ``retrieve`` emits one PH10.8 ACCESS audit event per
+    successful authorized retrieval (the intervention plan).  The nested
+    ``steps`` / ``notes`` list reads are list-style reads of the same
+    canonical resource and are deliberately NOT separately audited, so a
+    single navigation to an intervention produces exactly one event.
     """
 
     serializer_class = InterventionSerializer
@@ -570,6 +610,13 @@ class InterventionViewSet(viewsets.ModelViewSet):
             "assigned_counselor__user",
             "risk_alert",
         ).filter(assigned_counselor=gp)
+
+    def retrieve(self, request, *args, **kwargs):
+        """Authorized sensitive read — emits one ACCESS audit event."""
+        instance = self.get_object()
+        record_object_access(instance)
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
 
     def perform_create(self, serializer):
         gp = _get_guidance_profile(self.request.user)
@@ -697,6 +744,11 @@ class GuidanceReportView(APIView):
 
     Returns structured JSON guidance report for a student.
     Guidance counselors only.
+
+    Sensitive read: a successful report generation for a student emits
+    one PH10.8 ACCESS audit event targeting the StudentProfile (the
+    report aggregates behavioral notes, consultations, interventions and
+    risk alerts for the student).
     """
 
     permission_classes = [IsGuidanceUser]
@@ -705,6 +757,7 @@ class GuidanceReportView(APIView):
         from apps.accounts.models import StudentProfile
 
         student = get_object_or_404(StudentProfile, id=student_id)
+        record_object_access(student)
 
         # Behavioral note counts by type
         behavioral_counts = dict(

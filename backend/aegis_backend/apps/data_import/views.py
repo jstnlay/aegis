@@ -56,6 +56,15 @@ _ALLOWED_ROLES = frozenset(("admin", "faculty"))
 #: ZIP magic bytes used for content-based file type detection.
 _ZIP_MAGIC = b"PK\x03\x04"
 
+#: Real domain model each export kind operates on (PH10.9 export audit).
+#: Exports have no ExportJob model of their own; the audit points at the
+#: actual dataset being exported.  No model name is invented.
+EXPORT_DOMAIN_MODELS = {
+    ExportType.GRADES: "academics.Grade",
+    ExportType.ATTENDANCE: "attendance.AttendanceRecord",
+    ExportType.STUDENTS: "accounts.StudentProfile",
+}
+
 
 def _detect_file_type(uploaded_file):
     """
@@ -163,6 +172,14 @@ class ImportJobViewSet(viewsets.ModelViewSet):
             job.save()
             # Re-raise so the framework returns a generic 500 envelope.
             raise
+
+        # PH10.9: audit exactly ONE IMPORT event, only once the import
+        # genuinely completed.  FAILED/PARTIAL jobs are not audited as
+        # successful; the hook is fire-and-forget (PH10.7 principle).
+        if job.status == JobStatus.COMPLETED:
+            from apps.audit.import_export_hooks import audit_successful_import
+
+            audit_successful_import(job)
 
         out = ImportJobSerializer(job, context={"request": request})
         return Response(out.data, status=status.HTTP_201_CREATED)
@@ -336,6 +353,16 @@ class ExportViewMixin(APIView):
         )
         response = HttpResponse(payload, content_type=content_type)
         response["Content-Disposition"] = build_content_disposition(filename)
+
+        # PH10.9: audit exactly ONE EXPORT event only after the export
+        # payload was generated successfully.  The event references the
+        # REAL domain model of the exported dataset (exports have no job
+        # model); the hook is fire-and-forget (PH10.7 principle) so a
+        # failed audit write never changes the outcome.
+        from apps.audit.import_export_hooks import audit_successful_export
+
+        audit_successful_export(EXPORT_DOMAIN_MODELS[self.export_type])
+
         return response
 
     def _export_error(self, exc):

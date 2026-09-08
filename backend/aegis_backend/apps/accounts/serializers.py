@@ -3,6 +3,8 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
+from apps.audit.hooks import audit_successful_login
+
 from .models import User
 
 
@@ -14,10 +16,14 @@ class AegisTokenObtainPairSerializer(TokenObtainPairSerializer):
     additive top-level boolean that tells the client whether the account
     is still on its provisioned temporary credential and therefore must
     complete an initial password change before normal access.
+
+    PH10.7: after successful token issuance, records a LOGIN audit event
+    with the authenticated user, client IP, and user-agent.
     """
 
     def validate(self, attrs):
         data = super().validate(attrs)
+        audit_successful_login(self.user)
         data["must_change_password"] = bool(self.user.must_change_password)
         return data
 

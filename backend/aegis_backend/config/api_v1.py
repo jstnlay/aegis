@@ -23,4 +23,6 @@ urlpatterns = [
     path("analytics/", include("apps.analytics.urls")),
     # Chatbot (Phase 9): /chatbot/ deterministic service boundary.
     path("chatbot/", include("apps.chatbot.urls")),
+    # Audit (Phase 10.10): /audit/logs/ read-only administrator API.
+    path("audit/", include("apps.audit.urls")),
 ]

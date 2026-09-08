@@ -12,6 +12,8 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 
+from apps.audit.access import record_object_access
+
 from .models import Assessment, AssessmentQuestion, AssessmentResult
 from .serializers import (
     AssessmentSerializer,
@@ -294,8 +296,12 @@ class AssessmentResultViewSet(viewsets.ModelViewSet):
     Students can submit results for assessments assigned to them.
     Faculty/guidance can view results for assessments they created.
     Parents can view results for their children.
+
+    Sensitive read: ``retrieve`` emits one PH10.8 ACCESS audit event per
+    successful authorized retrieval (student answers, score, and
+    wellness/behavioral result content).
     """
-    
+
     queryset = AssessmentResult.objects.all()
     serializer_class = AssessmentResultSerializer
     permission_classes = [IsAuthenticated, CanViewAssessmentResult]
@@ -341,9 +347,16 @@ class AssessmentResultViewSet(viewsets.ModelViewSet):
             return AssessmentResult.objects.filter(
                 student_id__in=linked_student_ids
             )
-        
+
         return AssessmentResult.objects.none()
-    
+
+    def retrieve(self, request, *args, **kwargs):
+        """Authorized sensitive read — emits one ACCESS audit event."""
+        instance = self.get_object()
+        record_object_access(instance)
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
+
     def _assert_not_completed(self, result):
         """Raise if the result is completed (SEC-008 immutability boundary).
 

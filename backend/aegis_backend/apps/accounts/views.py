@@ -9,6 +9,7 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView as _BaseTokenRefreshView,
 )
 
+from apps.audit.hooks import audit_successful_logout
 from core.throttling import LoginRateThrottle, TokenRefreshRateThrottle
 
 from .models import User
@@ -75,6 +76,7 @@ class LogoutView(APIView):
                 status=400,
             )
         token.blacklist()
+        audit_successful_logout()
         return Response({"detail": "Successfully logged out."})
 
 
