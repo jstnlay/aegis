@@ -1,0 +1,5 @@
+dist
+node_modules
+scripts/.smoke.cjs
+package-lock.json
+*.local

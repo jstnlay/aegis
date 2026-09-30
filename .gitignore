@@ -52,3 +52,13 @@ cms/dist/
 cms/.strapi/
 cms/public/uploads/
 cms/*.log
+
+# Local OpenCode / Impeccable tooling
+.opencode/
+
+# Local Brave MCP browser profile
+.browser-profile/
+
+frontend/node_modules/
+frontend/dist/
+frontend/.env.*
