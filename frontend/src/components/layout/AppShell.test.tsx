@@ -143,24 +143,52 @@ describe("authenticated user in shell", () => {
    Role-aware sidebar navigation
    ===================================================================== */
 describe("role-aware sidebar", () => {
-  it("shows Dashboard as a real link and planned entries as non-links for students", async () => {
+  /**
+   * PH11.7 made Academics and Attendance real routes for students, so both are
+   * now links. `Assessments` remains the planned-entry assertion: it must stay
+   * informative and non-navigable rather than pointing at a fake route.
+   */
+  it("shows Dashboard, Academics and Attendance as real links for students", async () => {
     await renderAuthenticatedApp("student")
 
     expect(
       await screen.findByRole("link", { name: "Dashboard" })
     ).toHaveAttribute("href", "/app/dashboard")
+    expect(screen.getByRole("link", { name: "Academics" })).toHaveAttribute(
+      "href",
+      "/app/academics"
+    )
+    expect(screen.getByRole("link", { name: "Attendance" })).toHaveAttribute(
+      "href",
+      "/app/attendance"
+    )
+
     // Planned roadmap items are informative but never fake routes.
-    expect(screen.queryByRole("link", { name: "Academics" })).toBeNull()
-    expect(screen.queryByRole("link", { name: "Attendance" })).toBeNull()
-    expect(screen.getByText("Attendance")).toBeInTheDocument()
+    expect(screen.queryByRole("link", { name: "Assessments" })).toBeNull()
+    expect(screen.getByText("Assessments")).toBeInTheDocument()
     expect(screen.getAllByText("Planned").length).toBeGreaterThan(0)
   })
 
-  it("shows the Academics link to faculty", async () => {
+  it("keeps Attendance planned (not a link) for parent", async () => {
+    await renderAuthenticatedApp("parent")
+
+    expect(
+      await screen.findByRole("link", { name: "Dashboard" })
+    ).toBeInTheDocument()
+    expect(screen.queryByRole("link", { name: "Attendance" })).toBeNull()
+    expect(screen.getByText("Attendance")).toBeInTheDocument()
+  })
+
+  it("shows the Academics and Attendance links to faculty", async () => {
     await renderAuthenticatedApp("faculty")
 
-    const academics = await screen.findByRole("link", { name: "Academics" })
-    expect(academics).toHaveAttribute("href", "/app/academics")
+    expect(
+      await screen.findByRole("link", { name: "Academics" })
+    ).toHaveAttribute("href", "/app/academics")
+    expect(screen.getByRole("link", { name: "Attendance" })).toHaveAttribute(
+      "href",
+      "/app/attendance"
+    )
   })
 
   it("shows role-specific groups in the sidebar", async () => {

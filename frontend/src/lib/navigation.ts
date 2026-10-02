@@ -75,15 +75,30 @@ const ACADEMICS: NavItem = {
   route: "academics",
   label: "Academics",
   icon: BookOpen,
-  allowedRoles: ["faculty", "admin"],
+  // Students get the read-only grade record; faculty get grade encoding.
+  allowedRoles: ["student", "faculty", "admin"],
   status: "available",
 }
 
+/**
+ * Attendance is a real route for students and faculty only (PH11.7).
+ * Roles without a verified surface get their own planned item rather than a
+ * link that would bounce off `RequireRole`.
+ */
 const ATTENDANCE: NavItem = {
   route: "attendance",
   label: "Attendance",
   icon: CalendarCheck,
-  allowedRoles: ["faculty", "admin"],
+  allowedRoles: ["student", "faculty"],
+  status: "available",
+}
+
+/** Roadmap entry for roles whose attendance surface is not implemented yet. */
+const ATTENDANCE_PLANNED: NavItem = {
+  route: "attendance",
+  label: "Attendance",
+  icon: CalendarCheck,
+  allowedRoles: ["parent", "admin", "guidance"],
   status: "planned",
 }
 
@@ -152,7 +167,7 @@ const STUDENT_NAVIGATION: readonly NavGroup[] = [
   OVERVIEW_GROUP,
   {
     heading: "Learning",
-    items: [ATTENDANCE, ASSESSMENTS, REPORTS],
+    items: [ACADEMICS, ATTENDANCE, ASSESSMENTS, REPORTS],
   },
   {
     heading: "Communication",
@@ -164,7 +179,7 @@ const PARENT_NAVIGATION: readonly NavGroup[] = [
   OVERVIEW_GROUP,
   {
     heading: "My Child",
-    items: [ATTENDANCE, REPORTS],
+    items: [ATTENDANCE_PLANNED, REPORTS],
   },
   {
     heading: "Communication",
@@ -200,7 +215,14 @@ const ADMIN_NAVIGATION: readonly NavGroup[] = [
   OVERVIEW_GROUP,
   {
     heading: "Administration",
-    items: [ACADEMICS, ATTENDANCE, ASSESSMENTS, USERS, GUIDANCE, REPORTS],
+    items: [
+      ACADEMICS,
+      ATTENDANCE_PLANNED,
+      ASSESSMENTS,
+      USERS,
+      GUIDANCE,
+      REPORTS,
+    ],
   },
   {
     heading: "System",
@@ -272,6 +294,7 @@ export function getPageTitle(pathname: string): string {
     DASHBOARD,
     ACADEMICS,
     ATTENDANCE,
+    ATTENDANCE_PLANNED,
     ASSESSMENTS,
     GUIDANCE,
     USERS,

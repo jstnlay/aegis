@@ -77,6 +77,89 @@ const ROLE_CASES: ReadonlyArray<{ role: Role; heading: RegExp }> = [
   { role: "admin", heading: /Administration Panel/i },
 ]
 
+describe("PH11.7 domain routes", () => {
+  /**
+   * The AppShell header already renders an `<h1>` with the page title, so a
+   * heading assertion alone is ambiguous. Each case asserts a marker that is
+   * unique to the role-specific page body.
+   */
+  const DOMAIN_CASES: ReadonlyArray<{
+    role: Role
+    path: string
+    marker: RegExp
+  }> = [
+    {
+      role: "student",
+      path: "/app/academics",
+      marker: /Grades appear here once they are finalized/i,
+    },
+    {
+      role: "faculty",
+      path: "/app/academics",
+      marker: /Encode a grade/i,
+    },
+    {
+      role: "student",
+      path: "/app/attendance",
+      marker: /Attendance records tied to you/i,
+    },
+    {
+      role: "faculty",
+      path: "/app/attendance",
+      marker: /Take attendance/i,
+    },
+  ]
+
+  it.each(DOMAIN_CASES)(
+    "renders $role $path without a blank page",
+    async ({ role, path, marker }) => {
+      authState.user = makeUser(role)
+      renderAt(path)
+
+      expect(await screen.findByText(marker)).toBeInTheDocument()
+      expect(document.body.textContent?.trim().length ?? 0).toBeGreaterThan(0)
+    }
+  )
+
+  it("redirects a parent away from the student-only attendance route", async () => {
+    authState.user = makeUser("parent")
+    renderAt("/app/attendance")
+
+    // RequireRole bounces to /app -> dashboard -> parent dashboard.
+    expect(
+      await screen.findByRole("heading", { name: /Parent Portal/i })
+    ).toBeInTheDocument()
+    await waitFor(() =>
+      expect(screen.queryByText(/Take attendance/i)).not.toBeInTheDocument()
+    )
+  })
+
+  it("redirects guidance away from Academics", async () => {
+    authState.user = makeUser("guidance")
+    renderAt("/app/academics")
+
+    expect(
+      await screen.findByRole("heading", { name: /Guidance Center/i })
+    ).toBeInTheDocument()
+    await waitFor(() =>
+      expect(screen.queryByText(/Encode a grade/i)).not.toBeInTheDocument()
+    )
+  })
+
+  it("shows admin the documented Academics placeholder, not a student view", async () => {
+    authState.user = makeUser("admin")
+    renderAt("/app/academics")
+
+    expect(
+      await screen.findByText(/first domain to be implemented/i)
+    ).toBeInTheDocument()
+    // Admin must not be shown the student grade-record surface.
+    expect(
+      screen.queryByText(/Grades appear here once they are finalized/i)
+    ).not.toBeInTheDocument()
+  })
+})
+
 describe("role dashboard routes", () => {
   it.each(ROLE_CASES)(
     "renders the $role dashboard at /app/dashboard/$role without a blank page",

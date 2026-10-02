@@ -29,34 +29,57 @@ describe("role navigation configuration", () => {
   })
 
   it("only real routes are marked available", () => {
-    // Dashboard exists for everyone; Academics is the documented first
-    // domain placeholder. Everything else must be honest "planned" state —
-    // no fake pages are created behind nav links.
+    // Dashboard, Academics and Attendance have real routes (PH11.7).
+    // Everything else must stay honest "planned" state — no fake pages are
+    // created behind nav links.
     for (const role of ROLES) {
       const items = getNavItemsForRole(role)
       const available = items.filter((item) => item.status === "available")
       for (const item of available) {
-        expect(["dashboard", "academics"], `${role} / ${item.route}`).toContain(
-          item.route
-        )
+        expect(
+          ["dashboard", "academics", "attendance"],
+          `${role} / ${item.route}`
+        ).toContain(item.route)
       }
       expect(available.length, role).toBeGreaterThanOrEqual(1)
     }
   })
 
   it("available routes only link for their allowed roles", () => {
-    // Academics exists, but is only a link for faculty/admin.
+    // Academics exists for student/faculty/admin; Attendance is only a link
+    // for the two roles PH11.7 implemented.
     expect(getNavItemsForRole("faculty")).toContainEqual(
       expect.objectContaining({ route: "academics", status: "available" })
     )
     expect(getNavItemsForRole("admin")).toContainEqual(
       expect.objectContaining({ route: "academics", status: "available" })
     )
+    expect(getNavItemsForRole("student")).toContainEqual(
+      expect.objectContaining({ route: "academics", status: "available" })
+    )
+
+    for (const role of ["student", "faculty"] as const) {
+      expect(getNavItemsForRole(role), role).toContainEqual(
+        expect.objectContaining({ route: "attendance", status: "available" })
+      )
+    }
+    // Parent/admin attendance stays planned — no verified surface yet.
+    for (const role of ["parent", "admin"] as const) {
+      const attendance = getNavItemsForRole(role).find(
+        (i) => i.route === "attendance"
+      )
+      expect(attendance, role).toBeDefined()
+      expect(attendance?.status, role).toBe("planned")
+    }
+
     const studentAvailable = getNavItemsForRole("student").filter(
       (i) => i.status === "available"
     )
-    expect(studentAvailable).toHaveLength(1)
-    expect(studentAvailable[0]!.route).toBe("dashboard")
+    expect(studentAvailable.map((i) => i.route).sort()).toEqual([
+      "academics",
+      "attendance",
+      "dashboard",
+    ])
   })
 
   it("navigation trees are role-aware", () => {
@@ -68,7 +91,9 @@ describe("role navigation configuration", () => {
     expect(admin).toContain("academics")
     expect(student).not.toContain("users")
     expect(student).not.toContain("settings")
-    expect(student).not.toContain("academics")
+    // PH11.7 added Academics + Attendance for students.
+    expect(student).toContain("academics")
+    expect(student).toContain("attendance")
 
     const guidance = getNavItemsForRole("guidance").map((i) => i.route)
     expect(guidance).toContain("risk-alerts")
@@ -94,7 +119,7 @@ describe("route visibility", () => {
   it("follows the resolved role navigation", () => {
     expect(isRouteVisibleToRole("admin", "dashboard")).toBe(true)
     expect(isRouteVisibleToRole("admin", "academics")).toBe(true)
-    expect(isRouteVisibleToRole("student", "academics")).toBe(false)
+    expect(isRouteVisibleToRole("student", "academics")).toBe(true)
     expect(isRouteVisibleToRole("parent", "users")).toBe(false)
     expect(isRouteVisibleToRole("student", "settings")).toBe(false)
     expect(isRouteVisibleToRole("guidance", "risk-alerts")).toBe(true)
@@ -110,6 +135,7 @@ describe("page titles from navigation", () => {
 
   it("resolves known route titles", () => {
     expect(getPageTitle("/app/academics")).toBe("Academics")
+    expect(getPageTitle("/app/attendance")).toBe("Attendance")
   })
 
   it("falls back for unknown routes", () => {

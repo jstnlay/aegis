@@ -3,7 +3,8 @@ import { Navigate, type RouteObject } from "react-router-dom"
 import { AppShell } from "@/components/layout/AppShell"
 import { ProtectedRoute } from "@/features/auth/ProtectedRoute"
 import { RequireRole } from "@/features/auth/RequireRole"
-import { AcademicsLandingPage } from "@/routes/pages/AcademicsLandingPage"
+import { AcademicsPage } from "@/features/academics/AcademicsPage"
+import { AttendancePage } from "@/features/attendance/AttendancePage"
 import { ChangePasswordPage } from "@/routes/pages/ChangePasswordPage"
 import { LoginPage } from "@/routes/pages/LoginPage"
 import { NotFoundPage } from "@/routes/pages/NotFoundPage"
@@ -78,10 +79,22 @@ export const appRoutes: RouteObject[] = [
             ],
           },
           {
+            // PH11.7: one route, role-appropriate content. The backend scopes
+            // every grade/attendance queryset to the caller, so the page never
+            // filters by identity itself. Admin keeps the read-only placeholder
+            // because PH11.7 covers student and faculty surfaces only.
             path: "academics",
             element: (
-              <RequireRole allowedRoles={["faculty", "admin"]}>
-                <AcademicsLandingPage />
+              <RequireRole allowedRoles={["student", "faculty", "admin"]}>
+                <AcademicsPage />
+              </RequireRole>
+            ),
+          },
+          {
+            path: "attendance",
+            element: (
+              <RequireRole allowedRoles={["student", "faculty"]}>
+                <AttendancePage />
               </RequireRole>
             ),
           },
