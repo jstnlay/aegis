@@ -1,0 +1,34 @@
+# Render service definition for the shared DEV/QA AEGIS backend.
+#
+# Architecture:
+#     Render Django (this service)  ->  Supabase PostgreSQL (external)
+#
+# rootDir is backend/aegis_backend because manage.py lives there and because
+# the start command imports `config.wsgi` as a top-level module.
+#
+# QA provisioning order in the build command is deliberate and load-bearing:
+#     pip install -> migrate -> provision_qa_accounts
+# The command creates the five *.qa@aegis.local DEV/QA logins. It reads the
+# shared password from QA_SHARED_PASSWORD and needs the accounts table, so it
+# must run after migrate and it must finish before gunicorn starts serving.
+
+services:
+  - type: web
+    name: aegis-backend
+    runtime: python
+    rootDir: backend/aegis_backend
+    buildCommand: >-
+      pip install -r ../requirements/production.txt
+      && python manage.py migrate --settings=config.settings.production
+      && python manage.py provision_qa_accounts --settings=config.settings.production
+    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings.production
+      # Shared DEV/QA account password. sync: false keeps the value in the
+      # Render dashboard only -- it is never written to this repository.
+      - key: QA_SHARED_PASSWORD
+        sync: false
+      # The remaining variables (DJANGO_SECRET_KEY, DATABASE_*, CORS_*,
+      # STRAPI_*) are already configured on the live service and are left
+      # untouched here.
