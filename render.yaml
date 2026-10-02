@@ -1,34 +1,81 @@
 # Render service definition for the shared DEV/QA AEGIS backend.
 #
+# This file DESCRIBES the already-running service. The live DEV/QA service was
+# created through the Render Dashboard, not from this Blueprint, so applying
+# or syncing the Blueprint is not part of the workflow -- Dashboard settings
+# are the source of truth at runtime. Keep this file in step with it.
+#
 # Architecture:
-#     Render Django (this service)  ->  Supabase PostgreSQL (external)
+#     Frontend (Cloudflare Pages / Vercel later)
+#         -> Render Django (this service)
+#             -> Supabase PostgreSQL (external, region ap-southeast-1)
 #
 # rootDir is backend/aegis_backend because manage.py lives there and because
 # the start command imports `config.wsgi` as a top-level module.
 #
-# QA provisioning order in the build command is deliberate and load-bearing:
-#     pip install -> migrate -> provision_qa_accounts
-# The command creates the five *.qa@aegis.local DEV/QA logins. It reads the
-# shared password from QA_SHARED_PASSWORD and needs the accounts table, so it
-# must run after migrate and it must finish before gunicorn starts serving.
+# Build order is deliberate and load-bearing:
+#     pip install -> migrate -> provision_qa_accounts -> gunicorn starts
+# provision_qa_accounts writes accounts, so it must run after migrate, and it
+# must finish before gunicorn serves traffic.
+#
+# The shared DEV/QA service intentionally runs config.settings.development
+# (DEBUG=True, ALLOWED_HOSTS=["*"]). Production hardening is separate work.
 
 services:
   - type: web
     name: aegis-backend
     runtime: python
+    plan: free
+    region: singapore
+    branch: master
     rootDir: backend/aegis_backend
     buildCommand: >-
       pip install -r ../requirements/production.txt
-      && python manage.py migrate --settings=config.settings.production
-      && python manage.py provision_qa_accounts --settings=config.settings.production
+      && python manage.py migrate --settings=config.settings.development
+      && python manage.py provision_qa_accounts --settings=config.settings.development
     startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
+    # No healthCheckPath: this Django project exposes no health endpoint, and
+    # inventing one would misrepresent the service. Do not add /healthz or
+    # /api/v1/health/ without first adding the route to config/urls.py.
+    autoDeploy: true
     envVars:
       - key: DJANGO_SETTINGS_MODULE
-        value: config.settings.production
-      # Shared DEV/QA account password. sync: false keeps the value in the
-      # Render dashboard only -- it is never written to this repository.
+        value: config.settings.development
+      # Quoted because YAML treats a bare * as an alias indicator.
+      - key: DJANGO_DEBUG
+        value: "True"
+      - key: DJANGO_ALLOWED_HOSTS
+        value: "*"
+
+      # Secrets: declared here so the required variable set is discoverable,
+      # but never given a value in this repository. sync: false keeps them in
+      # the Render dashboard only.
+      - key: DJANGO_SECRET_KEY
+        sync: false
       - key: QA_SHARED_PASSWORD
         sync: false
-      # The remaining variables (DJANGO_SECRET_KEY, DATABASE_*, CORS_*,
-      # STRAPI_*) are already configured on the live service and are left
-      # untouched here.
+      - key: DATABASE_PASSWORD
+        sync: false
+      # Supabase's pooled user is project-specific (postgres.<project-ref>)
+      # and is not recorded anywhere in this repository, so it cannot be
+      # written here.
+      - key: DATABASE_USER
+        sync: false
+
+      # Supabase PostgreSQL (Singapore).
+      - key: DATABASE_NAME
+        value: postgres
+      - key: DATABASE_HOST
+        value: aws-0-ap-southeast-1.pooler.supabase.com
+      - key: DATABASE_PORT
+        value: "5432"
+
+      # The production frontend does not exist yet, so CORS stays on the local
+      # Vite dev origins. Add the real frontend origin when it is deployed.
+      - key: CORS_ALLOWED_ORIGINS
+        value: http://localhost:5173,http://localhost:3000
+
+      - key: JWT_ACCESS_LIFETIME_MINUTES
+        value: "30"
+      - key: JWT_REFRESH_LIFETIME_DAYS
+        value: "7"
