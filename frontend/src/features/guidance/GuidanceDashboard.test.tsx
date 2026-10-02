@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { describe, expect, it, vi } from "vitest"
+
 import { GuidanceDashboard } from "./GuidanceDashboard"
 import type { User } from "@/types/auth"
 
@@ -29,23 +30,101 @@ vi.mock("@/features/auth/AuthContext", () => ({
   }),
 }))
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: false,
-    },
-  },
-})
+/**
+ * The dashboard reads `useGuidanceStats` for the metric cards and the two list
+ * hooks for the feed cards. Stubbing all three keeps this test focused on
+ * rendering the aggregate rather than re-testing the query layer (which
+ * `api.test.tsx` covers).
+ */
+const stats = {
+  active_cases: 4,
+  at_risk_students: 2,
+  pending_follow_up: 2,
+  assessment_completion_rate: 50,
+}
 
-function renderWithClient(ui: React.ReactElement) {
+vi.mock("@/features/guidance/api", () => ({
+  useGuidanceStats: () => ({
+    data: stats,
+    isFetching: false,
+    isError: false,
+  }),
+  useRiskAlerts: () => ({
+    data: [
+      {
+        id: "ra-1",
+        student: "sp-1",
+        student_name: "Ana Reyes",
+        risk_level: "high",
+        risk_factors: ["attendance"],
+        source: "manual",
+        status: "active",
+        assigned_counselor: null,
+        assigned_counselor_name: null,
+        generated_at: "2025-02-01T00:00:00Z",
+        last_updated: "2025-02-01T00:00:00Z",
+        created_at: "2025-02-01T00:00:00Z",
+        updated_at: "2025-02-01T00:00:00Z",
+      },
+    ],
+    isFetching: false,
+    isError: false,
+  }),
+  useConsultations: () => ({
+    data: [],
+    isFetching: false,
+    isError: false,
+  }),
+}))
+
+function createClient() {
+  return new QueryClient({ defaultOptions: { queries: { retry: false } } })
+}
+
+function renderWithClient() {
   return render(
-    <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
+    <QueryClientProvider client={createClient()}>
+      <GuidanceDashboard />
+    </QueryClientProvider>
   )
 }
 
 describe("GuidanceDashboard", () => {
   it("renders loading state", () => {
-    renderWithClient(<GuidanceDashboard />)
+    renderWithClient()
     expect(screen.getByText(/Active Cases/i)).toBeInTheDocument()
+  })
+
+  it("renders the corrected At-Risk Students count", () => {
+    renderWithClient()
+
+    // `data-slot="card"` is the stable hook on the Card primitive, so the
+    // assertion below is scoped to the right card rather than matching a
+    // number from a neighbouring one.
+    const atRiskCard = screen
+      .getByText(/At-Risk Students/i)
+      .closest('[data-slot="card"]')
+    expect(atRiskCard).not.toBeNull()
+    expect(atRiskCard?.textContent).toContain("2")
+    // Not the resolved-alert-inclusive count of 3 the old logic produced.
+    expect(atRiskCard?.textContent).not.toContain("3")
+    expect(atRiskCard?.textContent).toContain(
+      "Distinct students with an open moderate/high alert"
+    )
+  })
+
+  it("labels Active Cases as open alerts rather than students", () => {
+    renderWithClient()
+    // active_cases counts alerts (4), not distinct students — the copy must not
+    // claim it counts students.
+    expect(screen.getByText(/Open risk alerts/i)).toBeInTheDocument()
+  })
+
+  it("does not render a nonexistent student ID code on alert cards", () => {
+    const { container } = renderWithClient()
+    expect(container.textContent).toContain("Ana Reyes")
+    // `RiskAlertSerializer` has no student_id field; a raw UUID must not be
+    // substituted for the missing human-facing code.
+    expect(container.textContent).not.toContain("sp-1")
   })
 })

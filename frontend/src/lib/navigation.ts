@@ -2,11 +2,13 @@ import {
   BookOpen,
   CalendarCheck,
   ClipboardCheck,
+  ClipboardList,
   FileText,
   LayoutDashboard,
   MessageSquare,
   Settings,
   Shield,
+  UserCog,
   Users,
   type LucideIcon,
 } from "lucide-react"
@@ -26,7 +28,8 @@ import type { Role } from "@/types/auth"
  * Item status:
  * - "available"  — a real screen/route exists (Dashboard for everyone,
  *                  Academics for faculty/admin as the documented
- *                  first-domain entry point).
+ *                  first-domain entry point, Attendance for student/faculty,
+ *                  and the PH11.8 guidance surface).
  * - "planned"    — intentionally documented placeholder; the route is NOT
  *                  created yet and no fake page exists. Rendered in the
  *                  sidebar as an informative, non-navigable entry.
@@ -102,22 +105,38 @@ const ATTENDANCE_PLANNED: NavItem = {
   status: "planned",
 }
 
+/**
+ * Faculty/admin assessment roadmap entry.
+ *
+ * Deliberately *not* the same object as `GUIDANCE_ASSESSMENTS` below. PH11.8
+ * shipped `/app/assessments` for guidance, but `RequireRole` keeps that route
+ * guidance-only, so faculty and admin keep an honest planned entry rather than a
+ * link that would bounce off the guard. When their assessment surface lands it
+ * gets its own route.
+ */
 const ASSESSMENTS: NavItem = {
   route: "assessments",
   label: "Assessments",
   icon: ClipboardCheck,
-  allowedRoles: ["faculty", "guidance", "admin"],
+  allowedRoles: ["faculty", "admin"],
   status: "planned",
 }
 
-const GUIDANCE: NavItem = {
-  route: "guidance",
-  label: "Guidance",
-  icon: MessageSquare,
-  allowedRoles: ["guidance", "admin"],
-  status: "planned",
+/** PH11.8: the guidance assessments surface, backed by a real route. */
+const GUIDANCE_ASSESSMENTS: NavItem = {
+  route: "assessments",
+  label: "Assessments",
+  icon: ClipboardCheck,
+  allowedRoles: ["guidance"],
+  status: "available",
 }
 
+/** PH11.8 removed the old `GUIDANCE` nav item entirely.
+ *
+ * `/app/guidance` is not a page and is deliberately left unregistered, so an
+ * entry for it could only ever be a placeholder. The guidance surface is
+ * reached through the real per-domain routes below instead.
+ */
 const USERS: NavItem = {
   route: "users",
   label: "Users",
@@ -147,7 +166,48 @@ const RISK_ALERTS: NavItem = {
   label: "Risk Alerts",
   icon: Shield,
   allowedRoles: ["guidance"],
-  status: "planned",
+  status: "available",
+}
+
+const CONSULTATIONS: NavItem = {
+  route: "consultations",
+  label: "Consultations",
+  icon: MessageSquare,
+  allowedRoles: ["guidance"],
+  status: "available",
+}
+
+const INTERVENTIONS: NavItem = {
+  route: "interventions",
+  label: "Interventions",
+  icon: ClipboardList,
+  allowedRoles: ["guidance"],
+  status: "available",
+}
+
+const STUDENTS: NavItem = {
+  route: "students",
+  label: "Students",
+  icon: Users,
+  allowedRoles: ["guidance"],
+  status: "available",
+}
+
+/**
+ * PH11.8 built the settings page at `/app/account-settings`, and it is scoped to
+ * the caller by `/accounts/me/`, so the route itself is open to every role.
+ *
+ * The nav entry is guidance-only for now: this batch changed the counselor's
+ * sidebar, and widening every role's sidebar is a separate product decision.
+ * The admin-only `SETTINGS` entry below is a different thing entirely — that is
+ * school administration, not personal account settings.
+ */
+const ACCOUNT_SETTINGS: NavItem = {
+  route: "account-settings",
+  label: "Account Settings",
+  icon: UserCog,
+  allowedRoles: ["guidance"],
+  status: "available",
 }
 
 const NOTIFICATIONS: NavItem = {
@@ -203,11 +263,22 @@ const GUIDANCE_NAVIGATION: readonly NavGroup[] = [
   OVERVIEW_GROUP,
   {
     heading: "Student Support",
-    items: [RISK_ALERTS, ASSESSMENTS, GUIDANCE, REPORTS],
+    items: [
+      RISK_ALERTS,
+      CONSULTATIONS,
+      INTERVENTIONS,
+      STUDENTS,
+      GUIDANCE_ASSESSMENTS,
+      REPORTS,
+    ],
   },
   {
     heading: "Communication",
     items: [NOTIFICATIONS],
+  },
+  {
+    heading: "Account",
+    items: [ACCOUNT_SETTINGS],
   },
 ]
 
@@ -215,14 +286,7 @@ const ADMIN_NAVIGATION: readonly NavGroup[] = [
   OVERVIEW_GROUP,
   {
     heading: "Administration",
-    items: [
-      ACADEMICS,
-      ATTENDANCE_PLANNED,
-      ASSESSMENTS,
-      USERS,
-      GUIDANCE,
-      REPORTS,
-    ],
+    items: [ACADEMICS, ATTENDANCE_PLANNED, ASSESSMENTS, USERS, REPORTS],
   },
   {
     heading: "System",
@@ -296,11 +360,15 @@ export function getPageTitle(pathname: string): string {
     ATTENDANCE,
     ATTENDANCE_PLANNED,
     ASSESSMENTS,
-    GUIDANCE,
+    GUIDANCE_ASSESSMENTS,
     USERS,
     REPORTS,
     SETTINGS,
     RISK_ALERTS,
+    CONSULTATIONS,
+    INTERVENTIONS,
+    STUDENTS,
+    ACCOUNT_SETTINGS,
     NOTIFICATIONS,
   ]
 

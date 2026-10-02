@@ -1,0 +1,852 @@
+import { MessageSquareText } from "lucide-react"
+import { useMemo, useState, type FormEvent } from "react"
+
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Skeleton } from "@/components/ui/skeleton"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import {
+  CONCERN_CATEGORIES,
+  CONCERN_CATEGORY_LABELS,
+  CONSULTATION_PRIORITIES,
+  CONSULTATION_PRIORITY_LABELS,
+  CONSULTATION_SESSION_TYPES,
+  CONSULTATION_SESSION_TYPE_LABELS,
+  CONSULTATION_STATUSES,
+  CONSULTATION_STATUS_LABELS,
+  countConsultationsByStatus,
+  filterConsultations,
+  useConsultations,
+  useCreateConsultation,
+  useStudentRoster,
+  useUpdateConsultation,
+  type ConcernCategory,
+  type Consultation,
+  type ConsultationPriority,
+  type ConsultationSessionType,
+  type ConsultationStatus,
+} from "@/features/guidance/api"
+import { normalizeApiError } from "@/lib/error"
+import {
+  consultationStatusBadgeClass,
+  riskLevelBadgeClass,
+} from "@/lib/status-badge"
+
+function PageHeading({
+  title,
+  description,
+}: {
+  title: string
+  description: string
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-3">
+        <MessageSquareText
+          className="size-5 text-muted-foreground"
+          aria-hidden="true"
+        />
+        <h1 className="text-2xl font-bold text-foreground">{title}</h1>
+      </div>
+      <p className="text-sm text-muted-foreground">{description}</p>
+    </div>
+  )
+}
+
+function ErrorNote({ message }: { message: string }) {
+  return (
+    <div
+      role="alert"
+      className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+    >
+      <span>{message}</span>
+    </div>
+  )
+}
+
+function EmptyState({ message }: { message: string }) {
+  return (
+    <p className="py-6 text-center text-sm text-muted-foreground">{message}</p>
+  )
+}
+
+function ConsultationStatusBadge({ status }: { status: ConsultationStatus }) {
+  return (
+    <Badge
+      variant="outline"
+      className={consultationStatusBadgeClass(status)}
+      data-consultation-status={status}
+    >
+      {CONSULTATION_STATUS_LABELS[status]}
+    </Badge>
+  )
+}
+
+/**
+ * `TimeField` renders `HH:MM:SS`; the seconds are always zero in practice and
+ * only add noise in a table cell.
+ */
+function formatTime(value: string): string {
+  return value.slice(0, 5)
+}
+
+/**
+ * Priority reuses the risk-level badge map.
+ *
+ * `ConsultationRecord.PriorityLevel` and `RiskAlert.RiskLevel` are the same
+ * three values carrying the same ordinal meaning, so they share one treatment
+ * rather than duplicating an identical class map.
+ */
+function PriorityBadge({ priority }: { priority: ConsultationPriority }) {
+  return (
+    <Badge
+      variant="secondary"
+      className={riskLevelBadgeClass(priority)}
+      data-priority={priority}
+    >
+      {CONSULTATION_PRIORITY_LABELS[priority]}
+    </Badge>
+  )
+}
+
+/**
+ * Status filter row with live counts.
+ *
+ * Counts come from the unfiltered list so the chip totals always describe the
+ * whole visible set instead of collapsing to zero as the user narrows it.
+ */
+function StatusFilterChips({
+  counts,
+  value,
+  onChange,
+}: {
+  counts: ReturnType<typeof countConsultationsByStatus>
+  value: ConsultationStatus | "all"
+  onChange: (next: ConsultationStatus | "all") => void
+}) {
+  const options: ReadonlyArray<ConsultationStatus | "all"> = [
+    "all",
+    ...CONSULTATION_STATUSES,
+  ]
+
+  return (
+    <div
+      className="flex flex-wrap gap-2"
+      role="group"
+      aria-label="Filter by status"
+    >
+      {options.map((option) => {
+        const active = value === option
+        return (
+          <Button
+            key={option}
+            type="button"
+            size="sm"
+            variant={active ? "default" : "outline"}
+            aria-pressed={active}
+            onClick={() => onChange(option)}
+          >
+            {option === "all" ? "All" : CONSULTATION_STATUS_LABELS[option]}{" "}
+            <span className="tabular-nums opacity-80">{counts[option]}</span>
+          </Button>
+        )
+      })}
+    </div>
+  )
+}
+
+/**
+ * Concern-category toggle group.
+ *
+ * There is no multi-select primitive in `components/ui`, and a set of pressed
+ * buttons maps onto the `concern_categories` JSON array more honestly than a
+ * `<select multiple>` would. The backend validates membership of each entry
+ * against a closed set, so the options are built from `CONCERN_CATEGORIES`
+ * rather than free text.
+ */
+function ConcernCategoryPicker({
+  value,
+  onToggle,
+  legend,
+}: {
+  value: ConcernCategory[]
+  onToggle: (category: ConcernCategory) => void
+  legend: string
+}) {
+  return (
+    <fieldset className="space-y-1.5">
+      <legend className="text-sm font-medium">{legend}</legend>
+      <div className="flex flex-wrap gap-1.5">
+        {CONCERN_CATEGORIES.map((category) => {
+          const selected = value.includes(category)
+          return (
+            <Button
+              key={category}
+              type="button"
+              size="sm"
+              variant={selected ? "secondary" : "outline"}
+              aria-pressed={selected}
+              onClick={() => onToggle(category)}
+            >
+              {CONCERN_CATEGORY_LABELS[category]}
+            </Button>
+          )
+        })}
+      </div>
+    </fieldset>
+  )
+}
+
+/**
+ * `POST /guidance/consultations/` form.
+ *
+ * There is deliberately no counselor field: `counselor` is a read-only
+ * serializer field that `perform_create` sets from the caller, and the list is
+ * already scoped to that caller.
+ */
+function NewConsultationDialog() {
+  const rosterQuery = useStudentRoster()
+  const create = useCreateConsultation()
+
+  const [open, setOpen] = useState(false)
+  const [studentId, setStudentId] = useState("")
+  const [sessionDate, setSessionDate] = useState("")
+  const [sessionTime, setSessionTime] = useState("")
+  const [sessionType, setSessionType] = useState<ConsultationSessionType>(
+    "individual_counseling"
+  )
+  const [concerns, setConcerns] = useState<ConcernCategory[]>([])
+  const [notes, setNotes] = useState("")
+  const [priority, setPriority] = useState<ConsultationPriority>("medium")
+  const [nextSessionDate, setNextSessionDate] = useState("")
+
+  const roster = rosterQuery.data ?? []
+  // `validate_session_notes` rejects a blank value, so the form mirrors that
+  // instead of letting the server 400 on an avoidable field.
+  const notesBlank = notes.trim().length === 0
+
+  function toggleConcern(category: ConcernCategory) {
+    setConcerns((current) =>
+      current.includes(category)
+        ? current.filter((item) => item !== category)
+        : [...current, category]
+    )
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!studentId || !sessionDate || !sessionTime || notesBlank) return
+    try {
+      await create.mutateAsync({
+        student: studentId,
+        session_date: sessionDate,
+        session_time: sessionTime,
+        session_type: sessionType,
+        concern_categories: concerns,
+        session_notes: notes.trim(),
+        priority_level: priority,
+        next_session_date: nextSessionDate || null,
+      })
+      setStudentId("")
+      setSessionDate("")
+      setSessionTime("")
+      setConcerns([])
+      setNotes("")
+      setNextSessionDate("")
+      setOpen(false)
+    } catch {
+      // Surfaced from `create.isError` below; a failed create keeps the dialog
+      // open with the entered values so nothing has to be retyped.
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button>New consultation</Button>
+      </DialogTrigger>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>New consultation</DialogTitle>
+          <DialogDescription>
+            Record a counseling session. The counselor is set to you by the
+            server.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="consultation-student">Student</Label>
+            <Select
+              value={studentId}
+              onValueChange={setStudentId}
+              disabled={rosterQuery.isLoading || roster.length === 0}
+            >
+              <SelectTrigger id="consultation-student">
+                <SelectValue
+                  placeholder={
+                    rosterQuery.isLoading
+                      ? "Loading students"
+                      : roster.length === 0
+                        ? "No students in roster"
+                        : "Select a student"
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {roster.map((entry) => (
+                  <SelectItem key={entry.id} value={entry.id}>
+                    {entry.name} — {entry.code}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="consultation-date">Session date</Label>
+              <Input
+                id="consultation-date"
+                type="date"
+                value={sessionDate}
+                onChange={(event) => setSessionDate(event.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="consultation-time">Session time</Label>
+              <Input
+                id="consultation-time"
+                type="time"
+                value={sessionTime}
+                onChange={(event) => setSessionTime(event.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="consultation-type">Session type</Label>
+            <Select
+              value={sessionType}
+              onValueChange={(value) =>
+                setSessionType(value as ConsultationSessionType)
+              }
+            >
+              <SelectTrigger id="consultation-type">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CONSULTATION_SESSION_TYPES.map((type) => (
+                  <SelectItem key={type} value={type}>
+                    {CONSULTATION_SESSION_TYPE_LABELS[type]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <ConcernCategoryPicker
+            legend="Concern categories"
+            value={concerns}
+            onToggle={toggleConcern}
+          />
+
+          <div className="space-y-1.5">
+            <Label htmlFor="consultation-notes">Session notes</Label>
+            <textarea
+              id="consultation-notes"
+              rows={4}
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring"
+            />
+            <p className="text-xs text-muted-foreground">
+              Required. The server rejects blank notes.
+            </p>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="consultation-priority">Priority</Label>
+              <Select
+                value={priority}
+                onValueChange={(value) =>
+                  setPriority(value as ConsultationPriority)
+                }
+              >
+                <SelectTrigger id="consultation-priority">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CONSULTATION_PRIORITIES.map((level) => (
+                    <SelectItem key={level} value={level}>
+                      {CONSULTATION_PRIORITY_LABELS[level]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="consultation-next">Next session date</Label>
+              <Input
+                id="consultation-next"
+                type="date"
+                value={nextSessionDate}
+                onChange={(event) => setNextSessionDate(event.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">Optional.</p>
+            </div>
+          </div>
+
+          {create.isError ? (
+            <ErrorNote message={normalizeApiError(create.error).message} />
+          ) : null}
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={
+                create.isPending ||
+                !studentId ||
+                !sessionDate ||
+                !sessionTime ||
+                notesBlank ||
+                roster.length === 0
+              }
+            >
+              {create.isPending ? "Creating…" : "Create consultation"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/**
+ * `PATCH /guidance/consultations/{id}/` form.
+ *
+ * Only the case-management fields are editable here. `student`, `session_date`
+ * and `session_time` identify the session itself, so the dialog leaves them
+ * alone rather than offering an edit that would silently rewrite history.
+ */
+function EditConsultationDialog({
+  consultation,
+}: {
+  consultation: Consultation
+}) {
+  const update = useUpdateConsultation()
+
+  const [open, setOpen] = useState(false)
+  const [status, setStatus] = useState<ConsultationStatus>(consultation.status)
+  const [priority, setPriority] = useState<ConsultationPriority>(
+    consultation.priority_level
+  )
+  const [notes, setNotes] = useState(consultation.session_notes)
+  const [recommendations, setRecommendations] = useState(
+    consultation.recommendations ?? ""
+  )
+  const [nextSessionDate, setNextSessionDate] = useState(
+    consultation.next_session_date ?? ""
+  )
+
+  const notesBlank = notes.trim().length === 0
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (notesBlank) return
+    try {
+      await update.mutateAsync({
+        id: consultation.id,
+        payload: {
+          status,
+          priority_level: priority,
+          session_notes: notes.trim(),
+          recommendations: recommendations.trim() || null,
+          next_session_date: nextSessionDate || null,
+        },
+      })
+      setOpen(false)
+    } catch {
+      // Surfaced from `update.isError` below.
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button type="button" size="xs" variant="outline">
+          Update
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Update consultation</DialogTitle>
+          <DialogDescription>
+            {consultation.student_name} — {consultation.session_date}{" "}
+            {formatTime(consultation.session_time)}
+          </DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor={`consultation-edit-status-${consultation.id}`}>
+                Status
+              </Label>
+              <Select
+                value={status}
+                onValueChange={(value) =>
+                  setStatus(value as ConsultationStatus)
+                }
+              >
+                <SelectTrigger
+                  id={`consultation-edit-status-${consultation.id}`}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CONSULTATION_STATUSES.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {CONSULTATION_STATUS_LABELS[option]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor={`consultation-edit-priority-${consultation.id}`}>
+                Priority
+              </Label>
+              <Select
+                value={priority}
+                onValueChange={(value) =>
+                  setPriority(value as ConsultationPriority)
+                }
+              >
+                <SelectTrigger
+                  id={`consultation-edit-priority-${consultation.id}`}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CONSULTATION_PRIORITIES.map((level) => (
+                    <SelectItem key={level} value={level}>
+                      {CONSULTATION_PRIORITY_LABELS[level]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor={`consultation-edit-notes-${consultation.id}`}>
+              Session notes
+            </Label>
+            <textarea
+              id={`consultation-edit-notes-${consultation.id}`}
+              rows={4}
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring"
+            />
+            <p className="text-xs text-muted-foreground">
+              Required. The server rejects blank notes.
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label
+              htmlFor={`consultation-edit-recommendations-${consultation.id}`}
+            >
+              Recommendations
+            </Label>
+            <textarea
+              id={`consultation-edit-recommendations-${consultation.id}`}
+              rows={3}
+              value={recommendations}
+              onChange={(event) => setRecommendations(event.target.value)}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor={`consultation-edit-next-${consultation.id}`}>
+              Next session date
+            </Label>
+            <Input
+              id={`consultation-edit-next-${consultation.id}`}
+              type="date"
+              value={nextSessionDate}
+              onChange={(event) => setNextSessionDate(event.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Clear the field to send null and remove the scheduled follow-up.
+            </p>
+          </div>
+
+          {update.isError ? (
+            <ErrorNote message={normalizeApiError(update.error).message} />
+          ) : null}
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={update.isPending || notesBlank}>
+              {update.isPending ? "Saving…" : "Save changes"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+export function ConsultationsPage() {
+  const consultationsQuery = useConsultations()
+  const rosterQuery = useStudentRoster()
+
+  const [status, setStatus] = useState<ConsultationStatus | "all">("all")
+  const [priority, setPriority] = useState<ConsultationPriority | "all">("all")
+  const [search, setSearch] = useState("")
+
+  const consultations = useMemo(
+    () => consultationsQuery.data ?? [],
+    [consultationsQuery.data]
+  )
+
+  const visible = useMemo(
+    () => filterConsultations(consultations, { status, priority, search }),
+    [consultations, status, priority, search]
+  )
+
+  const counts = useMemo(
+    () => countConsultationsByStatus(consultations),
+    [consultations]
+  )
+
+  /**
+   * Student UUID -> code.
+   *
+   * `ConsultationRecordSerializer` carries no student ID code, so the enrollment
+   * roster is the only verified source. A student with no enrollment is omitted
+   * rather than rendered as a raw UUID.
+   */
+  const codeByStudent = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const entry of rosterQuery.data ?? []) map.set(entry.id, entry.code)
+    return map
+  }, [rosterQuery.data])
+
+  const isFiltered =
+    status !== "all" || priority !== "all" || search.trim().length > 0
+
+  return (
+    <div className="space-y-6">
+      <PageHeading
+        title="Consultations"
+        description="Counseling sessions you have recorded. The server returns only your own consultations."
+      />
+
+      <Card>
+        <CardHeader>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="space-y-1">
+              <CardTitle>Sessions</CardTitle>
+              <CardDescription>
+                Showing {visible.length} of {consultations.length}, newest
+                session first.
+              </CardDescription>
+            </div>
+            <NewConsultationDialog />
+          </div>
+        </CardHeader>
+
+        <CardContent className="space-y-4">
+          <StatusFilterChips
+            counts={counts}
+            value={status}
+            onChange={setStatus}
+          />
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="consultation-filter-priority">Priority</Label>
+              <Select
+                value={priority}
+                onValueChange={(value) =>
+                  setPriority(value as ConsultationPriority | "all")
+                }
+              >
+                <SelectTrigger id="consultation-filter-priority">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All priorities</SelectItem>
+                  {CONSULTATION_PRIORITIES.map((level) => (
+                    <SelectItem key={level} value={level}>
+                      {CONSULTATION_PRIORITY_LABELS[level]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5 sm:col-span-1 lg:col-span-2">
+              <Label htmlFor="consultation-search">Search</Label>
+              <Input
+                id="consultation-search"
+                type="search"
+                value={search}
+                placeholder="Student, note, or concern category"
+                onChange={(event) => setSearch(event.target.value)}
+              />
+            </div>
+          </div>
+
+          {consultationsQuery.isLoading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+          ) : consultationsQuery.isError ? (
+            <ErrorNote
+              message={normalizeApiError(consultationsQuery.error).message}
+            />
+          ) : visible.length === 0 ? (
+            <EmptyState
+              message={
+                isFiltered
+                  ? "No consultations match the current filters."
+                  : "You have not recorded any consultations yet."
+              }
+            />
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Student</TableHead>
+                  <TableHead>Session</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Concerns</TableHead>
+                  <TableHead>Priority</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Next session</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {visible.map((consultation) => (
+                  <TableRow
+                    key={consultation.id}
+                    data-consultation-id={consultation.id}
+                  >
+                    <TableCell>
+                      <div className="font-medium">
+                        {consultation.student_name}
+                      </div>
+                      {codeByStudent.get(consultation.student) ? (
+                        <div className="text-xs text-muted-foreground">
+                          {codeByStudent.get(consultation.student)}
+                        </div>
+                      ) : null}
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm">{consultation.session_date}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {formatTime(consultation.session_time)}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {
+                        CONSULTATION_SESSION_TYPE_LABELS[
+                          consultation.session_type
+                        ]
+                      }
+                    </TableCell>
+                    <TableCell>
+                      {consultation.concern_categories.length === 0 ? (
+                        <span className="text-muted-foreground">—</span>
+                      ) : (
+                        <div className="flex flex-wrap gap-1">
+                          {consultation.concern_categories.map((category) => (
+                            <Badge key={category} variant="outline">
+                              {CONCERN_CATEGORY_LABELS[category]}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <PriorityBadge priority={consultation.priority_level} />
+                    </TableCell>
+                    <TableCell>
+                      <ConsultationStatusBadge status={consultation.status} />
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {consultation.next_session_date ?? "—"}
+                    </TableCell>
+                    <TableCell>
+                      <EditConsultationDialog consultation={consultation} />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <p className="text-xs text-muted-foreground">
+        Consultations are private to the counselor who recorded them. The
+        dashboard&apos;s pending-consultation count comes from the same scoped
+        list.
+      </p>
+    </div>
+  )
+}

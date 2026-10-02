@@ -30,9 +30,33 @@ vi.mock("@/lib/api", () => ({
   API_BASE_URL: "http://localhost:8000/api/v1",
   onSessionExpired: vi.fn(() => () => {}),
   apiClient: {
-    get: vi.fn(async () => ({
-      data: { count: 0, next: null, previous: null, results: [] },
-    })),
+    // Routing only, so every response is inert. The shape still has to match
+    // what the hook destructures: the guidance report and the attendance
+    // summary are single objects, not paginated envelopes.
+    get: vi.fn(async (url: string) => {
+      if (url.startsWith("/guidance/reports/student/")) {
+        return {
+          data: {
+            student: "sp-1",
+            student_name: "Test Guidance",
+            student_id_code: "S-0001",
+            behavioral_note_counts: {},
+            consultation_summary: { total: 0, by_status: {}, by_priority: {} },
+            intervention_summary: {
+              total: 0,
+              active: 0,
+              completed: 0,
+              cancelled: 0,
+            },
+            risk_alert_history: [],
+          },
+        }
+      }
+      if (url.startsWith("/attendance/summary/")) return { data: [] }
+      return {
+        data: { count: 0, next: null, previous: null, results: [] },
+      }
+    }),
   },
 }))
 
@@ -157,6 +181,159 @@ describe("PH11.7 domain routes", () => {
     expect(
       screen.queryByText(/Grades appear here once they are finalized/i)
     ).not.toBeInTheDocument()
+  })
+})
+
+describe("PH11.8 guidance routes", () => {
+  /**
+   * Each case asserts a marker that only that page body can render, so a route
+   * that silently fell through to another page would fail here.
+   */
+  const GUIDANCE_CASES: ReadonlyArray<{
+    path: string
+    marker: RegExp
+  }> = [
+    {
+      path: "/app/risk-alerts",
+      marker: /transitions each alert currently allows/i,
+    },
+    { path: "/app/consultations", marker: /only your own consultations/i },
+    { path: "/app/interventions", marker: /only plans assigned to you/i },
+    {
+      path: "/app/students",
+      marker: /Students with guidance activity/i,
+    },
+    { path: "/app/assessments", marker: /assessments you created/i },
+    { path: "/app/account-settings", marker: /cannot be changed here/i },
+  ]
+
+  it.each(GUIDANCE_CASES)(
+    "renders guidance $path without a blank page",
+    async ({ path, marker }) => {
+      authState.user = makeUser("guidance")
+      renderAt(path)
+
+      // The page and its footer note can both mention the same phrase, so
+      // assert at least one match rather than exactly one.
+      expect((await screen.findAllByText(marker)).length).toBeGreaterThan(0)
+      expect(document.body.textContent?.trim().length ?? 0).toBeGreaterThan(0)
+    }
+  )
+
+  it("renders the student profile from its :studentId param", async () => {
+    authState.user = makeUser("guidance")
+    renderAt("/app/students/sp-1")
+
+    // The roster is empty in this harness, so the page falls back to the
+    // generic heading. The point is that the param route resolves at all.
+    expect(
+      await screen.findByRole("heading", { name: "Student", level: 1 })
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole("link", { name: /back to roster/i })
+    ).toHaveAttribute("href", "/app/students")
+  })
+
+  const BLOCKED_FOR_OTHERS: ReadonlyArray<{
+    path: string
+    marker: RegExp
+  }> = [
+    { path: "/app/risk-alerts", marker: /transitions each alert/i },
+    { path: "/app/consultations", marker: /only your own consultations/i },
+    { path: "/app/interventions", marker: /only plans assigned to you/i },
+    {
+      path: "/app/students",
+      marker: /Students with guidance activity/i,
+    },
+    {
+      path: "/app/assessments",
+      marker: /assessments you created/i,
+    },
+  ]
+
+  const OTHER_ROLES: ReadonlyArray<Role> = [
+    "student",
+    "parent",
+    "faculty",
+    "admin",
+  ]
+
+  it.each(BLOCKED_FOR_OTHERS)(
+    "redirects a non-guidance role away from $path",
+    async ({ path, marker }) => {
+      for (const role of OTHER_ROLES) {
+        authState.user = makeUser(role)
+        const view = renderAt(path)
+
+        // RequireRole bounces to the caller's own dashboard.
+        expect(
+          await screen.findByRole("heading", {
+            name: ROLE_CASES.find((c) => c.role === role)!.heading,
+          })
+        ).toBeInTheDocument()
+        await waitFor(() =>
+          expect(screen.queryByText(marker)).not.toBeInTheDocument()
+        )
+
+        view.unmount()
+      }
+    }
+  )
+
+  it("keeps the guidance assessments route away from faculty and admin", async () => {
+    // /app/assessments resolves to the guidance page only. Faculty and admin
+    // keep a planned nav entry rather than a link that would bounce.
+    for (const role of ["faculty", "admin"] as const) {
+      authState.user = makeUser(role)
+      const view = renderAt("/app/assessments")
+
+      expect(
+        await screen.findByRole("heading", {
+          name: ROLE_CASES.find((c) => c.role === role)!.heading,
+        })
+      ).toBeInTheDocument()
+      expect(
+        screen.queryByText(/assessments you created/i)
+      ).not.toBeInTheDocument()
+
+      view.unmount()
+    }
+  })
+
+  it("redirects every non-guidance role away from account settings", async () => {
+    // PH11.8 keeps /app/account-settings guidance-only, even though
+    // `/accounts/me/` is self-scoped.
+    for (const role of ["student", "parent", "faculty", "admin"] as const) {
+      authState.user = makeUser(role)
+      const view = renderAt("/app/account-settings")
+
+      expect(
+        await screen.findByRole("heading", {
+          name: ROLE_CASES.find((c) => c.role === role)!.heading,
+        })
+      ).toBeInTheDocument()
+      expect(
+        screen.queryByRole("heading", {
+          name: "Account settings",
+          level: 1,
+        })
+      ).not.toBeInTheDocument()
+
+      view.unmount()
+    }
+  })
+
+  it("does not register an /app/guidance page", async () => {
+    authState.user = makeUser("guidance")
+    renderAt("/app/guidance")
+
+    // The guidance surface lives at its own top-level routes; /app/guidance
+    // must fall through to the 404 page rather than render something.
+    expect(
+      await screen.findByRole("heading", {
+        name: /not found|page doesn't exist/i,
+      })
+    ).toBeInTheDocument()
   })
 })
 

@@ -5,6 +5,13 @@ import { ProtectedRoute } from "@/features/auth/ProtectedRoute"
 import { RequireRole } from "@/features/auth/RequireRole"
 import { AcademicsPage } from "@/features/academics/AcademicsPage"
 import { AttendancePage } from "@/features/attendance/AttendancePage"
+import { AssessmentsPage } from "@/features/guidance/AssessmentsPage"
+import { ConsultationsPage } from "@/features/guidance/ConsultationsPage"
+import { InterventionsPage } from "@/features/guidance/InterventionsPage"
+import { RiskAlertsPage } from "@/features/guidance/RiskAlertsPage"
+import { StudentProfilePage } from "@/features/guidance/StudentProfilePage"
+import { StudentsPage } from "@/features/guidance/StudentsPage"
+import { AccountSettingsPage } from "@/features/settings/AccountSettingsPage"
 import { ChangePasswordPage } from "@/routes/pages/ChangePasswordPage"
 import { LoginPage } from "@/routes/pages/LoginPage"
 import { NotFoundPage } from "@/routes/pages/NotFoundPage"
@@ -95,6 +102,77 @@ export const appRoutes: RouteObject[] = [
             element: (
               <RequireRole allowedRoles={["student", "faculty"]}>
                 <AttendancePage />
+              </RequireRole>
+            ),
+          },
+          /* PH11.8: the guidance surface. Every route below is guidance-only
+             because the backend either scopes it to the counselor
+             (consultations, interventions) or is guidance-specific
+             (risk alerts, wellness/behavioral assessments). Risk alerts,
+             grades, attendance and behavioral notes are school-wide to
+             guidance, but no other role has a verified surface for them yet,
+             so they are not opened up here. */
+          {
+            path: "risk-alerts",
+            element: (
+              <RequireRole allowedRoles={["guidance"]}>
+                <RiskAlertsPage />
+              </RequireRole>
+            ),
+          },
+          {
+            path: "consultations",
+            element: (
+              <RequireRole allowedRoles={["guidance"]}>
+                <ConsultationsPage />
+              </RequireRole>
+            ),
+          },
+          {
+            path: "interventions",
+            element: (
+              <RequireRole allowedRoles={["guidance"]}>
+                <InterventionsPage />
+              </RequireRole>
+            ),
+          },
+          {
+            path: "students",
+            element: (
+              <RequireRole allowedRoles={["guidance"]}>
+                <StudentsPage />
+              </RequireRole>
+            ),
+          },
+          {
+            path: "students/:studentId",
+            element: (
+              <RequireRole allowedRoles={["guidance"]}>
+                <StudentProfilePage />
+              </RequireRole>
+            ),
+          },
+          {
+            // PH11.8: this is the *guidance* assessments surface — only the
+            // wellness/behavioral assessments the counselor created. It is a
+            // distinct route from the faculty/admin assessment work, which
+            // `RequireRole` keeps restricted to its own roles.
+            path: "assessments",
+            element: (
+              <RequireRole allowedRoles={["guidance"]}>
+                <AssessmentsPage />
+              </RequireRole>
+            ),
+          },
+          {
+            // PH11.8: guidance-only. `/accounts/me/` is self-scoped, but the
+            // surface is part of the guidance batch and the other roles have
+            // no verified settings surface yet, so the route stays guarded
+            // rather than being opened up silently.
+            path: "account-settings",
+            element: (
+              <RequireRole allowedRoles={["guidance"]}>
+                <AccountSettingsPage />
               </RequireRole>
             ),
           },

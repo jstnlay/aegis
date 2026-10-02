@@ -1,14 +1,12 @@
-import { useMemo } from "react"
-
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/features/auth/AuthContext"
 import {
-  useAssessmentCompletion,
-  useAtRiskStudents,
   useConsultations,
+  useGuidanceStats,
   useRiskAlerts,
+  type RiskAlert,
 } from "@/features/guidance/api"
 import { formatCount, formatPercent } from "@/lib/metric-format"
 import {
@@ -16,34 +14,31 @@ import {
   riskLevelBadgeClass,
 } from "@/lib/status-badge"
 
+/** Most recent alerts first, so the card is a live feed rather than API order. */
+function byGeneratedAtDesc(a: RiskAlert, b: RiskAlert): number {
+  return b.generated_at.localeCompare(a.generated_at)
+}
+
+const MAX_ALERT_CARDS = 5
+
 function GuidanceDashboard() {
   const { user } = useAuth()
 
+  // One aggregate feeds all four cards, so they can never disagree:
+  // in particular "Active Cases" and "At-Risk Students" are derived from the
+  // same open-alert set by the same rule.
+  const statsQuery = useGuidanceStats()
   const riskAlertsQuery = useRiskAlerts()
-  const atRiskQuery = useAtRiskStudents()
   const consultationsQuery = useConsultations()
-  const assessmentQuery = useAssessmentCompletion()
 
-  // `null` means the aggregate could not be measured; a real 0 (no
-  // active cases, no at-risk students) is preserved and shown as "0".
-  const atRiskCount = useMemo<number | null>(
-    () => (Array.isArray(atRiskQuery.data) ? atRiskQuery.data.length : null),
-    [atRiskQuery.data]
-  )
-
-  const pendingFollowUpCount = useMemo<number | null>(
-    () => assessmentQuery.data?.pending_follow_up ?? null,
-    [assessmentQuery.data]
-  )
-
-  const completionRate = useMemo<number | null>(
-    () => assessmentQuery.data?.assessment_completion_rate ?? null,
-    [assessmentQuery.data]
-  )
-
-  const activeCasesCount = useMemo<number | null>(
-    () => riskAlertsQuery.data?.length ?? null,
-    [riskAlertsQuery.data]
+  const stats = statsQuery.data
+  const recentAlerts = (riskAlertsQuery.data ?? [])
+    .slice()
+    .sort(byGeneratedAtDesc)
+    .slice(0, MAX_ALERT_CARDS)
+  const recentConsultations = (consultationsQuery.data ?? []).slice(
+    0,
+    MAX_ALERT_CARDS
   )
 
   if (!user) return null
@@ -67,14 +62,14 @@ function GuidanceDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {riskAlertsQuery.isFetching ? (
+              {statsQuery.isFetching ? (
                 <Skeleton className="h-8 w-20" />
               ) : (
-                formatCount(activeCasesCount)
+                formatCount(stats?.active_cases)
               )}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              Students with active risk alerts
+              Open risk alerts (not yet resolved)
             </p>
           </CardContent>
         </Card>
@@ -87,14 +82,14 @@ function GuidanceDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {atRiskQuery.isFetching ? (
+              {statsQuery.isFetching ? (
                 <Skeleton className="h-8 w-20" />
               ) : (
-                formatCount(atRiskCount)
+                formatCount(stats?.at_risk_students)
               )}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              Moderate to high risk level
+              Distinct students with an open moderate/high alert
             </p>
           </CardContent>
         </Card>
@@ -107,14 +102,14 @@ function GuidanceDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {assessmentQuery.isFetching ? (
+              {statsQuery.isFetching ? (
                 <Skeleton className="h-8 w-20" />
               ) : (
-                formatCount(pendingFollowUpCount)
+                formatCount(stats?.pending_follow_up)
               )}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              Consultations needing follow-up
+              Your ongoing and follow-up consultations
             </p>
           </CardContent>
         </Card>
@@ -127,10 +122,10 @@ function GuidanceDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {assessmentQuery.isFetching ? (
+              {statsQuery.isFetching ? (
                 <Skeleton className="h-8 w-20" />
               ) : (
-                formatPercent(completionRate, 0)
+                formatPercent(stats?.assessment_completion_rate, 0)
               )}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
@@ -154,11 +149,11 @@ function GuidanceDashboard() {
               <p className="text-sm text-muted-foreground">
                 Unable to load risk alerts. Please try again.
               </p>
-            ) : riskAlertsQuery.data && riskAlertsQuery.data.length > 0 ? (
+            ) : recentAlerts.length > 0 ? (
               <ul className="space-y-3">
-                {riskAlertsQuery.data.map((alert, idx) => (
+                {recentAlerts.map((alert) => (
                   <li
-                    key={alert.id || idx}
+                    key={alert.id}
                     className="rounded-md border p-3"
                     data-risk={alert.risk_level}
                   >
@@ -167,8 +162,14 @@ function GuidanceDashboard() {
                         <p className="truncate font-medium">
                           {alert.student_name}
                         </p>
+                        {/*
+                          `RiskAlertSerializer` exposes no student ID code, so
+                          no code is rendered here — the UUID is deliberately not
+                          shown as a substitute. The student profile page is the
+                          place a human-facing code is available.
+                        */}
                         <p className="truncate text-xs text-muted-foreground">
-                          {alert.student_id}
+                          {alert.status.replace(/_/g, " ")}
                         </p>
                       </div>
                       <Badge
@@ -179,27 +180,20 @@ function GuidanceDashboard() {
                         {alert.risk_level.toUpperCase()}
                       </Badge>
                     </div>
-                    <div className="mt-2 space-y-1">
-                      <p className="text-xs text-muted-foreground">
-                        Status: {alert.status.replace("_", " ")}
-                      </p>
-                      {alert.risk_factors && alert.risk_factors.length > 0 && (
-                        <div>
-                          <p className="text-xs font-medium">Risk Factors:</p>
-                          <p className="text-xs text-muted-foreground">
-                            {alert.risk_factors.slice(0, 2).join(", ")}
-                            {alert.risk_factors.length > 2 && " ..."}
-                          </p>
-                        </div>
-                      )}
-                    </div>
+                    {alert.risk_factors.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        <p className="text-xs font-medium">Risk Factors:</p>
+                        <p className="text-xs text-muted-foreground">
+                          {alert.risk_factors.slice(0, 2).join(", ")}
+                          {alert.risk_factors.length > 2 && " ..."}
+                        </p>
+                      </div>
+                    )}
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-muted-foreground">
-                No active risk alerts
-              </p>
+              <p className="text-sm text-muted-foreground">No risk alerts</p>
             )}
           </CardContent>
         </Card>
@@ -217,41 +211,38 @@ function GuidanceDashboard() {
               <p className="text-sm text-muted-foreground">
                 Unable to load consultations. Please try again.
               </p>
-            ) : consultationsQuery.data &&
-              consultationsQuery.data.length > 0 ? (
+            ) : recentConsultations.length > 0 ? (
               <ul className="space-y-3">
-                {consultationsQuery.data
-                  .slice(0, 5)
-                  .map((consultation, idx) => (
-                    <li
-                      key={consultation.id || idx}
-                      className="flex flex-wrap items-start justify-between gap-2 rounded-md border p-3"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate font-medium">
-                          {consultation.student_name}
-                        </p>
-                        <p className="truncate text-xs text-muted-foreground">
-                          {consultation.session_type} •{" "}
-                          {consultation.session_date}
-                        </p>
-                      </div>
-                      <div className="flex shrink-0 flex-col items-end gap-1">
-                        <Badge
-                          variant="secondary"
-                          className={consultationStatusBadgeClass(
-                            consultation.status
-                          )}
-                          data-consultation-status={consultation.status}
-                        >
-                          {consultation.status.replace("_", " ")}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          {consultation.priority_level} priority
-                        </span>
-                      </div>
-                    </li>
-                  ))}
+                {recentConsultations.map((consultation) => (
+                  <li
+                    key={consultation.id}
+                    className="flex flex-wrap items-start justify-between gap-2 rounded-md border p-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">
+                        {consultation.student_name}
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {consultation.session_type} •{" "}
+                        {consultation.session_date}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      <Badge
+                        variant="secondary"
+                        className={consultationStatusBadgeClass(
+                          consultation.status
+                        )}
+                        data-consultation-status={consultation.status}
+                      >
+                        {consultation.status.replace("_", " ")}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">
+                        {consultation.priority_level} priority
+                      </span>
+                    </div>
+                  </li>
+                ))}
               </ul>
             ) : (
               <p className="text-sm text-muted-foreground">

@@ -193,13 +193,52 @@ describe("role-aware sidebar", () => {
 
   it("shows role-specific groups in the sidebar", async () => {
     await renderAuthenticatedApp("guidance")
-    // Guidance sees Student Support / Risk Alerts roadmap entry (in the
-    // sidebar and echoed by the landing-page roadmap list).
+    // PH11.8 turned Risk Alerts from a roadmap entry into a real route, so
+    // guidance now gets a link rather than a non-navigable placeholder.
     expect((await screen.findAllByText("Risk Alerts")).length).toBeGreaterThan(
       0
     )
-    expect(screen.queryByRole("link", { name: "Risk Alerts" })).toBeNull()
+    expect(
+      await screen.findByRole("link", { name: "Risk Alerts" })
+    ).toBeInTheDocument()
     expect(screen.getByText("Student Support")).toBeInTheDocument()
+  })
+
+  it("gives guidance links for the whole PH11.8 surface", async () => {
+    await renderAuthenticatedApp("guidance")
+
+    for (const label of [
+      "Risk Alerts",
+      "Consultations",
+      "Interventions",
+      "Students",
+      "Assessments",
+      "Account Settings",
+    ]) {
+      expect(
+        await screen.findByRole("link", { name: label }),
+        label
+      ).toBeInTheDocument()
+    }
+
+    // /app/guidance is not a page and has no nav entry at all, so neither a
+    // link nor a placeholder should appear.
+    expect(screen.queryByText("Guidance")).toBeNull()
+    expect(screen.queryByRole("link", { name: "Guidance" })).toBeNull()
+  })
+
+  it("keeps the PH11.8 guidance links out of a student's sidebar", async () => {
+    await renderAuthenticatedApp("student")
+
+    for (const label of [
+      "Risk Alerts",
+      "Consultations",
+      "Interventions",
+      "Students",
+      "Account Settings",
+    ]) {
+      expect(screen.queryByRole("link", { name: label }), label).toBeNull()
+    }
   })
 
   it("keeps admin-only items out of non-admin navigation", async () => {

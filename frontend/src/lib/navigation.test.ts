@@ -29,17 +29,30 @@ describe("role navigation configuration", () => {
   })
 
   it("only real routes are marked available", () => {
-    // Dashboard, Academics and Attendance have real routes (PH11.7).
-    // Everything else must stay honest "planned" state — no fake pages are
-    // created behind nav links.
+    // Every "available" route below has a real entry in `appRoutes`. Adding a
+    // name here without adding the route is exactly the fake-page failure this
+    // test exists to prevent.
+    const REAL_AVAILABLE_ROUTES = [
+      // PH11.7
+      "dashboard",
+      "academics",
+      "attendance",
+      // PH11.8
+      "risk-alerts",
+      "consultations",
+      "interventions",
+      "students",
+      "assessments",
+      "account-settings",
+    ]
+
     for (const role of ROLES) {
       const items = getNavItemsForRole(role)
       const available = items.filter((item) => item.status === "available")
       for (const item of available) {
-        expect(
-          ["dashboard", "academics", "attendance"],
-          `${role} / ${item.route}`
-        ).toContain(item.route)
+        expect(REAL_AVAILABLE_ROUTES, `${role} / ${item.route}`).toContain(
+          item.route
+        )
       }
       expect(available.length, role).toBeGreaterThanOrEqual(1)
     }
@@ -97,7 +110,10 @@ describe("role navigation configuration", () => {
 
     const guidance = getNavItemsForRole("guidance").map((i) => i.route)
     expect(guidance).toContain("risk-alerts")
-    expect(guidance).toContain("guidance")
+    expect(guidance).toContain("consultations")
+    expect(guidance).toContain("interventions")
+    expect(guidance).toContain("students")
+    expect(guidance).toContain("account-settings")
     expect(admin).not.toContain("risk-alerts")
 
     const parent = getNavItemsForRole("parent").map((i) => i.route)
@@ -112,6 +128,83 @@ describe("role navigation configuration", () => {
     expect(
       student.some((g) => g.heading === "Overview" && g.items.length === 1)
     ).toBe(true)
+  })
+  it("gives guidance the PH11.8 surface as available links", () => {
+    const guidance = getNavItemsForRole("guidance")
+    for (const route of [
+      "risk-alerts",
+      "consultations",
+      "interventions",
+      "students",
+      "assessments",
+      "account-settings",
+    ]) {
+      expect(guidance, route).toContainEqual(
+        expect.objectContaining({ route, status: "available" })
+      )
+      expect(itemHref(guidance.find((i) => i.route === route)!)).toBe(
+        `/app/${route}`
+      )
+    }
+  })
+
+  it("keeps the guidance surface off every other role", () => {
+    for (const role of ["student", "parent", "faculty", "admin"] as const) {
+      const available = getNavItemsForRole(role)
+        .filter((i) => i.status === "available")
+        .map((i) => i.route)
+
+      for (const route of [
+        "risk-alerts",
+        "consultations",
+        "interventions",
+        "students",
+        "account-settings",
+      ]) {
+        expect(available, `${role} / ${route}`).not.toContain(route)
+      }
+      // `/app/assessments` resolves to the guidance page, so no other role may
+      // be handed an available link to it.
+      expect(available, role).not.toContain("assessments")
+    }
+  })
+
+  it("keeps faculty and admin assessments planned and guidance-only", () => {
+    for (const role of ["faculty", "admin"] as const) {
+      const item = getNavItemsForRole(role).find(
+        (i) => i.route === "assessments"
+      )
+      expect(item, role).toBeDefined()
+      expect(item?.status, role).toBe("planned")
+    }
+
+    const guidanceItem = getNavItemsForRole("guidance").find(
+      (i) => i.route === "assessments"
+    )
+    expect(guidanceItem?.status).toBe("available")
+  })
+
+  it("has no /app/guidance nav item at all", () => {
+    // PH11.8 removed the legacy GUIDANCE item entirely. `/app/guidance` is not
+    // a page and is left unregistered, so a nav entry could only ever be a
+    // placeholder pointing at a 404.
+    for (const role of ROLES) {
+      expect(
+        getNavItemsForRole(role).find((i) => i.route === "guidance"),
+        role
+      ).toBeUndefined()
+    }
+  })
+
+  it("still keeps the guidance dashboard reachable", () => {
+    // Removing the /app/guidance placeholder must not disturb the real
+    // /app/dashboard/guidance landing page.
+    for (const role of ROLES) {
+      const dashboard = getNavItemsForRole(role).find(
+        (i) => i.route === "dashboard"
+      )
+      expect(dashboard?.status, role).toBe("available")
+    }
   })
 })
 
