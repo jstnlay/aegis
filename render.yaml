@@ -14,9 +14,13 @@
 # the start command imports `config.wsgi` as a top-level module.
 #
 # Build order is deliberate and load-bearing:
-#     pip install -> migrate -> provision_qa_accounts -> gunicorn starts
-# provision_qa_accounts writes accounts, so it must run after migrate, and it
-# must finish before gunicorn serves traffic.
+#     pip install -> migrate -> provision_qa_accounts -> seed_qa_dataset
+#     -> gunicorn starts
+# provision_qa_accounts writes accounts and seed_qa_dataset hangs records off
+# those accounts, so both must run after migrate and must finish before gunicorn
+# serves traffic. seed_qa_dataset is idempotent and transactional: re-running it
+# on every deploy reuses the existing rows instead of duplicating them, and a
+# failure rolls the whole dataset back rather than leaving a half-seeded school.
 #
 # The shared DEV/QA service intentionally runs config.settings.development
 # (DEBUG=True, ALLOWED_HOSTS=["*"]). Production hardening is separate work.
@@ -33,6 +37,7 @@ services:
       pip install -r ../requirements/production.txt
       && python manage.py migrate --settings=config.settings.development
       && python manage.py provision_qa_accounts --settings=config.settings.development
+      && python manage.py seed_qa_dataset --settings=config.settings.development
     startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
     # No healthCheckPath: this Django project exposes no health endpoint, and
     # inventing one would misrepresent the service. Do not add /healthz or
