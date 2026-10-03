@@ -562,13 +562,11 @@ describe("assessment authoring", () => {
     })
   })
 
-  it("accepts an option-bearing question with a single option", async () => {
-    // `AssessmentQuestion.options` is a plain JSONField and
-    // `AssessmentQuestionSerializer` has no validate(), so the backend imposes
-    // no lower bound. A previous client-side "at least two options" rule was
-    // invented and has been removed.
-    mockedPost.mockResolvedValue({ data: {} } as never)
-
+  it("blocks an option-bearing question with a single option", async () => {
+    // `AssessmentQuestion.clean()` requires at least 2 options for
+    // multiple_choice and likert, and the model cannot report that as a field
+    // error, so the server rejects the request without naming the cause. The
+    // form blocks the submit instead of round-tripping a guaranteed failure.
     renderPage()
     await screen.findByText("Behavior Review")
 
@@ -584,23 +582,20 @@ describe("assessment authoring", () => {
       target: { value: "Only one" },
     })
 
-    // No invented restriction, and the submit button stays enabled.
-    expect(within(form).queryByText(/at least two options/i)).toBeNull()
-    const submit = within(form).getByRole("button", { name: "Add question" })
-    expect(submit).toBeEnabled()
-
-    fireEvent.click(submit)
-    await waitFor(() => {
-      expect(mockedPost).toHaveBeenCalledWith(
-        "/assessments/assessment-questions/",
-        expect.objectContaining({ options: ["Only one"] })
+    expect(
+      within(form).getByText(
+        "Multiple choice questions must have at least 2 options."
       )
-    })
+    ).toBeInTheDocument()
+    expect(
+      within(form).getByRole("button", { name: "Add question" })
+    ).toBeDisabled()
+
+    fireEvent.click(within(form).getByRole("button", { name: "Add question" }))
+    expect(mockedPost).not.toHaveBeenCalled()
   })
 
-  it("accepts an option-bearing question with no options typed", async () => {
-    mockedPost.mockResolvedValue({ data: {} } as never)
-
+  it("blocks an option-bearing question with no options typed", async () => {
     renderPage()
     await screen.findByText("Behavior Review")
 
@@ -612,17 +607,149 @@ describe("assessment authoring", () => {
     fireEvent.change(within(form).getByLabelText(/question text/i), {
       target: { value: "Open question" },
     })
+
+    expect(
+      within(form).getByRole("button", { name: "Add question" })
+    ).toBeDisabled()
     fireEvent.click(within(form).getByRole("button", { name: "Add question" }))
+    expect(mockedPost).not.toHaveBeenCalled()
+  })
+
+  it("blocks a multiple choice answer that is not one of the options", async () => {
+    renderPage()
+    await screen.findByText("Behavior Review")
+
+    const draft = screen
+      .getByText("Behavior Review")
+      .closest("[data-assessment-id]") as HTMLElement
+    const form = within(draft).getByRole("form", { name: "Add question" })
+
+    fireEvent.change(within(form).getByLabelText(/question text/i), {
+      target: { value: "Which support helps?" },
+    })
+    fireEvent.change(within(form).getByLabelText(/^options$/i), {
+      target: { value: "Mentoring\nCheck-ins" },
+    })
+    fireEvent.change(within(form).getByLabelText(/correct answer/i), {
+      target: { value: "Excellent" },
+    })
+
+    expect(
+      within(form).getByText(
+        "Correct answer must be one of the provided options."
+      )
+    ).toBeInTheDocument()
+    expect(
+      within(form).getByRole("button", { name: "Add question" })
+    ).toBeDisabled()
+    expect(mockedPost).not.toHaveBeenCalled()
+  })
+
+  it("accepts a multiple choice answer that matches an option", async () => {
+    mockedPost.mockResolvedValue({ data: {} } as never)
+
+    renderPage()
+    await screen.findByText("Behavior Review")
+
+    const draft = screen
+      .getByText("Behavior Review")
+      .closest("[data-assessment-id]") as HTMLElement
+    const form = within(draft).getByRole("form", { name: "Add question" })
+
+    fireEvent.change(within(form).getByLabelText(/question text/i), {
+      target: { value: "Which support helps?" },
+    })
+    fireEvent.change(within(form).getByLabelText(/^options$/i), {
+      target: { value: "Mentoring\nCheck-ins" },
+    })
+    fireEvent.change(within(form).getByLabelText(/correct answer/i), {
+      target: { value: "Mentoring" },
+    })
+
+    const submit = within(form).getByRole("button", { name: "Add question" })
+    expect(submit).toBeEnabled()
+    fireEvent.click(submit)
 
     await waitFor(() => {
       expect(mockedPost).toHaveBeenCalledWith(
         "/assessments/assessment-questions/",
-        expect.objectContaining({ options: [] })
+        expect.objectContaining({ correct_answer: "Mentoring" })
       )
     })
   })
 
-  it("still reports the option count without treating it as a rule", async () => {
+  it("blocks a true/false answer that is not exactly True or False", async () => {
+    renderPage()
+    await screen.findByText("Behavior Review")
+
+    const draft = screen
+      .getByText("Behavior Review")
+      .closest("[data-assessment-id]") as HTMLElement
+    const form = within(draft).getByRole("form", { name: "Add question" })
+
+    fireEvent.change(within(form).getByLabelText(/question text/i), {
+      target: { value: "The sky is blue." },
+    })
+    await openSelect(
+      within(form).getByRole("combobox", { name: /question type/i })
+    )
+    fireEvent.click(await screen.findByRole("option", { name: "True / False" }))
+
+    fireEvent.change(within(form).getByLabelText(/correct answer/i), {
+      target: { value: "Yes" },
+    })
+
+    expect(
+      within(form).getByText(
+        'True/False correct answer must be "True" or "False".'
+      )
+    ).toBeInTheDocument()
+    expect(
+      within(form).getByRole("button", { name: "Add question" })
+    ).toBeDisabled()
+    expect(mockedPost).not.toHaveBeenCalled()
+  })
+
+  it("accepts a true/false answer of exactly True", async () => {
+    mockedPost.mockResolvedValue({ data: {} } as never)
+
+    renderPage()
+    await screen.findByText("Behavior Review")
+
+    const draft = screen
+      .getByText("Behavior Review")
+      .closest("[data-assessment-id]") as HTMLElement
+    const form = within(draft).getByRole("form", { name: "Add question" })
+
+    fireEvent.change(within(form).getByLabelText(/question text/i), {
+      target: { value: "The sky is blue." },
+    })
+    await openSelect(
+      within(form).getByRole("combobox", { name: /question type/i })
+    )
+    fireEvent.click(await screen.findByRole("option", { name: "True / False" }))
+
+    fireEvent.change(within(form).getByLabelText(/correct answer/i), {
+      target: { value: "True" },
+    })
+
+    const submit = within(form).getByRole("button", { name: "Add question" })
+    expect(submit).toBeEnabled()
+    fireEvent.click(submit)
+
+    await waitFor(() => {
+      expect(mockedPost).toHaveBeenCalledWith(
+        "/assessments/assessment-questions/",
+        expect.objectContaining({
+          question_type: "true_false",
+          options: null,
+          correct_answer: "True",
+        })
+      )
+    })
+  })
+
+  it("still reports the option count once the minimum is met", async () => {
     renderPage()
     await screen.findByText("Behavior Review")
 
@@ -637,6 +764,37 @@ describe("assessment authoring", () => {
     expect(
       within(form).getByText("3 options; one per line.")
     ).toBeInTheDocument()
+  })
+
+  it("requires two scale options on a likert question", async () => {
+    renderPage()
+    await screen.findByText("Behavior Review")
+
+    const draft = screen
+      .getByText("Behavior Review")
+      .closest("[data-assessment-id]") as HTMLElement
+    const form = within(draft).getByRole("form", { name: "Add question" })
+
+    fireEvent.change(within(form).getByLabelText(/question text/i), {
+      target: { value: "How satisfied are you?" },
+    })
+    await openSelect(
+      within(form).getByRole("combobox", { name: /question type/i })
+    )
+    fireEvent.click(await screen.findByRole("option", { name: "Likert scale" }))
+
+    fireEvent.change(within(form).getByLabelText(/scale points/i), {
+      target: { value: "Agree" },
+    })
+
+    expect(
+      within(form).getByText(
+        "Likert questions must have at least 2 scale options."
+      )
+    ).toBeInTheDocument()
+    expect(
+      within(form).getByRole("button", { name: "Add question" })
+    ).toBeDisabled()
   })
 
   it("does not ask for options on an essay question", async () => {
@@ -788,6 +946,18 @@ describe("question order defaults", () => {
     return within(draft).getByRole("form", { name: "Add question" })
   }
 
+  /**
+   * The form defaults to `multiple_choice`, and
+   * `AssessmentQuestion.clean()` requires at least 2 options for that type.
+   * Tests in this block are about the order value, not about options, so they
+   * supply a valid option set and stay focused on their own subject.
+   */
+  function fillValidOptions(form: HTMLElement) {
+    fireEvent.change(within(form).getByLabelText(/^options$/i), {
+      target: { value: "Yes\nNo" },
+    })
+  }
+
   it("defaults to 1 for an assessment with no questions", async () => {
     stubQuestions([])
     const form = await draftForm([])
@@ -859,6 +1029,7 @@ describe("question order defaults", () => {
     fireEvent.change(within(form).getByLabelText(/^order$/i), {
       target: { value: "10" },
     })
+    fillValidOptions(form)
 
     expect(
       within(form).queryByText(/already used by another question/i)
@@ -883,6 +1054,7 @@ describe("question order defaults", () => {
     fireEvent.change(within(form).getByLabelText(/question text/i), {
       target: { value: "Second question" },
     })
+    fillValidOptions(form)
     fireEvent.click(within(form).getByRole("button", { name: "Add question" }))
 
     await waitFor(() => {
@@ -932,6 +1104,7 @@ describe("question order defaults", () => {
     fireEvent.change(within(form).getByLabelText(/question text/i), {
       target: { value: "Second question" },
     })
+    fillValidOptions(form)
     fireEvent.click(within(form).getByRole("button", { name: "Add question" }))
 
     // The server accepted order 2, the list refetched as [1, 2], and the cleared

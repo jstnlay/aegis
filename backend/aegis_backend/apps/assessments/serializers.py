@@ -32,6 +32,78 @@ class AssessmentQuestionSerializer(serializers.ModelSerializer):
             "updated_at",
         )
         read_only_fields = ("id", "created_at", "updated_at")
+        # AssessmentQuestion.Meta.unique_together. Stated here as well so a
+        # collision is a serializer 400 rather than a Django ValidationError
+        # raised from full_clean() inside Model.save().
+        validators = [
+            serializers.UniqueTogetherValidator(
+                queryset=AssessmentQuestion.objects.all(),
+                fields=("assessment", "order"),
+            ),
+        ]
+
+    def _field_under_validation(self, attrs, field):
+        """Submitted value for `field`, falling back to the stored value.
+
+        Required for PATCH, where only the submitted keys are present but the
+        rules below still reason over the whole question.
+        """
+        if field in attrs:
+            return attrs[field]
+        if self.instance is not None:
+            return getattr(self.instance, field, None)
+        return None
+
+    def validate(self, attrs):
+        """Mirror ``AssessmentQuestion.clean()``.
+
+        Every rule below already exists on the model and is reproduced verbatim
+        - no rule is added, relaxed or reordered. The duplication is necessary
+        because the model cannot report them as client errors: ``save()`` calls
+        ``full_clean()``, whose ``django.core.exceptions.ValidationError`` DRF
+        does not handle, so every one of these payloads returned HTTP 500.
+        """
+        question_type = self._field_under_validation(attrs, "question_type")
+        options = self._field_under_validation(attrs, "options")
+        correct_answer = self._field_under_validation(attrs, "correct_answer")
+
+        if question_type == AssessmentQuestion.QuestionType.MULTIPLE_CHOICE:
+            if not options or not isinstance(options, list) or len(options) < 2:
+                raise serializers.ValidationError(
+                    {
+                        "options": (
+                            "Multiple choice questions must have at least 2 "
+                            "options as a JSON array."
+                        )
+                    }
+                )
+            if correct_answer and options and correct_answer not in options:
+                raise serializers.ValidationError(
+                    {"correct_answer": "Correct answer must be one of the provided options."}
+                )
+
+        if question_type == AssessmentQuestion.QuestionType.LIKERT:
+            if not options or not isinstance(options, list) or len(options) < 2:
+                raise serializers.ValidationError(
+                    {
+                        "options": (
+                            "Likert questions must have at least 2 scale "
+                            "options as a JSON array."
+                        )
+                    }
+                )
+
+        if question_type == AssessmentQuestion.QuestionType.TRUE_FALSE:
+            if correct_answer and correct_answer not in ["True", "False"]:
+                raise serializers.ValidationError(
+                    {
+                        "correct_answer": (
+                            "True/False correct answer must be 'True' or 'False'."
+                        )
+                    }
+                )
+
+        return attrs
     
     def to_representation(self, instance):
         """Remove correct_answer for students viewing published assessments."""

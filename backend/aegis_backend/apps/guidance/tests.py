@@ -998,6 +998,144 @@ class InterventionCreateTest(GuidanceTestBase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
 
+class InterventionCreateValidationTest(GuidanceTestBase):
+    """Regression cover for intervention creation returning HTTP 500.
+
+    ``assigned_counselor`` is non-nullable and is filled from the caller's
+    GuidanceProfile. A guidance account without one used to reach
+    ``Intervention.save()`` with ``assigned_counselor=None``; ``full_clean()``
+    then raised a Django ValidationError, which DRF does not handle, so the
+    request surfaced as a 500.
+    """
+
+    def setUp(self):
+        super().setUp()
+
+        # A guidance-role account deliberately created without a GuidanceProfile
+        # row - the state provision_qa_accounts produces before the QA dataset
+        # attaches one.
+        self.profileless_user = User.objects.create_user(
+            email="guidance_noprofile@test.com", password="pass12345",
+            first_name="No", last_name="Profile", role="guidance",
+        )
+
+    def _payload(self, **overrides):
+        payload = {
+            "student": str(self.student_profile.id),
+            "plan_start_date": str(self.today),
+        }
+        payload.update(overrides)
+        return payload
+
+    def test_guidance_without_profile_is_forbidden_not_a_server_error(self):
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {self._get_token(self.profileless_user)}"
+        )
+        response = self.client.post(
+            "/api/v1/guidance/interventions/",
+            self._payload(),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(
+            response.data["error"]["code"], "PERMISSION_DENIED"
+        )
+        self.assertEqual(
+            response.data["error"]["message"], "No guidance profile found."
+        )
+        self.assertEqual(Intervention.objects.count(), 1)
+
+    def test_reversed_review_date_is_a_bad_request(self):
+        """The date-ordering rule must be a 400, not a model-level 500."""
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {self._get_token(self.guidance_user)}"
+        )
+        response = self.client.post(
+            "/api/v1/guidance/interventions/",
+            self._payload(
+                plan_start_date=str(self.today),
+                target_review_date=str(self.yesterday),
+            ),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["error"]["code"], "VALIDATION_ERROR")
+        self.assertEqual(
+            response.data["error"]["details"]["target_review_date"],
+            ["Target review date cannot be before the plan start date."],
+        )
+        self.assertEqual(Intervention.objects.count(), 1)
+
+    def test_review_date_on_the_start_date_is_accepted(self):
+        """Equal dates are not "before" - the boundary stays valid."""
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {self._get_token(self.guidance_user)}"
+        )
+        response = self.client.post(
+            "/api/v1/guidance/interventions/",
+            self._payload(
+                plan_start_date=str(self.today),
+                target_review_date=str(self.today),
+            ),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_review_date_after_start_date_is_accepted(self):
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {self._get_token(self.guidance_user)}"
+        )
+        response = self.client.post(
+            "/api/v1/guidance/interventions/",
+            self._payload(
+                plan_start_date=str(self.today),
+                target_review_date=str(self.today + timedelta(days=30)),
+            ),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        created = Intervention.objects.exclude(
+            id=self.intervention1.id
+        ).get()
+        self.assertEqual(created.assigned_counselor, self.guidance_profile)
+        self.assertEqual(created.status, Intervention.Status.ACTIVE)
+
+    def test_valid_creation_without_review_date_is_unchanged(self):
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {self._get_token(self.guidance_user)}"
+        )
+        response = self.client.post(
+            "/api/v1/guidance/interventions/",
+            self._payload(),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        created = Intervention.objects.exclude(
+            id=self.intervention1.id
+        ).get()
+        self.assertIsNone(created.target_review_date)
+
+    def test_patching_to_a_reversed_review_date_is_a_bad_request(self):
+        """The rule is enforced on update as well as create."""
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {self._get_token(self.guidance_user)}"
+        )
+        response = self.client.patch(
+            f"/api/v1/guidance/interventions/{self.intervention1.id}/",
+            {"target_review_date": "2000-01-01"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.intervention1.refresh_from_db()
+        self.assertIsNone(self.intervention1.target_review_date)
+
+
 class InterventionStepsTest(GuidanceTestBase):
     def setUp(self):
         super().setUp()

@@ -330,9 +330,9 @@ function AddQuestionForm({
   const parsedOrder = Number.parseInt(order, 10)
   const orderInvalid = !Number.isInteger(parsedOrder) || parsedOrder < 1
 
-  // The unique constraint is on (assessment, order), so an order already used
-  // by a sibling question cannot be reused. Caught here rather than by letting
-  // the request fail, because the server surfaces it as an IntegrityError.
+  // `AssessmentQuestion` is unique on `(assessment, order)`, so an order already
+  // used by a sibling question cannot be reused. Caught here rather than by
+  // letting the request fail, because the server rejects the collision.
   const orderTaken = questions.some(
     (question) => question.order === parsedOrder
   )
@@ -346,9 +346,37 @@ function AddQuestionForm({
     [optionsText]
   )
 
+  const answer = correctAnswer.trim()
+
+  // `AssessmentQuestion.clean()` enforces all three of these. The model cannot
+  // report them as field errors — `save()` calls `full_clean()`, whose Django
+  // ValidationError DRF does not handle — so the server rejects the request
+  // without saying which field was wrong. Mirrored here so the form blocks the
+  // submit and names the field instead.
+  const optionsTooFew = takesOptions && options.length < 2
+
+  const answerNotAnOption =
+    questionType === "multiple_choice" &&
+    answer.length > 0 &&
+    !options.includes(answer)
+
+  const answerNotBoolean =
+    questionType === "true_false" &&
+    answer.length > 0 &&
+    answer !== "True" &&
+    answer !== "False"
+
+  const blocked =
+    textBlank ||
+    orderInvalid ||
+    orderTaken ||
+    optionsTooFew ||
+    answerNotAnOption ||
+    answerNotBoolean
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (textBlank || orderInvalid || orderTaken) return
+    if (blocked) return
     try {
       await create.mutateAsync({
         assessment: assessment.id,
@@ -356,7 +384,7 @@ function AddQuestionForm({
         question_type: questionType,
         order: parsedOrder,
         options: takesOptions ? options : null,
-        correct_answer: correctAnswer.trim() || null,
+        correct_answer: answer.length > 0 ? answer : null,
       })
       setQuestionText("")
       setOptionsText("")
@@ -454,17 +482,26 @@ function AddQuestionForm({
             className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring"
           />
           {/*
-            No minimum option count is enforced here.
-            `AssessmentQuestion.options` is a plain
-            `JSONField(blank=True, null=True)` and
-            `AssessmentQuestionSerializer` declares no `validate()`, so the
-            backend imposes no lower bound. An earlier client-side
-            "at least two options" rule was an invented restriction and has
-            been removed.
+            Minimum option count and answer-key shape are real backend rules
+            (`AssessmentQuestion.clean()`): multiple_choice and likert need at
+            least 2 options, and a multiple_choice correct answer must be one of
+            them. An earlier revision of this form asserted the opposite — that
+            `options` was an unconstrained JSONField — and removed the client
+            check on that basis. The constraint is enforced by the model's
+            clean(), so the form blocks the submit and names the field.
           */}
-          <p className="text-xs text-muted-foreground">
-            {options.length} option{options.length === 1 ? "" : "s"}; one per
-            line.
+          <p
+            className={
+              optionsTooFew
+                ? "text-xs text-destructive"
+                : "text-xs text-muted-foreground"
+            }
+          >
+            {optionsTooFew
+              ? questionType === "likert"
+                ? "Likert questions must have at least 2 scale options."
+                : "Multiple choice questions must have at least 2 options."
+              : `${options.length} option${options.length === 1 ? "" : "s"}; one per line.`}
           </p>
         </div>
       ) : null}
@@ -476,8 +513,20 @@ function AddQuestionForm({
           value={correctAnswer}
           onChange={(event) => setCorrectAnswer(event.target.value)}
         />
-        <p className="text-xs text-muted-foreground">
-          Optional. Stored as the answer text that matches one of the options.
+        <p
+          className={
+            answerNotAnOption || answerNotBoolean
+              ? "text-xs text-destructive"
+              : "text-xs text-muted-foreground"
+          }
+        >
+          {answerNotAnOption
+            ? "Correct answer must be one of the provided options."
+            : answerNotBoolean
+              ? 'True/False correct answer must be "True" or "False".'
+              : questionType === "true_false"
+                ? 'Optional. Must be exactly "True" or "False" if given.'
+                : "Optional. Stored as the answer text that matches one of the options."}
         </p>
       </div>
 
@@ -485,11 +534,7 @@ function AddQuestionForm({
         <ErrorNote message={normalizeApiError(create.error).message} />
       ) : null}
 
-      <Button
-        type="submit"
-        size="sm"
-        disabled={create.isPending || textBlank || orderInvalid || orderTaken}
-      >
+      <Button type="submit" size="sm" disabled={create.isPending || blocked}>
         {create.isPending ? "Adding…" : "Add question"}
       </Button>
     </form>

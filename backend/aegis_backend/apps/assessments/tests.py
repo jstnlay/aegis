@@ -777,6 +777,181 @@ class AssessmentQuestionAPITests(AssessmentsTestBase):
         self.assertNotIn("correct_answer", response.data)
 
 
+class AssessmentQuestionValidationAPITests(AssessmentsTestBase):
+    """AssessmentQuestion.clean() rules must be 400s, not HTTP 500s.
+
+    ``AssessmentQuestion.save()`` calls ``full_clean()``, so every rule in
+    ``clean()`` used to raise a ``django.core.exceptions.ValidationError`` from
+    inside the request - unhandled by DRF, and therefore a 500. The serializer
+    now enforces the same rules, so each of these payloads is rejected as a
+    validation error with the field detail preserved.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.assessment = Assessment.objects.create(
+            title="Wellness Check",
+            assessment_type="wellness",
+            created_by=self.guidance_user,
+            is_published=False,
+        )
+        self.client.force_authenticate(user=self.guidance_user)
+
+    def _post(self, **overrides):
+        payload = {
+            "assessment": str(self.assessment.id),
+            "question_text": "How are you feeling today?",
+            "question_type": "multiple_choice",
+            "order": 1,
+            "options": ["Good", "Okay", "Bad"],
+            "correct_answer": "Good",
+        }
+        payload.update(overrides)
+        return self.client.post(
+            "/api/v1/assessments/assessment-questions/", payload, format="json"
+        )
+
+    def _assert_rejected(self, response, field):
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+            msg=f"expected 400, got {response.status_code}",
+        )
+        self.assertEqual(response.data["error"]["code"], "VALIDATION_ERROR")
+        self.assertIn(field, response.data["error"]["details"])
+
+    def test_multiple_choice_with_a_single_option_is_rejected(self):
+        response = self._post(options=["Only one"])
+        self._assert_rejected(response, "options")
+        self.assertEqual(AssessmentQuestion.objects.count(), 0)
+
+    def test_multiple_choice_with_no_options_is_rejected(self):
+        response = self._post(options=[])
+        self._assert_rejected(response, "options")
+
+    def test_multiple_choice_with_null_options_is_rejected(self):
+        response = self._post(options=None)
+        self._assert_rejected(response, "options")
+
+    def test_multiple_choice_with_non_array_options_is_rejected(self):
+        """The model requires a JSON array; a bare string must not pass."""
+        response = self._post(options="Good, Okay, Bad")
+        self._assert_rejected(response, "options")
+
+    def test_multiple_choice_answer_outside_the_options_is_rejected(self):
+        response = self._post(correct_answer="Excellent")
+        self._assert_rejected(response, "correct_answer")
+
+    def test_likert_without_scale_options_is_rejected(self):
+        response = self._post(question_type="likert", options=None)
+        self._assert_rejected(response, "options")
+
+    def test_likert_with_one_scale_option_is_rejected(self):
+        response = self._post(
+            question_type="likert",
+            options=["Strongly agree"],
+            correct_answer=None,
+        )
+        self._assert_rejected(response, "options")
+
+    def test_likert_with_two_scale_options_is_accepted(self):
+        response = self._post(
+            question_type="likert",
+            options=["Agree", "Disagree"],
+            correct_answer=None,
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_true_false_with_a_free_text_answer_is_rejected(self):
+        response = self._post(
+            question_type="true_false", options=None, correct_answer="Yes"
+        )
+        self._assert_rejected(response, "correct_answer")
+
+    def test_true_false_with_lowercase_answer_is_rejected(self):
+        """The model compares against 'True'/'False' exactly."""
+        response = self._post(
+            question_type="true_false", options=None, correct_answer="true"
+        )
+        self._assert_rejected(response, "correct_answer")
+
+    def test_true_false_with_a_valid_answer_is_accepted(self):
+        response = self._post(
+            question_type="true_false", options=None, correct_answer="True"
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_duplicate_order_in_the_same_assessment_is_rejected(self):
+        """(assessment, order) is unique_together - a repeat is a 400."""
+        first = self._post()
+        self.assertEqual(first.status_code, status.HTTP_201_CREATED)
+
+        duplicate = self._post(question_text="A second question at order 1")
+        self._assert_rejected(duplicate, "non_field_errors")
+        self.assertEqual(AssessmentQuestion.objects.count(), 1)
+
+    def test_the_same_order_in_a_different_assessment_is_accepted(self):
+        first = self._post()
+        self.assertEqual(first.status_code, status.HTTP_201_CREATED)
+
+        other = Assessment.objects.create(
+            title="Another Check",
+            assessment_type="wellness",
+            created_by=self.guidance_user,
+            is_published=False,
+        )
+        response = self._post(assessment=str(other.id))
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(AssessmentQuestion.objects.count(), 2)
+
+    def test_a_valid_multiple_choice_question_is_still_accepted(self):
+        """The happy path is unchanged by the added validation."""
+        response = self._post()
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        question = AssessmentQuestion.objects.get()
+        self.assertEqual(question.question_type, "multiple_choice")
+        self.assertEqual(question.options, ["Good", "Okay", "Bad"])
+        self.assertEqual(question.correct_answer, "Good")
+
+    def test_an_essay_question_needs_no_options_and_no_answer(self):
+        response = self._post(
+            question_type="essay", options=None, correct_answer=None
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_patching_to_a_taken_order_is_rejected(self):
+        first = self._post()
+        self.assertEqual(first.status_code, status.HTTP_201_CREATED)
+        second = self._post(order=2, question_text="Second")
+        self.assertEqual(second.status_code, status.HTTP_201_CREATED)
+
+        target = AssessmentQuestion.objects.get(order=2)
+        response = self.client.patch(
+            f"/api/v1/assessments/assessment-questions/{target.id}/",
+            {"order": 1},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        target.refresh_from_db()
+        self.assertEqual(target.order, 2)
+
+    def test_patching_other_fields_on_a_question_is_unaffected(self):
+        """The unique check must not reject a patch that keeps its own order."""
+        created = self._post()
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+
+        question = AssessmentQuestion.objects.get()
+        response = self.client.patch(
+            f"/api/v1/assessments/assessment-questions/{question.id}/",
+            {"question_text": "Reworded question"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        question.refresh_from_db()
+        self.assertEqual(question.question_text, "Reworded question")
+
+
 class AssessmentResultAPITests(AssessmentsTestBase):
     """Test AssessmentResult API endpoints."""
 

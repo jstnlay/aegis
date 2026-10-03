@@ -227,6 +227,41 @@ class InterventionSerializer(serializers.ModelSerializer):
             "updated_at",
         )
 
+    def validate(self, attrs):
+        """Reject a review date that precedes the plan start date.
+
+        Mirrors ``Intervention.clean()``. The model alone cannot express this
+        as a client error: ``Intervention.save()`` calls ``full_clean()``,
+        which raises ``django.core.exceptions.ValidationError`` - not handled
+        by DRF - so a reversed date pair returned HTTP 500 instead of 400.
+        The rule itself is unchanged; only where it is enforced moves.
+        """
+        if self.instance is not None:
+            plan_start_date = attrs.get(
+                "plan_start_date", self.instance.plan_start_date
+            )
+            target_review_date = attrs.get(
+                "target_review_date", self.instance.target_review_date
+            )
+        else:
+            plan_start_date = attrs.get("plan_start_date")
+            target_review_date = attrs.get("target_review_date")
+
+        if (
+            target_review_date
+            and plan_start_date
+            and target_review_date < plan_start_date
+        ):
+            raise serializers.ValidationError(
+                {
+                    "target_review_date": (
+                        "Target review date cannot be before "
+                        "the plan start date."
+                    )
+                }
+            )
+        return attrs
+
 
 class GuidanceReportSerializer(serializers.Serializer):
     """Read-only serializer for the guidance report endpoint."""

@@ -16,6 +16,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -620,6 +621,13 @@ class InterventionViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         gp = _get_guidance_profile(self.request.user)
+        if gp is None:
+            # Same guard and same message as BehavioralNoteViewSet.create and
+            # ConsultationRecordViewSet.create. Without it a guidance account
+            # with no GuidanceProfile row produced assigned_counselor=None and
+            # the model's full_clean() raised a Django ValidationError, which
+            # DRF does not handle - surfacing as HTTP 500.
+            raise PermissionDenied("No guidance profile found.")
         serializer.save(assigned_counselor=gp, status=Intervention.Status.ACTIVE)
 
     @action(detail=True, methods=["get", "post"], url_path="steps")
