@@ -140,9 +140,7 @@ export function Sidebar({
         </nav>
 
         <div className="border-t border-sidebar-border p-3">
-          <p className="px-1 text-xs text-sidebar-foreground/50">
-            AEGIS — PH11.5
-          </p>
+          <p className="px-1 text-xs text-sidebar-foreground/50">AEGIS</p>
         </div>
       </aside>
     </>

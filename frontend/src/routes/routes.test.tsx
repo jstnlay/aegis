@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react"
+import { render, screen, waitFor, within } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import type { ReactNode } from "react"
 import { createMemoryRouter, RouterProvider } from "react-router-dom"
@@ -170,17 +170,77 @@ describe("PH11.7 domain routes", () => {
     )
   })
 
-  it("shows admin the documented Academics placeholder, not a student view", async () => {
+  it("shows admin the academic-structure view, not a student view", async () => {
     authState.user = makeUser("admin")
     renderAt("/app/academics")
 
+    // PH11.9 removed the PH11.5 placeholder wording, which described shipped
+    // functionality (years, levels, sections, subjects, assignments,
+    // schedules, grading periods, enrollments, grade encoding) as "Planned
+    // features" that would "land in PH11.6".
     expect(
-      await screen.findByText(/first domain to be implemented/i)
+      await screen.findByText(/administered from the Administration section/i)
     ).toBeInTheDocument()
+    expect(
+      screen.queryByText(/first domain to be implemented/i)
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText(/Planned features/i)).not.toBeInTheDocument()
     // Admin must not be shown the student grade-record surface.
     expect(
       screen.queryByText(/Grades appear here once they are finalized/i)
     ).not.toBeInTheDocument()
+  })
+})
+
+/**
+ * PH11.9 section 1E. The sidebar, the role landing page and the admin
+ * Academics view each carried copy from PH11.5 that described shipped
+ * functionality as future work. These cases pin the corrected wording so it
+ * cannot silently regress.
+ */
+describe("no page describes implemented functionality as future work", () => {
+  it.each(ROLE_CASES)(
+    "the $role landing page has no Coming Soon or planned-features copy",
+    async ({ role, heading }) => {
+      authState.user = makeUser(role)
+      renderAt("/app/dashboard")
+
+      await screen.findByRole("heading", { name: heading })
+      const text = document.body.textContent ?? ""
+
+      expect(text).not.toMatch(/coming soon/i)
+      expect(text).not.toMatch(/planned features/i)
+      expect(text).not.toMatch(/will appear here/i)
+    }
+  )
+
+  it("the sidebar footer does not advertise a phase number", async () => {
+    authState.user = makeUser("admin")
+    renderAt("/app/dashboard")
+
+    await screen.findByRole("heading", { name: /Administration Panel/i })
+
+    // PH11.5 hardcoded "AEGIS — PH11.5" here; a phase label in the chrome goes
+    // stale the moment the next phase lands.
+    const sidebar = screen.getByRole("complementary", { name: /primary/i })
+    expect(sidebar.textContent ?? "").not.toMatch(/PH\d/)
+  })
+
+  it("the sidebar does not duplicate nav labels as body text", async () => {
+    authState.user = makeUser("student")
+    renderAt("/app/dashboard")
+
+    await screen.findByRole("heading", { name: /Student Dashboard/i })
+
+    // Every sidebar link must resolve to exactly one element with that
+    // accessible name; a second one means the page repeats the navigation.
+    const sidebar = screen.getByRole("complementary", { name: /primary/i })
+    const main = document.getElementById("main-content")
+    for (const link of within(sidebar).getAllByRole("link")) {
+      const name = link.textContent?.trim()
+      if (!name) continue
+      expect(within(main as HTMLElement).queryByText(name)).toBeNull()
+    }
   })
 })
 

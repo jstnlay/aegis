@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { render, screen } from "@testing-library/react"
+import { fireEvent, render, screen } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { MemoryRouter, Navigate, Route, Routes } from "react-router-dom"
 
@@ -335,5 +335,52 @@ describe("no-navigation / fallback behavior", () => {
 
     expect(await screen.findByText("Login route")).toBeDefined()
     expect(screen.queryByRole("navigation")).toBeNull()
+  })
+})
+
+/* =====================================================================
+   Render-error containment (PH11.9 foundation C)
+   ===================================================================== */
+
+/** Throws during render, the way a malformed record does. */
+function MalformedRecord(): React.ReactElement {
+  throw new Error("Objects are not valid as a React child")
+}
+
+describe("a page render failure does not unmount the shell", () => {
+  it("keeps navigation mounted and offers recovery", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mockedRestore.mockReturnValue(tokenPair)
+    tokenStorage.setTokens(tokenPair.access, tokenPair.refresh)
+    mockedMe.mockResolvedValue(makeUser("admin"))
+
+    const routes = (
+      <Routes>
+        <Route path="/" element={<ProtectedRoute />}>
+          <Route path="app" element={<AppShell />}>
+            <Route index element={<Navigate to="broken" replace />} />
+            <Route path="broken" element={<MalformedRecord />} />
+            <Route path="dashboard" element={<div>Dashboard route</div>} />
+            <Route path="*" element={<Navigate to="dashboard" replace />} />
+          </Route>
+        </Route>
+      </Routes>
+    )
+
+    render(wrapApp("/app/broken", routes))
+
+    // The recovery state replaces only the page body.
+    expect(await screen.findByRole("alert")).toBeDefined()
+
+    // The shell itself survives: sidebar navigation and header are still
+    // mounted, so the user is not stranded on a blank page.
+    expect(screen.getByRole("navigation")).toBeDefined()
+    expect(screen.getAllByText(/Ana Cruz/).length).toBeGreaterThan(0)
+    expect(screen.getByRole("button", { name: /try again/i })).toBeDefined()
+
+    // And navigating to a healthy route clears the error with no reload.
+    fireEvent.click(screen.getByRole("link", { name: /dashboard/i }))
+    expect(await screen.findByText("Dashboard route")).toBeDefined()
+    expect(screen.queryByRole("alert")).toBeNull()
   })
 })

@@ -8,13 +8,22 @@ import {
 } from "@/components/ui/card"
 
 /**
- * First-domain entry point (PH11.5).
+ * Admin-facing Academics view.
  *
- * Academics is the first domain feature chosen for implementation
- * based on the strongest backend/API evidence (full academics module,
- * grading periods, sections, subjects, enrollments, grades). This is an
- * intentionally documented placeholder — PH11.6 begins implementation.
- * No fabricated data is displayed.
+ * PH11.7 shipped the student and faculty Academics surfaces and deliberately
+ * left admin on a documented placeholder, because that page resolved no
+ * StudentProfile for an administrator. PH11.9 adds the admin academic-structure
+ * administration surface, which supersedes this file.
+ *
+ * What remains here is the honest statement of what the admin Academics route
+ * does today: it lists the academic structure that *is* readable through the
+ * verified read-only endpoints, and says plainly that authoring is not part of
+ * this screen. The previous wording claimed "full functionality lands in
+ * PH11.6" and listed academic years, grade levels, sections, subjects, subject
+ * assignments, schedules, grading periods, enrollments and grade encoding as
+ * "Planned features" — all of which shipped in PH11.7. A placeholder that
+ * describes implemented functionality as future work is a bug, not a
+ * placeholder.
  */
 export function AcademicsLandingPage() {
   return (
@@ -34,16 +43,20 @@ export function AcademicsLandingPage() {
 
       <Card>
         <CardHeader className="gap-1">
-          <h2 className="text-lg font-semibold">Getting started</h2>
+          <h2 className="text-lg font-semibold">Academic structure</h2>
           <CardDescription>
-            Academics is the first domain to be implemented. This page is the
-            documented entry point — full functionality lands in PH11.6.
+            Academic years, grade levels, sections, subjects, subject
+            assignments, schedules and grading periods are administered from the
+            Administration section of this workspace.
           </CardDescription>
         </CardHeader>
         <CardContent className="text-sm text-foreground">
-          Planned features: academic years, grade levels, sections, subjects,
-          subject assignments, schedules, grading periods, enrollments, and
-          grade encoding.
+          <p className="text-muted-foreground">
+            Grade records for a student are read from that student&apos;s own
+            profile. Encoding and finalization of grades are faculty and
+            administrator actions respectively, and are recorded in the audit
+            log.
+          </p>
         </CardContent>
       </Card>
     </div>

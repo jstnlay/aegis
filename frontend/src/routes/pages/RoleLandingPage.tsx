@@ -17,9 +17,15 @@ import type { Role } from "@/types/auth"
 /**
  * Role-specific landing content rendered inside the shared Dashboard route.
  *
- * These are NOT complete dashboards. Each identifies the current role,
- * shows a greeting, and provides a clear place for later role-specific
- * features — without fabricated statistics, charts, or user data.
+ * This is the fallback for a role whose nested dashboard route did not match.
+ * Each role's real dashboard normally renders instead (see
+ * `RoleDashboardRedirect`).
+ *
+ * It identifies the role and nothing more. An earlier revision kept a
+ * per-role `upcomingFeatures` array rendered under a "Coming Soon" heading;
+ * by PH11.9 that array described grades, attendance, assessments, risk alerts,
+ * consultations and interventions as future work when all of them shipped, and
+ * duplicated the sidebar besides.
  */
 
 interface RoleLandingProps {
@@ -28,75 +34,15 @@ interface RoleLandingProps {
 
 interface RoleContent {
   title: string
-  description: string
   icon: LucideIcon
-  upcomingFeatures: readonly string[]
 }
 
 const ROLE_CONTENT: Record<Role, RoleContent> = {
-  student: {
-    title: "Student Portal",
-    description:
-      "Your academic overview, attendance, and assessments will appear here.",
-    icon: BookOpen,
-    upcomingFeatures: [
-      "My Grades",
-      "Attendance Records",
-      "Take Assessments",
-      "Resources",
-    ],
-  },
-  parent: {
-    title: "Parent Portal",
-    description:
-      "Your child's academic progress, attendance, and reports will appear here.",
-    icon: Users,
-    upcomingFeatures: [
-      "Child's Grades",
-      "Attendance Overview",
-      "School Reports",
-    ],
-  },
-  faculty: {
-    title: "Faculty Dashboard",
-    description:
-      "Your classes, grade encoding, and attendance management will appear here.",
-    icon: ClipboardCheck,
-    upcomingFeatures: [
-      "My Classes",
-      "Grade Encoding",
-      "Record Attendance",
-      "Create Assessments",
-      "Behavioral Notes",
-    ],
-  },
-  guidance: {
-    title: "Guidance Center",
-    description:
-      "Student risk alerts, consultations, and intervention tracking will appear here.",
-    icon: MessageSquare,
-    upcomingFeatures: [
-      "Risk Alerts",
-      "Student Monitoring",
-      "Consultations",
-      "Intervention Plans",
-      "Wellness Assessments",
-    ],
-  },
-  admin: {
-    title: "Administration Panel",
-    description:
-      "School-wide management, user administration, and analytics will appear here.",
-    icon: Settings,
-    upcomingFeatures: [
-      "User Management",
-      "Academic Configuration",
-      "Analytics",
-      "Data Import",
-      "CMS",
-      "Audit Logs",
-    ],
-  },
+  student: { title: "Student Portal", icon: BookOpen },
+  parent: { title: "Parent Portal", icon: Users },
+  faculty: { title: "Faculty Dashboard", icon: ClipboardCheck },
+  guidance: { title: "Guidance Center", icon: MessageSquare },
+  admin: { title: "Administration Panel", icon: Settings },
 }
 
 function RoleLandingContent({ role }: RoleLandingProps) {
@@ -120,7 +66,7 @@ function RoleLandingContent({ role }: RoleLandingProps) {
           </Badge>
         </div>
         <p className="text-sm text-muted-foreground">
-          {name ? `Welcome back, ${name}.` : "Welcome."} {content.description}
+          {name ? `Welcome back, ${name}.` : "Welcome."}
         </p>
       </div>
 
@@ -128,27 +74,27 @@ function RoleLandingContent({ role }: RoleLandingProps) {
         <CardHeader className="gap-1">
           <div className="flex items-center gap-2">
             <Icon className="size-4 text-muted-foreground" aria-hidden="true" />
-            <h2 className="text-lg font-semibold">Coming Soon</h2>
+            <h2 className="text-lg font-semibold">Getting around</h2>
           </div>
         </CardHeader>
         <CardContent>
-          <p className="mb-3 text-sm text-muted-foreground">
-            The following features are planned for your role:
+          {/*
+           * PH11.5 listed this role's features here under a "Coming Soon"
+           * heading, and PH11.8/11.9 made every one of those claims false —
+           * grades, attendance, assessments, risk alerts, consultations and
+           * interventions all ship. The list was also pure duplication: the
+           * sidebar already renders the same items, as real links, grouped the
+           * same way, so repeating them produced two elements with the same
+           * accessible name per destination.
+           *
+           * Navigation is the sidebar's job. This page now only identifies the
+           * signed-in role; a role that reaches it has no matching dashboard
+           * route, and the sidebar is where everything else is reached.
+           */}
+          <p className="text-sm text-muted-foreground">
+            Use the navigation menu to reach the screens available to your
+            account.
           </p>
-          <ul className="space-y-1.5">
-            {content.upcomingFeatures.map((feature) => (
-              <li
-                key={feature}
-                className="flex min-w-0 items-center gap-2 text-sm text-foreground"
-              >
-                <span
-                  className="size-1.5 shrink-0 rounded-full bg-maroon-300"
-                  aria-hidden="true"
-                />
-                {feature}
-              </li>
-            ))}
-          </ul>
         </CardContent>
       </Card>
     </div>
