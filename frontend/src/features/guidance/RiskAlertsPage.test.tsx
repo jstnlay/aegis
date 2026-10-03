@@ -430,4 +430,67 @@ describe("RiskAlertsPage", () => {
     const alert = await screen.findByRole("alert")
     expect(alert).toHaveTextContent("boom")
   })
+
+  it("renders an object-shaped AI risk factor in the table", async () => {
+    // The real ai_engine shape. Typed as string[] in PH11.8, this rendered
+    // "[object Object]" and threw on the React child.
+    mockedFetchAllPages.mockResolvedValue({
+      count: 1,
+      results: [
+        makeAlert({
+          risk_factors: [
+            {
+              feature: "attendance_rate",
+              threshold: 0.75,
+              value: 0.62,
+              direction: "below",
+            },
+            "Family conflict",
+          ],
+        }),
+      ],
+    })
+
+    const { container } = renderPage()
+
+    await screen.findByText("Ana Reyes")
+    expect(container.textContent).toContain("attendance_rate")
+    expect(container.textContent).toContain("0.62")
+    expect(container.textContent).toContain("Family conflict")
+    expect(container.textContent).not.toContain("[object Object]")
+  })
+
+  it("finds an object-shaped factor through the search box", async () => {
+    mockedFetchAllPages.mockResolvedValue({
+      count: alerts.length,
+      results: alerts.map((alert, index) =>
+        index === 0
+          ? {
+              ...alert,
+              risk_factors: [
+                {
+                  feature: "attendance_rate",
+                  threshold: 0.75,
+                  value: 0.62,
+                  direction: "below",
+                },
+              ],
+            }
+          : alert
+      ),
+    })
+
+    renderPage()
+    await screen.findByText("Ana Reyes")
+
+    fireEvent.change(screen.getByLabelText(/search/i), {
+      target: { value: "attendance_rate" },
+    })
+
+    // Only the algorithm-derived alert matches; the manual ones do not.
+    await waitFor(() => {
+      expect(screen.getByText("Ana Reyes")).toBeInTheDocument()
+      expect(screen.queryByText("Ben Cruz")).not.toBeInTheDocument()
+    })
+  })
 })

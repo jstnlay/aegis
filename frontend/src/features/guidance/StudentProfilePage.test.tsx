@@ -80,8 +80,17 @@ const riskAlerts = [
     student: "sp-1",
     student_name: "Ana Reyes",
     risk_level: "high",
-    risk_factors: ["Chronic absenteeism"],
-    source: "manual",
+    // The real ai_engine decision-path shape. PH11.8 typed this as string[],
+    // so an algorithm alert rendered "[object Object]" on this page.
+    risk_factors: [
+      {
+        feature: "attendance_rate",
+        threshold: 0.75,
+        value: 0.62,
+        direction: "below",
+      },
+    ],
+    source: "algorithm",
     status: "active",
     assigned_counselor: null,
     assigned_counselor_name: null,
@@ -327,10 +336,21 @@ describe("StudentProfilePage", () => {
     })
 
     renderPage()
-    await screen.findByRole("heading", { name: "Ana Reyes", level: 1 })
 
-    const dash = await screen.findByText("—")
-    expect(dash).toBeInTheDocument()
+    // Assert on the identity header's stable `data-student-code` hook rather
+    // than a global `findByText("—")`. The grades table renders its own "—" in
+    // up to three cells per row, so a document-wide text query resolves
+    // differently depending on which independent query happened to settle
+    // first — it passed or threw "Found multiple elements" purely on timing.
+    const absent = await screen.findByRole("heading", {
+      name: "Ana Reyes",
+      level: 1,
+    })
+    await waitFor(() => {
+      expect(
+        within(absent.parentElement as HTMLElement).getByText("—")
+      ).toHaveAttribute("data-student-code", "absent")
+    })
   })
 
   it("requests the server-filtered grade endpoint for this student only", async () => {

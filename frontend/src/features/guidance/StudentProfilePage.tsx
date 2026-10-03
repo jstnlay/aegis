@@ -28,6 +28,7 @@ import {
   RISK_ALERT_SOURCE_LABELS,
   RISK_LEVEL_LABELS,
   atRiskStudentsFrom,
+  riskFactorLabel,
   useBehavioralNotes,
   useConsultations,
   useConsultationsByStudent,
@@ -151,7 +152,10 @@ function RiskAlertsBlock({ alerts }: { alerts: RiskAlert[] }) {
             </div>
             {alert.risk_factors.length > 0 ? (
               <p className="text-sm text-muted-foreground">
-                {alert.risk_factors.join(" · ")}
+                {alert.risk_factors
+                  .map(riskFactorLabel)
+                  .filter(Boolean)
+                  .join(" · ")}
               </p>
             ) : null}
           </div>

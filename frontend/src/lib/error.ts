@@ -30,6 +30,77 @@ export interface NormalizedApiError {
 
 const PASSWORD_CHANGE_REQUIRED_MESSAGE = "Password change required."
 
+/**
+ * Messages that carry no information for a reader. The backend no longer emits
+ * these for a body it can describe, but a 4xx can still arrive from a proxy or
+ * an older deployment, and a silent fallback would show the user nothing
+ * actionable. When one of these is seen we look in `details` before giving up.
+ */
+const GENERIC_MESSAGES = new Set([
+  "an error occurred.",
+  "error",
+  "bad request",
+  "the request could not be processed.",
+])
+
+/** DRF field names that are labels rather than something a reader can act on. */
+const OPAQUE_FIELD_NAMES = new Set([
+  "detail",
+  "non_field_errors",
+  "__all__",
+  "root",
+])
+
+const MAX_SUMMARIZED_FIELDS = 3
+
+/**
+ * Collapses a detail node to a string.
+ *
+ * The frozen envelope declares `message` as a string, but a hand-rolled or
+ * proxied error body may put an array there, so both are accepted rather than
+ * discarding the text.
+ */
+function coerceMessage(value: unknown): string | null {
+  if (typeof value === "string") return value
+  if (Array.isArray(value)) {
+    const parts = value.filter(
+      (item): item is string => typeof item === "string"
+    )
+    const joined = parts.join(" ").trim()
+    return joined || null
+  }
+  return null
+}
+
+/**
+ * Builds a one-line summary from a serializer's field-keyed error map, so a
+ * field error is legible even when it is not attached to a form input. Mirrors
+ * the backend's `_summarize_field_errors` so both sides name a field the same
+ * way.
+ */
+function summarizeFieldErrors(details: Record<string, unknown>): string | null {
+  const named: string[] = []
+  const opaque: string[] = []
+  let overflow = 0
+
+  for (const [field, value] of Object.entries(details)) {
+    const message = coerceMessage(value)
+    if (!message) continue
+    if (OPAQUE_FIELD_NAMES.has(field)) {
+      opaque.push(message)
+    } else if (named.length < MAX_SUMMARIZED_FIELDS) {
+      named.push(`${field}: ${message}`)
+    } else {
+      overflow += 1
+    }
+  }
+
+  const fragments = [...named, ...opaque]
+  if (fragments.length === 0) return null
+  if (overflow > 0) fragments.push(`(+${overflow} more)`)
+  return fragments.join("; ")
+}
+
 function envelopeOf(payload: unknown): ApiErrorEnvelope | null {
   if (typeof payload !== "object" || payload === null) return null
   const body = payload as { success?: unknown; error?: unknown }
@@ -45,12 +116,23 @@ function envelopeOf(payload: unknown): ApiErrorEnvelope | null {
     message?: unknown
     details?: unknown
   }
+
+  const details =
+    typeof err.details === "object" && err.details !== null
+      ? (err.details as Record<string, unknown>)
+      : null
+
+  let message = coerceMessage(err.message)
+  if (message === null || GENERIC_MESSAGES.has(message.toLowerCase())) {
+    // Prefer the real text over a placeholder the backend could not improve.
+    message = (details && summarizeFieldErrors(details)) ?? message
+  }
+
   return {
     success: false,
     error: {
       code: typeof err.code === "string" ? err.code : "ERROR",
-      message:
-        typeof err.message === "string" ? err.message : "An error occurred.",
+      message: message ?? "An error occurred.",
       details: err.details,
     },
   }
@@ -142,7 +224,20 @@ export function getFieldErrors(
     if (Array.isArray(value) && value.every((v) => typeof v === "string")) {
       out[key] = value as string[]
       found = true
+    } else if (typeof value === "string") {
+      out[key] = [value]
+      found = true
     }
   }
   return found ? out : null
+}
+
+/**
+ * The first message for one form field, for attaching to an input.
+ *
+ * Returns `null` when the failure was not attributed to that field, so a
+ * caller must treat `null` as "no field error" rather than as valid input.
+ */
+export function getFieldError(error: unknown, field: string): string | null {
+  return getFieldErrors(error)?.[field]?.[0] ?? null
 }

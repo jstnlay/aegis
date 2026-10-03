@@ -47,6 +47,7 @@ import {
   RISK_LEVEL_LABELS,
   countAlertsByStatus,
   filterRiskAlerts,
+  riskFactorLabel,
   useCreateRiskAlert,
   useRiskAlertTransition,
   useRiskAlerts,
@@ -526,9 +527,12 @@ export function RiskAlertsPage() {
                         <span className="text-muted-foreground">—</span>
                       ) : (
                         <ul className="space-y-0.5">
-                          {alert.risk_factors.map((factor) => (
-                            <li key={factor} className="text-xs">
-                              {factor}
+                          {alert.risk_factors.map((factor, index) => (
+                            <li
+                              key={`${alert.id}-factor-${index}`}
+                              className="text-xs"
+                            >
+                              {riskFactorLabel(factor) || "Unlabelled factor"}
                             </li>
                           ))}
                         </ul>

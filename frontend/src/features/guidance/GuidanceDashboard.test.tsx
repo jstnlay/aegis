@@ -43,7 +43,11 @@ const stats = {
   assessment_completion_rate: 50,
 }
 
-vi.mock("@/features/guidance/api", () => ({
+// Partial mock: the query hooks are stubbed, but `riskFactorLabel` is the real
+// implementation, so the object-shaped factor below exercises the actual
+// normalization rather than a stub that would hide a crash.
+vi.mock("@/features/guidance/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/guidance/api")>()),
   useGuidanceStats: () => ({
     data: stats,
     isFetching: false,
@@ -56,8 +60,16 @@ vi.mock("@/features/guidance/api", () => ({
         student: "sp-1",
         student_name: "Ana Reyes",
         risk_level: "high",
-        risk_factors: ["attendance"],
-        source: "manual",
+        // The real AI shape, not the PH11.8 string[] assumption.
+        risk_factors: [
+          {
+            feature: "attendance_rate",
+            threshold: 0.75,
+            value: 0.62,
+            direction: "below",
+          },
+        ],
+        source: "algorithm",
         status: "active",
         assigned_counselor: null,
         assigned_counselor_name: null,
@@ -126,5 +138,16 @@ describe("GuidanceDashboard", () => {
     // `RiskAlertSerializer` has no student_id field; a raw UUID must not be
     // substituted for the missing human-facing code.
     expect(container.textContent).not.toContain("sp-1")
+  })
+
+  it("renders an object-shaped AI risk factor without crashing", () => {
+    const { container } = renderWithClient()
+
+    // The regression: PH11.8 typed this as string[], so `.join()` produced
+    // "[object Object]" and React threw on the object child. The feature name
+    // and the decision value must both survive.
+    expect(container.textContent).toContain("attendance_rate")
+    expect(container.textContent).toContain("0.62")
+    expect(container.textContent).not.toContain("[object Object]")
   })
 })

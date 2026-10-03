@@ -172,12 +172,100 @@ export const RISK_ALERT_SOURCE_LABELS: Record<RiskAlertSource, string> = {
  * there is deliberately no `student_id` field here — the roster lookup in
  * `useStudentRoster` is the only way to show a human-readable code.
  */
+/**
+ * One entry of `RiskAlert.risk_factors`.
+ *
+ * `RiskAlert.risk_factors` is a bare `models.JSONField(default=list)` with no
+ * serializer validation, so both shapes genuinely occur and the client must
+ * accept both:
+ *
+ * - **object** — what the AI engine writes. `ai_engine/risk_scorer.py`
+ *   `_extract_decision_path` appends
+ *   `{feature, threshold, value, direction}` per decision-tree node, and
+ *   `ai_engine/risk_service.py` copies `explanation.contributing_factors`
+ *   straight onto the alert. `ai_engine/resolver.py` already reads these with
+ *   `factor.get("feature")`, so the object is the canonical form.
+ * - **string** — what a counselor types on a manual alert, and what the QA seed
+ *   writes.
+ *
+ * Typing this as `string[]` (as PH11.8 did) made `.join()` emit
+ * "[object Object]" and `.map()` hand a raw object to React as a child, which
+ * throws "Objects are not valid as a React child" and unmounts the page. The
+ * object's `value`/`threshold` are also the only record of *why* the model
+ * escalated a student, so they are rendered rather than discarded.
+ */
+export interface RiskFactorObject {
+  feature?: string | null
+  threshold?: number | null
+  value?: number | null
+  direction?: string | null
+}
+
+export type RiskFactor = string | RiskFactorObject
+
+/**
+ * A readable label for one factor, keeping the decision-tree detail.
+ *
+ * The raw `feature` key is preserved verbatim rather than prettified: it maps
+ * directly onto `ai_engine.config.FEATURE_COLUMNS`, so a counselor auditing an
+ * AI escalation can trace the row, and renaming it here would put the label out
+ * of step with the model.
+ */
+export function riskFactorLabel(factor: RiskFactor): string {
+  if (typeof factor === "string") return factor
+
+  if (factor === null || typeof factor !== "object") return ""
+
+  const feature =
+    typeof factor.feature === "string" ? factor.feature.trim() : ""
+  if (!feature) return ""
+
+  const parts: string[] = [feature]
+
+  const direction =
+    typeof factor.direction === "string" ? factor.direction.trim() : ""
+  if (direction) parts.push(direction)
+
+  if (typeof factor.value === "number" && Number.isFinite(factor.value)) {
+    parts.push(`value ${factor.value}`)
+  }
+
+  if (
+    typeof factor.threshold === "number" &&
+    Number.isFinite(factor.threshold)
+  ) {
+    parts.push(`threshold ${factor.threshold}`)
+  }
+
+  return parts.join(" ")
+}
+
+/**
+ * Lower-cased text for search matching.
+ *
+ * Returns "" for an unusable entry so a malformed factor can never inject
+ * "[object Object]" into the haystack and match every query.
+ */
+export function riskFactorSearchText(factor: RiskFactor): string {
+  if (typeof factor === "string") return factor.toLowerCase()
+  if (factor === null || typeof factor !== "object") return ""
+  return [riskFactorLabel(factor), featureKeyOf(factor)]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+}
+
+/** The bare `feature` key, for filtering that must match the model column. */
+function featureKeyOf(factor: RiskFactorObject): string {
+  return typeof factor.feature === "string" ? factor.feature : ""
+}
+
 export interface RiskAlert {
   id: string
   student: string
   student_name: string
   risk_level: RiskLevel
-  risk_factors: string[]
+  risk_factors: RiskFactor[]
   source: RiskAlertSource
   status: RiskAlertStatus
   assigned_counselor: string | null
@@ -220,6 +308,10 @@ export const RISK_ALERT_TRANSITION_LABELS: Record<RiskAlertTransition, string> =
  * `source`, `generated_at` and `last_updated` are read-only (the viewset
  * forces `source = manual` and stamps `generated_at` in `perform_create`),
  * so they are absent here by construction.
+ *
+ * `risk_factors` is `string[]` on the way *out* even though it is
+ * `RiskFactor[]` on the way in: a counselor records free text here. Only
+ * `ai_engine` writes the object form, and it does so server-side.
  */
 export interface CreateRiskAlertPayload {
   student: string
@@ -754,7 +846,7 @@ export function filterRiskAlerts(
       const haystack = [
         alert.student_name,
         alert.assigned_counselor_name ?? "",
-        ...alert.risk_factors,
+        ...alert.risk_factors.map(riskFactorSearchText),
       ]
         .join(" ")
         .toLowerCase()

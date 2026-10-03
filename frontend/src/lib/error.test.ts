@@ -1,7 +1,12 @@
 import { AxiosError, AxiosHeaders } from "axios"
 import { describe, expect, it } from "vitest"
 
-import { getFieldErrors, isHttpError, normalizeApiError } from "@/lib/error"
+import {
+  getFieldError,
+  getFieldErrors,
+  isHttpError,
+  normalizeApiError,
+} from "@/lib/error"
 import type { ApiErrorEnvelope } from "@/types/api"
 
 function envelopeBody(
@@ -138,5 +143,148 @@ describe("getFieldErrors", () => {
     )
 
     expect(getFieldErrors(error)).toBeNull()
+  })
+})
+
+/**
+ * The backend derives `error.message` from every DRF response shape, so a
+ * meaningful message reaches the UI. These cases pin the client-side half of
+ * that contract: the same text must survive normalization, and a body that
+ * still carries only a placeholder must not blank out the user's error.
+ */
+describe("action and field error messages", () => {
+  it("shows an action error that DRF wrapped in a list", () => {
+    // DRF leaves a list `exc.detail` un-wrapped, so the text lands in
+    // details.detail as an array. The backend now flattens it, and the
+    // client must not lose it if it ever sees the raw shape again.
+    const error = axiosError(
+      400,
+      envelopeBody("VALIDATION_ERROR", "An error occurred.", {
+        detail: ["Assessment is already published."],
+      })
+    )
+
+    expect(normalizeApiError(error).message).toBe(
+      "Assessment is already published."
+    )
+  })
+
+  it("names the field and reason when only a placeholder message arrives", () => {
+    const error = axiosError(
+      400,
+      envelopeBody("VALIDATION_ERROR", "An error occurred.", {
+        student: ["This field is required."],
+        score: ["Must be between 0 and 100."],
+      })
+    )
+
+    const message = normalizeApiError(error).message
+
+    expect(message).toContain("student")
+    expect(message).toContain("This field is required.")
+    expect(message).toContain("score")
+  })
+
+  it("does not echo an opaque DRF key back as a field name", () => {
+    const error = axiosError(
+      400,
+      envelopeBody("VALIDATION_ERROR", "An error occurred.", {
+        non_field_errors: ["Ordering is inconsistent."],
+      })
+    )
+
+    const message = normalizeApiError(error).message
+
+    expect(message).toBe("Ordering is inconsistent.")
+    expect(message).not.toContain("non_field_errors")
+  })
+
+  it("keeps a placeholder only when details hold nothing nameable", () => {
+    const error = axiosError(
+      400,
+      envelopeBody("VALIDATION_ERROR", "An error occurred.", {})
+    )
+
+    expect(normalizeApiError(error).message).toBe("An error occurred.")
+  })
+
+  it("joins an array message instead of discarding it", () => {
+    const body = {
+      success: false,
+      error: {
+        code: "VALIDATION_ERROR",
+        message: ["First problem.", "Second problem."],
+      },
+    }
+    const error = axiosError(400, body)
+
+    expect(normalizeApiError(error).message).toBe(
+      "First problem. Second problem."
+    )
+  })
+
+  it("still reports a permission denial rather than a placeholder", () => {
+    const error = axiosError(
+      403,
+      envelopeBody(
+        "PERMISSION_DENIED",
+        "You do not have permission to perform this action."
+      )
+    )
+
+    const normalized = normalizeApiError(error)
+
+    expect(normalized.status).toBe(403)
+    expect(normalized.message).toContain("permission")
+  })
+
+  it("never leaves the message empty for a bodiless 4xx", () => {
+    const error = axiosError(400, "")
+
+    expect(normalizeApiError(error).message).not.toBe("")
+  })
+})
+
+describe("getFieldError", () => {
+  it("returns the first message for one field", () => {
+    const error = axiosError(
+      400,
+      envelopeBody("VALIDATION_ERROR", "Invalid input.", {
+        subject_assignment: [
+          "This field is required.",
+          "And a second problem.",
+        ],
+      })
+    )
+
+    expect(getFieldError(error, "subject_assignment")).toBe(
+      "This field is required."
+    )
+  })
+
+  it("returns null when the failure was not attributed to that field", () => {
+    const error = axiosError(
+      400,
+      envelopeBody("VALIDATION_ERROR", "Invalid input.", {
+        subject_assignment: ["This field is required."],
+      })
+    )
+
+    expect(getFieldError(error, "student")).toBeNull()
+    expect(getFieldError(new Error("boom"), "student")).toBeNull()
+  })
+
+  it("handles a non-field action error without inventing a field", () => {
+    const error = axiosError(
+      400,
+      envelopeBody("VALIDATION_ERROR", "Invalid input.", {
+        detail: ["Assessment is already published."],
+      })
+    )
+
+    expect(getFieldError(error, "detail")).toBe(
+      "Assessment is already published."
+    )
+    expect(getFieldError(error, "assessment")).toBeNull()
   })
 })

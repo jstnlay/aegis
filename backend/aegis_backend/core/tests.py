@@ -14,6 +14,11 @@ a client error.
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.test import RequestFactory, SimpleTestCase
 from rest_framework import status
+from rest_framework.exceptions import (
+    NotFound,
+    PermissionDenied,
+    ValidationError as DRFValidationError,
+)
 
 from core.exceptions import custom_exception_handler, drf_validation_error_from
 
@@ -108,3 +113,119 @@ class CustomExceptionHandlerTests(SimpleTestCase):
         )
 
         self.assertIsNone(response)
+
+
+class ErrorMessageSummaryTests(SimpleTestCase):
+    """``error.message`` must be a useful string for every response shape.
+
+    ``error.details`` always keeps DRF's own structure. These tests pin only the
+    summary, which is what a client renders when it has no field-level form to
+    attach the detail to. Before this was fixed, every 400 rendered as
+    "An error occurred." because the handler only ever looked for a string
+    ``detail`` key.
+    """
+
+    def setUp(self):
+        self.factory = RequestFactory()
+
+    def _message(self, exc, method="POST"):
+        response = custom_exception_handler(
+            exc, {"request": getattr(self.factory, method.lower())("/")}
+        )
+        self.assertIsNotNone(response, "handler returned no response")
+        return response.data["error"]["message"]
+
+    def test_message_is_always_a_plain_string(self):
+        for exc in (
+            DRFValidationError({"student": ["This field is required."]}),
+            DRFValidationError("Assessment is already published."),
+            DRFValidationError(["First problem."]),
+            PermissionDenied(),
+            NotFound("No Assessment matches the given query."),
+        ):
+            with self.subTest(exc=type(exc).__name__):
+                message = self._message(exc)
+                self.assertIsInstance(message, str)
+                self.assertNotIsInstance(message, list)
+                self.assertTrue(message.strip(), "message was blank")
+
+    def test_serializer_field_errors_name_the_field_and_the_reason(self):
+        message = self._message(
+            DRFValidationError(
+                {
+                    "student": ["This field is required."],
+                    "score": ["Must be between 0 and 100."],
+                }
+            )
+        )
+
+        self.assertIn("student", message)
+        self.assertIn("This field is required.", message)
+        self.assertIn("score", message)
+        self.assertIn("Must be between 0 and 100.", message)
+
+    def test_action_error_string_survives_drfs_list_wrapping(self):
+        """DRF leaves a list ``exc.detail`` un-wrapped, so there is no
+        ``detail`` key to read. The text must still reach the message."""
+        message = self._message(DRFValidationError("Assessment is already published."))
+
+        self.assertEqual(message, "Assessment is already published.")
+
+    def test_zero_question_publish_error_is_reported_verbatim(self):
+        message = self._message(
+            DRFValidationError(
+                {"detail": "Cannot publish assessment without questions."}
+            )
+        )
+
+        self.assertEqual(message, "Cannot publish assessment without questions.")
+
+    def test_non_field_errors_are_not_echoed_as_a_field_name(self):
+        message = self._message(
+            DRFValidationError({"non_field_errors": ["Ordering is inconsistent."]})
+        )
+
+        self.assertEqual(message, "Ordering is inconsistent.")
+        self.assertNotIn("non_field_errors", message)
+
+    def test_field_summary_is_bounded_but_details_stay_complete(self):
+        detail = {f"field_{index}": ["is invalid"] for index in range(7)}
+        response = custom_exception_handler(
+            DRFValidationError(detail), {"request": self.factory.post("/")}
+        )
+
+        message = response.data["error"]["message"]
+        self.assertIn("(+4 more)", message)
+        # Bounding the summary must never truncate the machine-readable payload.
+        self.assertEqual(
+            set(response.data["error"]["details"]), set(detail)
+        )
+
+    def test_permission_denied_keeps_drfs_own_text(self):
+        self.assertEqual(
+            self._message(PermissionDenied()),
+            "You do not have permission to perform this action.",
+        )
+
+    def test_status_fallback_when_the_body_has_no_usable_text(self):
+        # An empty field map carries no usable text, so the message falls back
+        # to the status-appropriate default rather than shipping "".
+        response = custom_exception_handler(
+            DRFValidationError({}), {"request": self.factory.post("/")}
+        )
+        self.assertEqual(
+            response.data["error"]["message"],
+            "The request could not be processed.",
+        )
+
+    def test_details_are_unchanged_by_the_message_fix(self):
+        """The summary is derived independently; field attribution survives."""
+        response = custom_exception_handler(
+            DRFValidationError({"order": ["Already used."]}),
+            {"request": self.factory.post("/")},
+        )
+
+        self.assertEqual(
+            response.data["error"]["details"], {"order": ["Already used."]}
+        )
+        self.assertEqual(response.data["error"]["message"], "order: Already used.")

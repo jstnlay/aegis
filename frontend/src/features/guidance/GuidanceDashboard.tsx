@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/features/auth/AuthContext"
 import {
+  riskFactorLabel,
   useConsultations,
   useGuidanceStats,
   useRiskAlerts,
@@ -184,7 +185,11 @@ function GuidanceDashboard() {
                       <div className="mt-2 space-y-1">
                         <p className="text-xs font-medium">Risk Factors:</p>
                         <p className="text-xs text-muted-foreground">
-                          {alert.risk_factors.slice(0, 2).join(", ")}
+                          {alert.risk_factors
+                            .slice(0, 2)
+                            .map(riskFactorLabel)
+                            .filter(Boolean)
+                            .join(", ")}
                           {alert.risk_factors.length > 2 && " ..."}
                         </p>
                       </div>

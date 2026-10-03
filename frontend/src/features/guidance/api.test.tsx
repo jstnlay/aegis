@@ -10,11 +10,14 @@ import {
   filterRiskAlerts,
   normalizeDecimal,
   openRiskAlerts,
+  riskFactorLabel,
+  riskFactorSearchText,
   useConsultations,
   useGuidanceStats,
   useRiskAlerts,
   type Consultation,
   type RiskAlert,
+  type RiskFactor,
 } from "@/features/guidance/api"
 import { fetchAllPages } from "@/lib/pagination"
 
@@ -489,5 +492,145 @@ describe("normalizeDecimal", () => {
   it("distinguishes a real zero from missing data", () => {
     expect(normalizeDecimal("0.00")).toBe(0)
     expect(normalizeDecimal(null)).toBeNull()
+  })
+})
+
+/**
+ * `RiskAlert.risk_factors` is a bare JSONField, and the AI engine writes the
+ * object form that `_extract_decision_path` produces:
+ *
+ *   {"feature": ..., "threshold": ..., "value": ..., "direction": ...}
+ *
+ * These fixtures use that real shape. PH11.8 typed the field as `string[]`,
+ * which made every consumer either print "[object Object]" or hand an object to
+ * React as a child and throw.
+ */
+describe("riskFactorLabel", () => {
+  it("renders a string factor as typed", () => {
+    expect(riskFactorLabel("Chronic absenteeism")).toBe("Chronic absenteeism")
+  })
+
+  it("renders a real AI decision-path factor with its detail", () => {
+    const factor: RiskFactor = {
+      feature: "attendance_rate",
+      threshold: 0.75,
+      value: 0.62,
+      direction: "below",
+    }
+
+    const label = riskFactorLabel(factor)
+
+    expect(label).toContain("attendance_rate")
+    expect(label).toContain("below")
+    expect(label).toContain("0.62")
+    expect(label).toContain("0.75")
+    expect(label).not.toContain("[object Object]")
+  })
+
+  it("omits threshold and direction the model did not supply", () => {
+    expect(
+      riskFactorLabel({ feature: "current_term_grade_average", value: 65 })
+    ).toBe("current_term_grade_average value 65")
+  })
+
+  it("falls back to the feature key alone when only it is present", () => {
+    expect(riskFactorLabel({ feature: "behavioral_points" })).toBe(
+      "behavioral_points"
+    )
+  })
+
+  it("returns an empty string for an unusable entry", () => {
+    expect(riskFactorLabel({})).toBe("")
+    expect(riskFactorLabel({ feature: "   " })).toBe("")
+    expect(riskFactorLabel(null as unknown as RiskFactor)).toBe("")
+    expect(riskFactorLabel(7 as unknown as RiskFactor)).toBe("")
+  })
+
+  it("never drops a factor whose numeric detail is not finite", () => {
+    const label = riskFactorLabel({
+      feature: "attendance_rate",
+      value: Number.NaN,
+      threshold: Number.POSITIVE_INFINITY,
+    })
+
+    expect(label).toBe("attendance_rate")
+    expect(label).not.toContain("NaN")
+    expect(label).not.toContain("Infinity")
+  })
+})
+
+describe("riskFactorSearchText", () => {
+  it("matches an object factor on its label and its bare feature key", () => {
+    const factor: RiskFactor = {
+      feature: "attendance_rate",
+      threshold: 0.75,
+      value: 0.62,
+      direction: "below",
+    }
+
+    expect(riskFactorSearchText(factor)).toContain("attendance_rate")
+    expect(riskFactorSearchText(factor)).toContain("0.62")
+  })
+
+  it("does not put [object Object] into the search haystack", () => {
+    const text = riskFactorSearchText({ feature: "attendance_rate" })
+
+    expect(text).not.toContain("[object Object]")
+  })
+
+  it("returns empty text for an unusable entry", () => {
+    expect(riskFactorSearchText({} as RiskFactor)).toBe("")
+  })
+})
+
+describe("filterRiskAlerts with object-shaped factors", () => {
+  const alerts: RiskAlert[] = [
+    makeAlert({
+      id: "ra-obj",
+      student: "sp-obj",
+      student_name: "Object Factored",
+      risk_level: "high",
+      status: "active",
+      risk_factors: [
+        { feature: "attendance_rate", threshold: 0.75, value: 0.62 },
+        "Family conflict",
+      ],
+    }),
+  ]
+
+  it("searches the object factor by feature name", () => {
+    const result = filterRiskAlerts(alerts, { search: "attendance_rate" })
+
+    expect(result.map((alert) => alert.id)).toEqual(["ra-obj"])
+  })
+
+  it("still searches the string factor", () => {
+    const result = filterRiskAlerts(alerts, { search: "Family conflict" })
+
+    expect(result.map((alert) => alert.id)).toEqual(["ra-obj"])
+  })
+
+  it("does not match every alert on an object-shaped haystack", () => {
+    const others: RiskAlert[] = [
+      makeAlert({
+        id: "ra-other",
+        student: "sp-other",
+        student_name: "Someone Else",
+        risk_level: "low",
+        status: "active",
+        risk_factors: [],
+      }),
+    ]
+
+    // A needle present in both names must still match both, proving the
+    // object-shaped entry did not collapse the haystack to a single value.
+    expect(
+      filterRiskAlerts([...alerts, ...others], { search: "e" }).map(
+        (alert) => alert.id
+      )
+    ).toEqual(["ra-obj", "ra-other"])
+    expect(
+      filterRiskAlerts([...alerts, ...others], { search: "attendance_rate" })
+    ).toHaveLength(1)
   })
 })
