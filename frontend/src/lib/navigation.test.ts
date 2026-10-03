@@ -43,6 +43,8 @@ describe("role navigation configuration", () => {
       "interventions",
       "students",
       "assessments",
+      // PH11.9: notifications and account settings, both open to all roles
+      "notifications",
       "account-settings",
     ]
 
@@ -90,8 +92,10 @@ describe("role navigation configuration", () => {
     )
     expect(studentAvailable.map((i) => i.route).sort()).toEqual([
       "academics",
+      "account-settings",
       "attendance",
       "dashboard",
+      "notifications",
     ])
   })
 
@@ -159,13 +163,43 @@ describe("role navigation configuration", () => {
         "consultations",
         "interventions",
         "students",
-        "account-settings",
       ]) {
         expect(available, `${role} / ${route}`).not.toContain(route)
       }
       // `/app/assessments` resolves to the guidance page, so no other role may
       // be handed an available link to it.
       expect(available, role).not.toContain("assessments")
+    }
+  })
+
+  /**
+   * PH11.9 opened two surfaces to every role.
+   *
+   * Neither can reach another account: `/notifications/` is
+   * `recipient=request.user`, and `/accounts/me/` plus
+   * `/notifications/preferences/` are both caller-scoped. That is what makes
+   * an all-role link safe here, as opposed to the guidance resources above,
+   * which stay role-scoped because they address *other* students.
+   */
+  it("gives every role notifications and account settings as real links", () => {
+    for (const role of ROLES) {
+      const available = getNavItemsForRole(role)
+        .filter((i) => i.status === "available")
+        .map((i) => i.route)
+
+      expect(available, role).toContain("notifications")
+      expect(available, role).toContain("account-settings")
+    }
+  })
+
+  it("no longer shows a Planned entry for notifications or settings", () => {
+    for (const role of ROLES) {
+      const planned = getNavItemsForRole(role)
+        .filter((i) => i.status === "planned")
+        .map((i) => i.route)
+
+      expect(planned, role).not.toContain("notifications")
+      expect(planned, role).not.toContain("account-settings")
     }
   })
 

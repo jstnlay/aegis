@@ -11,6 +11,7 @@ import { InterventionsPage } from "@/features/guidance/InterventionsPage"
 import { RiskAlertsPage } from "@/features/guidance/RiskAlertsPage"
 import { StudentProfilePage } from "@/features/guidance/StudentProfilePage"
 import { StudentsPage } from "@/features/guidance/StudentsPage"
+import { NotificationsPage } from "@/features/notifications/NotificationsPage"
 import { AccountSettingsPage } from "@/features/settings/AccountSettingsPage"
 import { ChangePasswordPage } from "@/routes/pages/ChangePasswordPage"
 import { LoginPage } from "@/routes/pages/LoginPage"
@@ -165,16 +166,20 @@ export const appRoutes: RouteObject[] = [
             ),
           },
           {
-            // PH11.8: guidance-only. `/accounts/me/` is self-scoped, but the
-            // surface is part of the guidance batch and the other roles have
-            // no verified settings surface yet, so the route stays guarded
-            // rather than being opened up silently.
+            // PH11.9: opened to all five roles. `/notifications/` is scoped to
+            // `recipient=request.user` server-side, so the same screen serves
+            // every role over their own rows.
+            path: "notifications",
+            element: <NotificationsPage />,
+          },
+          {
+            // PH11.9: opened to all five roles. `/accounts/me/` is
+            // self-scoped and `/notifications/preferences/` is
+            // `get_or_create(request.user)`, so there is no cross-account
+            // surface here to guard. PH11.8 kept this guidance-only because
+            // only the counselor's sidebar had been changed at the time.
             path: "account-settings",
-            element: (
-              <RequireRole allowedRoles={["guidance"]}>
-                <AccountSettingsPage />
-              </RequireRole>
-            ),
+            element: <AccountSettingsPage />,
           },
         ],
       },

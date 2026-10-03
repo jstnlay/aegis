@@ -1,4 +1,5 @@
 import {
+  Bell,
   BookOpen,
   CalendarCheck,
   ClipboardCheck,
@@ -194,27 +195,37 @@ const STUDENTS: NavItem = {
 }
 
 /**
- * PH11.8 built the settings page at `/app/account-settings`, and it is scoped to
- * the caller by `/accounts/me/`, so the route itself is open to every role.
+ * PH11.9 built the settings page for every role.
  *
- * The nav entry is guidance-only for now: this batch changed the counselor's
- * sidebar, and widening every role's sidebar is a separate product decision.
- * The admin-only `SETTINGS` entry below is a different thing entirely — that is
- * school administration, not personal account settings.
+ * `AccountSettingsPage` reads `GET/PATCH /accounts/me/` (self-scoped),
+ * `POST /accounts/password/change/` and `GET/PUT /notifications/preferences/`
+ * (`get_or_create(request.user)`). None of those endpoints can address another
+ * account, so there is no cross-account surface for a role guard to protect —
+ * the scope was the caller's own, which is what "account settings" means.
+ *
+ * `allowedRoles` is left empty, which this module reads as "every role".
+ * PH11.8 kept this guidance-only only because that batch had changed the
+ * counselor's sidebar.
  */
 const ACCOUNT_SETTINGS: NavItem = {
   route: "account-settings",
   label: "Account Settings",
   icon: UserCog,
-  allowedRoles: ["guidance"],
   status: "available",
 }
 
+/**
+ * PH11.9: real route, open to all five roles.
+ *
+ * `NotificationViewSet.get_queryset()` is
+ * `Notification.objects.filter(recipient=request.user)`, so one screen serves
+ * every role over its own rows and no role can see another's.
+ */
 const NOTIFICATIONS: NavItem = {
   route: "notifications",
   label: "Notifications",
-  icon: MessageSquare,
-  status: "planned",
+  icon: Bell,
+  status: "available",
 }
 
 /* ------------------------------------------------------------------ */
@@ -222,6 +233,12 @@ const NOTIFICATIONS: NavItem = {
 /* ------------------------------------------------------------------ */
 
 const OVERVIEW_GROUP: NavGroup = { heading: "Overview", items: [DASHBOARD] }
+
+/** Every role gets an Account group now that settings is open to all of them. */
+const ACCOUNT_GROUP: NavGroup = {
+  heading: "Account",
+  items: [ACCOUNT_SETTINGS],
+}
 
 const STUDENT_NAVIGATION: readonly NavGroup[] = [
   OVERVIEW_GROUP,
@@ -233,18 +250,25 @@ const STUDENT_NAVIGATION: readonly NavGroup[] = [
     heading: "Communication",
     items: [NOTIFICATIONS],
   },
+  ACCOUNT_GROUP,
 ]
 
 const PARENT_NAVIGATION: readonly NavGroup[] = [
   OVERVIEW_GROUP,
   {
     heading: "My Child",
-    items: [ATTENDANCE_PLANNED, REPORTS],
+    // PH11.9 widens these to real links as the parent academics, attendance and
+    // assessment routes land. Until a route exists *and* `RequireRole` admits
+    // `parent`, they must stay planned — a link would bounce off the guard,
+    // which is the exact failure PH11.7 avoided by keeping parent on its own
+    // `ATTENDANCE_PLANNED` item.
+    items: [ATTENDANCE_PLANNED, ASSESSMENTS, REPORTS],
   },
   {
     heading: "Communication",
     items: [NOTIFICATIONS],
   },
+  ACCOUNT_GROUP,
 ]
 
 const FACULTY_NAVIGATION: readonly NavGroup[] = [
@@ -257,6 +281,7 @@ const FACULTY_NAVIGATION: readonly NavGroup[] = [
     heading: "Communication",
     items: [NOTIFICATIONS],
   },
+  ACCOUNT_GROUP,
 ]
 
 const GUIDANCE_NAVIGATION: readonly NavGroup[] = [
@@ -276,16 +301,15 @@ const GUIDANCE_NAVIGATION: readonly NavGroup[] = [
     heading: "Communication",
     items: [NOTIFICATIONS],
   },
-  {
-    heading: "Account",
-    items: [ACCOUNT_SETTINGS],
-  },
+  ACCOUNT_GROUP,
 ]
 
 const ADMIN_NAVIGATION: readonly NavGroup[] = [
   OVERVIEW_GROUP,
   {
     heading: "Administration",
+    // `ATTENDANCE` allows only student/faculty, so admin keeps the planned
+    // item until the PH11.9 admin attendance route admits `admin`.
     items: [ACADEMICS, ATTENDANCE_PLANNED, ASSESSMENTS, USERS, REPORTS],
   },
   {
@@ -296,6 +320,7 @@ const ADMIN_NAVIGATION: readonly NavGroup[] = [
     heading: "Communication",
     items: [NOTIFICATIONS],
   },
+  ACCOUNT_GROUP,
 ]
 
 const ROLE_NAVIGATION: Record<Role, readonly NavGroup[]> = {

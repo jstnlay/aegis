@@ -5,6 +5,7 @@ import { createMemoryRouter, RouterProvider } from "react-router-dom"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { appRoutes } from "@/routes/routes"
+import { ROLES } from "@/types/auth"
 import type { Role, User } from "@/types/auth"
 
 const authState = vi.hoisted(() => ({ user: null as User | null }))
@@ -360,24 +361,45 @@ describe("PH11.8 guidance routes", () => {
     }
   })
 
-  it("redirects every non-guidance role away from account settings", async () => {
-    // PH11.8 keeps /app/account-settings guidance-only, even though
-    // `/accounts/me/` is self-scoped.
-    for (const role of ["student", "parent", "faculty", "admin"] as const) {
+  it("opens account settings to every role (PH11.9)", async () => {
+    // PH11.8 kept this guidance-only. PH11.9 opens it, because every endpoint
+    // it uses is caller-scoped: `GET/PATCH /accounts/me/`,
+    // `POST /accounts/password/change/` and
+    // `GET/PUT /notifications/preferences/` (`get_or_create(request.user)`).
+    // None can address another account.
+    for (const role of ROLES) {
       authState.user = makeUser(role)
       const view = renderAt("/app/account-settings")
 
       expect(
         await screen.findByRole("heading", {
-          name: ROLE_CASES.find((c) => c.role === role)!.heading,
-        })
-      ).toBeInTheDocument()
-      expect(
-        screen.queryByRole("heading", {
           name: "Account settings",
           level: 1,
-        })
-      ).not.toBeInTheDocument()
+        }),
+        role
+      ).toBeInTheDocument()
+
+      view.unmount()
+    }
+  })
+
+  it("opens notifications to every role (PH11.9)", async () => {
+    // `NotificationViewSet.get_queryset()` is
+    // `Notification.objects.filter(recipient=request.user)`, so the same
+    // screen is correct for every role over its own rows.
+    for (const role of ROLES) {
+      authState.user = makeUser(role)
+      const view = renderAt("/app/notifications")
+
+      // Assert a body-unique marker, not the heading: the AppShell header
+      // already renders an <h1> with `getPageTitle()`, which for this route is
+      // also "Notifications".
+      expect(
+        await screen.findByText(
+          /Alerts and updates addressed to your account/i
+        ),
+        role
+      ).toBeInTheDocument()
 
       view.unmount()
     }
