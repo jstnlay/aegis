@@ -102,8 +102,55 @@ const ATTENDANCE_PLANNED: NavItem = {
   route: "attendance",
   label: "Attendance",
   icon: CalendarCheck,
-  allowedRoles: ["parent", "admin", "guidance"],
+  allowedRoles: ["admin", "guidance"],
   status: "planned",
+}
+
+/**
+ * PH11.9: the parent's academic record, covering both grades and attendance.
+ *
+ * `GET /academics/grades/`, `GET /attendance/records/` and
+ * `GET /attendance/summary/` are all scoped by the backend to
+ * `ParentStudentLink` children, so this page selects among the caller's own
+ * children and cannot reach another family's records. This is why parent no
+ * longer needs the `ATTENDANCE_PLANNED` placeholder above: a real surface
+ * replaced it.
+ */
+const PARENT_ACADEMICS: NavItem = {
+  route: "parent/academics",
+  label: "Academic Record",
+  icon: BookOpen,
+  allowedRoles: ["parent"],
+  status: "available",
+}
+
+/**
+ * PH11.9: the parent's assessment and results view.
+ *
+ * Read-only. The backend withholds `correct_answer` from any caller who is not
+ * the assessment's author, so no answer key reaches this screen.
+ */
+const PARENT_ASSESSMENTS: NavItem = {
+  route: "parent/assessments",
+  label: "Assessments",
+  icon: ClipboardCheck,
+  allowedRoles: ["parent"],
+  status: "available",
+}
+
+/**
+ * PH11.9: the parent's read-only view of Guidance Office records.
+ *
+ * `ConsultationRecordViewSet` and `RiskAlertViewSet` answer 403 for a parent on
+ * every mutating verb and on acknowledge/escalate/resolve, so this is a reading
+ * surface and the page renders no mutation control.
+ */
+const PARENT_SUPPORT: NavItem = {
+  route: "parent/support",
+  label: "Student Support",
+  icon: Shield,
+  allowedRoles: ["parent"],
+  status: "available",
 }
 
 /**
@@ -257,12 +304,21 @@ const PARENT_NAVIGATION: readonly NavGroup[] = [
   OVERVIEW_GROUP,
   {
     heading: "My Child",
-    // PH11.9 widens these to real links as the parent academics, attendance and
-    // assessment routes land. Until a route exists *and* `RequireRole` admits
-    // `parent`, they must stay planned — a link would bounce off the guard,
-    // which is the exact failure PH11.7 avoided by keeping parent on its own
-    // `ATTENDANCE_PLANNED` item.
-    items: [ATTENDANCE_PLANNED, ASSESSMENTS, REPORTS],
+    /*
+     * PH11.9 replaces this group's placeholders with real routes.
+     *
+     * `ATTENDANCE_PLANNED` and `ASSESSMENTS` were both planned entries kept
+     * honest by having no route: a link would have bounced off `RequireRole`.
+     * Both now exist at their own routes with `RequireRole` admitting `parent`,
+     * so leaving them planned would tell the reader a feature is unavailable
+     * when it is one click away.
+     *
+     * `REPORTS` stays planned. PH11.9 checked for a report contract and there
+     * is none: the only related endpoints are the controlled CSV/XLSX exports
+     * under `/data-import/exports/`, which are administrator file downloads,
+     * not a report a parent can request.
+     */
+    items: [PARENT_ACADEMICS, PARENT_ASSESSMENTS, PARENT_SUPPORT, REPORTS],
   },
   {
     heading: "Communication",
@@ -375,9 +431,17 @@ export function isRouteVisibleToRole(role: Role, route: string): boolean {
   return getNavItemsForRole(role).some((item) => item.route === route)
 }
 
-/** Page title for a pathname within the /app area (used by the header). */
+/**
+ * Page title for a pathname within the /app area (used by the header).
+ *
+ * PH11.9 introduced nested routes (`/app/parent/academics`), so matching on
+ * the first path segment alone would title that page "AEGIS". The longest
+ * matching route wins, which prefers a nested item over a top-level item that
+ * happens to share its prefix.
+ */
 export function getPageTitle(pathname: string): string {
-  const segment = pathname.replace(/^\/app\/?/, "").split("/")[0] ?? ""
+  const path = pathname.replace(/^\/app\/?/, "").replace(/\/+$/, "")
+  const segment = path.split("/")[0] ?? ""
 
   const allItems: readonly NavItem[] = [
     DASHBOARD,
@@ -395,9 +459,15 @@ export function getPageTitle(pathname: string): string {
     STUDENTS,
     ACCOUNT_SETTINGS,
     NOTIFICATIONS,
+    PARENT_ACADEMICS,
+    PARENT_ASSESSMENTS,
+    PARENT_SUPPORT,
   ]
 
-  const match = allItems.find((item) => item.route === segment)
+  const match = allItems
+    .filter((item) => path === item.route || path.startsWith(`${item.route}/`))
+    .sort((a, b) => b.route.length - a.route.length)[0]
+
   if (match) return match.label
   return segment ? "AEGIS" : "Dashboard"
 }

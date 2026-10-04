@@ -22,6 +22,9 @@ import {
 } from "@/routes/pages/RoleLandingPage"
 import { StudentDashboard } from "@/features/student/StudentDashboard"
 import { ParentDashboard } from "@/features/parent/ParentDashboard"
+import { ParentAcademicsPage } from "@/features/parent/ParentAcademicsPage"
+import { ParentAssessmentsPage } from "@/features/parent/ParentAssessmentsPage"
+import { ParentSupportRoute } from "@/features/parent/ParentSupportRoute"
 import { FacultyDashboard } from "@/features/faculty/FacultyDashboard"
 import { GuidanceDashboard } from "@/features/guidance/GuidanceDashboard"
 import { AdminDashboard } from "@/features/admin/AdminDashboard"
@@ -103,6 +106,39 @@ export const appRoutes: RouteObject[] = [
             element: (
               <RequireRole allowedRoles={["student", "faculty"]}>
                 <AttendancePage />
+              </RequireRole>
+            ),
+          },
+          /* PH11.9: the parent surface. Every route here is parent-only, and
+             each page selects a child client-side from the linked set that
+             `EnrollmentViewSet` returns — that queryset is already scoped to
+             `ParentStudentLink` children, so no child UUID from another family
+             can appear in the picker or be requested by these pages.
+
+             None of these routes is shared with another role. A student reads
+             their own records with no selector, and a counselor reads
+             school-wide data under the guidance routes below. */
+          {
+            path: "parent/academics",
+            element: (
+              <RequireRole allowedRoles={["parent"]}>
+                <ParentAcademicsPage />
+              </RequireRole>
+            ),
+          },
+          {
+            path: "parent/assessments",
+            element: (
+              <RequireRole allowedRoles={["parent"]}>
+                <ParentAssessmentsPage />
+              </RequireRole>
+            ),
+          },
+          {
+            path: "parent/support",
+            element: (
+              <RequireRole allowedRoles={["parent"]}>
+                <ParentSupportRoute />
               </RequireRole>
             ),
           },

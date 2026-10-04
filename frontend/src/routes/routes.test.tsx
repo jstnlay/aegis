@@ -319,6 +319,83 @@ describe("PH11.8 guidance routes", () => {
     "admin",
   ]
 
+  /**
+   * PH11.9 parent routes. Each is reachable by `parent` alone, and each page
+   * builds its selectors from `/academics/enrollments/`, which the backend
+   * scopes to `ParentStudentLink` children — so no other role may be handed one
+   * of these links.
+   */
+  const PARENT_ROUTES: ReadonlyArray<{ path: string; marker: RegExp }> = [
+    {
+      path: "/app/parent/academics",
+      marker: /Finalized grades and attendance/i,
+    },
+    {
+      path: "/app/parent/assessments",
+      marker: /Answer keys are never shared with parents/i,
+    },
+    {
+      path: "/app/parent/support",
+      marker: /Choose a linked student above/i,
+    },
+  ]
+
+  it.each(PARENT_ROUTES)(
+    "renders the parent surface at $path",
+    async ({ path, marker }) => {
+      authState.user = makeUser("parent")
+      renderAt(path)
+
+      expect(await screen.findByText(marker)).toBeInTheDocument()
+    }
+  )
+
+  it.each(PARENT_ROUTES)(
+    "redirects a non-parent role away from $path",
+    async ({ path, marker }) => {
+      for (const role of ["student", "faculty", "guidance", "admin"] as const) {
+        authState.user = makeUser(role)
+        const view = renderAt(path)
+
+        expect(
+          await screen.findByRole("heading", {
+            name: ROLE_CASES.find((c) => c.role === role)!.heading,
+          })
+        ).toBeInTheDocument()
+        await waitFor(() =>
+          expect(screen.queryByText(marker)).not.toBeInTheDocument()
+        )
+
+        view.unmount()
+      }
+    }
+  )
+
+  it("offers the parent no way to act on a guidance record", async () => {
+    /**
+     * The backend answers 403 for a parent on consultation create/update/delete
+     * and on acknowledge/escalate/resolve, so a control here could only ever
+     * produce an error. This asserts the absence of the mutation vocabulary
+     * rather than a 403 round-trip, because with the mocked API client every
+     * write would appear to succeed.
+     */
+    authState.user = makeUser("parent")
+    renderAt("/app/parent/support")
+
+    await screen.findByText(/Choose a linked student above/i)
+
+    for (const label of [
+      /acknowledge/i,
+      /escalate/i,
+      /^resolve$/i,
+      /new alert/i,
+      /edit/i,
+      /delete/i,
+    ]) {
+      expect(screen.queryByRole("button", { name: label })).toBeNull()
+    }
+  })
+
   it.each(BLOCKED_FOR_OTHERS)(
     "redirects a non-guidance role away from $path",
     async ({ path, marker }) => {

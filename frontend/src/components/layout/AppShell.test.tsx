@@ -169,14 +169,29 @@ describe("role-aware sidebar", () => {
     expect(screen.getAllByText("Planned").length).toBeGreaterThan(0)
   })
 
-  it("keeps Attendance planned (not a link) for parent", async () => {
+  it("shows the parent the three real PH11.9 links, and no Attendance placeholder", async () => {
+    /*
+     * PH11.9 gave parent real routes. The old assertion was that Attendance
+     * stayed a non-link placeholder; that placeholder is gone because the
+     * attendance data now lives inside `Academic Record`, so a separate
+     * Attendance entry would have duplicated it and pointed nowhere.
+     */
     await renderAuthenticatedApp("parent")
 
     expect(
       await screen.findByRole("link", { name: "Dashboard" })
     ).toBeInTheDocument()
-    expect(screen.queryByRole("link", { name: "Attendance" })).toBeNull()
-    expect(screen.getByText("Attendance")).toBeInTheDocument()
+    expect(
+      screen.getByRole("link", { name: "Academic Record" })
+    ).toHaveAttribute("href", "/app/parent/academics")
+    expect(screen.getByRole("link", { name: "Assessments" })).toHaveAttribute(
+      "href",
+      "/app/parent/assessments"
+    )
+    expect(
+      screen.getByRole("link", { name: "Student Support" })
+    ).toHaveAttribute("href", "/app/parent/support")
+    expect(screen.queryByText("Attendance")).toBeNull()
   })
 
   it("shows the Academics and Attendance links to faculty", async () => {

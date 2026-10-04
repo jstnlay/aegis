@@ -46,6 +46,10 @@ describe("role navigation configuration", () => {
       // PH11.9: notifications and account settings, both open to all roles
       "notifications",
       "account-settings",
+      // PH11.9 parent surfaces, each backed by a real route in `appRoutes`
+      "parent/academics",
+      "parent/assessments",
+      "parent/support",
     ]
 
     for (const role of ROLES) {
@@ -78,14 +82,18 @@ describe("role navigation configuration", () => {
         expect.objectContaining({ route: "attendance", status: "available" })
       )
     }
-    // Parent/admin attendance stays planned — no verified surface yet.
-    for (const role of ["parent", "admin"] as const) {
-      const attendance = getNavItemsForRole(role).find(
-        (i) => i.route === "attendance"
-      )
-      expect(attendance, role).toBeDefined()
-      expect(attendance?.status, role).toBe("planned")
-    }
+    // Parent reached a real attendance surface in PH11.9 at
+    // `parent/academics`, so it no longer carries the planned entry. Admin
+    // still has no attendance route of its own, so it keeps the placeholder.
+    expect(
+      getNavItemsForRole("parent").find((i) => i.route === "attendance")
+    ).toBeUndefined()
+
+    const adminAttendance = getNavItemsForRole("admin").find(
+      (i) => i.route === "attendance"
+    )
+    expect(adminAttendance).toBeDefined()
+    expect(adminAttendance?.status).toBe("planned")
 
     const studentAvailable = getNavItemsForRole("student").filter(
       (i) => i.status === "available"
@@ -121,9 +129,41 @@ describe("role navigation configuration", () => {
     expect(admin).not.toContain("risk-alerts")
 
     const parent = getNavItemsForRole("parent").map((i) => i.route)
-    expect(parent).toContain("attendance")
+    // PH11.9 gave parent three real routes. `attendance` is gone because the
+    // attendance data lives inside `parent/academics`; a separate link would
+    // duplicate it.
+    expect(parent).toContain("parent/academics")
+    expect(parent).toContain("parent/assessments")
+    expect(parent).toContain("parent/support")
+    expect(parent).not.toContain("attendance")
+    // Reports stays planned: there is no report contract a parent can use.
     expect(parent).toContain("reports")
     expect(parent).not.toContain("users")
+    expect(parent).not.toContain("students")
+  })
+
+  /**
+   * The parent routes are parent-only.
+   *
+   * Each reads data the backend scopes to `ParentStudentLink` children. Handing
+   * one of these links to another role would show that role a page whose every
+   * list is empty, or worse, a page whose selectors are built from the wrong
+   * scope.
+   */
+  it("keeps the parent routes off every other role", () => {
+    for (const role of ["student", "faculty", "guidance", "admin"] as const) {
+      const available = getNavItemsForRole(role)
+        .filter((i) => i.status === "available")
+        .map((i) => i.route)
+
+      for (const route of [
+        "parent/academics",
+        "parent/assessments",
+        "parent/support",
+      ]) {
+        expect(available, `${role} / ${route}`).not.toContain(route)
+      }
+    }
   })
 
   it("groups with no visible items are dropped", () => {
@@ -263,6 +303,25 @@ describe("page titles from navigation", () => {
   it("resolves known route titles", () => {
     expect(getPageTitle("/app/academics")).toBe("Academics")
     expect(getPageTitle("/app/attendance")).toBe("Attendance")
+  })
+
+  /**
+   * PH11.9 introduced nested routes. Matching on the first path segment alone
+   * would title every parent page "AEGIS", because the header resolves the
+   * title from the pathname.
+   */
+  it("resolves nested parent route titles", () => {
+    expect(getPageTitle("/app/parent/academics")).toBe("Academic Record")
+    expect(getPageTitle("/app/parent/assessments")).toBe("Assessments")
+    expect(getPageTitle("/app/parent/support")).toBe("Student Support")
+  })
+
+  it("still titles the top-level routes correctly now that nesting exists", () => {
+    // The longest-match rule must not let `parent/assessments` shadow the
+    // guidance `/app/assessments`, or `students` lose its title.
+    expect(getPageTitle("/app/assessments")).toBe("Assessments")
+    expect(getPageTitle("/app/students")).toBe("Students")
+    expect(getPageTitle("/app/account-settings")).toBe("Account Settings")
   })
 
   it("falls back for unknown routes", () => {
