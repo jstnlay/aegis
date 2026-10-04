@@ -2,8 +2,8 @@
 Assessments serializers.
 
 Role-based field access:
-- Students never receive correct_answer while taking assessments
-- Published assessments don't expose answer keys to students
+- Only the assessment's author, and admins, receive correct_answer
+- Students and parents never receive the answer key
 """
 
 from rest_framework import serializers
@@ -14,8 +14,9 @@ from .models import Assessment, AssessmentQuestion, AssessmentResult
 class AssessmentQuestionSerializer(serializers.ModelSerializer):
     """
     Serializer for assessment questions.
-    
-    Excludes correct_answer when serializing for students taking the assessment.
+
+    Excludes correct_answer unless the caller is the assessment's author or an
+    admin. See ``to_representation`` for the measured reason.
     """
     
     class Meta:
@@ -106,16 +107,32 @@ class AssessmentQuestionSerializer(serializers.ModelSerializer):
         return attrs
     
     def to_representation(self, instance):
-        """Remove correct_answer for students viewing published assessments."""
+        """Remove correct_answer from anyone who is not the assessment's author.
+
+        The answer key is author material. It is needed to write and to review
+        questions (``assessment__created_by``) and is available to admins, who
+        already hold full object-level authority over every assessment via
+        ``IsAssessmentCreator``.
+
+        Everyone else must not receive it. The previous rule removed it only
+        for ``role == 'student'`` on a published assessment, which left a
+        parent - who is served a published assessment through the same nested
+        ``questions`` field - reading back every answer key. Measured before
+        this change on one published assessment targeted at a linked child:
+
+            guidance   correct_answer=['A']
+            student    correct_answer=[<absent>]
+            parent     correct_answer=['A']
+            admin      correct_answer=['A']
+        """
         data = super().to_representation(instance)
         request = self.context.get('request')
-        
+
         if request and hasattr(request, 'user'):
             user = request.user
-            # Hide correct_answer from students when assessment is published
-            if user.role == 'student' and instance.assessment.is_published:
+            if user.role != 'admin' and instance.assessment.created_by_id != user.id:
                 data.pop('correct_answer', None)
-        
+
         return data
 
 

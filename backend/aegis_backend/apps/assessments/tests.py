@@ -5,6 +5,7 @@ Covers: model validation, serializers, API endpoints, scoped querysets,
 role-based permissions, assessment lifecycle, auto-grading, and notifications.
 """
 
+from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import patch
 
@@ -775,6 +776,177 @@ class AssessmentQuestionAPITests(AssessmentsTestBase):
         response = self.client.get(f"/api/v1/assessments/assessment-questions/{question.id}/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertNotIn("correct_answer", response.data)
+
+
+class AnswerKeyVisibilityTests(AssessmentsTestBase):
+    """correct_answer is author material: only the author and admins receive it.
+
+    ``AssessmentQuestionSerializer.to_representation`` previously removed the
+    answer key only for ``role == 'student'``. A parent is served a published
+    assessment through the same nested ``questions`` field and therefore read
+    back every answer. Measured before this contract was tightened, on one
+    published assessment targeted at a linked child's section:
+
+        guidance   correct_answer=['A']
+        student    correct_answer=[<absent>]
+        parent     correct_answer=['A']      <- the defect
+        admin      correct_answer=['A']
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.assessment = Assessment.objects.create(
+            title="Well-Being Check",
+            assessment_type="wellness",
+            creator_role="guidance",
+            created_by=self.guidance_user,
+            time_limit_minutes=20,
+            deadline=timezone.localdate() + timedelta(days=7),
+        )
+        self.assessment.target_sections.add(self.section)
+        self.assessment.is_published = True
+        self.assessment.published_at = timezone.now()
+        self.assessment.save()
+
+        self.mc_question = AssessmentQuestion.objects.create(
+            assessment=self.assessment,
+            question_text="Which option applies?",
+            question_type="multiple_choice",
+            order=1,
+            options=["Almost always", "Often", "Rarely"],
+            correct_answer="Almost always",
+        )
+        self.tf_question = AssessmentQuestion.objects.create(
+            assessment=self.assessment,
+            question_text="I feel safe travelling to school.",
+            question_type="true_false",
+            order=2,
+            correct_answer="True",
+        )
+
+    # -- the reported defect --------------------------------------------
+
+    def test_parent_does_not_receive_the_answer_key(self):
+        self.client.force_authenticate(user=self.parent_user)
+        response = self.client.get(
+            f"/api/v1/assessments/assessments/{self.assessment.id}/"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["questions"]), 2)
+        for question in response.data["questions"]:
+            with self.subTest(order=question["order"]):
+                self.assertNotIn("correct_answer", question)
+
+    def test_parent_does_not_receive_the_answer_key_from_the_question_endpoint(self):
+        self.client.force_authenticate(user=self.parent_user)
+        response = self.client.get(
+            f"/api/v1/assessments/assessment-questions/{self.mc_question.id}/"
+        )
+
+        # The question list queryset excludes a parent entirely, so this is a
+        # 404 rather than a redacted payload. Pinned so a future queryset
+        # change that does admit parents still has to redact the key.
+        self.assertIn(
+            response.status_code,
+            (status.HTTP_200_OK, status.HTTP_404_NOT_FOUND),
+        )
+        if response.status_code == status.HTTP_200_OK:
+            self.assertNotIn("correct_answer", response.data)
+
+    def test_student_does_not_receive_the_answer_key(self):
+        self.client.force_authenticate(user=self.student_user)
+        response = self.client.get(
+            f"/api/v1/assessments/assessments/{self.assessment.id}/"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        for question in response.data["questions"]:
+            self.assertNotIn("correct_answer", question)
+
+    def test_non_author_faculty_does_not_receive_the_answer_key(self):
+        """Faculty cannot read this wellness assessment at all."""
+        self.client.force_authenticate(user=self.faculty_user)
+        response = self.client.get(
+            f"/api/v1/assessments/assessments/{self.assessment.id}/"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_non_author_guidance_does_not_receive_the_answer_key(self):
+        """A second counselor's queryset excludes this assessment."""
+        self.client.force_authenticate(user=self.guidance2_user)
+        response = self.client.get(
+            f"/api/v1/assessments/assessments/{self.assessment.id}/"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    # -- author and admin keep the key ----------------------------------
+
+    def test_author_still_receives_the_answer_key(self):
+        self.client.force_authenticate(user=self.guidance_user)
+        response = self.client.get(
+            f"/api/v1/assessments/assessments/{self.assessment.id}/"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        answers = {
+            question["order"]: question.get("correct_answer")
+            for question in response.data["questions"]
+        }
+        self.assertEqual(answers[1], "Almost always")
+        self.assertEqual(answers[2], "True")
+
+    def test_admin_still_receives_the_answer_key(self):
+        self.client.force_authenticate(user=self.admin_user)
+        response = self.client.get(
+            f"/api/v1/assessments/assessments/{self.assessment.id}/"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        answers = {
+            question["order"]: question.get("correct_answer")
+            for question in response.data["questions"]
+        }
+        self.assertEqual(answers[1], "Almost always")
+        self.assertEqual(answers[2], "True")
+
+    def test_author_keeps_the_answer_key_on_an_unpublished_assessment(self):
+        """Draft authoring needs the key too; this is not a published-only rule."""
+        self.assessment.is_published = False
+        self.assessment.save()
+
+        self.client.force_authenticate(user=self.guidance_user)
+        response = self.client.get(
+            f"/api/v1/assessments/assessments/{self.assessment.id}/"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.data["questions"][0]["correct_answer"], "Almost always"
+        )
+
+    # -- non-author role still sees the rest of the question ------------
+
+    def test_parent_still_receives_the_question_text_and_options(self):
+        """
+        Redaction must remove the answer only.
+
+        A parent needs the stem and the options to help their child, so both
+        remain in the payload.
+        """
+        self.client.force_authenticate(user=self.parent_user)
+        response = self.client.get(
+            f"/api/v1/assessments/assessments/{self.assessment.id}/"
+        )
+
+        first = response.data["questions"][0]
+        self.assertEqual(first["question_text"], "Which option applies?")
+        self.assertEqual(first["question_type"], "multiple_choice")
+        self.assertEqual(
+            first["options"], ["Almost always", "Often", "Rarely"]
+        )
 
 
 class AssessmentQuestionValidationAPITests(AssessmentsTestBase):
