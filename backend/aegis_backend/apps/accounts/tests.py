@@ -1249,3 +1249,253 @@ class PH87OnboardingTest(TestCase):
         login = self._login(self.temp_password)
         body = str(login.data)
         self.assertNotIn(self.temp_password, body)
+
+
+# ---------------------------------------------------------------------------
+# Administrator authority is role-based, not is_staff-based
+# ---------------------------------------------------------------------------
+#
+# The user-administration endpoints previously used DRF's stock
+# ``IsAdminUser``, which gates on ``is_staff``. Every other administrator area
+# gates on ``core.permissions.IsAdminUser`` (``role == "admin"``) per NFR-011.
+# An account created by ``provision_qa_accounts`` - or by any plain
+# ``create_user`` call - has ``is_staff=False``, so the QA administrator was
+# rejected with HTTP 403 on the endpoints it is meant to administer.
+#
+# These tests pin the reconciled contract: authority follows ``role``, the
+# ``is_staff``/``is_superuser`` state does not grant or revoke API access, and
+# non-administrator roles stay blocked.
+
+
+def _token_for(user):
+    from rest_framework_simplejwt.tokens import RefreshToken
+
+    return str(RefreshToken.for_user(user).access_token)
+
+
+class AdminRoleAuthorityTest(TestCase):
+    """Administrator authority follows ``role``, independent of staff flags."""
+
+    USERS_URL = "/api/v1/accounts/users/"
+
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = User.objects.create_user(
+            email="admrole_admin@example.com",
+            password="AdminRole_2026!",
+            first_name="Role",
+            last_name="Admin",
+            role="admin",
+        )
+        self.target = User.objects.create_user(
+            email="admrole_target@example.com",
+            password="TargetRole_2026!",
+            first_name="Role",
+            last_name="Target",
+            role="student",
+        )
+        self.faculty = User.objects.create_user(
+            email="admrole_faculty@example.com",
+            password="FacultyRole_2026!",
+            first_name="Role",
+            last_name="Faculty",
+            role="faculty",
+        )
+        self.guidance = User.objects.create_user(
+            email="admrole_guidance@example.com",
+            password="GuidRole_2026!",
+            first_name="Role",
+            last_name="Guidance",
+            role="guidance",
+        )
+        self.parent = User.objects.create_user(
+            email="admrole_parent@example.com",
+            password="ParentRole_2026!",
+            first_name="Role",
+            last_name="Parent",
+            role="parent",
+        )
+
+    def _as(self, user):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {_token_for(user)}")
+        return user
+
+    # -- the reported mismatch ------------------------------------------
+
+    def test_admin_role_without_is_staff_can_list_users(self):
+        """The reported defect: role=admin + is_staff=False was HTTP 403."""
+        self.assertEqual(self.admin.role, "admin")
+        self.assertFalse(self.admin.is_staff)
+        self.assertFalse(self.admin.is_superuser)
+
+        self._as(self.admin)
+        response = self.client.get(self.USERS_URL)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_admin_role_without_is_staff_can_retrieve_a_user(self):
+        self._as(self.admin)
+        response = self.client.get(f"{self.USERS_URL}{self.target.id}/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["role"], "student")
+
+    def test_admin_role_without_is_staff_can_create_a_user(self):
+        self._as(self.admin)
+        response = self.client.post(
+            "/api/v1/accounts/users/create/",
+            {
+                "email": "admrole_created@example.com",
+                "username": "",
+                "first_name": "Created",
+                "last_name": "Faculty",
+                "role": "faculty",
+                "password": "CreatedRole_2026!",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        created = User.objects.get(email="admrole_created@example.com")
+        self.assertEqual(created.role, "faculty")
+
+    # -- the staff-state direction that must NOT grant access ------------
+
+    def test_is_staff_without_admin_role_is_refused(self):
+        """is_staff alone must never grant API administrator authority."""
+        impostor = User.objects.create_user(
+            email="admrole_impostor@example.com",
+            password="ImpostorRole_2026!",
+            first_name="Im",
+            last_name="Postor",
+            role="faculty",
+        )
+        impostor.is_staff = True
+        impostor.save(update_fields=["is_staff"])
+
+        self._as(impostor)
+        response = self.client.get(self.USERS_URL)
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_is_superuser_without_admin_role_is_refused(self):
+        """is_superuser is a Django-admin flag, not API authority."""
+        impostor = User.objects.create_user(
+            email="admrole_super@example.com",
+            password="SuperRole_2026!",
+            first_name="Sup",
+            last_name="Erus",
+            role="guidance",
+        )
+        impostor.is_superuser = True
+        impostor.save(update_fields=["is_superuser"])
+
+        self._as(impostor)
+        response = self.client.get(self.USERS_URL)
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_superuser_created_by_manager_is_still_authorized(self):
+        """
+        ``create_superuser`` sets both is_staff and role='admin'.
+
+        The SEC-001 tests already rely on this shape, so this guards the
+        existing administrator path against the permission-class change.
+        """
+        superuser = User.objects.create_superuser(
+            email="admrole_superuser@example.com",
+            password="SuperUsrRole_2026!",
+            first_name="Super",
+            last_name="Admin",
+        )
+        self.assertTrue(superuser.is_staff)
+        self.assertTrue(superuser.is_superuser)
+        self.assertEqual(superuser.role, "admin")
+
+        self._as(superuser)
+        response = self.client.get(self.USERS_URL)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    # -- every other role stays blocked ---------------------------------
+
+    def test_every_non_admin_role_is_refused(self):
+        for user in (self.faculty, self.guidance, self.target, self.parent):
+            with self.subTest(role=user.role):
+                self.client.credentials(
+                    HTTP_AUTHORIZATION=f"Bearer {_token_for(user)}"
+                )
+                response = self.client.get(self.USERS_URL)
+                self.assertEqual(
+                    response.status_code,
+                    status.HTTP_403_FORBIDDEN,
+                    msg=f"{user.role} must not reach {self.USERS_URL}",
+                )
+
+    def test_every_non_admin_role_is_refused_on_create(self):
+        for user in (self.faculty, self.guidance, self.target, self.parent):
+            with self.subTest(role=user.role):
+                self.client.credentials(
+                    HTTP_AUTHORIZATION=f"Bearer {_token_for(user)}"
+                )
+                response = self.client.post(
+                    "/api/v1/accounts/users/create/",
+                    {
+                        "email": f"admrole_forbidden_{user.role}@example.com",
+                        "username": "",
+                        "first_name": "No",
+                        "last_name": "Way",
+                        "role": "admin",
+                        "password": "ForbiddenRole_2026!",
+                    },
+                    format="json",
+                )
+                self.assertEqual(
+                    response.status_code,
+                    status.HTTP_403_FORBIDDEN,
+                    msg=f"{user.role} must not create users",
+                )
+        self.assertFalse(User.objects.filter(role="admin").exclude(pk=self.admin.pk).exists())
+
+    def test_anonymous_is_unauthenticated(self):
+        self.client.credentials()
+        response = self.client.get(self.USERS_URL)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    # -- consistency with the other administrator areas -----------------
+
+    def test_same_admin_passes_the_other_role_gated_areas(self):
+        """
+        One administrator identity must satisfy every administrator gate.
+
+        ``core.permissions.IsAdminUser`` is what the academics, analytics and
+        audit areas use, so both gates must agree on the same account.
+        """
+        from core.permissions import IsAdminUser as RoleIsAdminUser
+
+        class MockRequest:
+            def __init__(self, user):
+                self.user = user
+
+        self.assertTrue(
+            RoleIsAdminUser().has_permission(MockRequest(self.admin), None)
+        )
+
+        # A non-admin must fail that same class, so the agreement above is
+        # real authority rather than a permissive no-op.
+        for user in (self.faculty, self.guidance, self.target, self.parent):
+            with self.subTest(role=user.role):
+                self.assertFalse(
+                    RoleIsAdminUser().has_permission(MockRequest(user), None)
+                )
+
+    def test_inactive_admin_is_refused_by_the_authentication_layer(self):
+        """is_active is enforced by AegisJWTAuthentication, not by this gate."""
+        self.admin.is_active = False
+        self.admin.save(update_fields=["is_active"])
+
+        token = _token_for(self.admin)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+        response = self.client.get(self.USERS_URL)
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)

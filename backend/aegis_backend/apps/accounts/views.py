@@ -10,6 +10,7 @@ from rest_framework_simplejwt.views import (
 )
 
 from apps.audit.hooks import audit_successful_logout
+from core.permissions import IsAdminUser
 from core.throttling import LoginRateThrottle, TokenRefreshRateThrottle
 
 from .models import User
@@ -80,22 +81,33 @@ class LogoutView(APIView):
         return Response({"detail": "Successfully logged out."})
 
 
+# Administrator authority is role-based across this project (NFR-011): every
+# other administrator area - academics writes, attendance, analytics, the audit
+# log - gates on ``core.permissions.IsAdminUser``, which tests ``role == "admin"``.
+#
+# These three views previously used ``rest_framework.permissions.IsAdminUser``,
+# which gates on the ``is_staff`` flag instead. The two are not equivalent: an
+# account provisioned by ``provision_qa_accounts`` (and by any ``create_user``
+# call) is created with ``is_staff=False``, so ``admin.qa`` held ``role="admin"``
+# and was still rejected with HTTP 403 on the user-administration endpoints it is
+# the administrator of. ``is_staff`` is retained for its separate purpose - it
+# gates the Django admin site (apps/accounts/admin.py) and nothing in this API.
 class UserListView(generics.ListAPIView):
     queryset = User.objects.all()
     serializer_class = UserSerializer
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdminUser]
 
 
 class UserDetailView(generics.RetrieveAPIView):
     queryset = User.objects.all()
     serializer_class = UserSerializer
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdminUser]
 
 
 class UserCreateView(generics.CreateAPIView):
     queryset = User.objects.all()
     serializer_class = UserCreateSerializer
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdminUser]
 
 
 class CurrentUserView(generics.RetrieveUpdateAPIView):

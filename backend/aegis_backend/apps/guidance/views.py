@@ -317,8 +317,15 @@ class ConsultationRecordViewSet(viewsets.ModelViewSet):
 
     serializer_class = ConsultationRecordSerializer
 
+    #: Every mutating verb, including ``destroy``. ``destroy`` was previously
+    #: left on the read-only branch, which let any authenticated user whose
+    #: queryset contained the row delete it - a parent could delete their own
+    #: child's counseling record. Guidance records are counselor-owned: only
+    #: the counselor role may write them.
+    WRITE_ACTIONS = ("create", "update", "partial_update", "destroy")
+
     def get_permissions(self):
-        if self.action in ("create", "update", "partial_update"):
+        if self.action in self.WRITE_ACTIONS:
             return [IsGuidanceUser()]
         from rest_framework.permissions import IsAuthenticated
 
@@ -471,8 +478,24 @@ class RiskAlertViewSet(viewsets.ModelViewSet):
 
     serializer_class = RiskAlertSerializer
 
+    #: Every mutating verb and every custom status transition. The transitions
+    #: are writes, not reads: ``acknowledge``/``escalate``/``resolve`` change
+    #: the alert's status and were previously reachable by any authenticated
+    #: user whose queryset contained the row, so a parent could move their
+    #: child's alert through the guidance workflow. Only the counselor role may
+    #: drive a risk alert.
+    WRITE_ACTIONS = (
+        "create",
+        "update",
+        "partial_update",
+        "destroy",
+        "acknowledge",
+        "escalate",
+        "resolve",
+    )
+
     def get_permissions(self):
-        if self.action in ("create", "update", "partial_update"):
+        if self.action in self.WRITE_ACTIONS:
             return [IsGuidanceUser()]
         from rest_framework.permissions import IsAuthenticated
 

@@ -1353,3 +1353,342 @@ class GuidanceReportTest(GuidanceTestBase):
             f"/api/v1/guidance/reports/student/{self.student_profile.id}/"
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+# ===========================================================================
+# Guidance records are counselor-owned: read-only for every other role
+# ===========================================================================
+#
+# ``ConsultationRecordViewSet`` and ``RiskAlertViewSet`` gate only
+# create/update/partial_update on the counselor role and fall through to
+# ``IsAuthenticated`` for everything else. That left ``destroy`` and the three
+# RiskAlert status transitions reachable by any authenticated user whose
+# queryset contained the row, so a parent could delete their own child's
+# counseling record and drive their child's risk alert through the guidance
+# workflow. These tests pin the read-only contract for non-counselor roles and
+# keep the counselor's own capabilities intact.
+
+
+class ConsultationWriteRestrictedTest(GuidanceTestBase):
+    """Consultations are readable by the subject's parent/student, writable only by guidance."""
+
+    def setUp(self):
+        super().setUp()
+        self.consultation = ConsultationRecord.objects.create(
+            student=self.student_profile,
+            counselor=self.guidance_profile,
+            session_date=self.today,
+            session_time=time(10, 0),
+            session_type="individual_counseling",
+            concern_categories=["academic"],
+            session_notes="Initial consultation.",
+            priority_level="medium",
+        )
+        self.url = f"/api/v1/guidance/consultations/{self.consultation.id}/"
+
+    # -- the reported defect --------------------------------------------
+
+    def test_parent_cannot_delete_own_childs_consultation(self):
+        """The reported defect: parent DELETE returned 204 and removed the row."""
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {self._get_token(self.parent_user)}"
+        )
+        response = self.client.delete(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(
+            ConsultationRecord.objects.filter(pk=self.consultation.pk).exists()
+        )
+
+    def test_student_cannot_delete_own_consultation(self):
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {self._get_token(self.student_user)}"
+        )
+        response = self.client.delete(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(
+            ConsultationRecord.objects.filter(pk=self.consultation.pk).exists()
+        )
+
+    def test_parent_cannot_update_childs_consultation(self):
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {self._get_token(self.parent_user)}"
+        )
+        response = self.client.patch(
+            self.url, {"status": "completed"}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.consultation.refresh_from_db()
+        self.assertNotEqual(self.consultation.status, "completed")
+
+    def test_parent_cannot_create_consultation(self):
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {self._get_token(self.parent_user)}"
+        )
+        response = self.client.post(
+            "/api/v1/guidance/consultations/",
+            {
+                "student": str(self.student_profile.id),
+                "session_date": str(self.today),
+                "session_time": "10:00:00",
+                "session_type": "individual_counseling",
+                "concern_categories": ["academic"],
+                "session_notes": "Self-scheduled.",
+                "priority_level": "low",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(ConsultationRecord.objects.count(), 1)
+
+    def test_faculty_and_admin_cannot_delete_consultation(self):
+        """Guidance has no faculty/admin read path either, so no write path."""
+        for user in (self.faculty_user, self.admin_user):
+            with self.subTest(role=user.role):
+                self.client.credentials(
+                    HTTP_AUTHORIZATION=f"Bearer {self._get_token(user)}"
+                )
+                response = self.client.delete(self.url)
+                self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(
+            ConsultationRecord.objects.filter(pk=self.consultation.pk).exists()
+        )
+
+    # -- parent read access is preserved --------------------------------
+
+    def test_parent_can_still_read_linked_childs_consultation(self):
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {self._get_token(self.parent_user)}"
+        )
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["id"], str(self.consultation.id))
+
+    def test_parent_cannot_reach_unlinked_students_consultation(self):
+        """student2_profile has no ParentStudentLink to this parent."""
+        other = ConsultationRecord.objects.create(
+            student=self.student2_profile,
+            counselor=self.guidance_profile,
+            session_date=self.today,
+            session_time=time(11, 0),
+            session_type="individual_counseling",
+            concern_categories=["behavioral"],
+            session_notes="Another student.",
+            priority_level="medium",
+        )
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {self._get_token(self.parent_user)}"
+        )
+        response = self.client.get(
+            f"/api/v1/guidance/consultations/{other.id}/"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    # -- counselor capabilities are unchanged ----------------------------
+
+    def test_guidance_can_still_delete_own_consultation(self):
+        """DELETE is not removed from the counselor's authority; it is closed to others."""
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {self._get_token(self.guidance_user)}"
+        )
+        response = self.client.delete(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(
+            ConsultationRecord.objects.filter(pk=self.consultation.pk).exists()
+        )
+
+
+class RiskAlertWriteRestrictedTest(GuidanceTestBase):
+    """Risk alerts are readable by the subject's parent/student; only guidance transitions them."""
+
+    def setUp(self):
+        super().setUp()
+        # GuidanceTestBase seeds risk_alert1 for student_profile. student2_profile
+        # has no ParentStudentLink to this parent, so its alert is the out-of-scope
+        # row used by the scoping tests below.
+        self.unlinked_alert = RiskAlert.objects.create(
+            student=self.student2_profile,
+            risk_level="high",
+            risk_factors=["Conflict with classmate"],
+            source="manual",
+            status="active",
+            generated_at=timezone.now(),
+        )
+        self.url = f"/api/v1/guidance/risk-alerts/{self.risk_alert1.id}/"
+
+    def _reset(self):
+        RiskAlert.objects.filter(pk=self.risk_alert1.pk).update(status="active")
+
+    def _transitions(self):
+        return ("acknowledge", "escalate", "resolve")
+
+    # -- the reported defect --------------------------------------------
+
+    def test_parent_cannot_drive_risk_alert_status_transitions(self):
+        """The reported defect: all three transitions returned 200 for a parent."""
+        for transition in self._transitions():
+            with self.subTest(transition=transition):
+                self._reset()
+                self.client.credentials(
+                    HTTP_AUTHORIZATION=f"Bearer {self._get_token(self.parent_user)}"
+                )
+                response = self.client.post(f"{self.url}{transition}/")
+
+                self.assertEqual(
+                    response.status_code, status.HTTP_403_FORBIDDEN
+                )
+                self.assertEqual(
+                    RiskAlert.objects.get(pk=self.risk_alert1.pk).status,
+                    "active",
+                )
+
+    def test_student_cannot_drive_risk_alert_status_transitions(self):
+        for transition in self._transitions():
+            with self.subTest(transition=transition):
+                self._reset()
+                self.client.credentials(
+                    HTTP_AUTHORIZATION=f"Bearer {self._get_token(self.student_user)}"
+                )
+                response = self.client.post(f"{self.url}{transition}/")
+
+                self.assertEqual(
+                    response.status_code, status.HTTP_403_FORBIDDEN
+                )
+                self.assertEqual(
+                    RiskAlert.objects.get(pk=self.risk_alert1.pk).status,
+                    "active",
+                )
+
+    def test_parent_cannot_delete_childs_risk_alert(self):
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {self._get_token(self.parent_user)}"
+        )
+        response = self.client.delete(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(RiskAlert.objects.filter(pk=self.risk_alert1.pk).exists())
+
+    def test_parent_cannot_update_childs_risk_alert(self):
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {self._get_token(self.parent_user)}"
+        )
+        response = self.client.patch(
+            self.url, {"status": "resolved", "risk_level": "low"}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.risk_alert1.refresh_from_db()
+        self.assertEqual(self.risk_alert1.status, "active")
+        self.assertEqual(self.risk_alert1.risk_level, "moderate")
+
+    def test_parent_cannot_create_risk_alert(self):
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {self._get_token(self.parent_user)}"
+        )
+        response = self.client.post(
+            "/api/v1/guidance/risk-alerts/",
+            {
+                "student": str(self.student_profile.id),
+                "risk_level": "high",
+                "risk_factors": ["Self-reported"],
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(RiskAlert.objects.count(), 2)
+
+    def test_faculty_and_admin_cannot_transition_or_delete(self):
+        """
+        The counselor gate answers before the queryset, so these are 403 rather
+        than the 404 a scoped queryset would produce for a role it excludes.
+        """
+        for user in (self.faculty_user, self.admin_user):
+            for transition in self._transitions():
+                with self.subTest(role=user.role, transition=transition):
+                    self._reset()
+                    self.client.credentials(
+                        HTTP_AUTHORIZATION=f"Bearer {self._get_token(user)}"
+                    )
+                    response = self.client.post(f"{self.url}{transition}/")
+                    self.assertEqual(
+                        response.status_code, status.HTTP_403_FORBIDDEN
+                    )
+        self.assertTrue(RiskAlert.objects.filter(pk=self.risk_alert1.pk).exists())
+        self.assertEqual(
+            RiskAlert.objects.get(pk=self.risk_alert1.pk).status, "active"
+        )
+
+    # -- parent read access is preserved --------------------------------
+
+    def test_parent_can_still_read_linked_childs_risk_alert(self):
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {self._get_token(self.parent_user)}"
+        )
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["id"], str(self.risk_alert1.id))
+
+    def test_parent_cannot_reach_unlinked_students_risk_alert(self):
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {self._get_token(self.parent_user)}"
+        )
+        response = self.client.get(
+            f"/api/v1/guidance/risk-alerts/{self.unlinked_alert.id}/"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_parent_does_not_see_unlinked_alert_in_the_list(self):
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {self._get_token(self.parent_user)}"
+        )
+        response = self.client.get("/api/v1/guidance/risk-alerts/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(
+            response.data["results"][0]["id"], str(self.risk_alert1.id)
+        )
+
+    # -- counselor capabilities are unchanged ----------------------------
+
+    def test_guidance_can_still_drive_every_transition(self):
+        expected = {
+            "acknowledge": "under_monitoring",
+            "escalate": "escalated",
+            "resolve": "resolved",
+        }
+        for transition, target_status in expected.items():
+            with self.subTest(transition=transition):
+                self._reset()
+                self.client.credentials(
+                    HTTP_AUTHORIZATION=f"Bearer {self._get_token(self.guidance_user)}"
+                )
+                response = self.client.post(f"{self.url}{transition}/")
+
+                self.assertEqual(response.status_code, status.HTTP_200_OK)
+                self.assertEqual(
+                    RiskAlert.objects.get(pk=self.risk_alert1.pk).status,
+                    target_status,
+                )
+
+    def test_guidance_can_still_delete_risk_alert(self):
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {self._get_token(self.guidance_user)}"
+        )
+        response = self.client.delete(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(RiskAlert.objects.filter(pk=self.risk_alert1.pk).exists())
+
+    def test_anonymous_cannot_transition(self):
+        self.client.credentials()
+        response = self.client.post(f"{self.url}acknowledge/")
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
