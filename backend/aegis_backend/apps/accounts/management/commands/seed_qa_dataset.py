@@ -304,6 +304,14 @@ RISK_ALERT_STUDENTS = (
     (61, "moderate", "resolved", ["Home visit completed"]),
     (74, "moderate", "active", ["Declining EsP participation"]),
     (88, "high", "under_monitoring", ["Reported bullying, monitoring"]),
+    # PH11.9: the three parent.qa children (QA_PARENT_CHILDREN). Without these
+    # the parent's read-only Student Support page renders three empty tables,
+    # which is indistinguishable from a broken queryset. Every status and level
+    # is represented so the page's badges and the open-alert count are
+    # exercised, and the factors stay plainly synthetic.
+    (QA_STUDENT_ROSTER_INDEX, "low", "under_monitoring", ["Improved attendance after counselling"]),
+    (QA_STUDENT_ROSTER_INDEX + 1, "moderate", "active", ["Missed assignments"]),
+    (2 * STUDENTS_PER_SECTION, "high", "resolved", ["Adjustment period, now stable"]),
 )
 
 #: (roster index, session_type, priority, status, concern_categories,
@@ -321,6 +329,12 @@ CONSULTATIONS = (
     (36, "individual_counseling", "high", "follow_up", ["academic", "behavioral"], 6, 3),
     (42, "parent_conference", "low", "completed", ["family"], 41, None),
     (61, "follow_up", "medium", "completed", ["behavioral"], 25, None),
+    # PH11.9: the three parent.qa children, one session each, spanning three
+    # different session types and statuses so the parent's counselling table
+    # has a row per state it can render.
+    (QA_STUDENT_ROSTER_INDEX, "individual_counseling", "low", "completed", ["academic"], 16, None),
+    (QA_STUDENT_ROSTER_INDEX + 1, "parent_conference", "medium", "follow_up", ["family", "behavioral"], 7, 9),
+    (2 * STUDENTS_PER_SECTION, "follow_up", "high", "completed", ["emotional"], 33, None),
 )
 
 #: (roster index, status, days_since_start, review_in_days, steps) where steps
@@ -374,6 +388,11 @@ BEHAVIORAL_NOTES = (
     (30, "warning", 15),
     (42, "incident", 32),
     (61, "positive", 24),
+    # PH11.9: the three parent.qa children. Behavioral notes are immutable once
+    # written, so the parent's page reads them as a history.
+    (QA_STUDENT_ROSTER_INDEX, "positive", 6),
+    (QA_STUDENT_ROSTER_INDEX + 1, "warning", 11),
+    (2 * STUDENTS_PER_SECTION, "incident", 20),
 )
 
 #: The guidance-owned wellness assessment. Wellness/behavioral assessments must
@@ -442,7 +461,15 @@ WELLNESS_QUESTIONS = (
 
 #: Roster indices with a completed wellness assessment result, including
 #: student.qa so the student-facing dashboard has a result to show.
-WELLNESS_RESULT_STUDENTS = (1, 8, 11, 14, 21, QA_STUDENT_ROSTER_INDEX, 30, 36, 42, 61, 74)
+#: PH11.9 adds the second parent.qa child who sits in the assessment's target
+#: section. The third child is in Grade 9 Mabini and is deliberately left out:
+#: the assessment targets Grade 8 Bonifacio only, and a result from an
+#: untargeted student would contradict the targeting contract
+#: ``AssessmentResultViewSet.perform_create`` enforces on submission.
+WELLNESS_RESULT_STUDENTS = (
+    1, 8, 11, 14, 21, QA_STUDENT_ROSTER_INDEX, QA_STUDENT_ROSTER_INDEX + 1,
+    30, 36, 42, 61, 74,
+)
 
 #: Chance that an auto-gradable item is answered correctly.
 WELLNESS_CORRECT_RATE = 0.8

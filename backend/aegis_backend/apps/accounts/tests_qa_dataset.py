@@ -419,6 +419,115 @@ class SeedDatasetTestCase(TestCase):
         )
         self.assertGreaterEqual(len(sections), 2)
 
+    # ------------------------------------------------------------------
+    # PH11.9: every parent.qa child must have guidance records.
+    #
+    # The parent's Student Support page is read-only and is fed entirely by the
+    # guidance endpoints. Without records for these three students the page
+    # renders three empty tables, which is indistinguishable from a queryset
+    # that is silently broken. Each child therefore carries at least one risk
+    # alert, one consultation and one behavioural note.
+    # ------------------------------------------------------------------
+
+    def test_every_parent_qa_child_has_guidance_records(self):
+        parent = ParentProfile.objects.get(user__email=seed_module.QA_PARENT_EMAIL)
+        child_ids = set(
+            ParentStudentLink.objects.filter(parent=parent).values_list(
+                "student_id", flat=True
+            )
+        )
+        self.assertTrue(child_ids)
+
+        for label, model in (
+            ("RiskAlert", RiskAlert),
+            ("ConsultationRecord", ConsultationRecord),
+            ("BehavioralNote", BehavioralNote),
+        ):
+            covered = set(
+                model.objects.filter(student_id__in=child_ids).values_list(
+                    "student_id", flat=True
+                )
+            )
+            self.assertEqual(
+                covered,
+                child_ids,
+                msg=(
+                    f"{label}: the parent's {label} view would be missing rows "
+                    f"for {sorted(str(i) for i in child_ids - covered)}"
+                ),
+            )
+
+    def test_parent_qa_children_span_every_guidance_status(self):
+        """
+        The parent's tables render a badge per status, so the dataset must
+        contain each one. A page that only ever shows "active" cannot show that
+        a resolved alert still appears as history.
+        """
+        parent = ParentProfile.objects.get(user__email=seed_module.QA_PARENT_EMAIL)
+        child_ids = list(
+            ParentStudentLink.objects.filter(parent=parent).values_list(
+                "student_id", flat=True
+            )
+        )
+
+        self.assertEqual(
+            set(
+                RiskAlert.objects.filter(student_id__in=child_ids).values_list(
+                    "status", flat=True
+                )
+            ),
+            {"active", "under_monitoring", "resolved"},
+        )
+        self.assertEqual(
+            set(
+                RiskAlert.objects.filter(student_id__in=child_ids).values_list(
+                    "risk_level", flat=True
+                )
+            ),
+            {"low", "moderate", "high"},
+        )
+        self.assertEqual(
+            set(
+                ConsultationRecord.objects.filter(
+                    student_id__in=child_ids
+                ).values_list("status", flat=True)
+            ),
+            {"completed", "follow_up"},
+        )
+        # The parent has no intervention surface: InterventionViewSet is
+        # guidance-only, so a seeded plan here would be invisible to the parent
+        # and would suggest they should have one.
+        self.assertFalse(
+            Intervention.objects.filter(student_id__in=child_ids).exists()
+        )
+
+    def test_parent_qa_guidance_records_stay_manual_with_no_risk_score(self):
+        """
+        Adding parent-facing guidance rows must not invent model output.
+
+        RiskScore is an ai_engine computation log with no API surface, so the
+        dataset holds manual alerts with a null score reference and zero
+        RiskScores — the same rule the original guidance rows follow.
+        """
+        parent = ParentProfile.objects.get(user__email=seed_module.QA_PARENT_EMAIL)
+        child_ids = list(
+            ParentStudentLink.objects.filter(parent=parent).values_list(
+                "student_id", flat=True
+            )
+        )
+
+        self.assertTrue(
+            RiskAlert.objects.filter(student_id__in=child_ids).exists()
+        )
+        self.assertFalse(
+            RiskAlert.objects.filter(
+                student_id__in=child_ids, risk_score_ref__isnull=False
+            ).exists()
+        )
+        for alert in RiskAlert.objects.filter(student_id__in=child_ids):
+            self.assertEqual(alert.source, RiskAlert.Source.MANUAL)
+        self.assertFalse(RiskScore.objects.exists())
+
     def test_admin_qa_needs_no_admin_profile(self):
         """AdminProfile is referenced only by models.py and the Django admin --
         no serializer, permission or view reads it -- so the seed must not invent
