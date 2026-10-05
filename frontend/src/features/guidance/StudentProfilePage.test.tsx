@@ -258,6 +258,37 @@ function renderPage() {
   )
 }
 
+/**
+ * Wait for the student identity heading.
+ *
+ * The page cannot render its heading until `useGuidanceStudents` resolves, and
+ * that query is gated behind five other queries:
+ *
+ *     enabled: !alertsQuery.isLoading && !consultationsQuery.isLoading &&
+ *              !interventionsQuery.isLoading && !resultsQuery.isLoading &&
+ *              !notesQuery.isLoading
+ *
+ * So a single assertion waits out six sequential resolution rounds rather than
+ * one. Testing Library's default `findBy` timeout is 1000ms, which is ample when
+ * this file runs alone but not when the whole suite runs in parallel and the
+ * worker is competing for CPU — the query chain then resolves slower than the
+ * default allows and the wait times out even though nothing is wrong.
+ *
+ * The wait budget is raised rather than the assertion changed: the heading and
+ * its name are still required exactly as before. This test file was flaky at
+ * PH11.9's baseline commit (reproduced 3 failures in 4 full-suite runs, passing
+ * when the file runs alone), so the flake predates this phase.
+ */
+const RESOLVE_TIMEOUT_MS = 5000
+
+function findStudentHeading() {
+  return screen.findByRole(
+    "heading",
+    { name: "Ana Reyes", level: 1 },
+    { timeout: RESOLVE_TIMEOUT_MS }
+  )
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   mockedFetchAllPages.mockImplementation(async (url: string) => {
@@ -315,9 +346,7 @@ describe("StudentProfilePage", () => {
   it("shows the guidance-activity identity for the routed student", async () => {
     renderPage()
 
-    expect(
-      await screen.findByRole("heading", { name: "Ana Reyes", level: 1 })
-    ).toBeInTheDocument()
+    expect(await findStudentHeading()).toBeInTheDocument()
     // The code comes from a guidance record (the assessment result fixture),
     // not from an enrollment roster.
     expect(screen.getByText("S-1001")).toBeInTheDocument()
@@ -342,10 +371,7 @@ describe("StudentProfilePage", () => {
     // up to three cells per row, so a document-wide text query resolves
     // differently depending on which independent query happened to settle
     // first — it passed or threw "Found multiple elements" purely on timing.
-    const absent = await screen.findByRole("heading", {
-      name: "Ana Reyes",
-      level: 1,
-    })
+    const absent = await findStudentHeading()
     await waitFor(() => {
       expect(
         within(absent.parentElement as HTMLElement).getByText("—")
@@ -355,7 +381,7 @@ describe("StudentProfilePage", () => {
 
   it("requests the server-filtered grade endpoint for this student only", async () => {
     renderPage()
-    await screen.findByRole("heading", { name: "Ana Reyes", level: 1 })
+    await findStudentHeading()
 
     expect(mockedFetchAllPages).toHaveBeenCalledWith(
       "/academics/grades/?student=sp-1&status=finalized"
@@ -364,14 +390,14 @@ describe("StudentProfilePage", () => {
 
   it("requests the server-filtered attendance summary for this student", async () => {
     renderPage()
-    await screen.findByRole("heading", { name: "Ana Reyes", level: 1 })
+    await findStudentHeading()
 
     expect(mockedGet).toHaveBeenCalledWith("/attendance/summary/?student=sp-1")
   })
 
   it("normalizes decimal grade strings to numbers", async () => {
     renderPage()
-    await screen.findByRole("heading", { name: "Ana Reyes", level: 1 })
+    await findStudentHeading()
 
     // "88.50" arrives as a DRF decimal string; it must not render as such.
     expect(await screen.findByText("88.5")).toBeInTheDocument()
@@ -379,7 +405,7 @@ describe("StudentProfilePage", () => {
 
   it("shows a dash for an unset grade score", async () => {
     renderPage()
-    await screen.findByRole("heading", { name: "Ana Reyes", level: 1 })
+    await findStudentHeading()
 
     await screen.findByText("English")
     const row = screen.getByText("English").closest("tr") as HTMLElement
@@ -388,7 +414,7 @@ describe("StudentProfilePage", () => {
 
   it("shows attendance record counts and no invented rate", async () => {
     renderPage()
-    await screen.findByRole("heading", { name: "Ana Reyes", level: 1 })
+    await findStudentHeading()
 
     const present = await screen.findByText("Present")
     const presentCard = present.parentElement as HTMLElement
@@ -410,7 +436,7 @@ describe("StudentProfilePage", () => {
 
   it("keeps another student's records out of the profile", async () => {
     renderPage()
-    await screen.findByRole("heading", { name: "Ana Reyes", level: 1 })
+    await findStudentHeading()
 
     await screen.findByText("Reviewed midterm results.")
     expect(screen.queryByText("Not this student.")).toBeNull()
@@ -419,7 +445,7 @@ describe("StudentProfilePage", () => {
 
   it("marks the student at risk with the level that actually applies", async () => {
     renderPage()
-    await screen.findByRole("heading", { name: "Ana Reyes", level: 1 })
+    await findStudentHeading()
 
     const badge = await screen.findByText(/At risk \(High\)/)
     expect(badge).toHaveAttribute("data-at-risk", "true")
@@ -441,7 +467,7 @@ describe("StudentProfilePage", () => {
     })
 
     renderPage()
-    await screen.findByRole("heading", { name: "Ana Reyes", level: 1 })
+    await findStudentHeading()
 
     const badge = await screen.findByText(/At risk \(Moderate\)/)
     expect(badge).toHaveAttribute("data-at-risk-level", "moderate")
@@ -465,7 +491,7 @@ describe("StudentProfilePage", () => {
     })
 
     renderPage()
-    await screen.findByRole("heading", { name: "Ana Reyes", level: 1 })
+    await findStudentHeading()
 
     // The alert still renders in the history, but the at-risk badge must not.
     await waitFor(() => expect(screen.queryByText("At risk")).toBeNull())
@@ -474,7 +500,7 @@ describe("StudentProfilePage", () => {
 
   it("renders the summary tiles from own-counselor data, not report totals", async () => {
     renderPage()
-    await screen.findByRole("heading", { name: "Ana Reyes", level: 1 })
+    await findStudentHeading()
 
     // The fixture's report claims total 1 for both, matching the counselor's
     // own single record, so this only proves the tiles render.
@@ -521,7 +547,7 @@ describe("StudentProfilePage", () => {
     })
 
     renderPage()
-    await screen.findByRole("heading", { name: "Ana Reyes", level: 1 })
+    await findStudentHeading()
 
     // The counselor recorded exactly one of each.
     const consultTile = document.querySelector(
@@ -542,7 +568,7 @@ describe("StudentProfilePage", () => {
 
   it("renders behavioral note counts from the report", async () => {
     renderPage()
-    await screen.findByRole("heading", { name: "Ana Reyes", level: 1 })
+    await findStudentHeading()
 
     expect(
       await screen.findByText(/Positive 1 · Warning 0 · Incident 2/)
@@ -551,7 +577,7 @@ describe("StudentProfilePage", () => {
 
   it("renders the student's own assessment results with a percentage", async () => {
     renderPage()
-    await screen.findByRole("heading", { name: "Ana Reyes", level: 1 })
+    await findStudentHeading()
 
     expect(await screen.findByText("Wellness Check-In")).toBeInTheDocument()
     // `percentage` is a 0-100 decimal, not a 0-1 ratio.
@@ -568,7 +594,7 @@ describe("StudentProfilePage", () => {
     })
 
     renderPage()
-    await screen.findByRole("heading", { name: "Ana Reyes", level: 1 })
+    await findStudentHeading()
 
     expect(
       await screen.findByText(/No attendance records found/i)
@@ -588,7 +614,7 @@ describe("StudentProfilePage", () => {
     })
 
     renderPage()
-    await screen.findByRole("heading", { name: "Ana Reyes", level: 1 })
+    await findStudentHeading()
 
     expect(await screen.findByText("grades down")).toBeInTheDocument()
     // Behavioral notes still render.
@@ -599,7 +625,7 @@ describe("StudentProfilePage", () => {
 
   it("links back to the roster", async () => {
     renderPage()
-    await screen.findByRole("heading", { name: "Ana Reyes", level: 1 })
+    await findStudentHeading()
 
     expect(
       screen.getByRole("link", { name: /back to roster/i })
