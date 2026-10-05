@@ -50,6 +50,15 @@ describe("role navigation configuration", () => {
       "parent/academics",
       "parent/assessments",
       "parent/support",
+      // PH11.9 admin surfaces, likewise
+      "admin/academics",
+      "admin/grades",
+      "admin/attendance",
+      "admin/analytics",
+      "admin/users",
+      "admin/data",
+      "admin/cms",
+      "admin/audit",
     ]
 
     for (const role of ROLES) {
@@ -70,8 +79,17 @@ describe("role navigation configuration", () => {
     expect(getNavItemsForRole("faculty")).toContainEqual(
       expect.objectContaining({ route: "academics", status: "available" })
     )
+    // PH11.9 removed admin from this route: it served `AcademicsLandingPage`,
+    // a placeholder pointing at "the Administration section of this workspace"
+    // when no such routes existed. Admin now has `admin/academics`.
+    expect(
+      getNavItemsForRole("admin").find((i) => i.route === "academics")
+    ).toBeUndefined()
     expect(getNavItemsForRole("admin")).toContainEqual(
-      expect.objectContaining({ route: "academics", status: "available" })
+      expect.objectContaining({
+        route: "admin/academics",
+        status: "available",
+      })
     )
     expect(getNavItemsForRole("student")).toContainEqual(
       expect.objectContaining({ route: "academics", status: "available" })
@@ -82,18 +100,16 @@ describe("role navigation configuration", () => {
         expect.objectContaining({ route: "attendance", status: "available" })
       )
     }
-    // Parent reached a real attendance surface in PH11.9 at
-    // `parent/academics`, so it no longer carries the planned entry. Admin
-    // still has no attendance route of its own, so it keeps the placeholder.
-    expect(
-      getNavItemsForRole("parent").find((i) => i.route === "attendance")
-    ).toBeUndefined()
-
-    const adminAttendance = getNavItemsForRole("admin").find(
-      (i) => i.route === "attendance"
-    )
-    expect(adminAttendance).toBeDefined()
-    expect(adminAttendance?.status).toBe("planned")
+    // PH11.9 removed the `ATTENDANCE_PLANNED` roadmap item. Parent reached a
+    // real attendance view inside `parent/academics` and admin reached one at
+    // `admin/attendance`; guidance has no attendance route of its own, so it
+    // gets no entry rather than a placeholder pointing at nothing.
+    for (const role of ROLES) {
+      expect(
+        getNavItemsForRole(role).find((i) => i.route === "attendance")?.status,
+        role
+      ).not.toBe("planned")
+    }
 
     const studentAvailable = getNavItemsForRole("student").filter(
       (i) => i.status === "available"
@@ -111,11 +127,27 @@ describe("role navigation configuration", () => {
     const student = getNavItemsForRole("student").map((i) => i.route)
     const admin = getNavItemsForRole("admin").map((i) => i.route)
 
-    expect(admin).toContain("users")
-    expect(admin).toContain("settings")
-    expect(admin).toContain("academics")
-    expect(student).not.toContain("users")
-    expect(student).not.toContain("settings")
+    // PH11.9 gave admin eight real routes.
+    for (const route of [
+      "admin/academics",
+      "admin/grades",
+      "admin/attendance",
+      "admin/analytics",
+      "admin/users",
+      "admin/data",
+      "admin/cms",
+      "admin/audit",
+    ]) {
+      expect(admin, route).toContain(route)
+    }
+    // PH11.9 removed the admin Settings item: there is no SystemSetting model,
+    // view or route anywhere in the backend, so the entry could only ever point
+    // at a page that cannot exist.
+    expect(admin).not.toContain("settings")
+    // Admin is off the student/faculty academics route, which served a
+    // placeholder describing implemented functionality as future work.
+    expect(admin).not.toContain("academics")
+    expect(student).not.toContain("admin/users")
     // PH11.7 added Academics + Attendance for students.
     expect(student).toContain("academics")
     expect(student).toContain("attendance")
@@ -243,19 +275,37 @@ describe("role navigation configuration", () => {
     }
   })
 
-  it("keeps faculty and admin assessments planned and guidance-only", () => {
-    for (const role of ["faculty", "admin"] as const) {
-      const item = getNavItemsForRole(role).find(
-        (i) => i.route === "assessments"
-      )
-      expect(item, role).toBeDefined()
-      expect(item?.status, role).toBe("planned")
-    }
+  it("keeps the faculty assessments entry planned", () => {
+    /*
+     * `/app/assessments` still resolves to the guidance page, which
+     * `RequireRole` keeps guidance-only. Faculty therefore keeps an honest
+     * planned entry rather than a link that would bounce off the guard.
+     */
+    const item = getNavItemsForRole("faculty").find(
+      (i) => i.route === "assessments"
+    )
+    expect(item).toBeDefined()
+    expect(item?.status).toBe("planned")
 
     const guidanceItem = getNavItemsForRole("guidance").find(
       (i) => i.route === "assessments"
     )
     expect(guidanceItem?.status).toBe("available")
+  })
+
+  /**
+   * Admin has a real assessment surface, so the planned placeholder is gone.
+   *
+   * `AssessmentViewSet.get_queryset()` returns the full table for `admin` and
+   * `IsAssessmentCreator` grants admins full object-level authority over every
+   * assessment, so admin reads the same endpoint guidance authors through. A
+   * planned entry for a capability that exists is the placeholder failure this
+   * module's tests exist to catch.
+   */
+  it("gives admin a real assessments link", () => {
+    expect(
+      getNavItemsForRole("admin").find((i) => i.route === "assessments")
+    ).toBeUndefined()
   })
 
   it("has no /app/guidance nav item at all", () => {
@@ -285,12 +335,58 @@ describe("role navigation configuration", () => {
 describe("route visibility", () => {
   it("follows the resolved role navigation", () => {
     expect(isRouteVisibleToRole("admin", "dashboard")).toBe(true)
-    expect(isRouteVisibleToRole("admin", "academics")).toBe(true)
+    expect(isRouteVisibleToRole("admin", "admin/users")).toBe(true)
     expect(isRouteVisibleToRole("student", "academics")).toBe(true)
-    expect(isRouteVisibleToRole("parent", "users")).toBe(false)
+    expect(isRouteVisibleToRole("parent", "admin/users")).toBe(false)
     expect(isRouteVisibleToRole("student", "settings")).toBe(false)
     expect(isRouteVisibleToRole("guidance", "risk-alerts")).toBe(true)
-    expect(isRouteVisibleToRole("student", "assessments")).toBe(true)
+    expect(isRouteVisibleToRole("guidance", "assessments")).toBe(true)
+    expect(isRouteVisibleToRole("parent", "parent/support")).toBe(true)
+    expect(isRouteVisibleToRole("student", "parent/support")).toBe(false)
+  })
+
+  /**
+   * Each role's own routes are visible only to that role.
+   *
+   * The parent and admin routes read data the backend scopes by role or by
+   * `ParentStudentLink` children, so handing one of these links to another role
+   * would show a page whose every list is empty at best.
+   */
+  it("keeps the admin routes off every other role", () => {
+    for (const role of ["student", "parent", "faculty", "guidance"] as const) {
+      const available = getNavItemsForRole(role)
+        .filter((i) => i.status === "available")
+        .map((i) => i.route)
+
+      for (const route of [
+        "admin/academics",
+        "admin/grades",
+        "admin/attendance",
+        "admin/analytics",
+        "admin/users",
+        "admin/data",
+        "admin/cms",
+        "admin/audit",
+      ]) {
+        expect(available, `${role} / ${route}`).not.toContain(route)
+      }
+    }
+  })
+
+  it("keeps the parent routes off every other role", () => {
+    for (const role of ["student", "faculty", "guidance", "admin"] as const) {
+      const available = getNavItemsForRole(role)
+        .filter((i) => i.status === "available")
+        .map((i) => i.route)
+
+      for (const route of [
+        "parent/academics",
+        "parent/assessments",
+        "parent/support",
+      ]) {
+        expect(available, `${role} / ${route}`).not.toContain(route)
+      }
+    }
   })
 })
 

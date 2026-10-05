@@ -3,25 +3,44 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/features/auth/AuthContext"
 import {
-  useSchoolWideMetrics,
+  useGradeLevelComparison,
   useRiskDistribution,
-  useLowPerformanceStudents,
+  useSchoolWideMetrics,
 } from "@/features/admin/api"
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table"
 import { formatCount, formatPercent } from "@/lib/metric-format"
+import type { GradeLevelComparison } from "@/features/admin/api"
 
+/**
+ * Administrator overview.
+ *
+ * Every metric on this screen is an aggregate. NFR-010 requires administrators
+ * to view student data in aggregated or anonymised form unless explicit consent
+ * is given, and the endpoints used here honour that: `school-wide` returns
+ * three scalars, `risk-distribution` returns four counts, and
+ * `grade-levels/comparison` returns one average per grade level.
+ *
+ * PH11.9 removed the "Low-Performance Students" card this screen previously
+ * carried. It called `/analytics/low-performance/`, which returns
+ * `student_id` and `student_name` — named individual students. That endpoint
+ * predates this screen and is neither extended nor changed here, but presenting
+ * its output on an admin dashboard is exactly what NFR-010 rules out, so the
+ * card is gone rather than relabelled. Nothing else in the admin surface calls
+ * it. See `docs/PH11.9_NOTE.md` for the full finding.
+ */
 function AdminDashboard() {
   const { user } = useAuth()
 
   const metricsQuery = useSchoolWideMetrics()
   const riskDistQuery = useRiskDistribution()
-  const lowPerfQuery = useLowPerformanceStudents()
+  const comparisonQuery = useGradeLevelComparison()
 
-  // `null` means the backend reported no data for that metric; a real 0
-  // is passed through untouched and rendered as "0" / "0.00%".
+  // `null` means the backend reported no data for that metric; a real 0 is
+  // passed through untouched and rendered as "0" / "0.00%".
   const overallGradeAvg = metricsQuery.data?.overall_grade_average ?? null
   const totalStudents = metricsQuery.data?.total_students ?? null
   const gradeLevels = metricsQuery.data?.grade_levels ?? null
-  const riskDistribution = riskDistQuery.data ?? null
+  const risk = riskDistQuery.data ?? null
 
   if (!user) return null
 
@@ -37,9 +56,13 @@ function AdminDashboard() {
         >
           <span className="truncate">{user.email}</span>
         </Badge>
+        <p className="text-sm text-muted-foreground">
+          School-wide aggregates only. Individual student records are not shown
+          here.
+        </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
@@ -54,7 +77,7 @@ function AdminDashboard() {
                 formatPercent(overallGradeAvg, 2)
               )}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="mt-1 text-xs text-muted-foreground">
               School-wide academic performance
             </p>
           </CardContent>
@@ -74,7 +97,7 @@ function AdminDashboard() {
                 formatCount(totalStudents)
               )}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="mt-1 text-xs text-muted-foreground">
               Active student enrollments
             </p>
           </CardContent>
@@ -92,7 +115,7 @@ function AdminDashboard() {
                 formatCount(gradeLevels)
               )}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="mt-1 text-xs text-muted-foreground">
               Active grade levels
             </p>
           </CardContent>
@@ -108,27 +131,45 @@ function AdminDashboard() {
             <div className="space-y-2">
               <Skeleton className="h-8 w-3/4" />
             </div>
-          ) : riskDistribution ? (
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="rounded-md p-3 text-center">
-                <div className="text-lg font-bold text-success">
-                  {formatCount(riskDistribution.low)}
+          ) : risk ? (
+            <>
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="rounded-md p-3 text-center">
+                  <div className="text-lg font-bold text-success">
+                    {formatCount(risk.distribution.low)}
+                  </div>
+                  <p className="text-xs text-success">Low Risk</p>
                 </div>
-                <p className="text-xs text-success">Low Risk</p>
-              </div>
-              <div className="rounded-md p-3 text-center">
-                <div className="text-lg font-bold text-warning-foreground">
-                  {formatCount(riskDistribution.moderate)}
+                <div className="rounded-md p-3 text-center">
+                  <div className="text-lg font-bold text-warning-foreground">
+                    {formatCount(risk.distribution.moderate)}
+                  </div>
+                  <p className="text-xs text-warning-foreground">
+                    Moderate Risk
+                  </p>
                 </div>
-                <p className="text-xs text-warning-foreground">Moderate Risk</p>
-              </div>
-              <div className="rounded-md p-3 text-center">
-                <div className="text-lg font-bold text-destructive">
-                  {formatCount(riskDistribution.high)}
+                <div className="rounded-md p-3 text-center">
+                  <div className="text-lg font-bold text-destructive">
+                    {formatCount(risk.distribution.high)}
+                  </div>
+                  <p className="text-xs text-destructive">High Risk</p>
                 </div>
-                <p className="text-xs text-destructive">High Risk</p>
               </div>
-            </div>
+              {/*
+                RiskScore has no API surface, so `total_with_scores` is zero
+                unless the risk engine has been run out of band. Showing all
+                three buckets as 0 without saying so would read as "no student
+                is at risk" rather than "the model has not been run".
+              */}
+              {risk.total_with_scores === 0 ? (
+                <p className="mt-3 text-sm text-muted-foreground">
+                  No computed risk scores are available. These counts come from
+                  the risk-scoring engine, which has not been run for this
+                  dataset. Recorded manual alerts are counted separately on the
+                  Guidance risk-alerts page.
+                </p>
+              ) : null}
+            </>
           ) : (
             <p className="text-sm text-muted-foreground">
               {riskDistQuery.isError
@@ -141,41 +182,70 @@ function AdminDashboard() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Low-Performance Students (Top 20)</CardTitle>
+          <CardTitle>Average by grade level</CardTitle>
         </CardHeader>
         <CardContent>
-          {lowPerfQuery.isFetching ? (
-            <div className="space-y-2">
-              <Skeleton className="h-10 w-full" />
-            </div>
-          ) : lowPerfQuery.isError ? (
-            <p className="text-sm text-muted-foreground">
-              Unable to load low-performance students. Please try again.
-            </p>
-          ) : lowPerfQuery.data && lowPerfQuery.data.length > 0 ? (
-            <ul className="space-y-2">
-              {lowPerfQuery.data.map((student, idx) => (
-                <li
-                  key={idx}
-                  className="flex items-center justify-between gap-2 rounded-md border p-3"
-                >
-                  <p className="min-w-0 truncate font-medium">
-                    {student.student_name}
-                  </p>
-                  <span className="shrink-0 font-bold text-foreground">
-                    {formatPercent(student.average, 2)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              No low-performance students found
-            </p>
-          )}
+          <GradeLevelTable
+            rows={comparisonQuery.data ?? []}
+            isLoading={comparisonQuery.isLoading}
+            error={
+              comparisonQuery.isError
+                ? "Unable to load the grade level comparison. Please try again."
+                : null
+            }
+          />
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+function GradeLevelTable({
+  rows,
+  isLoading,
+  error,
+}: {
+  rows: readonly GradeLevelComparison[]
+  isLoading: boolean
+  error: string | null
+}) {
+  const columns: readonly DataTableColumn<GradeLevelComparison>[] = [
+    {
+      key: "name",
+      header: "Grade level",
+      cell: (row) => (
+        <span className="font-medium">{row.grade_level_name}</span>
+      ),
+    },
+    {
+      key: "average",
+      header: "Average",
+      cell: (row) => (
+        <span className="font-bold">{formatPercent(row.average, 2)}</span>
+      ),
+    },
+    {
+      key: "count",
+      header: "Grades counted",
+      cell: (row) => (
+        <span className="text-muted-foreground">
+          {formatCount(row.grade_count)}
+        </span>
+      ),
+    },
+  ]
+
+  return (
+    <DataTable
+      caption="Average grade by level"
+      columns={columns}
+      rows={rows}
+      rowKey={(row) => row.grade_level_id}
+      isLoading={isLoading}
+      error={error}
+      loadingLabel="Loading grade level comparison"
+      emptyMessage="No finalized grades are available to compare yet."
+    />
   )
 }
 

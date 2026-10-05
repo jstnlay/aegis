@@ -7,7 +7,6 @@ import {
   FileText,
   LayoutDashboard,
   MessageSquare,
-  Settings,
   Shield,
   UserCog,
   Users,
@@ -97,13 +96,131 @@ const ATTENDANCE: NavItem = {
   status: "available",
 }
 
-/** Roadmap entry for roles whose attendance surface is not implemented yet. */
-const ATTENDANCE_PLANNED: NavItem = {
-  route: "attendance",
+/**
+ * PH11.9 removed the `ATTENDANCE_PLANNED` roadmap item entirely.
+ *
+ * PH11.7 kept it for parent, admin and guidance. PH11.9 gave parent a real
+ * attendance view inside `parent/academics` and admin one at `admin/attendance`,
+ * which covers both. Guidance still has no attendance route: it can read every
+ * record and the summary through the same endpoints, but no guidance attendance
+ * screen was in scope, and a planned entry for a route that does not exist is
+ * the same placeholder failure PH11.8 removed for `/app/guidance`. Guidance
+ * still reads attendance data on the student profile page, which is a real
+ * route.
+ */
+
+/* ------------------------------------------------------------------ */
+/* PH11.9 admin navigation                                             */
+/* ------------------------------------------------------------------ */
+
+/**
+ * PH11.9 admin tree.
+ *
+ * PH11.7 shipped admin a placeholder tree: `users` and `settings` were planned
+ * entries pointing at routes that did not exist, and `academics` linked to a
+ * page that described implemented functionality as future work. This tree
+ * contains only routes that exist, each backed by an endpoint verified during
+ * this phase.
+ */
+const ADMIN_ACADEMIC_STRUCTURE: NavItem = {
+  route: "admin/academics",
+  label: "Academic Structure",
+  icon: BookOpen,
+  allowedRoles: ["admin"],
+  status: "available",
+}
+
+/**
+ * Grade oversight and finalization.
+ *
+ * `GradeViewSet.get_permissions()` grants the `finalize` action to
+ * `IsAdminUser`, so this is the one grade write an administrator holds.
+ * `encode` and `batch_import` are `IsFacultyUser`, so no score-entry control is
+ * offered.
+ */
+const ADMIN_GRADES: NavItem = {
+  route: "admin/grades",
+  label: "Grades",
+  icon: ClipboardCheck,
+  allowedRoles: ["admin"],
+  status: "available",
+}
+
+/**
+ * Attendance oversight.
+ *
+ * Read-only for admin: `AttendanceRecordViewSet.get_permissions()` gates every
+ * write verb on `IsFacultyUser`. The page states this rather than offering a
+ * form the backend would reject.
+ */
+const ADMIN_ATTENDANCE: NavItem = {
+  route: "admin/attendance",
   label: "Attendance",
   icon: CalendarCheck,
-  allowedRoles: ["admin", "guidance"],
-  status: "planned",
+  allowedRoles: ["admin"],
+  status: "available",
+}
+
+/** School-wide aggregates. NFR-010 requires these stay anonymised. */
+const ADMIN_ANALYTICS: NavItem = {
+  route: "admin/analytics",
+  label: "Analytics",
+  icon: LayoutDashboard,
+  allowedRoles: ["admin"],
+  status: "available",
+}
+
+/**
+ * User administration.
+ *
+ * `UserListView`, `UserDetailView` and `UserCreateView` are the complete user
+ * contract: list, retrieve and create. There is no update, deactivate, delete,
+ * role-reassignment or password-reset route, and the page says so explicitly.
+ */
+const ADMIN_USERS: NavItem = {
+  route: "admin/users",
+  label: "Users",
+  icon: Users,
+  allowedRoles: ["admin"],
+  status: "available",
+}
+
+/** Import jobs and the controlled CSV/XLSX exports. */
+const ADMIN_DATA: NavItem = {
+  route: "admin/data",
+  label: "Imports & Exports",
+  icon: FileText,
+  allowedRoles: ["admin"],
+  status: "available",
+}
+
+/**
+ * School content through the CMS proxy.
+ *
+ * Read-only: content is authored in Strapi and the AEGIS proxy exposes no write
+ * endpoint, so there is no authoring form.
+ */
+const ADMIN_CMS: NavItem = {
+  route: "admin/cms",
+  label: "Content",
+  icon: FileText,
+  allowedRoles: ["admin"],
+  status: "available",
+}
+
+/**
+ * The audit trail.
+ *
+ * Read-only by design: `AuditLogViewSet` is a `ReadOnlyModelViewSet` whose
+ * `http_method_names` maps no write route, which is the correct property for an
+ * append-only trail.
+ */
+const ADMIN_AUDIT: NavItem = {
+  route: "admin/audit",
+  label: "Audit Logs",
+  icon: Shield,
+  allowedRoles: ["admin"],
+  status: "available",
 }
 
 /**
@@ -185,27 +302,34 @@ const GUIDANCE_ASSESSMENTS: NavItem = {
  * entry for it could only ever be a placeholder. The guidance surface is
  * reached through the real per-domain routes below instead.
  */
-const USERS: NavItem = {
-  route: "users",
-  label: "Users",
-  icon: Users,
-  allowedRoles: ["admin"],
-  status: "planned",
-}
+/**
+ * PH11.9 removed the `USERS` and `SETTINGS` planned entries entirely.
+ *
+ * `users` became the real `admin/users` route (see `ADMIN_USERS`).
+ *
+ * `settings` is gone because there is no SystemSetting model, view or route
+ * anywhere in the backend — the only mention is a comment in
+ * `apps/attendance/views.py` saying the absence threshold "will be replaced by
+ * SystemSetting lookup when CMS module is built (Phase 7)", and that never
+ * happened. A planned entry for a route that cannot exist is the same
+ * placeholder failure PH11.8 removed for `/app/guidance`. `Account Settings`
+ * remains, and that is the real self-scoped `GET/PATCH /accounts/me/` surface.
+ */
 
+/**
+ * Roadmap entry for roles with no report surface.
+ *
+ * PH11.9 checked for a report or export contract: the only related thing that
+ * exists is the controlled CSV/XLSX export family under
+ * `/data-import/exports/`, which is a file download available to
+ * administrators and is surfaced as "Imports & Exports". No AcademicReport API
+ * exists, so this stays planned rather than pointing at one.
+ */
 const REPORTS: NavItem = {
   route: "reports",
   label: "Reports",
   icon: FileText,
-  allowedRoles: ["faculty", "guidance", "admin"],
-  status: "planned",
-}
-
-const SETTINGS: NavItem = {
-  route: "settings",
-  label: "Settings",
-  icon: Settings,
-  allowedRoles: ["admin"],
+  allowedRoles: ["faculty", "guidance", "admin", "student"],
   status: "planned",
 }
 
@@ -364,13 +488,16 @@ const ADMIN_NAVIGATION: readonly NavGroup[] = [
   OVERVIEW_GROUP,
   {
     heading: "Administration",
-    // `ATTENDANCE` allows only student/faculty, so admin keeps the planned
-    // item until the PH11.9 admin attendance route admits `admin`.
-    items: [ACADEMICS, ATTENDANCE_PLANNED, ASSESSMENTS, USERS, REPORTS],
+    items: [
+      ADMIN_ACADEMIC_STRUCTURE,
+      ADMIN_GRADES,
+      ADMIN_ATTENDANCE,
+      ADMIN_ANALYTICS,
+    ],
   },
   {
-    heading: "System",
-    items: [SETTINGS],
+    heading: "School Operations",
+    items: [ADMIN_USERS, ADMIN_DATA, ADMIN_CMS, ADMIN_AUDIT, REPORTS],
   },
   {
     heading: "Communication",
@@ -447,12 +574,9 @@ export function getPageTitle(pathname: string): string {
     DASHBOARD,
     ACADEMICS,
     ATTENDANCE,
-    ATTENDANCE_PLANNED,
     ASSESSMENTS,
     GUIDANCE_ASSESSMENTS,
-    USERS,
     REPORTS,
-    SETTINGS,
     RISK_ALERTS,
     CONSULTATIONS,
     INTERVENTIONS,
@@ -462,6 +586,14 @@ export function getPageTitle(pathname: string): string {
     PARENT_ACADEMICS,
     PARENT_ASSESSMENTS,
     PARENT_SUPPORT,
+    ADMIN_ACADEMIC_STRUCTURE,
+    ADMIN_GRADES,
+    ADMIN_ATTENDANCE,
+    ADMIN_ANALYTICS,
+    ADMIN_USERS,
+    ADMIN_DATA,
+    ADMIN_CMS,
+    ADMIN_AUDIT,
   ]
 
   const match = allItems

@@ -171,25 +171,50 @@ describe("PH11.7 domain routes", () => {
     )
   })
 
-  it("shows admin the academic-structure view, not a student view", async () => {
+  it("bounces admin off the student/faculty academics route", async () => {
+    /*
+     * PH11.9 removed `admin` from this route. It served
+     * `AcademicsLandingPage`, a placeholder that pointed admin at "the
+     * Administration section of this workspace" — a section that had no routes
+     * at all. Admin now has real pages under /app/admin/*, so RequireRole sends
+     * it to its own dashboard instead.
+     */
     authState.user = makeUser("admin")
     renderAt("/app/academics")
 
-    // PH11.9 removed the PH11.5 placeholder wording, which described shipped
-    // functionality (years, levels, sections, subjects, assignments,
-    // schedules, grading periods, enrollments, grade encoding) as "Planned
-    // features" that would "land in PH11.6".
     expect(
-      await screen.findByText(/administered from the Administration section/i)
+      await screen.findByRole("heading", {
+        name: ROLE_CASES.find((c) => c.role === "admin")!.heading,
+      })
     ).toBeInTheDocument()
+    // Neither the placeholder copy nor the student grade-record surface.
     expect(
-      screen.queryByText(/first domain to be implemented/i)
+      screen.queryByText(/administered from the Administration section/i)
     ).not.toBeInTheDocument()
-    expect(screen.queryByText(/Planned features/i)).not.toBeInTheDocument()
-    // Admin must not be shown the student grade-record surface.
     expect(
       screen.queryByText(/Grades appear here once they are finalized/i)
     ).not.toBeInTheDocument()
+  })
+
+  it("keeps the student and faculty academics route open to both roles", async () => {
+    for (const role of ["student", "faculty"] as const) {
+      authState.user = makeUser(role)
+      const view = renderAt("/app/academics")
+
+      // The real role-specific surface mounts, not the placeholder. Matched on
+      // the page's own marker rather than the "Academics" heading, because the
+      // AppShell header renders that same title for the route.
+      const marker =
+        role === "student"
+          ? /Grades appear here once they are finalized/i
+          : /Encode a grade/i
+      expect(await screen.findByText(marker)).toBeInTheDocument()
+      expect(
+        screen.queryByText(/administered from the Administration section/i)
+      ).not.toBeInTheDocument()
+
+      view.unmount()
+    }
   })
 })
 
@@ -318,6 +343,124 @@ describe("PH11.8 guidance routes", () => {
     "faculty",
     "admin",
   ]
+
+  /**
+   * PH11.9 admin routes. Each is reachable by `admin` alone, and each is built
+   * from an endpoint verified during this phase.
+   */
+  const ADMIN_ROUTES: ReadonlyArray<{ path: string; marker: RegExp }> = [
+    {
+      path: "/app/admin/academics",
+      marker: /Administrators have full create and delete/i,
+    },
+    {
+      path: "/app/admin/grades",
+      marker: /is the one grade write an administrator holds/i,
+    },
+    {
+      path: "/app/admin/attendance",
+      marker: /Recording or editing a record is a faculty action/i,
+    },
+    {
+      path: "/app/admin/analytics",
+      marker: /No individual student record is shown/i,
+    },
+    {
+      path: "/app/admin/users",
+      marker: /the only account-creation form the API exposes/i,
+    },
+    {
+      path: "/app/admin/data",
+      marker: /Bulk data movement in and out/i,
+    },
+    {
+      path: "/app/admin/cms",
+      marker: /Content is authored in Strapi/i,
+    },
+    {
+      path: "/app/admin/audit",
+      marker: /This trail is append-only/i,
+    },
+  ]
+
+  it.each(ADMIN_ROUTES)(
+    "renders the admin surface at $path",
+    async ({ path, marker }) => {
+      authState.user = makeUser("admin")
+      renderAt(path)
+
+      expect(await screen.findByText(marker)).toBeInTheDocument()
+    }
+  )
+
+  it.each(ADMIN_ROUTES)(
+    "redirects a non-admin role away from $path",
+    async ({ path, marker }) => {
+      for (const role of [
+        "student",
+        "parent",
+        "faculty",
+        "guidance",
+      ] as const) {
+        authState.user = makeUser(role)
+        const view = renderAt(path)
+
+        expect(
+          await screen.findByRole("heading", {
+            name: ROLE_CASES.find((c) => c.role === role)!.heading,
+          })
+        ).toBeInTheDocument()
+        await waitFor(() =>
+          expect(screen.queryByText(marker)).not.toBeInTheDocument()
+        )
+
+        view.unmount()
+      }
+    }
+  )
+
+  /**
+   * NFR-010 requires admin analytics to stay aggregated. No admin route may
+   * render a named student, which is what `/analytics/low-performance/` would
+   * provide if any screen called it.
+   */
+  it("shows no student name on the admin analytics surface", async () => {
+    authState.user = makeUser("admin")
+    renderAt("/app/admin/analytics")
+
+    expect(
+      await screen.findByText(/No individual student record is shown/i)
+    ).toBeInTheDocument()
+    // The low-performer card this screen used to carry is gone, so neither its
+    // heading nor the student-count phrasing it introduced may reappear.
+    expect(screen.queryByText(/Low-Performance Students/i)).toBeNull()
+  })
+
+  /**
+   * The write boundary is stated on the screens where it applies, so a tester
+   * can tell "this role cannot" from "this screen is unfinished".
+   */
+  it.each([
+    ["/app/admin/attendance", /Read-only view/i],
+    ["/app/admin/users", /Not available through this API/i],
+    ["/app/admin/cms", /Read-only view/i],
+  ])("states the unsupported operations at %s", async (path, marker) => {
+    authState.user = makeUser("admin")
+    renderAt(path as string)
+
+    expect(await screen.findByText(marker as RegExp)).toBeInTheDocument()
+  })
+
+  it("offers an admin no attendance write control", async () => {
+    authState.user = makeUser("admin")
+    renderAt("/app/admin/attendance")
+
+    await screen.findByText(/Read-only view/i)
+
+    for (const label of [/record attendance/i, /save/i, /^delete$/i]) {
+      expect(screen.queryByRole("button", { name: label })).toBeNull()
+    }
+  })
 
   /**
    * PH11.9 parent routes. Each is reachable by `parent` alone, and each page

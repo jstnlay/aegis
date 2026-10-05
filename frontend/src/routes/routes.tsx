@@ -28,6 +28,14 @@ import { ParentSupportRoute } from "@/features/parent/ParentSupportRoute"
 import { FacultyDashboard } from "@/features/faculty/FacultyDashboard"
 import { GuidanceDashboard } from "@/features/guidance/GuidanceDashboard"
 import { AdminDashboard } from "@/features/admin/AdminDashboard"
+import { AdminAcademicsPage } from "@/features/admin/AdminAcademicsPage"
+import { AdminAnalyticsPage } from "@/features/admin/AdminAnalyticsPage"
+import { AdminAttendancePage } from "@/features/admin/AdminAttendancePage"
+import { AdminAuditPage } from "@/features/admin/AdminAuditPage"
+import { AdminCmsPage } from "@/features/admin/AdminCmsPage"
+import { AdminDataPage } from "@/features/admin/AdminDataPage"
+import { AdminGradesPage } from "@/features/admin/AdminGradesPage"
+import { AdminUsersPage } from "@/features/admin/AdminUsersPage"
 
 export const appRoutes: RouteObject[] = [
   { path: "/login", element: <LoginPage /> },
@@ -92,11 +100,16 @@ export const appRoutes: RouteObject[] = [
           {
             // PH11.7: one route, role-appropriate content. The backend scopes
             // every grade/attendance queryset to the caller, so the page never
-            // filters by identity itself. Admin keeps the read-only placeholder
-            // because PH11.7 covers student and faculty surfaces only.
+            // filters by identity itself.
+            //
+            // PH11.9 removed `admin` from this route. It served
+            // `AcademicsLandingPage`, a placeholder that pointed admin at "the
+            // Administration section of this workspace" — a section that had no
+            // routes at all. Admin now has real pages under /app/admin/*, so
+            // RequireRole sends it to its own surfaces instead.
             path: "academics",
             element: (
-              <RequireRole allowedRoles={["student", "faculty", "admin"]}>
+              <RequireRole allowedRoles={["student", "faculty"]}>
                 <AcademicsPage />
               </RequireRole>
             ),
@@ -207,6 +220,76 @@ export const appRoutes: RouteObject[] = [
             // every role over their own rows.
             path: "notifications",
             element: <NotificationsPage />,
+          },
+          /* PH11.9: the admin surface. Each route is admin-only and each is
+             built from an endpoint verified during this phase. Where the backend
+             does not support an operation - an attendance write, a user update,
+             a system setting - the page says so rather than offering a control
+             that could only fail. See docs/PH11.9_NOTE.md for the
+             endpoint-by-endpoint map and the operations deliberately left out. */
+          {
+            path: "admin/academics",
+            element: (
+              <RequireRole allowedRoles={["admin"]}>
+                <AdminAcademicsPage />
+              </RequireRole>
+            ),
+          },
+          {
+            path: "admin/grades",
+            element: (
+              <RequireRole allowedRoles={["admin"]}>
+                <AdminGradesPage />
+              </RequireRole>
+            ),
+          },
+          {
+            path: "admin/attendance",
+            element: (
+              <RequireRole allowedRoles={["admin"]}>
+                <AdminAttendancePage />
+              </RequireRole>
+            ),
+          },
+          {
+            path: "admin/analytics",
+            element: (
+              <RequireRole allowedRoles={["admin"]}>
+                <AdminAnalyticsPage />
+              </RequireRole>
+            ),
+          },
+          {
+            path: "admin/users",
+            element: (
+              <RequireRole allowedRoles={["admin"]}>
+                <AdminUsersPage />
+              </RequireRole>
+            ),
+          },
+          {
+            path: "admin/data",
+            element: (
+              <RequireRole allowedRoles={["admin"]}>
+                <AdminDataPage />
+              </RequireRole>
+            ),
+          },
+          {
+            path: "admin/cms",
+            element: (
+              <RequireRole allowedRoles={["admin"]}>
+                <AdminCmsPage />
+              </RequireRole>
+            ),
+          },
+          {
+            path: "admin/audit",
+            element: (
+              <RequireRole allowedRoles={["admin"]}>
+                <AdminAuditPage />
+              </RequireRole>
+            ),
           },
           {
             // PH11.9: opened to all five roles. `/accounts/me/` is

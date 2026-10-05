@@ -263,10 +263,80 @@ describe("role-aware sidebar", () => {
     expect(screen.queryByText("Settings")).toBeNull()
   })
 
-  it("shows admin-only items as planned entries for admins", async () => {
+  it("gives admin eight real links and no Settings placeholder", async () => {
+    /*
+     * PH11.9 replaced this with real routes. The `users` planned entry became
+     * the `admin/users` page, and `settings` was removed entirely because no
+     * SystemSetting endpoint exists in the backend for it to reach.
+     */
     await renderAuthenticatedApp("admin")
-    expect(await screen.findByText("Users")).toBeInTheDocument()
-    expect(screen.getByText("Settings")).toBeInTheDocument()
+
+    expect(
+      await screen.findByRole("link", { name: "Dashboard" })
+    ).toBeInTheDocument()
+
+    for (const [label, href] of [
+      ["Academic Structure", "/app/admin/academics"],
+      ["Grades", "/app/admin/grades"],
+      ["Attendance", "/app/admin/attendance"],
+      ["Analytics", "/app/admin/analytics"],
+      ["Users", "/app/admin/users"],
+      ["Imports & Exports", "/app/admin/data"],
+      ["Content", "/app/admin/cms"],
+      ["Audit Logs", "/app/admin/audit"],
+    ] as const) {
+      expect(screen.getByRole("link", { name: label }), label).toHaveAttribute(
+        "href",
+        href
+      )
+    }
+
+    expect(screen.queryByText("Settings")).toBeNull()
+  })
+
+  it("keeps every admin link off the other four roles", async () => {
+    for (const role of ["student", "parent", "faculty", "guidance"] as const) {
+      const view = await renderAuthenticatedApp(role)
+
+      for (const label of [
+        "Academic Structure",
+        "Analytics",
+        "Imports & Exports",
+        "Audit Logs",
+      ]) {
+        expect(
+          screen.queryByRole("link", { name: label }),
+          `${role} / ${label}`
+        ).toBeNull()
+      }
+
+      view.unmount()
+    }
+  })
+
+  it("shows parent the three real links and no Attendance placeholder", async () => {
+    /*
+     * PH11.7 kept Attendance as a non-link placeholder for parent. PH11.9 gave
+     * parent a real attendance view inside `Academic Record`, so the
+     * placeholder is gone: a separate Attendance entry would duplicate that
+     * data and point at no route.
+     */
+    await renderAuthenticatedApp("parent")
+
+    expect(
+      await screen.findByRole("link", { name: "Dashboard" })
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole("link", { name: "Academic Record" })
+    ).toHaveAttribute("href", "/app/parent/academics")
+    expect(screen.getByRole("link", { name: "Assessments" })).toHaveAttribute(
+      "href",
+      "/app/parent/assessments"
+    )
+    expect(
+      screen.getByRole("link", { name: "Student Support" })
+    ).toHaveAttribute("href", "/app/parent/support")
+    expect(screen.queryByText("Attendance")).toBeNull()
   })
 })
 
