@@ -30,7 +30,13 @@ const mockedFetchAllPages = vi.mocked(fetchAllPages)
 
 const RESOURCE_BY_SEGMENT: Record<string, unknown[]> = {
   "academic-years": [
-    { id: "ay-1", name: "SY 2026-2027", start_date: "2026-06-01", end_date: "2027-05-31", is_current: true },
+    {
+      id: "ay-1",
+      name: "SY 2026-2027",
+      start_date: "2026-06-01",
+      end_date: "2027-05-31",
+      is_current: true,
+    },
   ],
   "grade-levels": [
     { id: "gl-1", name: "Grade 8", level_number: 8 },
@@ -38,7 +44,12 @@ const RESOURCE_BY_SEGMENT: Record<string, unknown[]> = {
   ],
   sections: [{ id: "sec-1", name: "Bonifacio", grade_level_name: "Grade 8" }],
   subjects: [
-    { id: "sub-1", name: "Mathematics", code: "MATH-8", grade_level_name: "Grade 8" },
+    {
+      id: "sub-1",
+      name: "Mathematics",
+      code: "MATH-8",
+      grade_level_name: "Grade 8",
+    },
   ],
   "subject-assignments": [],
   "grading-periods": [],
@@ -202,9 +213,7 @@ describe("AdminAcademicsPage create forms", () => {
       if (url.includes("/accounts/faculty-profiles/")) {
         return {
           count: 1,
-          results: [
-            { id: "fp-1", name: "Ana Rivera", employee_id: "FAC-001" },
-          ],
+          results: [{ id: "fp-1", name: "Ana Rivera", employee_id: "FAC-001" }],
         }
       }
       const segment = url.split("/").filter(Boolean).pop() ?? ""
@@ -325,10 +334,7 @@ async function openSelect(trigger: HTMLElement) {
 }
 
 /** Pick the option whose visible text matches, then wait for the value to land. */
-async function chooseOption(
-  trigger: HTMLElement,
-  optionText: RegExp | string
-) {
+async function chooseOption(trigger: HTMLElement, optionText: RegExp | string) {
   await openSelect(trigger)
   const option = await screen.findByRole("option", { name: optionText })
   fireEvent.click(option)

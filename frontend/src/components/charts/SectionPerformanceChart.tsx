@@ -154,7 +154,9 @@ export function SectionPerformanceChart({
                 <LabelList
                   dataKey="average"
                   position="top"
-                  formatter={(value: unknown) => formatPercent(Number(value), 1)}
+                  formatter={(value: unknown) =>
+                    formatPercent(Number(value), 1)
+                  }
                   style={{ fill: AXIS_COLOR, fontSize: 12 }}
                 />
               </Bar>

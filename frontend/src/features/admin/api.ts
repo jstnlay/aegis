@@ -664,6 +664,138 @@ export interface GradingPeriodRef {
   order: number
 }
 
+/* ========================================================================== */
+/* 9b PH11.10 trends — real per-period and per-day series                       */
+/* ========================================================================== */
+
+/**
+ * One grading period's average for one student.
+ *
+ * `GET /analytics/students/{id}/academic-trend/` is what the existing metrics
+ * endpoint cannot provide: `latest_period_average` there is the *overall*
+ * average restated, not a per-period figure, so it cannot form a series.
+ *
+ * `average` is `number | null`. Null means the period has recorded grades but no
+ * score on any of them, which is a gap in the record rather than a zero.
+ */
+export interface AcademicTrendPeriod {
+  period_id: string
+  period: string
+  order: number
+  average: number | null
+  grade_count: number
+}
+
+export interface AcademicTrend {
+  student_id: string
+  has_data: boolean
+  periods: AcademicTrendPeriod[]
+}
+
+/** Per-day attendance counts for one student, ascending by date. */
+export interface AttendanceTrendDay {
+  date: string
+  present: number
+  late: number
+  absent: number
+  total: number
+}
+
+export interface AttendanceTrend {
+  student_id?: string
+  has_data?: boolean
+  days: AttendanceTrendDay[]
+}
+
+export function useStudentAcademicTrend(studentId: string | null) {
+  return useQuery<AcademicTrend, Error>({
+    queryKey: ["analytics", "student-academic-trend", studentId],
+    enabled: Boolean(studentId),
+    queryFn: async () => {
+      const { data } = await apiClient.get<{
+        status: string
+        data: AcademicTrend
+      }>(`/analytics/students/${studentId ?? ""}/academic-trend/`)
+      return data.data
+    },
+  })
+}
+
+export function useStudentAttendanceTrend(
+  studentId: string | null,
+  range?: { from?: string; to?: string }
+) {
+  return useQuery<AttendanceTrend, Error>({
+    queryKey: [
+      "analytics",
+      "student-attendance-trend",
+      studentId,
+      range?.from ?? "",
+      range?.to ?? "",
+    ],
+    enabled: Boolean(studentId),
+    queryFn: async () => {
+      const params = new URLSearchParams()
+      if (range?.from) params.set("date_from", range.from)
+      if (range?.to) params.set("date_to", range.to)
+      const query = params.toString()
+      const { data } = await apiClient.get<{
+        status: string
+        data: AttendanceTrend
+      }>(
+        `/analytics/students/${studentId ?? ""}/attendance-trend/${
+          query ? `?${query}` : ""
+        }`
+      )
+      return data.data
+    },
+  })
+}
+
+/** Per-period averages across the school. Staff or administrator. */
+export function useSchoolWideAcademicTrend(academicYearId?: string | null) {
+  return useQuery<{ periods: AcademicTrendPeriod[] }, Error>({
+    queryKey: ["analytics", "school-wide-academic-trend", academicYearId ?? ""],
+    queryFn: async () => {
+      const { data } = await apiClient.get<{
+        status: string
+        data: { periods: AcademicTrendPeriod[] }
+      }>(
+        `/analytics/academic-trend/${
+          academicYearId ? `?academic_year=${academicYearId}` : ""
+        }`
+      )
+      return data.data
+    },
+  })
+}
+
+/** Per-day attendance counts across the school. Administrator only. */
+export function useSchoolWideAttendanceTrend(range?: {
+  from?: string
+  to?: string
+}) {
+  return useQuery<AttendanceTrend, Error>({
+    queryKey: [
+      "analytics",
+      "school-wide-attendance-trend",
+      range?.from ?? "",
+      range?.to ?? "",
+    ],
+    queryFn: async () => {
+      const params = new URLSearchParams()
+      if (range?.from) params.set("date_from", range.from)
+      if (range?.to) params.set("date_to", range.to)
+      const query = params.toString()
+      const { data } = await apiClient.get<{
+        status: string
+        data: AttendanceTrend
+      }>(`/analytics/attendance-trend/${query ? `?${query}` : ""}`)
+      return data.data
+    },
+  })
+}
+
 /** The grading periods, in academic order. */
 export function useGradingPeriodOrder() {
   const { list } = useAdminResource<GradingPeriod>({
@@ -1084,9 +1216,7 @@ export function cmsResourceFilePath(documentId: string): string {
  * Rejects with the normalized API error so the caller can show it; a failed
  * download never becomes a silent success.
  */
-export async function downloadCmsResource(
-  documentId: string
-): Promise<void> {
+export async function downloadCmsResource(documentId: string): Promise<void> {
   const response = await apiClient.get(cmsResourceFilePath(documentId), {
     responseType: "blob",
   })

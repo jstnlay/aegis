@@ -1,4 +1,13 @@
-import { Legend, Line, LineChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
+import {
+  Legend,
+  Line,
+  LineChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts"
 
 import {
   ChartCard,
@@ -120,7 +129,10 @@ export function SubjectTrendChart({
             .join(". ")}`}
         >
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={points} margin={{ top: 8, right: 8, bottom: 8, left: 0 }}>
+            <LineChart
+              data={points}
+              margin={{ top: 8, right: 8, bottom: 8, left: 0 }}
+            >
               <CartesianGrid
                 vertical={false}
                 stroke={GRID_COLOR}

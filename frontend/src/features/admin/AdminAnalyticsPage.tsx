@@ -9,12 +9,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { ChartState } from "@/components/charts/ChartCard"
 import { GradeLevelPerformanceChart } from "@/components/charts/GradeLevelPerformanceChart"
+import { RiskDistributionChart } from "@/components/charts/RiskDistributionChart"
+import { RoleDistributionChart } from "@/components/charts/RoleDistributionChart"
 import { SectionPerformanceChart } from "@/components/charts/SectionPerformanceChart"
 import { SubjectTrendChart } from "@/components/charts/SubjectTrendChart"
+import {
+  AcademicTrendChart,
+  AttendanceTrendChart,
+} from "@/components/charts/TrendCharts"
 import { Label } from "@/components/ui/label"
 import {
   useGradingPeriodOrder,
+  useSchoolWideAttendanceTrend,
   useSchoolWideMetrics,
   useSectionPerformance,
   useSections,
@@ -42,6 +50,7 @@ export function AdminAnalyticsPage() {
   const periodOrder = useGradingPeriodOrder()
   const { list: sectionsQuery } = useSections()
   const sectionQuery = useSectionPerformance(sectionId || null)
+  const attendanceTrendQuery = useSchoolWideAttendanceTrend()
 
   return (
     <div className="space-y-6">
@@ -84,7 +93,28 @@ export function AdminAnalyticsPage() {
       */}
       <GradeLevelPerformanceChart />
 
+      <AcademicTrendChart />
+
       <SubjectTrendChart periodOrder={periodOrder} />
+
+      {/*
+        The attendance trend is administrator-only, so it carries its own query
+        state rather than being folded into a shared fetch. Loading and failure
+        are handled here because the chart component is handed finished rows.
+      */}
+      <ChartState
+        isLoading={attendanceTrendQuery.isLoading}
+        error={attendanceTrendQuery.isError ? attendanceTrendQuery.error : null}
+        loadingLabel="Loading attendance trend"
+        isEmpty={false}
+        emptyMessage="No attendance has been recorded yet."
+      >
+        <AttendanceTrendChart days={attendanceTrendQuery.data?.days ?? []} />
+      </ChartState>
+
+      <RiskDistributionChart />
+
+      <RoleDistributionChart />
 
       <Card>
         <CardContent className="space-y-4 pt-6">
@@ -126,4 +156,3 @@ function MetricCard({ label, value }: { label: string; value: string }) {
     </Card>
   )
 }
-

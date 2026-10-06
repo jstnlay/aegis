@@ -313,8 +313,7 @@ describe("CMS resource download", () => {
     mockedGet.mockResolvedValueOnce({
       data: new Blob(["bytes"]),
       headers: {
-        "content-disposition":
-          "attachment; filename*=UTF-8''handbook.pdf",
+        "content-disposition": "attachment; filename*=UTF-8''handbook.pdf",
       },
     } as never)
 
@@ -413,4 +412,3 @@ describe("CMS resource download", () => {
     vi.restoreAllMocks()
   })
 })
-

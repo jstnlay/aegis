@@ -11,6 +11,29 @@ urlpatterns = [
         views.StudentMetricsView.as_view(),
         name="analytics-student-metrics",
     ),
+    # PH11.10: real per-period academic and per-day attendance trends. The
+    # metrics endpoint cannot supply either — its latest_period_average is the
+    # overall average restated, and the attendance summary has no date axis.
+    path(
+        "students/<uuid:student_id>/academic-trend/",
+        views.StudentAcademicTrendView.as_view(),
+        name="analytics-student-academic-trend",
+    ),
+    path(
+        "students/<uuid:student_id>/attendance-trend/",
+        views.StudentAttendanceTrendView.as_view(),
+        name="analytics-student-attendance-trend",
+    ),
+    path(
+        "academic-trend/",
+        views.SchoolWideAcademicTrendView.as_view(),
+        name="analytics-school-wide-academic-trend",
+    ),
+    path(
+        "attendance-trend/",
+        views.SchoolWideAttendanceTrendView.as_view(),
+        name="analytics-school-wide-attendance-trend",
+    ),
     path(
         "sections/<uuid:section_id>/performance/",
         views.SectionPerformanceView.as_view(),

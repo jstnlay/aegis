@@ -131,6 +131,187 @@ class GradeLevelComparisonView(StaffAnalyticsView):
         return Response({"status": "ok", "data": result})
 
 
+class _StudentScopedAnalyticsView(BaseAnalyticsView):
+    """
+    Shared authorization for a per-student analytics view.
+
+    PH11.10. Extracted from `StudentMetricsView` rather than repeated, because
+    the two new student-scoped trends (academic, attendance) must resolve exactly
+    the same question "may this caller read this student?" and a copy of the
+    ladder in three places would be three chances to diverge.
+
+    The ladder is the one `StudentMetricsView` already enforced:
+      student -> own record
+      parent  -> a linked child
+      faculty -> an advisory-section or subject-assignment scope
+      guidance / admin -> any student
+    """
+
+    def _authorized(self, student_id):
+        """
+        Resolve the student and decide whether this caller may read them.
+
+        Returns a `(student_profile, denial_response)` pair: exactly one is
+        meaningful. Returning the response rather than raising keeps the refusal
+        identical to the one `StudentMetricsView` already sends, so a client
+        cannot tell the two apart from the body alone.
+        """
+        from django.shortcuts import get_object_or_404
+
+        from apps.accounts.models import StudentProfile
+
+        student_obj = get_object_or_404(StudentProfile, pk=student_id)
+        user = self.request.user
+
+        allowed = True
+        if user.role == "student":
+            allowed = user.student_profile.id == student_obj.id
+        elif user.role == "parent":
+            from apps.accounts.models import ParentStudentLink
+
+            allowed = ParentStudentLink.objects.filter(
+                parent=user.parent_profile, student=student_obj
+            ).exists()
+        elif user.role == "faculty":
+            allowed = self._faculty_has_scope(user, student_obj)
+
+        if not allowed:
+            return None, Response(
+                {"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN
+            )
+        return student_obj, None
+
+    @staticmethod
+    def _faculty_has_scope(user, student_obj) -> bool:
+        """Adviser of the student's section, or teaches that student."""
+        is_adviser = (
+            user.faculty_profile.is_adviser
+            and student_obj.section_id is not None
+            and user.faculty_profile.advisory_section_id == student_obj.section_id
+        )
+        if is_adviser:
+            return True
+
+        from apps.academics.models import SubjectAssignment
+
+        return SubjectAssignment.objects.filter(
+            faculty=user.faculty_profile, section=student_obj.section
+        ).exists()
+
+
+class StudentAcademicTrendView(_StudentScopedAnalyticsView):
+    """
+    GET /api/v1/analytics/students/{id}/academic-trend/
+
+    PH11.10. Real per-grading-period averages for one student.
+
+    `StudentMetricsView` cannot serve a trend: its `latest_period_average` is
+    derived from the same overall average, so it reports one figure twice rather
+    than two periods. This returns genuine per-period averages, ordered by
+    `GradingPeriod.order`.
+    """
+
+    def get(self, request, student_id):
+        student, denial = self._authorized(student_id)
+        if denial is not None:
+            return denial
+        return Response(
+            {"status": "ok", "data": services.student_period_trend(student)}
+        )
+
+
+class StudentAttendanceTrendView(_StudentScopedAnalyticsView):
+    """
+    GET /api/v1/analytics/students/{id}/attendance-trend/
+
+    PH11.10. Per-day present / late / absent counts for one student, ascending
+    by date. Optional `date_from` / `date_to` bound the range; omitted, the full
+    history is returned.
+    """
+
+    def get(self, request, student_id):
+        student, denial = self._authorized(student_id)
+        if denial is not None:
+            return denial
+
+        from_date, to_date = _optional_date_range(request)
+
+        return Response(
+            {
+                "status": "ok",
+                "data": services.student_attendance_trend(
+                    student, from_date=from_date, to_date=to_date
+                ),
+            }
+        )
+
+
+def _optional_date_range(request):
+    """Read `date_from` / `date_to`, ignoring a value that is not a date.
+
+    A malformed bound is dropped rather than 400ing: the range is a convenience
+    filter on a read-only aggregate, and refusing the whole request over it would
+    be a worse failure than returning a slightly wider range.
+    """
+    from datetime import date as date_cls
+
+    def parse(name):
+        raw = request.query_params.get(name)
+        if not raw:
+            return None
+        try:
+            return date_cls.fromisoformat(raw)
+        except ValueError:
+            return None
+
+    return parse("date_from"), parse("date_to")
+
+
+class SchoolWideAcademicTrendView(StaffAnalyticsView):
+    """
+    GET /api/v1/analytics/academic-trend/
+
+    PH11.10. Per-grading-period averages across the school, for the school-wide
+    academic-performance visual reports. Optional `academic_year` narrows it.
+    Aggregate only: no student is identified.
+    """
+
+    def get(self, request):
+        academic_year_id = request.query_params.get("academic_year")
+        return Response(
+            {
+                "status": "ok",
+                "data": services.school_wide_period_trend(academic_year_id),
+            }
+        )
+
+
+class SchoolWideAttendanceTrendView(APIView):
+    """
+    GET /api/v1/analytics/attendance-trend/
+
+    PH11.10. Per-day present / late / absent counts across the school.
+
+    Administrator-only, matching `/analytics/school-wide/` and
+    `/analytics/risk-distribution/`. Aggregate counts only, so NFR-010's
+    anonymisation requirement is met by the shape of the data rather than by a
+    display-layer decision.
+    """
+
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        from_date, to_date = _optional_date_range(request)
+        return Response(
+            {
+                "status": "ok",
+                "data": services.school_wide_attendance_trend(
+                    from_date=from_date, to_date=to_date
+                ),
+            }
+        )
+
+
 class SubjectTrendsView(StaffAnalyticsView):
     """Subject performance trends."""
 

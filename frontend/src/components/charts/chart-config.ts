@@ -82,7 +82,10 @@ export function chartColor(index: number): string {
   const tokenName = token.startsWith("var(")
     ? token.slice(4, token.indexOf(")"))
     : token
-  return resolveToken(tokenName, FALLBACK_CHART_COLORS[index % FALLBACK_CHART_COLORS.length]!)
+  return resolveToken(
+    tokenName,
+    FALLBACK_CHART_COLORS[index % FALLBACK_CHART_COLORS.length]!
+  )
 }
 
 /**
@@ -106,9 +109,7 @@ export function formatPercentValue(value: number | null | undefined): string {
 }
 
 /** Counts for a tooltip. */
-export function formatCountValue(
-  value: number | null | undefined
-): string {
+export function formatCountValue(value: number | null | undefined): string {
   if (value === null || value === undefined || !Number.isFinite(value)) {
     return "No data"
   }

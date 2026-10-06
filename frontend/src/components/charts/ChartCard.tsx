@@ -37,6 +37,11 @@ interface ChartStateProps {
  *
  * An error wins over everything, including loading: if a request has already
  * failed there is nothing left to wait for.
+ *
+ * A child may be omitted. That is for the case where the data fetch lives
+ * outside the chart — for example an administrator-only endpoint queried by the
+ * page — so the state handling can wrap a chart that is handed finished rows
+ * rather than fetching for itself.
  */
 export function ChartState({
   isLoading,
@@ -45,7 +50,7 @@ export function ChartState({
   isEmpty,
   emptyMessage,
   children,
-}: ChartStateProps & { children: ReactNode }) {
+}: ChartStateProps & { children?: ReactNode }) {
   if (error) return <ErrorNote message={normalizeApiError(error).message} />
   if (isLoading) return <LoadingState label={loadingLabel} />
   if (isEmpty) return <ChartEmptyState message={emptyMessage} />
@@ -126,12 +131,7 @@ export function ChartFrame({
   children: ReactNode
 }) {
   return (
-    <div
-      role="img"
-      aria-label={label}
-      style={{ height }}
-      className="w-full"
-    >
+    <div role="img" aria-label={label} style={{ height }} className="w-full">
       {children}
     </div>
   )

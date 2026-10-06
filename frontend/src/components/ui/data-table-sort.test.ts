@@ -81,11 +81,7 @@ describe("sortRows", () => {
     ]
     const sorted = sortRows(allMissing, { sortValue: (row) => row.score })
 
-    expect(sorted.map((row) => row.label)).toEqual([
-      "first",
-      "second",
-      "third",
-    ])
+    expect(sorted.map((row) => row.label)).toEqual(["first", "second", "third"])
   })
 
   it("breaks ties on the tie-break value", () => {
@@ -100,11 +96,7 @@ describe("sortRows", () => {
       tieBreak: (row) => row.team,
     })
 
-    expect(sorted.map((row) => row.team)).toEqual([
-      "Alpha",
-      "Charlie",
-      "Delta",
-    ])
+    expect(sorted.map((row) => row.team)).toEqual(["Alpha", "Charlie", "Delta"])
   })
 
   it("uses the tie-break only when the primary values are equal", () => {
@@ -172,7 +164,10 @@ describe("sortRows", () => {
 
 describe("nextSortState", () => {
   it("starts ascending on an unsorted column", () => {
-    expect(nextSortState(null, "name")).toEqual({ key: "name", direction: "asc" })
+    expect(nextSortState(null, "name")).toEqual({
+      key: "name",
+      direction: "asc",
+    })
   })
 
   it("flips direction on the active column", () => {
@@ -213,7 +208,9 @@ describe("ariaSortFor", () => {
   it("reports nothing for an inactive column", () => {
     // `undefined` rather than "none": aria-sort belongs only on the sorted
     // header, and "none" on every other column would be noise.
-    expect(ariaSortFor({ key: "name", direction: "asc" }, "score")).toBeUndefined()
+    expect(
+      ariaSortFor({ key: "name", direction: "asc" }, "score")
+    ).toBeUndefined()
     expect(ariaSortFor(null, "name")).toBeUndefined()
   })
 })

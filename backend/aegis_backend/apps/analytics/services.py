@@ -60,6 +60,206 @@ def student_academic_metrics(student_profile) -> dict[str, Any]:
     }
 
 
+def student_period_trend(student_profile) -> dict[str, Any]:
+    """
+    Real per-grading-period averages for one student.
+
+    PH11.10. ``student_academic_metrics`` reports a single overall average and a
+    ``latest_period_average`` that is computed from that *same* overall average —
+    it is not a per-period figure, so it cannot stand in for a trend. This
+    aggregates the actual finalized grades per period instead.
+
+    Periods are ordered by ``GradingPeriod.order``, the field the academics app
+    already orders by, rather than by name: "Second Term" sorts before "First
+    Term" alphabetically.
+
+    A period with no finalized grade is omitted rather than reported with a
+    zero average, which would assert a failing score the database does not
+    contain. A period whose grades are all recorded without a score *is*
+    reported, with ``average: None`` and ``grade_count: 0`` — that is a real gap
+    in the student's record and hiding it would be as misleading as zero-filling.
+    """
+    from apps.academics.models import Grade, GradingPeriod
+
+    rows = list(
+        Grade.objects.filter(
+            student=student_profile,
+            status="finalized",
+        )
+        .values(
+            "grading_period__id",
+            "grading_period__name",
+            "grading_period__order",
+            "score",
+        )
+        .order_by("grading_period__order")
+    )
+
+    return {
+        "student_id": str(student_profile.id),
+        "has_data": bool(rows),
+        "periods": _period_buckets(rows),
+    }
+
+
+def _period_buckets(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """
+    Collapse per-grade rows into per-period averages, ordered by `order`.
+
+    A period averages only the grades that carry a score; `grade_count` reports
+    how many did, so a caller can tell a low-scoring period from an unscored
+    one. `average` is None when nothing was scored.
+    """
+    buckets: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        bucket = buckets.setdefault(
+            row["grading_period__id"],
+            {
+                "period_id": row["grading_period__id"],
+                "period": row["grading_period__name"],
+                "order": row["grading_period__order"],
+                "scores": [],
+            },
+        )
+        if row["score"] is not None:
+            bucket["scores"].append(float(row["score"]))
+
+    return [
+        {
+            "period_id": bucket["period_id"],
+            "period": bucket["period"],
+            "order": bucket["order"],
+            "average": (
+                round(sum(bucket["scores"]) / len(bucket["scores"]), 2)
+                if bucket["scores"]
+                else None
+            ),
+            "grade_count": len(bucket["scores"]),
+        }
+        for bucket in sorted(buckets.values(), key=lambda entry: entry["order"])
+    ]
+
+
+def student_attendance_trend(
+    student_profile, from_date=None, to_date=None
+) -> dict[str, Any]:
+    """
+    Per-day present / late / absent counts for one student.
+
+    PH11.10. ``student_attendance_summary`` returns whole-period totals, so it
+    cannot plot attendance over time; ``/attendance/summary/`` returns per-section
+    counts with no date dimension at all. This aggregates the real
+    ``AttendanceRecord`` rows by date.
+
+    Days with no record are absent from ``days`` rather than being emitted with
+    zeroes. A school day on which nothing was recorded is a gap in the data, not
+    a day the student was absent, and filling it would assert an absence that
+    was never recorded.
+
+    Days are ordered ascending by date. When no range is supplied the full record
+    history is returned; the caller is responsible for bounding it.
+    """
+    from apps.attendance.models import AttendanceRecord
+
+    records = AttendanceRecord.objects.filter(student=student_profile)
+    if from_date is not None:
+        records = records.filter(date__gte=from_date)
+    if to_date is not None:
+        records = records.filter(date__lte=to_date)
+
+    buckets: dict[Any, dict[str, int]] = {}
+    for record_date, status in records.values_list("date", "status"):
+        bucket = buckets.setdefault(
+            record_date, {"present": 0, "late": 0, "absent": 0}
+        )
+        if status in bucket:
+            bucket[status] += 1
+
+    days = [
+        {
+            "date": day.isoformat(),
+            "present": counts["present"],
+            "late": counts["late"],
+            "absent": counts["absent"],
+            "total": counts["present"] + counts["late"] + counts["absent"],
+        }
+        for day, counts in sorted(buckets.items())
+    ]
+
+    return {
+        "student_id": str(student_profile.id),
+        "has_data": bool(days),
+        "days": days,
+    }
+
+
+def school_wide_period_trend(academic_year_id=None) -> dict[str, Any]:
+    """
+    Per-grading-period averages across every student.
+
+    PH11.10. The school-wide counterpart of ``student_period_trend``, for the
+    "school-wide academic performance" visual reports the specification asks for.
+    Same treatment of empty periods: reported with ``average: None``, never
+    zero-filled.
+    """
+    from apps.academics.models import Grade
+
+    filters = {"status": "finalized"}
+    if academic_year_id:
+        filters["subject_assignment__academic_year_id"] = academic_year_id
+
+    rows = list(
+        Grade.objects.filter(**filters)
+        .values(
+            "grading_period__id",
+            "grading_period__name",
+            "grading_period__order",
+            "score",
+        )
+        .order_by("grading_period__order")
+    )
+
+    return {"periods": _period_buckets(rows)}
+
+
+def school_wide_attendance_trend(from_date=None, to_date=None) -> dict[str, Any]:
+    """
+    Per-day present / late / absent counts across every student.
+
+    PH11.10. School-wide counterpart of ``student_attendance_trend``. Aggregate
+    counts only — no student is identified, which is what NFR-010 requires of an
+    administrator-facing view.
+    """
+    from apps.attendance.models import AttendanceRecord
+
+    records = AttendanceRecord.objects.all()
+    if from_date is not None:
+        records = records.filter(date__gte=from_date)
+    if to_date is not None:
+        records = records.filter(date__lte=to_date)
+
+    buckets: dict[Any, dict[str, int]] = {}
+    for record_date, status in records.values_list("date", "status"):
+        bucket = buckets.setdefault(
+            record_date, {"present": 0, "late": 0, "absent": 0}
+        )
+        if status in bucket:
+            bucket[status] += 1
+
+    days = [
+        {
+            "date": day.isoformat(),
+            "present": counts["present"],
+            "late": counts["late"],
+            "absent": counts["absent"],
+            "total": counts["present"] + counts["late"] + counts["absent"],
+        }
+        for day, counts in sorted(buckets.items())
+    ]
+
+    return {"days": days}
+
+
 def student_attendance_summary(student_profile) -> dict[str, Any]:
     """Attendance summary for a single student."""
     from apps.attendance.models import AttendanceRecord

@@ -194,10 +194,7 @@ export function DataTable<T>({
               return (
                 <TableHead
                   key={column.key}
-                  className={cn(
-                    column.headerClassName,
-                    sortable && "p-0"
-                  )}
+                  className={cn(column.headerClassName, sortable && "p-0")}
                   scope="col"
                   aria-sort={ariaSortFor(sort, column.key)}
                 >
@@ -219,10 +216,7 @@ export function DataTable<T>({
         </TableHeader>
         <TableBody>
           {rows.map((row, index) => (
-            <TableRow
-              key={rowKey(row, index)}
-              {...(rowProps?.(row) ?? {})}
-            >
+            <TableRow key={rowKey(row, index)} {...(rowProps?.(row) ?? {})}>
               {columns.map((column) => (
                 <TableCell key={column.key} className={column.cellClassName}>
                   {column.cell(row)}

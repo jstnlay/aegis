@@ -48,10 +48,7 @@ interface SortableRow<T> {
  * missing value is absence of data, not a value that is small, and burying it
  * under real records keeps it out of the top of the list either way.
  */
-export function sortRows<T>(
-  rows: readonly T[],
-  column: SortableRow<T>
-): T[] {
+export function sortRows<T>(rows: readonly T[], column: SortableRow<T>): T[] {
   const direction = 1
   return [...rows].sort((a, b) => {
     const left = normalize(column.sortValue(a))
@@ -68,11 +65,7 @@ export function sortRows<T>(
   })
 }
 
-function tieBreak<T>(
-  column: SortableRow<T>,
-  a: T,
-  b: T
-): number {
+function tieBreak<T>(column: SortableRow<T>, a: T, b: T): number {
   if (!column.tieBreak) return 0
   const left = normalize(column.tieBreak(a))
   const right = normalize(column.tieBreak(b))

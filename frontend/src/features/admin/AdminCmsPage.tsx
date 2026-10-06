@@ -266,9 +266,7 @@ function ResourcesCard() {
             disabled={download.pendingId === row.document_id}
             onClick={() => download.start(row.document_id)}
           >
-            {download.pendingId === row.document_id
-              ? "Preparing…"
-              : "Download"}
+            {download.pendingId === row.document_id ? "Preparing…" : "Download"}
           </Button>
         ) : (
           <span className="text-muted-foreground">—</span>

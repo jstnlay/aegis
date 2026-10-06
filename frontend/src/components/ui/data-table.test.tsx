@@ -637,7 +637,7 @@ describe("DataTable sorting", () => {
     )
   }
 
-function renderedNames(): (string | null | undefined)[] {
+  function renderedNames(): (string | null | undefined)[] {
     return screen
       .getAllByRole("row")
       .slice(1)
@@ -656,7 +656,7 @@ function renderedNames(): (string | null | undefined)[] {
     const onSortChange = vi.fn()
     renderSortable({ onSortChange })
 
-// Only the two columns with a sortValue render a button.
+    // Only the two columns with a sortValue render a button.
     const buttons = screen.getAllByRole("button")
     expect(buttons).toHaveLength(2)
     expect(buttons[0]).toHaveTextContent("Name")
@@ -716,7 +716,9 @@ function renderedNames(): (string | null | undefined)[] {
     renderSortable({ sort: { key: "name", direction: "desc" } })
 
     // Colour and a glyph are not the only signal.
-    expect(screen.getByRole("button", { name: /sorted descending/i })).toBeInTheDocument()
+    expect(
+      screen.getByRole("button", { name: /sorted descending/i })
+    ).toBeInTheDocument()
   })
 
   it("renders rows in the order the caller computed", () => {

@@ -7,6 +7,7 @@ import { GradeLevelPerformanceChart } from "./GradeLevelPerformanceChart"
 import { RiskDistributionChart } from "./RiskDistributionChart"
 import { RoleDistributionChart } from "./RoleDistributionChart"
 import { SubjectTrendChart } from "./SubjectTrendChart"
+import { AcademicTrendChart, AttendanceTrendChart } from "./TrendCharts"
 import {
   formatCountValue,
   formatPercentValue,
@@ -41,7 +42,9 @@ function renderChart(node: React.ReactElement) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
-  return render(<QueryClientProvider client={client}>{node}</QueryClientProvider>)
+  return render(
+    <QueryClientProvider client={client}>{node}</QueryClientProvider>
+  )
 }
 
 /**
@@ -245,14 +248,13 @@ describe("RiskDistributionChart", () => {
     renderChart(<RiskDistributionChart />)
 
     await waitFor(() => expect(mockedGet).toHaveBeenCalled())
-    const label = (await screen.findByRole("img")).getAttribute("aria-label") ?? ""
+    const label =
+      (await screen.findByRole("img")).getAttribute("aria-label") ?? ""
     expect(label).toContain("Low 3")
     expect(label).toContain("Moderate 2")
     expect(label).toContain("High 1")
     expect(label).toContain("Insufficient data 4")
-    expect(
-      screen.getByText(/have a computed risk score/i)
-    ).toBeInTheDocument()
+    expect(screen.getByText(/have a computed risk score/i)).toBeInTheDocument()
   })
 
   it("does not fabricate a fourth segment when the endpoint omits it", async () => {
@@ -268,7 +270,8 @@ describe("RiskDistributionChart", () => {
 
     renderChart(<RiskDistributionChart />)
 
-    const label = (await screen.findByRole("img")).getAttribute("aria-label") ?? ""
+    const label =
+      (await screen.findByRole("img")).getAttribute("aria-label") ?? ""
     expect(label).toContain("Low 2")
     // Zero-count segments are dropped rather than drawn as hairlines.
     expect(label).not.toContain("Moderate")
@@ -300,11 +303,7 @@ describe("RiskDistributionChart", () => {
 })
 
 describe("RoleDistributionChart", () => {
-  const user = (
-    id: string,
-    role: string,
-    isActive = true
-  ) => ({
+  const user = (id: string, role: string, isActive = true) => ({
     id,
     email: `${id}@school.edu`,
     username: id,
@@ -332,7 +331,8 @@ describe("RoleDistributionChart", () => {
 
     renderChart(<RoleDistributionChart />)
 
-    const label = (await screen.findByRole("img")).getAttribute("aria-label") ?? ""
+    const label =
+      (await screen.findByRole("img")).getAttribute("aria-label") ?? ""
     expect(label).toContain("Students 2")
     expect(label).toContain("Parents 1")
     expect(label).toContain("Faculty 1")
@@ -347,12 +347,17 @@ describe("RoleDistributionChart", () => {
   it("derives the distribution rather than using fixed figures", async () => {
     mockedFetchAllPages.mockResolvedValue({
       count: 3,
-      results: [user("s1", "student"), user("s2", "student"), user("s3", "student")],
+      results: [
+        user("s1", "student"),
+        user("s2", "student"),
+        user("s3", "student"),
+      ],
     } as never)
 
     renderChart(<RoleDistributionChart />)
 
-    const label = (await screen.findByRole("img")).getAttribute("aria-label") ?? ""
+    const label =
+      (await screen.findByRole("img")).getAttribute("aria-label") ?? ""
     expect(label).toContain("Students 3")
     expect(label).not.toContain("40%")
     expect(screen.getByText(/3 active accounts/i)).toBeInTheDocument()
@@ -371,10 +376,13 @@ describe("RoleDistributionChart", () => {
 
     renderChart(<RoleDistributionChart />)
 
-    const label = (await screen.findByRole("img")).getAttribute("aria-label") ?? ""
+    const label =
+      (await screen.findByRole("img")).getAttribute("aria-label") ?? ""
     expect(label).toContain("Students 2")
     expect(label).not.toContain("Faculty")
-    expect(screen.getByText(/2 deactivated accounts excluded/i)).toBeInTheDocument()
+    expect(
+      screen.getByText(/2 deactivated accounts excluded/i)
+    ).toBeInTheDocument()
   })
 
   it("shows the empty state when there are no accounts", async () => {
@@ -385,6 +393,164 @@ describe("RoleDistributionChart", () => {
     expect(
       await screen.findByText(/no active user accounts/i)
     ).toBeInTheDocument()
+  })
+})
+
+describe("AcademicTrendChart", () => {
+  /**
+   * This is the endpoint that exists because `/analytics/subjects/trends/`
+   * keys its periods by name and cannot supply an academic axis order.
+   */
+
+  it("draws the periods in the order the endpoint returned", async () => {
+    mockedGet.mockResolvedValue({
+      data: {
+        status: "ok",
+        data: {
+          periods: [
+            {
+              period_id: "p1",
+              period: "First Term",
+              order: 1,
+              average: 85,
+              grade_count: 40,
+            },
+            {
+              period_id: "p2",
+              period: "Second Term",
+              order: 2,
+              average: 86.5,
+              grade_count: 40,
+            },
+          ],
+        },
+      },
+    } as never)
+
+    renderChart(<AcademicTrendChart />)
+
+    const label =
+      (await screen.findByRole("img")).getAttribute("aria-label") ?? ""
+    expect(label.indexOf("First Term")).toBeLessThan(
+      label.indexOf("Second Term")
+    )
+    expect(label).toContain("85.00 out of 100")
+  })
+
+  /*
+   * A period with recorded grades but no score is a gap in the record, not a
+   * failing average. Zero-filling it would assert something the database does
+   * not contain.
+   */
+  it("plots an unscored period as a gap rather than a zero", async () => {
+    mockedGet.mockResolvedValue({
+      data: {
+        status: "ok",
+        data: {
+          periods: [
+            {
+              period_id: "p1",
+              period: "First Term",
+              order: 1,
+              average: 85,
+              grade_count: 40,
+            },
+            {
+              period_id: "p2",
+              period: "Second Term",
+              order: 2,
+              average: null,
+              grade_count: 0,
+            },
+          ],
+        },
+      },
+    } as never)
+
+    renderChart(<AcademicTrendChart />)
+
+    const label =
+      (await screen.findByRole("img")).getAttribute("aria-label") ?? ""
+    expect(label).toContain("No grades recorded")
+    // It must not be reported as a score of zero.
+    expect(label).not.toContain("0.00 out of 100")
+  })
+
+  it("shows the empty state when no period carries a score", async () => {
+    mockedGet.mockResolvedValue({
+      data: {
+        status: "ok",
+        data: {
+          periods: [
+            {
+              period_id: "p1",
+              period: "First Term",
+              order: 1,
+              average: null,
+              grade_count: 0,
+            },
+          ],
+        },
+      },
+    } as never)
+
+    renderChart(<AcademicTrendChart />)
+
+    expect(
+      await screen.findByText(/No finalized grades are recorded for any/i)
+    ).toBeInTheDocument()
+  })
+
+  it("reports a failure as a failure", async () => {
+    mockedGet.mockRejectedValue(apiFailure("Trend unavailable."))
+
+    renderChart(<AcademicTrendChart />)
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /Trend unavailable/i
+    )
+  })
+})
+
+describe("AttendanceTrendChart", () => {
+  it("plots the real per-day counts it is handed", () => {
+    renderChart(
+      <AttendanceTrendChart
+        days={[
+          { date: "2024-07-01", present: 30, late: 2, absent: 1 },
+          { date: "2024-07-02", present: 28, late: 3, absent: 2 },
+        ]}
+      />
+    )
+
+    const label = screen.getByRole("img").getAttribute("aria-label") ?? ""
+    expect(label).toContain("2024-07-01: 30 present, 2 late, 1 absent")
+    expect(label).toContain("2024-07-02: 28 present, 3 late, 2 absent")
+  })
+
+  /*
+   * The endpoint omits days with no records, so the chart must not invent
+   * zero-height bars for them: three zeros reads as a day nobody attended.
+   */
+  it("does not invent rows for days the endpoint omitted", () => {
+    renderChart(
+      <AttendanceTrendChart
+        days={[{ date: "2024-07-01", present: 30, late: 0, absent: 1 }]}
+      />
+    )
+
+    const label = screen.getByRole("img").getAttribute("aria-label") ?? ""
+    expect(label).toContain("2024-07-01")
+    expect(label).not.toContain("2024-07-02")
+  })
+
+  it("shows the empty state when no day has a record", () => {
+    renderChart(<AttendanceTrendChart days={[]} />)
+
+    expect(
+      screen.getByText(/No attendance has been recorded yet/i)
+    ).toBeInTheDocument()
+    expect(screen.queryByRole("img")).not.toBeInTheDocument()
   })
 })
 
@@ -470,7 +636,8 @@ describe("SubjectTrendChart", () => {
 
     renderChart(<SubjectTrendChart periodOrder={periodOrder.slice(0, 2)} />)
 
-    const label = (await screen.findByRole("img")).getAttribute("aria-label") ?? ""
+    const label =
+      (await screen.findByRole("img")).getAttribute("aria-label") ?? ""
     expect(label).toContain("MATH")
     expect(label).toContain("SCI")
     expect(label).toContain("80.00 out of 100")

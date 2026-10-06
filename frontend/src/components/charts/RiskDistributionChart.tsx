@@ -47,7 +47,11 @@ const SLICES: readonly {
   { key: "low", label: "Low", color: "var(--chart-2)" },
   { key: "moderate", label: "Moderate", color: "var(--chart-4)" },
   { key: "high", label: "High", color: "var(--destructive)" },
-  { key: "insufficient_data", label: "Insufficient data", color: "var(--muted-foreground)" },
+  {
+    key: "insufficient_data",
+    label: "Insufficient data",
+    color: "var(--muted-foreground)",
+  },
 ]
 
 function toSlices(distribution: {
