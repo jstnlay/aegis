@@ -95,9 +95,9 @@ export function ParentAcademicsPage() {
           gradesError={gradesQuery.isError}
           summaryRows={summaryQuery.data ?? []}
           summaryLoading={summaryQuery.isLoading}
-          summaryError={summaryQuery.isError}
           records={recordsQuery.data ?? []}
           recordsLoading={recordsQuery.isLoading}
+          recordsError={recordsQuery.isError}
           statusFilter={statusFilter}
           onStatusFilterChange={setStatusFilter}
           search={search}
@@ -181,9 +181,9 @@ function AcademicRecord({
   gradesError,
   summaryRows,
   summaryLoading,
-  summaryError,
   records,
   recordsLoading,
+  recordsError,
   statusFilter,
   onStatusFilterChange,
   search,
@@ -200,7 +200,6 @@ function AcademicRecord({
     total_records: number
   }>
   summaryLoading: boolean
-  summaryError: boolean
   records: readonly {
     id: string
     date: string
@@ -208,6 +207,7 @@ function AcademicRecord({
     section_name: string
   }[]
   recordsLoading: boolean
+  recordsError: boolean
   statusFilter: string
   onStatusFilterChange: (value: string) => void
   search: string
@@ -220,6 +220,13 @@ function AcademicRecord({
         withScores.length
       : null
 
+  /*
+   * The summary query drives this card only. It is deliberately kept separate
+   * from the record query: PH11.10 fixed a defect where the record table was
+   * handed the *summary* error, so a failed record request rendered as
+   * "No attendance has been recorded yet." — an empty-success state asserting
+   * something the API never said.
+   */
   const present = summaryRows.reduce((s, r) => s + r.present_count, 0)
   const late = summaryRows.reduce((s, r) => s + r.late_count, 0)
   const absent = summaryRows.reduce((s, r) => s + r.absent_count, 0)
@@ -257,12 +264,18 @@ function AcademicRecord({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {summaryLoading ? "—" : formatPercent(attendanceRate, 1)}
+              {summaryLoading
+                ? "—"
+                : summaryRows.length === 0
+                  ? "—"
+                  : formatPercent(attendanceRate, 1)}
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
               {summaryLoading
                 ? "Loading…"
-                : `${present} present · ${late} late · ${absent} absent`}
+                : summaryRows.length === 0
+                  ? "No attendance summary available"
+                  : `${present} present · ${late} late · ${absent} absent`}
             </p>
           </CardContent>
         </Card>
@@ -339,7 +352,7 @@ function AcademicRecord({
               statusFilter={statusFilter}
               isLoading={recordsLoading}
               error={
-                summaryError
+                recordsError
                   ? "Unable to load attendance records. Please try again."
                   : null
               }

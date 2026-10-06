@@ -6,7 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { apiClient } from "@/lib/api"
 import { fetchAllPages } from "@/lib/pagination"
 import {
-  cmsResourceFileUrl,
+  cmsResourceFilePath,
+  downloadCmsResource,
   filenameFromDisposition,
   useAdminAttendanceSummary,
   useAdminGrades,
@@ -282,22 +283,134 @@ describe("export filename parsing", () => {
   })
 })
 
-describe("CMS resource file link", () => {
+describe("CMS resource download", () => {
   /**
    * SEC-007: the file is proxied through AEGIS under the caller's own access
    * rules. Pointing at the Strapi URL instead would bypass that entirely.
    */
-  it("builds the authorized proxy path, not a Strapi URL", () => {
-    const url = cmsResourceFileUrl("doc-123")
+  it("addresses the authorized proxy path, not a Strapi URL", () => {
+    const path = cmsResourceFilePath("doc-123")
 
-    expect(url).toBe("/api/v1/cms/resources/doc-123/file/")
-    expect(url).not.toContain("strapi")
-    expect(url).not.toContain("http")
+    expect(path).toBe("/cms/resources/doc-123/file/")
+    expect(path).not.toContain("strapi")
+    expect(path).not.toContain("http")
   })
 
   it("escapes the document id so a crafted value cannot escape the path", () => {
-    expect(cmsResourceFileUrl("a/b?x=1")).toBe(
-      "/api/v1/cms/resources/a%2Fb%3Fx%3D1/file/"
+    expect(cmsResourceFilePath("a/b?x=1")).toBe(
+      "/cms/resources/a%2Fb%3Fx%3D1/file/"
     )
   })
+
+  /*
+   * PH11.10 regression. The download used to be an `<a href>` at this route.
+   * Authentication in this app is a bearer token injected by the axios request
+   * interceptor, and a native anchor sends no such header, so the SEC-007 proxy
+   * answered 401. These assertions pin that the request goes through the API
+   * client (where the token and the refresh path live) and asks for a blob.
+   */
+  it("requests the file through the API client so the bearer token is sent", async () => {
+    mockedGet.mockResolvedValueOnce({
+      data: new Blob(["bytes"]),
+      headers: {
+        "content-disposition":
+          "attachment; filename*=UTF-8''handbook.pdf",
+      },
+    } as never)
+
+    await downloadCmsResource("doc-123")
+
+    expect(mockedGet).toHaveBeenCalledTimes(1)
+    const call = mockedGet.mock.calls[0]!
+    const [path, config] = call
+    expect(path).toBe("/cms/resources/doc-123/file/")
+    expect(config).toMatchObject({ responseType: "blob" })
+  })
+
+  it("hands the bytes to the browser under the server's filename", async () => {
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:mock")
+    const revokeObjectURL = vi
+      .spyOn(URL, "revokeObjectURL")
+      .mockImplementation(() => {})
+    const clicked: HTMLAnchorElement[] = []
+    const originalCreate = document.createElement.bind(document)
+    vi.spyOn(document, "createElement").mockImplementation((tag: string) => {
+      const element = originalCreate(tag)
+      if (tag === "a") {
+        element.addEventListener("click", (event) => {
+          event.preventDefault()
+          clicked.push(element as HTMLAnchorElement)
+        })
+      }
+      return element
+    })
+
+    mockedGet.mockResolvedValueOnce({
+      data: new Blob(["bytes"]),
+      headers: {
+        "content-disposition": "attachment; filename*=UTF-8''handbook.pdf",
+      },
+    } as never)
+
+    await downloadCmsResource("doc-123")
+
+    expect(clicked).toHaveLength(1)
+    expect(clicked[0]!.download).toBe("handbook.pdf")
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:mock")
+
+    vi.restoreAllMocks()
+  })
+
+  it("falls back to a generic filename when the header is absent", async () => {
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:mock")
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {})
+    const originalCreate = document.createElement.bind(document)
+    const clicked: HTMLAnchorElement[] = []
+    vi.spyOn(document, "createElement").mockImplementation((tag: string) => {
+      const element = originalCreate(tag)
+      if (tag === "a") {
+        element.addEventListener("click", (event) => {
+          event.preventDefault()
+          clicked.push(element as HTMLAnchorElement)
+        })
+      }
+      return element
+    })
+
+    mockedGet.mockResolvedValueOnce({
+      data: new Blob(["bytes"]),
+      headers: {},
+    } as never)
+
+    await downloadCmsResource("doc-123")
+
+    expect(clicked[0]!.download).toBe("aegis-resource")
+
+    vi.restoreAllMocks()
+  })
+
+  it("propagates a failure rather than reporting a silent success", async () => {
+    const createObjectURL = vi.spyOn(URL, "createObjectURL")
+    const failure = Object.assign(new Error("Request failed"), {
+      isAxiosError: true,
+      response: {
+        status: 401,
+        data: {
+          success: false,
+          error: {
+            code: "AUTHENTICATION_REQUIRED",
+            message: "Authentication credentials were not provided.",
+          },
+        },
+      },
+    })
+    mockedGet.mockRejectedValueOnce(failure)
+
+    await expect(downloadCmsResource("doc-123")).rejects.toThrow()
+    // Nothing reached the browser: a failed download must not look successful.
+    expect(createObjectURL).not.toHaveBeenCalled()
+
+    vi.restoreAllMocks()
+  })
 })
+

@@ -13,9 +13,10 @@ from apps.audit.hooks import audit_successful_logout
 from core.permissions import IsAdminUser
 from core.throttling import LoginRateThrottle, TokenRefreshRateThrottle
 
-from .models import User
+from .models import FacultyProfile, User
 from .serializers import (
     AegisTokenObtainPairSerializer,
+    FacultyProfileListSerializer,
     LogoutSerializer,
     PasswordChangeSerializer,
     UserSerializer,
@@ -96,6 +97,29 @@ class UserListView(generics.ListAPIView):
     queryset = User.objects.all()
     serializer_class = UserSerializer
     permission_classes = [IsAdminUser]
+
+
+class FacultyProfileListView(generics.ListAPIView):
+    """
+    GET /api/v1/accounts/faculty-profiles/ - administrator faculty roster.
+
+    PH11.10. `SubjectAssignment.faculty` is required by the serializer and the
+    academic structure screen has to be able to populate it, but no
+    administrator-facing route listed faculty before this one.
+
+    Ordered by surname then forename so the picker is stable between loads
+    rather than following primary-key insertion order. Read-only and
+    administrator-only, matching `UserListView`.
+    """
+
+    serializer_class = FacultyProfileListSerializer
+    permission_classes = [IsAdminUser]
+
+    def get_queryset(self):
+        return (
+            FacultyProfile.objects.select_related("user")
+            .order_by("user__last_name", "user__first_name", "employee_id")
+        )
 
 
 class UserDetailView(generics.RetrieveAPIView):

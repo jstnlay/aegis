@@ -360,12 +360,12 @@ function FacultyAttendance() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Status</Label>
+                <Label htmlFor="attendance-status">Status</Label>
                 <Select
                   value={status}
                   onValueChange={(v) => setStatus(v as AttendanceStatus)}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id="attendance-status">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>

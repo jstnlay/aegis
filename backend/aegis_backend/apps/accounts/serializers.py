@@ -5,7 +5,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from apps.audit.hooks import audit_successful_login
 
-from .models import User
+from .models import FacultyProfile, User
 
 
 class AegisTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -92,6 +92,33 @@ class UserCreateSerializer(serializers.ModelSerializer):
         user.set_password(password)
         user.save()
         return user
+
+
+class FacultyProfileListSerializer(serializers.ModelSerializer):
+    """
+    Read-only faculty roster for GET /api/v1/accounts/faculty-profiles/.
+
+    PH11.10: `SubjectAssignment.faculty` is a required foreign key, but until
+    now no administrator-facing route listed `FacultyProfile`, so the academic
+    structure screen could not populate the picker and every assignment create
+    was rejected with a 400 on a field the form did not offer.
+
+    Only what a picker needs is exposed: the profile id (the foreign key
+    value), the display name and the employee id. No email, no phone number, no
+    address — this is a teaching-assignment roster, not a personnel record, and
+    NFR-010 keeps identifiable student data out of administrator views by the
+    same reasoning applied here to staff.
+    """
+
+    name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = FacultyProfile
+        fields = ("id", "name", "employee_id")
+        read_only_fields = ("id", "name", "employee_id")
+
+    def get_name(self, obj) -> str:
+        return obj.user.get_full_name()
 
 
 class LogoutSerializer(serializers.Serializer):

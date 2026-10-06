@@ -26,6 +26,7 @@ import {
   useEnrollments,
   useGradeLevels,
   useGradingPeriods,
+  useFacultyProfiles,
   useSections,
   useSubjects,
   useSubjectAssignments,
@@ -37,7 +38,7 @@ import {
   type Subject,
   type SubjectAssignment,
 } from "@/features/admin/api"
-import { normalizeApiError } from "@/lib/error"
+import { getFieldErrors, normalizeApiError } from "@/lib/error"
 
 /**
  * Academic structure administration.
@@ -156,6 +157,7 @@ function DeleteButton({
 function AcademicYearsCard() {
   const { list, create, remove } = useAcademicYears()
   const [form, setForm] = useState({ name: "", start_date: "", end_date: "" })
+  const fieldErrors = useFieldErrors(create.error)
   const canSubmit =
     form.name.trim() !== "" && form.start_date !== "" && form.end_date !== ""
 
@@ -220,40 +222,35 @@ function AcademicYearsCard() {
           }}
         >
           <div className="grid gap-3 sm:grid-cols-3">
-            <Field label="Name" id="new-year-name">
-              {(value, onChange) => (
-                <Input
-                  id="new-year-name"
-                  value={value}
-                  placeholder="SY 2026-2027"
-                  onChange={(e) => onChange(e.target.value)}
-                />
-              )}
-            </Field>
-            <Field label="Start date" id="new-year-start">
-              {(value, onChange) => (
-                <Input
-                  id="new-year-start"
-                  type="date"
-                  value={value}
-                  onChange={(e) => onChange(e.target.value)}
-                />
-              )}
-            </Field>
-            <Field label="End date" id="new-year-end">
-              {(value, onChange) => (
-                <Input
-                  id="new-year-end"
-                  type="date"
-                  value={value}
-                  onChange={(e) => onChange(e.target.value)}
-                />
-              )}
-            </Field>
+            <Field
+              label="Name"
+              id="new-year-name"
+              required
+              placeholder="SY 2026-2027"
+              value={form.name}
+              error={fieldErrors.name}
+              onChange={(name) => setForm({ ...form, name })}
+            />
+            <Field
+              label="Start date"
+              id="new-year-start"
+              type="date"
+              required
+              value={form.start_date}
+              error={fieldErrors.start_date}
+              onChange={(start_date) => setForm({ ...form, start_date })}
+            />
+            <Field
+              label="End date"
+              id="new-year-end"
+              type="date"
+              required
+              value={form.end_date}
+              error={fieldErrors.end_date}
+              onChange={(end_date) => setForm({ ...form, end_date })}
+            />
           </div>
-          {create.isError ? (
-            <ErrorNote message={normalizeApiError(create.error).message} />
-          ) : null}
+          <CreateError error={create.error} fieldErrors={fieldErrors} />
           <Button type="submit" disabled={!canSubmit || create.isPending}>
             {create.isPending ? "Saving…" : "Create academic year"}
           </Button>
@@ -277,6 +274,7 @@ function AcademicYearsCard() {
 function GradeLevelsCard() {
   const { list, create, remove } = useGradeLevels()
   const [form, setForm] = useState({ name: "", level_number: "" })
+  const fieldErrors = useFieldErrors(create.error)
   const canSubmit = form.name.trim() !== "" && form.level_number !== ""
 
   const columns: readonly DataTableColumn<GradeLevel>[] = [
@@ -326,30 +324,27 @@ function GradeLevelsCard() {
           }}
         >
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Name" id="new-level-name">
-              {(value, onChange) => (
-                <Input
-                  id="new-level-name"
-                  value={value}
-                  placeholder="Grade 8"
-                  onChange={(e) => onChange(e.target.value)}
-                />
-              )}
-            </Field>
-            <Field label="Level number" id="new-level-number">
-              {(value, onChange) => (
-                <Input
-                  id="new-level-number"
-                  type="number"
-                  value={value}
-                  onChange={(e) => onChange(e.target.value)}
-                />
-              )}
-            </Field>
+            <Field
+              label="Name"
+              id="new-level-name"
+              required
+              placeholder="Grade 8"
+              value={form.name}
+              error={fieldErrors.name}
+              onChange={(name) => setForm({ ...form, name })}
+            />
+            <Field
+              label="Level number"
+              id="new-level-number"
+              type="number"
+              required
+              min={1}
+              value={form.level_number}
+              error={fieldErrors.level_number}
+              onChange={(level_number) => setForm({ ...form, level_number })}
+            />
           </div>
-          {create.isError ? (
-            <ErrorNote message={normalizeApiError(create.error).message} />
-          ) : null}
+          <CreateError error={create.error} fieldErrors={fieldErrors} />
           <Button type="submit" disabled={!canSubmit || create.isPending}>
             {create.isPending ? "Saving…" : "Create grade level"}
           </Button>
@@ -374,19 +369,17 @@ function SectionsCard() {
   const { list, create, remove } = useSections()
   const { list: levels } = useGradeLevels()
   const { list: years } = useAcademicYears()
-  const { list: assignments } = useSubjectAssignments()
+  const facultyRoster = useFacultyProfiles()
 
   /*
-   * `SubjectAssignment` is the only endpoint that exposes FacultyProfile UUIDs
-   * to an administrator — its `faculty` field — so the adviser picker is built
-   * from the assignments already loaded rather than from a guidance-staff
-   * endpoint that does not exist for this audience.
+   * The adviser picker reads the same administrator-only roster as the
+   * subject-assignment picker, so both name every faculty member rather than
+   * only those already teaching an existing assignment.
    */
-  const faculty = Array.from(
-    new Map(
-      (assignments.data ?? []).map((a) => [a.faculty, a.faculty_name])
-    ).entries()
-  ).map(([id, name]) => ({ value: id, label: name }))
+  const faculty = (facultyRoster.data ?? []).map((profile) => ({
+    value: profile.id,
+    label: `${profile.name} (${profile.employee_id})`,
+  }))
 
   const [form, setForm] = useState({
     name: "",
@@ -394,6 +387,7 @@ function SectionsCard() {
     academic_year: "",
     adviser: "",
   })
+  const fieldErrors = useFieldErrors(create.error)
   const canSubmit =
     form.name.trim() !== "" &&
     form.grade_level !== "" &&
@@ -465,20 +459,21 @@ function SectionsCard() {
           }}
         >
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Field label="Name" id="new-section-name">
-              {(value, onChange) => (
-                <Input
-                  id="new-section-name"
-                  value={value}
-                  placeholder="Bonifacio"
-                  onChange={(e) => onChange(e.target.value)}
-                />
-              )}
-            </Field>
+            <Field
+              label="Name"
+              id="new-section-name"
+              required
+              placeholder="Bonifacio"
+              value={form.name}
+              error={fieldErrors.name}
+              onChange={(name) => setForm({ ...form, name })}
+            />
             <ChoiceField
               label="Grade level"
               id="new-section-grade"
+              required
               value={form.grade_level}
+              error={fieldErrors.grade_level}
               onChange={(value) => setForm({ ...form, grade_level: value })}
               options={(levels.data ?? []).map((level) => ({
                 value: level.id,
@@ -488,7 +483,9 @@ function SectionsCard() {
             <ChoiceField
               label="Academic year"
               id="new-section-year"
+              required
               value={form.academic_year}
+              error={fieldErrors.academic_year}
               onChange={(value) => setForm({ ...form, academic_year: value })}
               options={(years.data ?? []).map((year) => ({
                 value: year.id,
@@ -499,15 +496,20 @@ function SectionsCard() {
               label="Adviser"
               id="new-section-adviser"
               value={form.adviser}
+              error={fieldErrors.adviser}
               onChange={(value) => setForm({ ...form, adviser: value })}
               options={faculty}
               optional
-              emptyLabel="No faculty available"
+              emptyLabel={
+                facultyRoster.isLoading
+                  ? "Loading faculty…"
+                  : facultyRoster.isError
+                    ? "Faculty could not be loaded."
+                    : "No faculty accounts exist yet."
+              }
             />
           </div>
-          {create.isError ? (
-            <ErrorNote message={normalizeApiError(create.error).message} />
-          ) : null}
+          <CreateError error={create.error} fieldErrors={fieldErrors} />
           <Button type="submit" disabled={!canSubmit || create.isPending}>
             {create.isPending ? "Saving…" : "Create section"}
           </Button>
@@ -532,6 +534,7 @@ function SubjectsCard() {
   const { list, create, remove } = useSubjects()
   const { list: levels } = useGradeLevels()
   const [form, setForm] = useState({ name: "", code: "", grade_level: "" })
+  const fieldErrors = useFieldErrors(create.error)
   const canSubmit =
     form.name.trim() !== "" &&
     form.code.trim() !== "" &&
@@ -593,30 +596,30 @@ function SubjectsCard() {
           }}
         >
           <div className="grid gap-3 sm:grid-cols-3">
-            <Field label="Name" id="new-subject-name">
-              {(value, onChange) => (
-                <Input
-                  id="new-subject-name"
-                  value={value}
-                  placeholder="Mathematics"
-                  onChange={(e) => onChange(e.target.value)}
-                />
-              )}
-            </Field>
-            <Field label="Code" id="new-subject-code">
-              {(value, onChange) => (
-                <Input
-                  id="new-subject-code"
-                  value={value}
-                  placeholder="MATH-8"
-                  onChange={(e) => onChange(e.target.value)}
-                />
-              )}
-            </Field>
+            <Field
+              label="Name"
+              id="new-subject-name"
+              required
+              placeholder="Mathematics"
+              value={form.name}
+              error={fieldErrors.name}
+              onChange={(name) => setForm({ ...form, name })}
+            />
+            <Field
+              label="Code"
+              id="new-subject-code"
+              required
+              placeholder="MATH-8"
+              value={form.code}
+              error={fieldErrors.code}
+              onChange={(code) => setForm({ ...form, code })}
+            />
             <ChoiceField
               label="Grade level"
               id="new-subject-grade"
+              required
               value={form.grade_level}
+              error={fieldErrors.grade_level}
               onChange={(value) => setForm({ ...form, grade_level: value })}
               options={(levels.data ?? []).map((level) => ({
                 value: level.id,
@@ -624,9 +627,7 @@ function SubjectsCard() {
               }))}
             />
           </div>
-          {create.isError ? (
-            <ErrorNote message={normalizeApiError(create.error).message} />
-          ) : null}
+          <CreateError error={create.error} fieldErrors={fieldErrors} />
           <Button type="submit" disabled={!canSubmit || create.isPending}>
             {create.isPending ? "Saving…" : "Create subject"}
           </Button>
@@ -652,21 +653,26 @@ function SubjectAssignmentsCard() {
   const { list: subjects } = useSubjects()
   const { list: sections } = useSections()
   const { list: years } = useAcademicYears()
+  const facultyRoster = useFacultyProfiles()
 
   /*
-   * The `faculty` field is required by `SubjectAssignmentSerializer` and is not
-   * read-only, but no administrator-facing endpoint lists FacultyProfiles. The
-   * form therefore omits it and the assignment is created without a teacher
-   * rather than offering a picker that cannot be populated. A faculty member can
-   * still be attached through the Django admin site.
+   * `SubjectAssignment.faculty` is a required foreign key. PH11.10 added
+   * GET /accounts/faculty-profiles/ (administrator-only, PH11.10 test
+   * `FacultyProfileListTest`), so the picker is populated from real faculty
+   * records rather than omitted and left to fail as a 400.
    */
   const [form, setForm] = useState({
     subject: "",
     section: "",
     academic_year: "",
+    faculty: "",
   })
+  const fieldErrors = useFieldErrors(create.error)
   const canSubmit =
-    form.subject !== "" && form.section !== "" && form.academic_year !== ""
+    form.subject !== "" &&
+    form.section !== "" &&
+    form.academic_year !== "" &&
+    form.faculty !== ""
 
   const columns: readonly DataTableColumn<SubjectAssignment>[] = [
     {
@@ -727,10 +733,16 @@ function SubjectAssignmentsCard() {
                 subject: form.subject,
                 section: form.section,
                 academic_year: form.academic_year,
+                faculty: form.faculty,
               },
               {
                 onSuccess: () =>
-                  setForm({ subject: "", section: "", academic_year: "" }),
+                  setForm({
+                    subject: "",
+                    section: "",
+                    academic_year: "",
+                    faculty: "",
+                  }),
               }
             )
           }}
@@ -739,7 +751,9 @@ function SubjectAssignmentsCard() {
             <ChoiceField
               label="Subject"
               id="new-assignment-subject"
+              required
               value={form.subject}
+              error={fieldErrors.subject}
               onChange={(value) => setForm({ ...form, subject: value })}
               options={(subjects.data ?? []).map((subject) => ({
                 value: subject.id,
@@ -749,7 +763,9 @@ function SubjectAssignmentsCard() {
             <ChoiceField
               label="Section"
               id="new-assignment-section"
+              required
               value={form.section}
+              error={fieldErrors.section}
               onChange={(value) => setForm({ ...form, section: value })}
               options={(sections.data ?? []).map((section) => ({
                 value: section.id,
@@ -759,22 +775,36 @@ function SubjectAssignmentsCard() {
             <ChoiceField
               label="Academic year"
               id="new-assignment-year"
+              required
               value={form.academic_year}
+              error={fieldErrors.academic_year}
               onChange={(value) => setForm({ ...form, academic_year: value })}
               options={(years.data ?? []).map((year) => ({
                 value: year.id,
                 label: year.name,
               }))}
             />
+            <ChoiceField
+              label="Faculty"
+              id="new-assignment-faculty"
+              required
+              value={form.faculty}
+              error={fieldErrors.faculty}
+              onChange={(value) => setForm({ ...form, faculty: value })}
+              options={(facultyRoster.data ?? []).map((profile) => ({
+                value: profile.id,
+                label: `${profile.name} (${profile.employee_id})`,
+              }))}
+              emptyLabel={
+                facultyRoster.isLoading
+                  ? "Loading faculty…"
+                  : facultyRoster.isError
+                    ? "Faculty could not be loaded, so no teacher can be chosen."
+                    : "No faculty accounts exist yet."
+              }
+            />
           </div>
-          <p className="text-xs text-muted-foreground">
-            Faculty cannot be chosen here: no endpoint lists faculty profiles
-            for an administrator, so the assignment is created unassigned and a
-            teacher is attached through the Django admin site.
-          </p>
-          {create.isError ? (
-            <ErrorNote message={normalizeApiError(create.error).message} />
-          ) : null}
+          <CreateError error={create.error} fieldErrors={fieldErrors} />
           <Button type="submit" disabled={!canSubmit || create.isPending}>
             {create.isPending ? "Saving…" : "Create assignment"}
           </Button>
@@ -805,6 +835,7 @@ function GradingPeriodsCard() {
     end_date: "",
     academic_year: "",
   })
+  const fieldErrors = useFieldErrors(create.error)
   const canSubmit =
     form.name.trim() !== "" &&
     form.order !== "" &&
@@ -883,50 +914,49 @@ function GradingPeriodsCard() {
           }}
         >
           <div className="grid gap-3 sm:grid-cols-5">
-            <Field label="Name" id="new-period-name">
-              {(value, onChange) => (
-                <Input
-                  id="new-period-name"
-                  value={value}
-                  placeholder="First Term"
-                  onChange={(e) => onChange(e.target.value)}
-                />
-              )}
-            </Field>
-            <Field label="Order" id="new-period-order">
-              {(value, onChange) => (
-                <Input
-                  id="new-period-order"
-                  type="number"
-                  value={value}
-                  onChange={(e) => onChange(e.target.value)}
-                />
-              )}
-            </Field>
-            <Field label="Start date" id="new-period-start">
-              {(value, onChange) => (
-                <Input
-                  id="new-period-start"
-                  type="date"
-                  value={value}
-                  onChange={(e) => onChange(e.target.value)}
-                />
-              )}
-            </Field>
-            <Field label="End date" id="new-period-end">
-              {(value, onChange) => (
-                <Input
-                  id="new-period-end"
-                  type="date"
-                  value={value}
-                  onChange={(e) => onChange(e.target.value)}
-                />
-              )}
-            </Field>
+            <Field
+              label="Name"
+              id="new-period-name"
+              required
+              placeholder="First Term"
+              value={form.name}
+              error={fieldErrors.name}
+              onChange={(name) => setForm({ ...form, name })}
+            />
+            <Field
+              label="Order"
+              id="new-period-order"
+              type="number"
+              required
+              min={1}
+              value={form.order}
+              error={fieldErrors.order}
+              onChange={(order) => setForm({ ...form, order })}
+            />
+            <Field
+              label="Start date"
+              id="new-period-start"
+              type="date"
+              required
+              value={form.start_date}
+              error={fieldErrors.start_date}
+              onChange={(start_date) => setForm({ ...form, start_date })}
+            />
+            <Field
+              label="End date"
+              id="new-period-end"
+              type="date"
+              required
+              value={form.end_date}
+              error={fieldErrors.end_date}
+              onChange={(end_date) => setForm({ ...form, end_date })}
+            />
             <ChoiceField
               label="Academic year"
               id="new-period-year"
+              required
               value={form.academic_year}
+              error={fieldErrors.academic_year}
               onChange={(value) => setForm({ ...form, academic_year: value })}
               options={(years.data ?? []).map((year) => ({
                 value: year.id,
@@ -934,9 +964,7 @@ function GradingPeriodsCard() {
               }))}
             />
           </div>
-          {create.isError ? (
-            <ErrorNote message={normalizeApiError(create.error).message} />
-          ) : null}
+          <CreateError error={create.error} fieldErrors={fieldErrors} />
           <Button type="submit" disabled={!canSubmit || create.isPending}>
             {create.isPending ? "Saving…" : "Create grading period"}
           </Button>
@@ -988,6 +1016,7 @@ function EnrollmentsCard() {
     academic_year: "",
     date_enrolled: "",
   })
+  const fieldErrors = useFieldErrors(create.error)
   const canSubmit =
     form.student !== "" &&
     form.section !== "" &&
@@ -1091,7 +1120,9 @@ function EnrollmentsCard() {
             <ChoiceField
               label="Student"
               id="new-enrollment-student"
+              required
               value={form.student}
+              error={fieldErrors.student}
               onChange={(value) => setForm({ ...form, student: value })}
               options={students}
               emptyLabel="No students available"
@@ -1099,7 +1130,9 @@ function EnrollmentsCard() {
             <ChoiceField
               label="Section"
               id="new-enrollment-section"
+              required
               value={form.section}
+              error={fieldErrors.section}
               onChange={(value) => setForm({ ...form, section: value })}
               options={(sections.data ?? []).map((section) => ({
                 value: section.id,
@@ -1109,27 +1142,26 @@ function EnrollmentsCard() {
             <ChoiceField
               label="Academic year"
               id="new-enrollment-year"
+              required
               value={form.academic_year}
+              error={fieldErrors.academic_year}
               onChange={(value) => setForm({ ...form, academic_year: value })}
               options={(years.data ?? []).map((year) => ({
                 value: year.id,
                 label: year.name,
               }))}
             />
-            <Field label="Date enrolled" id="new-enrollment-date">
-              {(value, onChange) => (
-                <Input
-                  id="new-enrollment-date"
-                  type="date"
-                  value={value}
-                  onChange={(e) => onChange(e.target.value)}
-                />
-              )}
-            </Field>
+            <Field
+              label="Date enrolled"
+              id="new-enrollment-date"
+              type="date"
+              required
+              value={form.date_enrolled}
+              error={fieldErrors.date_enrolled}
+              onChange={(date_enrolled) => setForm({ ...form, date_enrolled })}
+            />
           </div>
-          {create.isError ? (
-            <ErrorNote message={normalizeApiError(create.error).message} />
-          ) : null}
+          <CreateError error={create.error} fieldErrors={fieldErrors} />
           <Button type="submit" disabled={!canSubmit || create.isPending}>
             {create.isPending ? "Saving…" : "Create enrollment"}
           </Button>
@@ -1155,37 +1187,132 @@ function EnrollmentsCard() {
 /* ------------------------------------------------------------------ */
 
 /**
- * A labelled text/date/number field with its own value state.
+ * A labelled text/date/number field controlled by its parent card.
  *
- * Each field owns its state and reports upward; the parent card decides when
- * the form is valid. An earlier draft had a single shared field component that
- * stashed its value in a hidden input and read them all back on submit, which
- * made validity unobservable and coupled the form to the DOM.
+ * The value lives in the card's form state and every keystroke is reported
+ * upward through `onChange`. A previous revision kept `useState` inside this
+ * component and handed the child its *own* setter, which meant the card's form
+ * object was never written: `canSubmit` read from that object stayed `false`
+ * forever and six of the seven create forms could not be submitted at all. The
+ * field is therefore fully controlled — it renders the control itself so the
+ * label, the id and any error message stay bound to one another.
  */
 function Field({
   label,
   id,
+  value,
+  onChange,
   type = "text",
-  children,
+  placeholder,
+  min,
+  max,
+  step,
+  required = false,
+  error,
 }: {
   label: string
   id: string
-  type?: string
-  children: (
-    value: string,
-    onChange: (value: string) => void
-  ) => React.ReactNode
+  value: string
+  onChange: (value: string) => void
+  type?: "text" | "date" | "number"
+  placeholder?: string
+  min?: number
+  max?: number
+  step?: number
+  required?: boolean
+  error?: string | null
 }) {
-  const [value, setValue] = useState("")
-  void type
+  const errorId = `${id}-error`
 
   return (
     <div className="space-y-1.5">
       <Label htmlFor={id}>{label}</Label>
-      {children(value, setValue)}
+      <Input
+        id={id}
+        type={type}
+        value={value}
+        placeholder={placeholder}
+        min={min}
+        max={max}
+        step={step}
+        required={required}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? errorId : undefined}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      <FieldError id={errorId} message={error} />
     </div>
   )
 }
+
+/**
+ * The inline message for one field, announced when it appears and linked to
+ * the control by `aria-describedby`.
+ */
+function FieldError({
+  id,
+  message,
+}: {
+  id: string
+  message: string | null | undefined
+}) {
+  if (!message) return null
+  return (
+    <p id={id} className="text-xs text-destructive">
+      {message}
+    </p>
+  )
+}
+
+/**
+ * The messages the API returned for this form, keyed by request field name.
+ *
+ * Returns an empty map when the failure was not a field-keyed validation error
+ * (a 500, a 403, a network error), so callers always have a map to index.
+ */
+function useFieldErrors(error: unknown): Record<string, string> {
+  const fields = getFieldErrors(error)
+  if (!fields) return {}
+  const out: Record<string, string> = {}
+  for (const [name, messages] of Object.entries(fields)) {
+    const first = messages[0]
+    if (first) out[name] = first
+  }
+  return out
+}
+
+/**
+ * The form-level banner for a failed create.
+ *
+ * A field-keyed 400 is already shown against each input, so repeating it here
+ * would print the same sentence twice. The banner is kept for failures the
+ * inputs cannot explain — a permission error, a server fault, a network drop,
+ * or a `non_field_errors` entry.
+ */
+function CreateError({
+  error,
+  fieldErrors,
+}: {
+  error: unknown
+  fieldErrors: Record<string, string>
+}) {
+  if (!error) return null
+  const named = Object.keys(fieldErrors).filter(
+    (name) => !OPAQUE_ERROR_FIELDS.has(name)
+  )
+  if (named.length > 0 && named.length === Object.keys(fieldErrors).length) {
+    return null
+  }
+  return <ErrorNote message={normalizeApiError(error).message} />
+}
+
+/** DRF keys that are not a specific input, so their text needs the banner. */
+const OPAQUE_ERROR_FIELDS = new Set([
+  "detail",
+  "non_field_errors",
+  "__all__",
+  "root",
+])
 
 /** A labelled select. `optional` adds a "None" entry representing "". */
 function ChoiceField({
@@ -1196,6 +1323,8 @@ function ChoiceField({
   options,
   optional = false,
   emptyLabel,
+  required = false,
+  error,
 }: {
   label: string
   id: string
@@ -1204,12 +1333,21 @@ function ChoiceField({
   options: readonly { value: string; label: string }[]
   optional?: boolean
   emptyLabel?: string
+  required?: boolean
+  error?: string | null
 }) {
+  const errorId = `${id}-error`
+
   return (
     <div className="space-y-1.5">
       <Label htmlFor={id}>{label}</Label>
       <Select value={value} onValueChange={onChange}>
-        <SelectTrigger id={id}>
+        <SelectTrigger
+          id={id}
+          aria-required={required || undefined}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? errorId : undefined}
+        >
           <SelectValue placeholder={`Select ${label.toLowerCase()}`} />
         </SelectTrigger>
         <SelectContent>
@@ -1221,6 +1359,7 @@ function ChoiceField({
           ))}
         </SelectContent>
       </Select>
+      <FieldError id={errorId} message={error} />
       {options.length === 0 && emptyLabel ? (
         <p className="text-xs text-muted-foreground">{emptyLabel}</p>
       ) : null}

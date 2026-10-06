@@ -201,6 +201,32 @@ export function useCreateUser() {
 /* Academic structure — IsAdminOrReadOnly, admin has full CRUD                 */
 /* ========================================================================== */
 
+/**
+ * One row of the administrator faculty roster.
+ *
+ * `GET /accounts/faculty-profiles/` is administrator-only and exposes the
+ * profile id (the value `SubjectAssignment.faculty` and `Section.adviser` both
+ * take), the display name and the employee id. No contact details.
+ */
+export interface FacultyProfileSummary {
+  id: string
+  name: string
+  employee_id: string
+}
+
+/** The faculty roster, for the subject-assignment and section pickers. */
+export function useFacultyProfiles() {
+  return useQuery<FacultyProfileSummary[], Error>({
+    queryKey: ["admin", "faculty-profiles"],
+    queryFn: async () => {
+      const { results } = await fetchAllPages<FacultyProfileSummary>(
+        "/accounts/faculty-profiles/"
+      )
+      return results
+    },
+  })
+}
+
 export interface AcademicYear {
   id: string
   name: string
@@ -982,12 +1008,49 @@ export function useCmsResources() {
 }
 
 /**
- * The authorized download URL for a Strapi-hosted resource file.
+ * The CMS proxy route for a Strapi-hosted resource file.
  *
  * `GET /cms/resources/{document_id}/file/` is SEC-007: it proxies the file
  * through AEGIS with the caller's own access rules rather than exposing the
- * Strapi URL. It streams bytes, so it is a link target and not a query.
+ * Strapi URL. It is *not* browsable as a link target — see
+ * `downloadCmsResource`.
  */
-export function cmsResourceFileUrl(documentId: string): string {
-  return `/api/v1/cms/resources/${encodeURIComponent(documentId)}/file/`
+export function cmsResourceFilePath(documentId: string): string {
+  return `/cms/resources/${encodeURIComponent(documentId)}/file/`
+}
+
+/**
+ * Download a CMS resource file with the caller's credentials.
+ *
+ * PH11.10. This was previously a plain `<a href>` pointing at the proxy, which
+ * returned 401: authentication in this app is a bearer token injected by the
+ * axios request interceptor, and a native anchor sends no such header. The
+ * correct pattern already existed for exports (`downloadExport`), so this
+ * mirrors it — request through `apiClient` so the token and the 401 refresh
+ * path apply, then hand the bytes to the browser as an object URL.
+ *
+ * Rejects with the normalized API error so the caller can show it; a failed
+ * download never becomes a silent success.
+ */
+export async function downloadCmsResource(
+  documentId: string
+): Promise<void> {
+  const response = await apiClient.get(cmsResourceFilePath(documentId), {
+    responseType: "blob",
+  })
+
+  const filename =
+    filenameFromDisposition(response.headers["content-disposition"]) ??
+    "aegis-resource"
+  const blobUrl = URL.createObjectURL(response.data as Blob)
+  try {
+    const anchor = document.createElement("a")
+    anchor.href = blobUrl
+    anchor.download = filename
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+  } finally {
+    URL.revokeObjectURL(blobUrl)
+  }
 }

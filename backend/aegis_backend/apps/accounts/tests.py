@@ -21,6 +21,7 @@ import subprocess
 import sys
 
 from apps.accounts.models import (
+    FacultyProfile,
     ParentProfile,
     ParentStudentLink,
     StudentProfile,
@@ -1497,5 +1498,155 @@ class AdminRoleAuthorityTest(TestCase):
         token = _token_for(self.admin)
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
         response = self.client.get(self.USERS_URL)
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+# ---------------------------------------------------------------------------
+# PH11.10: administrator faculty roster
+# ---------------------------------------------------------------------------
+
+
+class FacultyProfileListTest(TestCase):
+    """
+    GET /api/v1/accounts/faculty-profiles/ feeds the subject-assignment picker.
+
+    ``SubjectAssignment.faculty`` is a required foreign key. Until PH11.10 no
+    administrator-facing route listed ``FacultyProfile``, so that picker could
+    not be populated and every create was rejected on a field the form never
+    offered. These tests pin the roster, its ordering, its permission boundary
+    and the absence of personnel fields.
+    """
+
+    URL = "/api/v1/accounts/faculty-profiles/"
+
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = User.objects.create_user(
+            email="facultyroster_admin@example.com",
+            password="RosterAdmin_2026!",
+            first_name="Roster",
+            last_name="Admin",
+            role="admin",
+        )
+        # Deliberately created out of surname order so the ordering assertion
+        # fails if the view ever falls back to insertion order.
+        self.delta = User.objects.create_user(
+            email="facultyroster_delta@example.com",
+            password="RosterDelta_2026!",
+            first_name="Ana",
+            last_name="Zulu",
+            role="faculty",
+        )
+        self.bravo = User.objects.create_user(
+            email="facultyroster_bravo@example.com",
+            password="RosterBravo_2026!",
+            first_name="Bea",
+            last_name="Alpha",
+            role="faculty",
+        )
+        FacultyProfile.objects.create(user=self.delta, employee_id="FAC-002")
+        FacultyProfile.objects.create(user=self.bravo, employee_id="FAC-001")
+
+    def _as(self, user):
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {_token_for(user)}"
+        )
+
+    def test_admin_can_list_faculty_profiles(self):
+        self._as(self.admin)
+        response = self.client.get(self.URL)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        names = [row["name"] for row in response.data["results"]]
+        self.assertEqual(names, ["Bea Alpha", "Ana Zulu"])
+
+    def test_list_is_ordered_by_surname_then_forename(self):
+        """A stable picker order, not primary-key insertion order."""
+        self._as(self.admin)
+        response = self.client.get(self.URL)
+
+        # Zulu was created first, so insertion order and surname order disagree.
+        self.assertEqual(
+            [row["name"] for row in response.data["results"]],
+            ["Bea Alpha", "Ana Zulu"],
+        )
+
+    def test_each_row_carries_the_foreign_key_id_and_employee_id(self):
+        """`faculty` on SubjectAssignment takes the profile id, not the user id."""
+        self._as(self.admin)
+        response = self.client.get(self.URL)
+
+        by_name = {row["name"]: row for row in response.data["results"]}
+        self.assertEqual(by_name["Bea Alpha"]["id"], str(self.bravo.faculty_profile.id))
+        self.assertEqual(by_name["Bea Alpha"]["employee_id"], "FAC-001")
+
+    def test_empty_roster_returns_an_empty_page_not_an_error(self):
+        FacultyProfile.objects.all().delete()
+        self._as(self.admin)
+        response = self.client.get(self.URL)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 0)
+        self.assertEqual(response.data["results"], [])
+
+    def test_non_faculty_roles_are_excluded(self):
+        """Only real faculty profiles appear; a user with no profile has none."""
+        from apps.accounts.models import StudentProfile
+
+        student = User.objects.create_user(
+            email="facultyroster_student@example.com",
+            password="RosterStudent_2026!",
+            first_name="Sam",
+            last_name="Student",
+            role="student",
+        )
+        StudentProfile.objects.create(
+            user=student,
+            student_id="2026-0001",
+            enrollment_date="2026-06-01",
+        )
+
+        self._as(self.admin)
+        response = self.client.get(self.URL)
+
+        ids = [row["id"] for row in response.data["results"]]
+        self.assertNotIn(str(student.student_profile.id), ids)
+        self.assertEqual(len(ids), 2)
+
+    def test_no_personnel_or_contact_fields_are_exposed(self):
+        """NFR-010 reasoning applied to staff: a roster is not a personnel file."""
+        self._as(self.admin)
+        response = self.client.get(self.URL)
+
+        for row in response.data["results"]:
+            self.assertEqual(
+                set(row.keys()), {"id", "name", "employee_id"}
+            )
+
+    def test_every_non_admin_role_is_refused(self):
+        """Same authority rule as the user list: role=admin, nothing else."""
+        others = [
+            User.objects.create_user(
+                email=f"facultyroster_{role}@example.com",
+                password=f"Roster{role.capitalize()}_2026!",
+                first_name="Other",
+                last_name=role.capitalize(),
+                role=role,
+            )
+            for role in ("faculty", "guidance", "student", "parent")
+        ]
+        for user in others:
+            with self.subTest(role=user.role):
+                self.client.credentials(HTTP_AUTHORIZATION="")
+                self._as(user)
+                response = self.client.get(self.URL)
+                self.assertEqual(
+                    response.status_code, status.HTTP_403_FORBIDDEN
+                )
+
+    def test_anonymous_is_refused(self):
+        self.client.credentials(HTTP_AUTHORIZATION="")
+        response = self.client.get(self.URL)
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)

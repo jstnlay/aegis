@@ -1,6 +1,7 @@
 import { FileText } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import {
   Card,
   CardContent,
@@ -9,11 +10,12 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table"
+import { ErrorNote } from "@/components/feedback/Feedback"
 import { useState } from "react"
 import {
   ANNOUNCEMENT_PRIORITY_LABELS,
   ANNOUNCEMENT_TYPE_LABELS,
-  cmsResourceFileUrl,
+  downloadCmsResource,
   RESOURCE_TYPE_LABELS,
   useCmsAnnouncements,
   useCmsResources,
@@ -39,8 +41,10 @@ import { normalizeApiError } from "@/lib/error"
  * unreachable, which is not the same as "there is no content" — the error path
  * says so rather than rendering an empty list that reads as an empty school.
  *
- * Resource files are linked through `GET /cms/resources/{id}/file/` (SEC-007),
- * the authorized proxy, never through a direct Strapi URL.
+ * Resource files are downloaded through `GET /cms/resources/{id}/file/`
+ * (SEC-007), the authorized proxy, never through a direct Strapi URL. PH11.10
+ * corrected that download: it was a plain link, which cannot carry the bearer
+ * token this app authenticates with, so it now goes through the API client.
  */
 
 export function AdminCmsPage() {
@@ -206,6 +210,7 @@ function AnnouncementsCard() {
 
 function ResourcesCard() {
   const query = useCmsResources()
+  const download = useCmsResourceDownload()
 
   const columns: readonly DataTableColumn<CmsResource>[] = [
     {
@@ -244,18 +249,27 @@ function ResourcesCard() {
       key: "file",
       header: "File",
       /*
-       * The link targets the AEGIS proxy (SEC-007), which streams the file under
-       * the caller's own access rules. Pointing at the Strapi URL would bypass
-       * that check entirely.
+       * PH11.10: this was an `<a href>` at the AEGIS proxy route (SEC-007),
+       * which returned 401 — authentication here is a bearer token added by
+       * the axios request interceptor, and a native anchor sends no such
+       * header. The download now goes through the API client so the token and
+       * the refresh path apply. The Strapi URL is still never exposed: that
+       * would bypass the SEC-007 access check entirely.
        */
       cell: (row) =>
         row.file_or_url ? (
-          <a
-            href={cmsResourceFileUrl(row.document_id)}
-            className="text-sm font-medium underline underline-offset-4"
+          <Button
+            type="button"
+            variant="link"
+            size="sm"
+            className="h-auto p-0"
+            disabled={download.pendingId === row.document_id}
+            onClick={() => download.start(row.document_id)}
           >
-            Download
-          </a>
+            {download.pendingId === row.document_id
+              ? "Preparing…"
+              : "Download"}
+          </Button>
         ) : (
           <span className="text-muted-foreground">—</span>
         ),
@@ -271,7 +285,7 @@ function ResourcesCard() {
           are downloaded through AEGIS, not from Strapi directly.
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
         <DataTable
           caption="Resources"
           columns={columns}
@@ -282,9 +296,36 @@ function ResourcesCard() {
           loadingLabel="Loading resources"
           emptyMessage="No resources are currently published."
         />
+        {download.error ? <ErrorNote message={download.error} /> : null}
       </CardContent>
     </Card>
   )
+}
+
+/**
+ * One download at a time, with its own error.
+ *
+ * The table's error prop reports the *list* query, so a failed file download
+ * needs its own surface — otherwise a 401 from the proxy would look like a
+ * successfully rendered table with a dead link.
+ */
+function useCmsResourceDownload() {
+  const [pendingId, setPendingId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const start = (documentId: string) => {
+    setPendingId(documentId)
+    setError(null)
+    void downloadCmsResource(documentId)
+      .catch((caught: unknown) => {
+        setError(normalizeApiError(caught).message)
+      })
+      .finally(() => {
+        setPendingId(null)
+      })
+  }
+
+  return { pendingId, error, start }
 }
 
 function formatDate(value: string): string {
