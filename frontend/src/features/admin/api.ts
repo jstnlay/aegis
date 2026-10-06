@@ -93,7 +93,7 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { useCallback } from "react"
+import { useCallback, useMemo } from "react"
 
 import { apiClient } from "@/lib/api"
 import { fetchAllPages } from "@/lib/pagination"
@@ -647,6 +647,58 @@ export function useGradeLevelComparison() {
         data: { grade_levels: GradeLevelComparison[] }
       }>("/analytics/grade-levels/comparison/")
       return data.data.grade_levels
+    },
+  })
+}
+
+/**
+ * One grading period's identity, for ordering a period axis.
+ *
+ * `/analytics/subjects/trends/` keys its periods by name, so a trend chart
+ * needs the academic order from somewhere. `GradingPeriod.order` is the field
+ * the rest of the app already sorts periods by.
+ */
+export interface GradingPeriodRef {
+  id: string
+  name: string
+  order: number
+}
+
+/** The grading periods, in academic order. */
+export function useGradingPeriodOrder() {
+  const { list } = useAdminResource<GradingPeriod>({
+    resource: "grading-periods",
+    queryKey: ["admin", "grading-periods"],
+  })
+  return useMemo(
+    () =>
+      (list.data ?? [])
+        .map((period) => ({
+          id: period.id,
+          name: period.name,
+          order: period.order,
+        }))
+        .sort((a, b) => a.order - b.order),
+    [list.data]
+  )
+}
+
+/**
+ * Subject averages per grading period.
+ * `GET /analytics/subjects/trends/`.
+ *
+ * `{status, data: {subject_trends: {SUBJECT_CODE: {period_name: average}}}}`.
+ * Periods are keyed by name, so callers order the axis themselves.
+ */
+export function useSubjectTrends() {
+  return useQuery<Record<string, Record<string, number>>, Error>({
+    queryKey: ["analytics", "subject-trends"],
+    queryFn: async () => {
+      const { data } = await apiClient.get<{
+        status: string
+        data: { subject_trends: Record<string, Record<string, number>> }
+      }>("/analytics/subjects/trends/")
+      return data.data.subject_trends
     },
   })
 }

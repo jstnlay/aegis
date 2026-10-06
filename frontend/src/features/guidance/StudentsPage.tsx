@@ -11,6 +11,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table"
+import { useDataTablePagination } from "@/components/ui/data-table-pagination"
+import { orderRows, type DataTableSort } from "@/components/ui/data-table-sort"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -20,19 +23,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Skeleton } from "@/components/ui/skeleton"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
 import {
   RISK_LEVEL_LABELS,
   filterGuidanceStudents,
   useGuidanceStudents,
+  type GuidanceStudent,
   type GuidanceStudentFilters,
   type RiskLevel,
 } from "@/features/guidance/api"
@@ -42,6 +37,12 @@ import { riskLevelBadgeClass } from "@/lib/status-badge"
 type ActivityFilter = NonNullable<GuidanceStudentFilters["activity"]>
 
 const NO_CODE = "—"
+
+/** Rows per page for a list that can reach the size of a school cohort. */
+const PAGE_SIZE = 25
+
+/** Page sizes offered for this list. */
+const PAGE_SIZE_OPTIONS = [25, 50, 100] as const
 
 function PageHeading() {
   return (
@@ -54,17 +55,6 @@ function PageHeading() {
         Students with guidance activity — risk alerts, your consultations, your
         intervention plans, and results on assessments you created.
       </p>
-    </div>
-  )
-}
-
-function ErrorNote({ message }: { message: string }) {
-  return (
-    <div
-      role="alert"
-      className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
-    >
-      <span>{message}</span>
     </div>
   )
 }
@@ -96,6 +86,7 @@ export function StudentsPage() {
 
   const [activity, setActivity] = useState<ActivityFilter>("all")
   const [search, setSearch] = useState("")
+  const [sort, setSort] = useState<DataTableSort | null>(null)
 
   const students = useMemo(
     () => studentsQuery.data?.students ?? [],
@@ -113,6 +104,97 @@ export function StudentsPage() {
   )
 
   const isFiltered = activity !== "all" || search.trim().length > 0
+
+  const columns = useMemo<readonly DataTableColumn<GuidanceStudent>[]>(
+    () => [
+      {
+        key: "name",
+        header: "Student",
+        sortValue: (row) => row.name,
+        sortTieBreak: (row) => row.code,
+        cell: (row) => (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-medium">{row.name}</span>
+            <AtRiskBadge level={row.atRiskLevel} />
+          </div>
+        ),
+      },
+      {
+        key: "code",
+        header: "Code",
+        sortValue: (row) => row.code,
+        cell: (row) => (
+          <span className="tabular-nums text-sm text-muted-foreground">
+            {row.code ?? NO_CODE}
+          </span>
+        ),
+      },
+      {
+        key: "openAlerts",
+        header: "Open alerts",
+        sortValue: (row) => row.openAlertCount,
+        cellClassName: "tabular-nums",
+        cell: (row) => row.openAlertCount,
+      },
+      {
+        key: "consultations",
+        header: "Consultations",
+        sortValue: (row) => row.consultationCount,
+        cellClassName: "tabular-nums",
+        cell: (row) => row.consultationCount,
+      },
+      {
+        key: "interventions",
+        header: "Interventions",
+        sortValue: (row) => row.interventionCount,
+        cellClassName: "tabular-nums",
+        cell: (row) => row.interventionCount,
+      },
+      {
+        key: "results",
+        header: "Results",
+        sortValue: (row) => row.resultCount,
+        cellClassName: "tabular-nums",
+        cell: (row) => row.resultCount,
+      },
+      {
+        key: "lastActivity",
+        header: "Last activity",
+        sortValue: (row) => row.latestActivity,
+        cellClassName: "text-sm text-muted-foreground",
+        cell: (row) => row.latestActivity ?? NO_CODE,
+      },
+      {
+        key: "actions",
+        header: "Actions",
+        cell: (row) => (
+          <Button asChild size="xs" variant="outline">
+            <Link to={`/app/students/${row.id}`}>View profile</Link>
+          </Button>
+        ),
+      },
+    ],
+    []
+  )
+
+  /*
+   * PH11.10: this directory had no pagination and rendered every matching
+   * student. Sorting is client-side because `useGuidanceStudents` composes five
+   * sibling queries that are each fetched whole — the viewsets declare no
+   * `ordering` filter backend, so there is nothing to send. The chosen sort is
+   * applied before slicing, so page 1 shows the top of the ordering rather than
+   * an arbitrary slice of it.
+   */
+  const sorted = useMemo(
+    () => orderRows(visible, sort, columns),
+    [visible, sort, columns]
+  )
+
+  const { pagination, pageRows, setPageSize } = useDataTablePagination(
+    sorted,
+    PAGE_SIZE,
+    `students:${activity}:${search}`
+  )
 
   return (
     <div className="space-y-6">
@@ -162,78 +244,33 @@ export function StudentsPage() {
             </div>
           </div>
 
-          {studentsQuery.isLoading ? (
-            <div className="space-y-2">
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-            </div>
-          ) : studentsQuery.isError ? (
-            <ErrorNote
-              message={normalizeApiError(studentsQuery.error).message}
-            />
-          ) : visible.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">
-              {isFiltered
+          <DataTable
+            caption="Students with guidance activity"
+            columns={columns}
+            rows={pageRows}
+            rowKey={(row) => row.id}
+            rowProps={(row) => ({
+              "data-student-id": row.id,
+              "data-at-risk": row.atRiskLevel ? "true" : "false",
+            })}
+            isLoading={studentsQuery.isLoading}
+            error={
+              studentsQuery.isError
+                ? normalizeApiError(studentsQuery.error).message
+                : null
+            }
+            loadingLabel="Loading students"
+            emptyMessage={
+              isFiltered
                 ? "No students match the current filters."
-                : "No students have guidance activity yet."}
-            </p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Student</TableHead>
-                  <TableHead>Code</TableHead>
-                  <TableHead>Open alerts</TableHead>
-                  <TableHead>Consultations</TableHead>
-                  <TableHead>Interventions</TableHead>
-                  <TableHead>Results</TableHead>
-                  <TableHead>Last activity</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {visible.map((student) => (
-                  <TableRow
-                    key={student.id}
-                    data-student-id={student.id}
-                    data-at-risk={student.atRiskLevel ? "true" : "false"}
-                  >
-                    <TableCell>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-medium">{student.name}</span>
-                        <AtRiskBadge level={student.atRiskLevel} />
-                      </div>
-                    </TableCell>
-                    <TableCell className="tabular-nums text-sm text-muted-foreground">
-                      {student.code ?? NO_CODE}
-                    </TableCell>
-                    <TableCell className="tabular-nums">
-                      {student.openAlertCount}
-                    </TableCell>
-                    <TableCell className="tabular-nums">
-                      {student.consultationCount}
-                    </TableCell>
-                    <TableCell className="tabular-nums">
-                      {student.interventionCount}
-                    </TableCell>
-                    <TableCell className="tabular-nums">
-                      {student.resultCount}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {student.latestActivity ?? NO_CODE}
-                    </TableCell>
-                    <TableCell>
-                      <Button asChild size="xs" variant="outline">
-                        <Link to={`/app/students/${student.id}`}>
-                          View profile
-                        </Link>
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
+                : "No students have guidance activity yet."
+            }
+            pagination={pagination}
+            pageSizeOptions={PAGE_SIZE_OPTIONS}
+            onPageSizeChange={setPageSize}
+            sort={sort}
+            onSortChange={setSort}
+          />
         </CardContent>
       </Card>
 

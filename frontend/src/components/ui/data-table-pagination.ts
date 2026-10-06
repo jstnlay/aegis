@@ -26,6 +26,8 @@ export interface DataTablePaginationState<T> {
   /** The slice of `rows` for the current page. */
   pageRows: T[]
   totalPages: number
+  /** Choose a different page size and return to page 1. */
+  setPageSize: (pageSize: number) => void
 }
 
 /**
@@ -36,7 +38,7 @@ export interface DataTablePaginationState<T> {
  * how many rows there are.
  *
  * @param rows        the full filtered result set
- * @param pageSize    rows per page
+ * @param pageSize    initial rows per page; the reader may change it
  * @param resetKey    change this value to return to page 1; pass the active
  *                    filter/search expression. Omit for a list that is never
  *                    filtered.
@@ -47,9 +49,11 @@ export function useDataTablePagination<T>(
   resetKey?: string
 ): DataTablePaginationState<T> {
   const [page, setPage] = React.useState(1)
+  const [size, setSize] = React.useState({ current: pageSize, chosen: false })
   const [prevResetKey, setPrevResetKey] = React.useState(resetKey)
+  const currentPageSize = size.current
   const totalCount = rows.length
-  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
+  const totalPages = Math.max(1, Math.ceil(totalCount / currentPageSize))
 
   // A new filter/search result must not leave the reader stranded on a page
   // that no longer exists. Adjusting state during render (rather than in an
@@ -60,18 +64,36 @@ export function useDataTablePagination<T>(
     setPage(1)
   }
 
+  /*
+   * Two writers of the page size: the caller, which may reconfigure it (a
+   * preset per surface), and the reader, via the table's own control. `chosen`
+   * records that the reader was the last one to set it, so an unchanged
+   * `pageSize` argument cannot immediately override that choice and put the
+   * control back where it was — which would make the select unusable.
+   */
+  if (pageSize !== currentPageSize && !size.chosen) {
+    setSize({ current: pageSize, chosen: false })
+  }
+
   // Clamped for the case where the rows shrink without resetKey changing.
   const clampedPage = Math.min(page, totalPages)
-  const start = (clampedPage - 1) * pageSize
+  const start = (clampedPage - 1) * currentPageSize
 
   return {
     pagination: {
       page: clampedPage,
-      pageSize,
+      pageSize: currentPageSize,
       totalCount,
       onPageChange: setPage,
     },
-    pageRows: rows.slice(start, start + pageSize),
+    pageRows: rows.slice(start, start + currentPageSize),
     totalPages,
+    setPageSize: (next: number) => {
+      setSize({ current: next, chosen: true })
+      // The reader is choosing a size from wherever they were; page 1 keeps
+      // the result predictable rather than leaving them on an out-of-range
+      // slice.
+      setPage(1)
+    },
   }
 }

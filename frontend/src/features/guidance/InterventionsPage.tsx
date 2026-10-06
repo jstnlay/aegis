@@ -28,15 +28,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table"
+import { useDataTablePagination } from "@/components/ui/data-table-pagination"
+import { orderRows, type DataTableSort } from "@/components/ui/data-table-sort"
 import { Skeleton } from "@/components/ui/skeleton"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
 import {
   INTERVENTION_STATUSES,
   INTERVENTION_STATUS_LABELS,
@@ -798,12 +793,19 @@ function ManagePlanDialog({ intervention }: { intervention: Intervention }) {
   )
 }
 
+/** Rows per page for the counselor's plan list. */
+const PAGE_SIZE = 25
+
+/** Page sizes offered for this list. */
+const PAGE_SIZE_OPTIONS = [25, 50, 100] as const
+
 export function InterventionsPage() {
   const interventionsQuery = useInterventions()
   const rosterQuery = useStudentRoster()
 
   const [status, setStatus] = useState<InterventionStatus | "all">("all")
   const [search, setSearch] = useState("")
+  const [sort, setSort] = useState<DataTableSort | null>(null)
 
   const interventions = useMemo(
     () => interventionsQuery.data ?? [],
@@ -833,6 +835,74 @@ export function InterventionsPage() {
   }, [rosterQuery.data])
 
   const isFiltered = status !== "all" || search.trim().length > 0
+
+  const columns = useMemo<readonly DataTableColumn<Intervention>[]>(
+    () => [
+      {
+        key: "student",
+        header: "Student",
+        sortValue: (row) => row.student_name,
+        sortTieBreak: (row) => codeByStudent.get(row.student) ?? null,
+        cell: (row) => (
+          <>
+            <div className="font-medium">{row.student_name}</div>
+            {codeByStudent.get(row.student) ? (
+              <div className="text-xs text-muted-foreground">
+                {codeByStudent.get(row.student)}
+              </div>
+            ) : null}
+          </>
+        ),
+      },
+      {
+        key: "planStart",
+        header: "Plan start",
+        sortValue: (row) => row.plan_start_date,
+        sortTieBreak: (row) => row.student_name,
+        cellClassName: "text-sm text-muted-foreground",
+        cell: (row) => row.plan_start_date,
+      },
+      {
+        key: "targetReview",
+        header: "Target review",
+        // No target review means "not scheduled yet", so it sinks to the bottom
+        // rather than sorting as the epoch.
+        sortValue: (row) => row.target_review_date,
+        sortTieBreak: (row) => row.student_name,
+        cellClassName: "text-sm text-muted-foreground",
+        cell: (row) => row.target_review_date ?? "—",
+      },
+      {
+        key: "status",
+        header: "Status",
+        sortValue: (row) => row.status,
+        sortTieBreak: (row) => row.plan_start_date,
+        cell: (row) => <InterventionStatusBadge status={row.status} />,
+      },
+      {
+        key: "actions",
+        header: "Actions",
+        cell: (row) => <ManagePlanDialog intervention={row} />,
+      },
+    ],
+    [codeByStudent]
+  )
+
+  /*
+   * PH11.10: pagination and client-side sorting for the plan list. The server
+   * returns only the counselor's own plans with no `ordering` parameter, so the
+   * ordering happens here over rows already in memory.
+   */
+  const sorted = useMemo(
+    () => orderRows(visible, sort, columns),
+    [visible, sort, columns]
+  )
+
+  const { pagination, pageRows, setPageSize } = useDataTablePagination(
+    sorted,
+    PAGE_SIZE,
+    `interventions:${status}:${search}`
+  )
 
   return (
     <div className="space-y-6">
@@ -872,67 +942,30 @@ export function InterventionsPage() {
             />
           </div>
 
-          {interventionsQuery.isLoading ? (
-            <div className="space-y-2">
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-            </div>
-          ) : interventionsQuery.isError ? (
-            <ErrorNote
-              message={normalizeApiError(interventionsQuery.error).message}
-            />
-          ) : visible.length === 0 ? (
-            <EmptyState
-              message={
-                isFiltered
-                  ? "No interventions match the current filters."
-                  : "You have not opened any intervention plans yet."
-              }
-            />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Student</TableHead>
-                  <TableHead>Plan start</TableHead>
-                  <TableHead>Target review</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {visible.map((intervention) => (
-                  <TableRow
-                    key={intervention.id}
-                    data-intervention-id={intervention.id}
-                  >
-                    <TableCell>
-                      <div className="font-medium">
-                        {intervention.student_name}
-                      </div>
-                      {codeByStudent.get(intervention.student) ? (
-                        <div className="text-xs text-muted-foreground">
-                          {codeByStudent.get(intervention.student)}
-                        </div>
-                      ) : null}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {intervention.plan_start_date}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {intervention.target_review_date ?? "—"}
-                    </TableCell>
-                    <TableCell>
-                      <InterventionStatusBadge status={intervention.status} />
-                    </TableCell>
-                    <TableCell>
-                      <ManagePlanDialog intervention={intervention} />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
+          <DataTable
+            caption="Intervention plans"
+            columns={columns}
+            rows={pageRows}
+            rowKey={(row) => row.id}
+            rowProps={(row) => ({ "data-intervention-id": row.id })}
+            isLoading={interventionsQuery.isLoading}
+            error={
+              interventionsQuery.isError
+                ? normalizeApiError(interventionsQuery.error).message
+                : null
+            }
+            loadingLabel="Loading interventions"
+            emptyMessage={
+              isFiltered
+                ? "No interventions match the current filters."
+                : "You have not opened any intervention plans yet."
+            }
+            pagination={pagination}
+            pageSizeOptions={PAGE_SIZE_OPTIONS}
+            onPageSizeChange={setPageSize}
+            sort={sort}
+            onSortChange={setSort}
+          />
         </CardContent>
       </Card>
 

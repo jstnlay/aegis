@@ -11,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table"
+import { useDataTablePagination } from "@/components/ui/data-table-pagination"
 import { ErrorNote } from "@/components/feedback/Feedback"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -132,6 +133,12 @@ export function AdminAcademicsPage() {
     </div>
   )
 }
+
+/** Rows per page for the tables that grow without a bound. */
+const PAGE_SIZE = 25
+
+/** Page sizes offered for those tables. */
+const PAGE_SIZE_OPTIONS = [25, 50, 100] as const
 
 /** Delete button plus its pending state, shared by every table's Actions column. */
 function DeleteButton({
@@ -1023,6 +1030,17 @@ function EnrollmentsCard() {
     form.academic_year !== "" &&
     form.date_enrolled !== ""
 
+  /*
+   * PH11.10: enrollments is the one academic-structure table that grows without
+   * a bound — one row per student per section per year — so it is paginated
+   * rather than rendered in full. Not sorted: the columns here are lookups an
+   * administrator scans for a specific student rather than a list they re-order.
+   */
+  const { pagination, pageRows, setPageSize } = useDataTablePagination(
+    list.data ?? [],
+    PAGE_SIZE
+  )
+
   const columns: readonly DataTableColumn<Enrollment>[] = [
     {
       key: "student",
@@ -1170,12 +1188,15 @@ function EnrollmentsCard() {
         <DataTable
           caption="Enrollments"
           columns={columns}
-          rows={list.data ?? []}
+          rows={pageRows}
           rowKey={(row) => row.id}
           isLoading={list.isLoading}
           error={list.isError ? normalizeApiError(list.error).message : null}
           loadingLabel="Loading enrollments"
           emptyMessage="No enrollments have been recorded."
+          pagination={pagination}
+          pageSizeOptions={PAGE_SIZE_OPTIONS}
+          onPageSizeChange={setPageSize}
         />
       </CardContent>
     </Card>

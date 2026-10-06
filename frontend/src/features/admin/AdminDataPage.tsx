@@ -11,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table"
+import { useDataTablePagination } from "@/components/ui/data-table-pagination"
 import { ErrorNote } from "@/components/feedback/Feedback"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -120,12 +121,28 @@ export function AdminDataPage() {
   )
 }
 
+/** Rows per page for the import history, which grows by one job per upload. */
+const PAGE_SIZE = 20
+
+/** Page sizes offered for the import history. */
+const PAGE_SIZE_OPTIONS = [20, 50, 100] as const
+
 function ImportsCard() {
   const jobsQuery = useImportJobs()
   const createJob = useCreateImportJob()
   const [file, setFile] = useState<File | null>(null)
   const [importType, setImportType] = useState<ImportType>("grades")
   const [expanded, setExpanded] = useState<string | null>(null)
+
+  /*
+   * PH11.10: import history grows by one job per upload and was rendered in
+   * full. Paginated; the backend's own ordering (newest first) is left alone
+   * because that is the order an administrator reads this list in.
+   */
+  const { pagination, pageRows, setPageSize } = useDataTablePagination(
+    jobsQuery.data ?? [],
+    PAGE_SIZE
+  )
 
   const columns: readonly DataTableColumn<ImportJobSummary>[] = [
     {
@@ -281,7 +298,7 @@ function ImportsCard() {
           <DataTable
             caption="Import jobs"
             columns={columns}
-            rows={jobsQuery.data ?? []}
+            rows={pageRows}
             rowKey={(job) => job.id}
             isLoading={jobsQuery.isLoading}
             error={
@@ -291,6 +308,9 @@ function ImportsCard() {
             }
             loadingLabel="Loading import jobs"
             emptyMessage="No files have been imported yet."
+            pagination={pagination}
+            pageSizeOptions={PAGE_SIZE_OPTIONS}
+            onPageSizeChange={setPageSize}
           />
 
           {expanded ? <ImportJobRecords jobId={expanded} /> : null}

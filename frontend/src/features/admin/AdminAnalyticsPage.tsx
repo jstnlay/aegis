@@ -9,16 +9,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table"
-import { ErrorNote } from "@/components/feedback/Feedback"
+import { GradeLevelPerformanceChart } from "@/components/charts/GradeLevelPerformanceChart"
+import { SectionPerformanceChart } from "@/components/charts/SectionPerformanceChart"
+import { SubjectTrendChart } from "@/components/charts/SubjectTrendChart"
 import { Label } from "@/components/ui/label"
 import {
-  useGradeLevelComparison,
+  useGradingPeriodOrder,
   useSchoolWideMetrics,
   useSectionPerformance,
   useSections,
-  type GradeLevelComparison,
-  type SectionPerformance,
 } from "@/features/admin/api"
 import { formatCount, formatPercent } from "@/lib/metric-format"
 
@@ -40,7 +39,7 @@ export function AdminAnalyticsPage() {
   const [sectionId, setSectionId] = useState("")
 
   const schoolWideQuery = useSchoolWideMetrics()
-  const comparisonQuery = useGradeLevelComparison()
+  const periodOrder = useGradingPeriodOrder()
   const { list: sectionsQuery } = useSections()
   const sectionQuery = useSectionPerformance(sectionId || null)
 
@@ -78,19 +77,14 @@ export function AdminAnalyticsPage() {
         />
       </div>
 
-      <Card>
-        <CardContent className="pt-6">
-          <GradeLevelTable
-            rows={comparisonQuery.data ?? []}
-            isLoading={comparisonQuery.isLoading}
-            error={
-              comparisonQuery.isError
-                ? "Unable to load the grade level comparison. Please try again."
-                : null
-            }
-          />
-        </CardContent>
-      </Card>
+      {/*
+        PH11.10. Each figure below also appears as a chart drawn from the same
+        endpoint, so the number and the plot can never disagree: the chart reads
+        the identical query result rather than fetching its own copy.
+      */}
+      <GradeLevelPerformanceChart />
+
+      <SubjectTrendChart periodOrder={periodOrder} />
 
       <Card>
         <CardContent className="space-y-4 pt-6">
@@ -110,21 +104,12 @@ export function AdminAnalyticsPage() {
             </Select>
           </div>
 
-          {sectionId ? (
-            <SectionPerformancePanel
-              data={sectionQuery.data}
-              isLoading={sectionQuery.isLoading}
-              error={
-                sectionQuery.isError
-                  ? "Unable to load this section's performance. Please try again."
-                  : null
-              }
-            />
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              Select a section to see its aggregate.
-            </p>
-          )}
+          <SectionPerformanceChart
+            sectionId={sectionId || null}
+            data={sectionQuery.data}
+            isLoading={sectionQuery.isLoading}
+            error={sectionQuery.isError ? sectionQuery.error : null}
+          />
         </CardContent>
       </Card>
     </div>
@@ -142,92 +127,3 @@ function MetricCard({ label, value }: { label: string; value: string }) {
   )
 }
 
-function SectionPerformancePanel({
-  data,
-  isLoading,
-  error,
-}: {
-  data: SectionPerformance | undefined
-  isLoading: boolean
-  error: string | null
-}) {
-  if (isLoading) {
-    return (
-      <p
-        role="status"
-        aria-busy="true"
-        className="text-sm text-muted-foreground"
-      >
-        Loading section performance…
-      </p>
-    )
-  }
-  if (error) return <ErrorNote message={error} />
-  if (!data) return null
-
-  return (
-    <div className="grid gap-4 sm:grid-cols-3">
-      <MetricCard
-        label={`${data.section_name} average`}
-        value={formatPercent(data.grade_average, 2)}
-      />
-      <MetricCard
-        label="Students enrolled"
-        value={formatCount(data.total_students)}
-      />
-      <MetricCard
-        label="Finalized grades"
-        value={formatCount(data.total_grades)}
-      />
-    </div>
-  )
-}
-
-function GradeLevelTable({
-  rows,
-  isLoading,
-  error,
-}: {
-  rows: readonly GradeLevelComparison[]
-  isLoading: boolean
-  error: string | null
-}) {
-  const columns: readonly DataTableColumn<GradeLevelComparison>[] = [
-    {
-      key: "name",
-      header: "Grade level",
-      cell: (row) => (
-        <span className="font-medium">{row.grade_level_name}</span>
-      ),
-    },
-    {
-      key: "average",
-      header: "Average",
-      cell: (row) => (
-        <span className="font-bold">{formatPercent(row.average, 2)}</span>
-      ),
-    },
-    {
-      key: "count",
-      header: "Grades counted",
-      cell: (row) => (
-        <span className="text-muted-foreground">
-          {formatCount(row.grade_count)}
-        </span>
-      ),
-    },
-  ]
-
-  return (
-    <DataTable
-      caption="Average grade by level"
-      columns={columns}
-      rows={rows}
-      rowKey={(row) => row.grade_level_id}
-      isLoading={isLoading}
-      error={error}
-      loadingLabel="Loading grade level comparison"
-      emptyMessage="No finalized grades are available to compare yet."
-    />
-  )
-}

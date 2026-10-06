@@ -579,3 +579,316 @@ describe("DataTable state precedence", () => {
     expect(screen.queryAllByRole("status")).toHaveLength(0)
   })
 })
+
+/**
+ * PH11.10 additions: client-side sorting and the page-size control.
+ *
+ * Sorting is asserted through what a reader sees — the order of the rendered
+ * rows and the `aria-sort` state — rather than by inspecting internals, because
+ * those are the two things that can disagree and produce a table that claims
+ * one order while showing another.
+ */
+describe("DataTable sorting", () => {
+  interface SortableRow {
+    id: string
+    name: string
+    score: number
+  }
+
+  const SORTABLE: SortableRow[] = [
+    { id: "s1", name: "Cara", score: 9 },
+    { id: "s2", name: "Ana", score: 100 },
+    { id: "s3", name: "Bea", score: 10 },
+  ]
+
+  const SORTABLE_COLUMNS: readonly DataTableColumn<SortableRow>[] = [
+    {
+      key: "name",
+      header: "Name",
+      sortValue: (row) => row.name,
+      cell: (row) => row.name,
+    },
+    {
+      key: "score",
+      header: "Score",
+      sortValue: (row) => row.score,
+      cell: (row) => row.score,
+    },
+    // No sortValue: must stay a plain, non-interactive heading.
+    { key: "actions", header: "Actions", cell: (row) => row.id },
+  ]
+
+  const sortableRowKey = (row: SortableRow) => row.id
+
+  function renderSortable(props: {
+    sort?: { key: string; direction: "asc" | "desc" } | null
+    onSortChange?: (sort: { key: string; direction: "asc" | "desc" }) => void
+  }) {
+    return render(
+      <DataTable
+        caption="Sortable"
+        columns={SORTABLE_COLUMNS}
+        rows={SORTABLE}
+        rowKey={sortableRowKey}
+        emptyMessage="Nothing"
+        sort={props.sort ?? null}
+        onSortChange={props.onSortChange ?? vi.fn()}
+      />
+    )
+  }
+
+function renderedNames(): (string | null | undefined)[] {
+    return screen
+      .getAllByRole("row")
+      .slice(1)
+      .map((row) => within(row).getAllByRole("cell")[0]?.textContent)
+  }
+
+  it("leaves a table unsorted until a column is chosen", () => {
+    renderSortable({})
+
+    // The caller owns the ordering, so with no sort state the rows render as
+    // supplied.
+    expect(renderedNames()).toEqual(["Cara", "Ana", "Bea"])
+  })
+
+  it("reports a click on a sortable heading and leaves others inert", () => {
+    const onSortChange = vi.fn()
+    renderSortable({ onSortChange })
+
+// Only the two columns with a sortValue render a button.
+    const buttons = screen.getAllByRole("button")
+    expect(buttons).toHaveLength(2)
+    expect(buttons[0]).toHaveTextContent("Name")
+    expect(buttons[1]).toHaveTextContent("Score")
+
+    // The actions column has no sortValue, so its heading is plain text.
+    const actionsHeader = screen.getAllByRole("columnheader")[2]!
+    expect(actionsHeader).toHaveTextContent("Actions")
+    expect(actionsHeader.querySelector("button")).toBeNull()
+
+    fireEvent.click(buttons[1]!)
+    expect(onSortChange).toHaveBeenCalledWith({
+      key: "score",
+      direction: "asc",
+    })
+  })
+
+  it("asks for the opposite direction on a second click of the same column", () => {
+    const onSortChange = vi.fn()
+    renderSortable({ sort: { key: "score", direction: "asc" }, onSortChange })
+
+    fireEvent.click(screen.getByRole("button", { name: /Score/ }))
+    expect(onSortChange).toHaveBeenCalledWith({
+      key: "score",
+      direction: "desc",
+    })
+  })
+
+  it("starts a different column ascending", () => {
+    const onSortChange = vi.fn()
+    renderSortable({ sort: { key: "score", direction: "desc" }, onSortChange })
+
+    fireEvent.click(screen.getByRole("button", { name: /Name/ }))
+    expect(onSortChange).toHaveBeenCalledWith({
+      key: "name",
+      direction: "asc",
+    })
+  })
+
+  it("marks only the active header with aria-sort", () => {
+    renderSortable({ sort: { key: "name", direction: "asc" } })
+
+    const headers = screen.getAllByRole("columnheader")
+    expect(headers[0]).toHaveAttribute("aria-sort", "ascending")
+    expect(headers[1]).not.toHaveAttribute("aria-sort")
+    expect(headers[2]).not.toHaveAttribute("aria-sort")
+  })
+
+  it("reports a descending active header", () => {
+    renderSortable({ sort: { key: "score", direction: "desc" } })
+
+    const headers = screen.getAllByRole("columnheader")
+    expect(headers[1]).toHaveAttribute("aria-sort", "descending")
+  })
+
+  it("states the direction in text as well as in the attribute", () => {
+    renderSortable({ sort: { key: "name", direction: "desc" } })
+
+    // Colour and a glyph are not the only signal.
+    expect(screen.getByRole("button", { name: /sorted descending/i })).toBeInTheDocument()
+  })
+
+  it("renders rows in the order the caller computed", () => {
+    // The caller owns the sort, so this pins that the table renders what it is
+    // given rather than imposing an order of its own.
+    const sorted = [...SORTABLE].sort((a, b) => a.score - b.score)
+    render(
+      <DataTable
+        caption="Sortable"
+        columns={SORTABLE_COLUMNS}
+        rows={sorted}
+        rowKey={sortableRowKey}
+        emptyMessage="Nothing"
+        sort={{ key: "score", direction: "asc" }}
+        onSortChange={vi.fn()}
+      />
+    )
+
+    expect(renderedNames()).toEqual(["Cara", "Bea", "Ana"])
+  })
+
+  it("omits the sort affordance entirely when no column opts in", () => {
+    render(
+      <DataTable
+        caption="Plain"
+        columns={COLUMNS}
+        rows={ROWS}
+        rowKey={rowKey}
+        emptyMessage="Nothing"
+        onSortChange={vi.fn()}
+      />
+    )
+
+    // Nothing to click, so no misleading control is offered.
+    expect(screen.queryByRole("button")).not.toBeInTheDocument()
+  })
+})
+
+describe("DataTable page size", () => {
+  const many: Row[] = Array.from({ length: 45 }, (_, index) => ({
+    id: `p${index}`,
+    code: `S-${String(index).padStart(3, "0")}`,
+    name: `Student ${index}`,
+  }))
+
+  const manyRowKey = (row: Row) => row.id
+
+  function renderPaginated(props: {
+    pageSize?: number
+    pageSizeOptions?: readonly number[]
+    onPageSizeChange?: (size: number) => void
+  }) {
+    function Harness() {
+      const { pagination, pageRows, setPageSize } = useDataTablePagination(
+        many,
+        props.pageSize ?? 10
+      )
+      return (
+        <DataTable
+          caption="Many"
+          columns={COLUMNS}
+          rows={pageRows}
+          rowKey={manyRowKey}
+          emptyMessage="Nothing"
+          pagination={pagination}
+          pageSizeOptions={props.pageSizeOptions}
+          onPageSizeChange={
+            props.onPageSizeChange ?? ((size) => setPageSize(size))
+          }
+        />
+      )
+    }
+    return render(<Harness />)
+  }
+
+  it("offers no size control when the caller supplies no options", () => {
+    renderPaginated({})
+
+    expect(screen.queryByLabelText(/rows per page/i)).not.toBeInTheDocument()
+  })
+
+  it("offers the caller's sizes and marks the current one selected", () => {
+    renderPaginated({ pageSizeOptions: [10, 25, 50] })
+
+    const select = screen.getByLabelText(/rows per page/i)
+    expect(select).toHaveValue("10")
+    expect(
+      Array.from(select.querySelectorAll("option")).map((o) => o.value)
+    ).toEqual(["10", "25", "50"])
+  })
+
+  it("reports a size change to the caller", () => {
+    const onPageSizeChange = vi.fn()
+    renderPaginated({ pageSizeOptions: [10, 25], onPageSizeChange })
+
+    fireEvent.change(screen.getByLabelText(/rows per page/i), {
+      target: { value: "25" },
+    })
+    expect(onPageSizeChange).toHaveBeenCalledWith(25)
+  })
+
+  it("returns to page 1 and re-slices when the size changes", () => {
+    renderPaginated({ pageSize: 10, pageSizeOptions: [10, 25] })
+
+    fireEvent.click(screen.getByRole("button", { name: "Next" }))
+    expect(screen.getByText("Page 2 of 5")).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText(/rows per page/i), {
+      target: { value: "25" },
+    })
+
+    // 45 rows at 25 per page is two pages, and the reader starts at the first.
+    expect(screen.getByText("Page 1 of 2")).toBeInTheDocument()
+    expect(screen.getByText(/Showing 1–25 of 45/)).toBeInTheDocument()
+  })
+
+  it("hides the size control when everything fits on one page", () => {
+    render(
+      <DataTable
+        caption="Few"
+        columns={COLUMNS}
+        rows={ROWS}
+        rowKey={rowKey}
+        emptyMessage="Nothing"
+        pagination={{
+          page: 1,
+          pageSize: 50,
+          totalCount: 3,
+          onPageChange: vi.fn(),
+        }}
+        pageSizeOptions={[10, 50]}
+        onPageSizeChange={vi.fn()}
+      />
+    )
+
+    // No pagination controls at all, so no size control either.
+    expect(screen.queryByLabelText(/rows per page/i)).not.toBeInTheDocument()
+  })
+
+  it("honours a caller re-configuring the page size", () => {
+    function Harness() {
+      const { pagination, pageRows } = useDataTablePagination(many, 20)
+      return (
+        <DataTable
+          caption="Many"
+          columns={COLUMNS}
+          rows={pageRows}
+          rowKey={manyRowKey}
+          emptyMessage="Nothing"
+          pagination={pagination}
+        />
+      )
+    }
+    render(<Harness />)
+
+    expect(screen.getByText(/Showing 1–20 of 45/)).toBeInTheDocument()
+  })
+})
+
+describe("DataTable rowProps", () => {
+  it("applies caller row attributes to the row element", () => {
+    render(
+      <DataTable
+        caption="Students"
+        columns={COLUMNS}
+        rows={ROWS}
+        rowKey={rowKey}
+        emptyMessage="Nothing"
+        rowProps={(row) => ({ "data-code": row.code })}
+      />
+    )
+
+    expect(screen.getAllByRole("row")[1]).toHaveAttribute("data-code", "S-001")
+  })
+})

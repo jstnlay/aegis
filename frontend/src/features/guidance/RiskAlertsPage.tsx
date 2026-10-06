@@ -28,15 +28,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Skeleton } from "@/components/ui/skeleton"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table"
+import { useDataTablePagination } from "@/components/ui/data-table-pagination"
+import { orderRows, type DataTableSort } from "@/components/ui/data-table-sort"
 import {
   ALERT_TRANSITIONS_BY_STATUS,
   RISK_ALERT_STATUSES,
@@ -45,6 +39,7 @@ import {
   RISK_ALERT_SOURCE_LABELS,
   RISK_LEVELS,
   RISK_LEVEL_LABELS,
+  RISK_LEVEL_ORDER,
   countAlertsByStatus,
   filterRiskAlerts,
   riskFactorLabel,
@@ -59,6 +54,12 @@ import {
 } from "@/features/guidance/api"
 import { normalizeApiError } from "@/lib/error"
 import { riskLevelBadgeClass } from "@/lib/status-badge"
+
+/** Rows per page for a list that covers every alert in the school. */
+const PAGE_SIZE = 25
+
+/** Page sizes offered for this list. */
+const PAGE_SIZE_OPTIONS = [25, 50, 100] as const
 
 function PageHeading({
   title,
@@ -89,12 +90,6 @@ function ErrorNote({ message }: { message: string }) {
     >
       <span>{message}</span>
     </div>
-  )
-}
-
-function EmptyState({ message }: { message: string }) {
-  return (
-    <p className="py-6 text-center text-sm text-muted-foreground">{message}</p>
   )
 }
 
@@ -388,6 +383,8 @@ export function RiskAlertsPage() {
 
   const counts = useMemo(() => countAlertsByStatus(alerts), [alerts])
 
+  const [sort, setSort] = useState<DataTableSort | null>(null)
+
   /**
    * Student UUID -> human-facing code.
    *
@@ -403,6 +400,117 @@ export function RiskAlertsPage() {
 
   const isFiltered =
     status !== "all" || riskLevel !== "all" || search.trim().length > 0
+
+  const columns = useMemo<readonly DataTableColumn<RiskAlert>[]>(
+    () => [
+      {
+        key: "student",
+        header: "Student",
+        sortValue: (row) => row.student_name,
+        sortTieBreak: (row) => codeByStudent.get(row.student) ?? null,
+        cell: (row) => (
+          <>
+            <div className="font-medium">{row.student_name}</div>
+            {codeByStudent.get(row.student) ? (
+              <div className="text-xs text-muted-foreground">
+                {codeByStudent.get(row.student)}
+              </div>
+            ) : null}
+          </>
+        ),
+      },
+      {
+        key: "riskLevel",
+        header: "Level",
+        /*
+         * Ranked by the declared order of the risk levels rather than
+         * alphabetically, so ascending reads low → moderate → high.
+         */
+        sortValue: (row) => RISK_LEVEL_ORDER[row.risk_level],
+        sortTieBreak: (row) => row.student_name,
+        cell: (row) => (
+          <Badge
+            variant="secondary"
+            className={riskLevelBadgeClass(row.risk_level)}
+            data-risk-level={row.risk_level}
+          >
+            {RISK_LEVEL_LABELS[row.risk_level]}
+          </Badge>
+        ),
+      },
+      {
+        key: "status",
+        header: "Status",
+        sortValue: (row) => row.status,
+        sortTieBreak: (row) => row.student_name,
+        cell: (row) => <AlertStatusBadge status={row.status} />,
+      },
+      {
+        key: "factors",
+        header: "Factors",
+        cell: (row) =>
+          row.risk_factors.length === 0 ? (
+            <span className="text-muted-foreground">—</span>
+          ) : (
+            <ul className="space-y-0.5">
+              {row.risk_factors.map((factor, index) => (
+                <li key={`${row.id}-factor-${index}`} className="text-xs">
+                  {riskFactorLabel(factor) || "Unlabelled factor"}
+                </li>
+              ))}
+            </ul>
+          ),
+      },
+      {
+        key: "source",
+        header: "Source",
+        sortValue: (row) => row.source,
+        cellClassName: "text-sm text-muted-foreground",
+        cell: (row) => RISK_ALERT_SOURCE_LABELS[row.source],
+      },
+      {
+        key: "generated",
+        header: "Generated",
+        sortValue: (row) => row.generated_at,
+        sortTieBreak: (row) => row.student_name,
+        cellClassName: "text-sm text-muted-foreground",
+        cell: (row) => formatDate(row.generated_at),
+      },
+      {
+        key: "actions",
+        header: "Actions",
+        cell: (row) => (
+          <TransitionButtons
+            alert={row}
+            isPending={transition.isPending}
+            isPendingThisAlert={
+              transition.isPending && transition.variables?.id === row.id
+            }
+            onTransition={(input) => transition.mutate(input)}
+          />
+        ),
+      },
+    ],
+    [codeByStudent, transition]
+  )
+
+  /*
+   * PH11.10: the alert table rendered every matching row and reimplemented the
+   * three list states by hand. It now uses `DataTable`, gains client-side
+   * sorting (the guidance viewsets declare no `ordering` filter backend, so
+   * there is nothing to send) and gains pagination for a list that reaches
+   * every alert in the school.
+   */
+  const sorted = useMemo(
+    () => orderRows(visible, sort, columns),
+    [visible, sort, columns]
+  )
+
+  const { pagination, pageRows, setPageSize } = useDataTablePagination(
+    sorted,
+    PAGE_SIZE,
+    `alerts:${status}:${riskLevel}:${search}`
+  )
 
   return (
     <div className="space-y-6">
@@ -471,95 +579,30 @@ export function RiskAlertsPage() {
             <ErrorNote message={normalizeApiError(transition.error).message} />
           ) : null}
 
-          {alertsQuery.isLoading ? (
-            <div className="space-y-2">
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-            </div>
-          ) : alertsQuery.isError ? (
-            <ErrorNote message={normalizeApiError(alertsQuery.error).message} />
-          ) : visible.length === 0 ? (
-            <EmptyState
-              message={
-                isFiltered
-                  ? "No alerts match the current filters."
-                  : "No risk alerts have been logged."
-              }
-            />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Student</TableHead>
-                  <TableHead>Level</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Factors</TableHead>
-                  <TableHead>Source</TableHead>
-                  <TableHead>Generated</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {visible.map((alert) => (
-                  <TableRow key={alert.id} data-alert-id={alert.id}>
-                    <TableCell>
-                      <div className="font-medium">{alert.student_name}</div>
-                      {codeByStudent.get(alert.student) ? (
-                        <div className="text-xs text-muted-foreground">
-                          {codeByStudent.get(alert.student)}
-                        </div>
-                      ) : null}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="secondary"
-                        className={riskLevelBadgeClass(alert.risk_level)}
-                        data-risk-level={alert.risk_level}
-                      >
-                        {RISK_LEVEL_LABELS[alert.risk_level]}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <AlertStatusBadge status={alert.status} />
-                    </TableCell>
-                    <TableCell>
-                      {alert.risk_factors.length === 0 ? (
-                        <span className="text-muted-foreground">—</span>
-                      ) : (
-                        <ul className="space-y-0.5">
-                          {alert.risk_factors.map((factor, index) => (
-                            <li
-                              key={`${alert.id}-factor-${index}`}
-                              className="text-xs"
-                            >
-                              {riskFactorLabel(factor) || "Unlabelled factor"}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {RISK_ALERT_SOURCE_LABELS[alert.source]}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {formatDate(alert.generated_at)}
-                    </TableCell>
-                    <TableCell>
-                      <TransitionButtons
-                        alert={alert}
-                        isPending={transition.isPending}
-                        isPendingThisAlert={
-                          transition.isPending &&
-                          transition.variables?.id === alert.id
-                        }
-                        onTransition={(input) => transition.mutate(input)}
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
+          <DataTable
+            caption="Risk alerts"
+            columns={columns}
+            rows={pageRows}
+            rowKey={(row) => row.id}
+            rowProps={(row) => ({ "data-alert-id": row.id })}
+            isLoading={alertsQuery.isLoading}
+            error={
+              alertsQuery.isError
+                ? normalizeApiError(alertsQuery.error).message
+                : null
+            }
+            loadingLabel="Loading risk alerts"
+            emptyMessage={
+              isFiltered
+                ? "No alerts match the current filters."
+                : "No risk alerts have been logged."
+            }
+            pagination={pagination}
+            pageSizeOptions={PAGE_SIZE_OPTIONS}
+            onPageSizeChange={setPageSize}
+            sort={sort}
+            onSortChange={setSort}
+          />
         </CardContent>
       </Card>
 

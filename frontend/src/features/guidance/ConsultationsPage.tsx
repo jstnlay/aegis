@@ -28,20 +28,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Skeleton } from "@/components/ui/skeleton"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table"
+import { useDataTablePagination } from "@/components/ui/data-table-pagination"
+import { orderRows, type DataTableSort } from "@/components/ui/data-table-sort"
 import {
   CONCERN_CATEGORIES,
   CONCERN_CATEGORY_LABELS,
   CONSULTATION_PRIORITIES,
   CONSULTATION_PRIORITY_LABELS,
+  CONSULTATION_PRIORITY_RANK,
   CONSULTATION_SESSION_TYPES,
   CONSULTATION_SESSION_TYPE_LABELS,
   CONSULTATION_STATUSES,
@@ -93,12 +88,6 @@ function ErrorNote({ message }: { message: string }) {
     >
       <span>{message}</span>
     </div>
-  )
-}
-
-function EmptyState({ message }: { message: string }) {
-  return (
-    <p className="py-6 text-center text-sm text-muted-foreground">{message}</p>
   )
 }
 
@@ -647,6 +636,12 @@ function EditConsultationDialog({
   )
 }
 
+/** Rows per page for a counselor's full session history. */
+const PAGE_SIZE = 25
+
+/** Page sizes offered for this list. */
+const PAGE_SIZE_OPTIONS = [25, 50, 100] as const
+
 export function ConsultationsPage() {
   const consultationsQuery = useConsultations()
   const rosterQuery = useStudentRoster()
@@ -654,6 +649,7 @@ export function ConsultationsPage() {
   const [status, setStatus] = useState<ConsultationStatus | "all">("all")
   const [priority, setPriority] = useState<ConsultationPriority | "all">("all")
   const [search, setSearch] = useState("")
+  const [sort, setSort] = useState<DataTableSort | null>(null)
 
   const consultations = useMemo(
     () => consultationsQuery.data ?? [],
@@ -685,6 +681,111 @@ export function ConsultationsPage() {
 
   const isFiltered =
     status !== "all" || priority !== "all" || search.trim().length > 0
+
+  const columns = useMemo<readonly DataTableColumn<Consultation>[]>(
+    () => [
+      {
+        key: "student",
+        header: "Student",
+        sortValue: (row) => row.student_name,
+        sortTieBreak: (row) => codeByStudent.get(row.student) ?? null,
+        cell: (row) => (
+          <>
+            <div className="font-medium">{row.student_name}</div>
+            {codeByStudent.get(row.student) ? (
+              <div className="text-xs text-muted-foreground">
+                {codeByStudent.get(row.student)}
+              </div>
+            ) : null}
+          </>
+        ),
+      },
+      {
+        key: "session",
+        header: "Session",
+        sortValue: (row) => row.session_date,
+        sortTieBreak: (row) => row.session_time,
+        cell: (row) => (
+          <>
+            <div className="text-sm">{row.session_date}</div>
+            <div className="text-xs text-muted-foreground">
+              {formatTime(row.session_time)}
+            </div>
+          </>
+        ),
+      },
+      {
+        key: "type",
+        header: "Type",
+        sortValue: (row) => row.session_type,
+        cellClassName: "text-sm text-muted-foreground",
+        cell: (row) => CONSULTATION_SESSION_TYPE_LABELS[row.session_type],
+      },
+      {
+        key: "concerns",
+        header: "Concerns",
+        cell: (row) =>
+          row.concern_categories.length === 0 ? (
+            <span className="text-muted-foreground">—</span>
+          ) : (
+            <div className="flex flex-wrap gap-1">
+              {row.concern_categories.map((category) => (
+                <Badge key={category} variant="outline">
+                  {CONCERN_CATEGORY_LABELS[category]}
+                </Badge>
+              ))}
+            </div>
+          ),
+      },
+      {
+        key: "priority",
+        header: "Priority",
+        // Ranked so ascending reads low → medium → high.
+        sortValue: (row) => CONSULTATION_PRIORITY_RANK[row.priority_level],
+        sortTieBreak: (row) => row.session_date,
+        cell: (row) => <PriorityBadge priority={row.priority_level} />,
+      },
+      {
+        key: "status",
+        header: "Status",
+        sortValue: (row) => row.status,
+        sortTieBreak: (row) => row.session_date,
+        cell: (row) => <ConsultationStatusBadge status={row.status} />,
+      },
+      {
+        key: "nextSession",
+        header: "Next session",
+        sortValue: (row) => row.next_session_date,
+        sortTieBreak: (row) => row.session_date,
+        cellClassName: "text-sm text-muted-foreground",
+        cell: (row) => row.next_session_date ?? "—",
+      },
+      {
+        key: "actions",
+        header: "Actions",
+        cell: (row) => <EditConsultationDialog consultation={row} />,
+      },
+    ],
+    [codeByStudent]
+  )
+
+  /*
+   * PH11.10: pagination and client-side sorting for a counselor's full session
+   * history. The server returns the counselor's own consultations with no
+   * `ordering` parameter, so the ordering happens here over rows already in
+   * memory. The default order (newest first) is preserved until a column is
+   * chosen.
+   */
+  const sorted = useMemo(
+    () => orderRows(visible, sort, columns),
+    [visible, sort, columns]
+  )
+
+  const { pagination, pageRows, setPageSize } = useDataTablePagination(
+    sorted,
+    PAGE_SIZE,
+    `consultations:${status}:${priority}:${search}`
+  )
 
   return (
     <div className="space-y-6">
@@ -749,96 +850,30 @@ export function ConsultationsPage() {
             </div>
           </div>
 
-          {consultationsQuery.isLoading ? (
-            <div className="space-y-2">
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-            </div>
-          ) : consultationsQuery.isError ? (
-            <ErrorNote
-              message={normalizeApiError(consultationsQuery.error).message}
-            />
-          ) : visible.length === 0 ? (
-            <EmptyState
-              message={
-                isFiltered
-                  ? "No consultations match the current filters."
-                  : "You have not recorded any consultations yet."
-              }
-            />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Student</TableHead>
-                  <TableHead>Session</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Concerns</TableHead>
-                  <TableHead>Priority</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Next session</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {visible.map((consultation) => (
-                  <TableRow
-                    key={consultation.id}
-                    data-consultation-id={consultation.id}
-                  >
-                    <TableCell>
-                      <div className="font-medium">
-                        {consultation.student_name}
-                      </div>
-                      {codeByStudent.get(consultation.student) ? (
-                        <div className="text-xs text-muted-foreground">
-                          {codeByStudent.get(consultation.student)}
-                        </div>
-                      ) : null}
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-sm">{consultation.session_date}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {formatTime(consultation.session_time)}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {
-                        CONSULTATION_SESSION_TYPE_LABELS[
-                          consultation.session_type
-                        ]
-                      }
-                    </TableCell>
-                    <TableCell>
-                      {consultation.concern_categories.length === 0 ? (
-                        <span className="text-muted-foreground">—</span>
-                      ) : (
-                        <div className="flex flex-wrap gap-1">
-                          {consultation.concern_categories.map((category) => (
-                            <Badge key={category} variant="outline">
-                              {CONCERN_CATEGORY_LABELS[category]}
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <PriorityBadge priority={consultation.priority_level} />
-                    </TableCell>
-                    <TableCell>
-                      <ConsultationStatusBadge status={consultation.status} />
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {consultation.next_session_date ?? "—"}
-                    </TableCell>
-                    <TableCell>
-                      <EditConsultationDialog consultation={consultation} />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
+          <DataTable
+            caption="Consultations"
+            columns={columns}
+            rows={pageRows}
+            rowKey={(row) => row.id}
+            rowProps={(row) => ({ "data-consultation-id": row.id })}
+            isLoading={consultationsQuery.isLoading}
+            error={
+              consultationsQuery.isError
+                ? normalizeApiError(consultationsQuery.error).message
+                : null
+            }
+            loadingLabel="Loading consultations"
+            emptyMessage={
+              isFiltered
+                ? "No consultations match the current filters."
+                : "You have not recorded any consultations yet."
+            }
+            pagination={pagination}
+            pageSizeOptions={PAGE_SIZE_OPTIONS}
+            onPageSizeChange={setPageSize}
+            sort={sort}
+            onSortChange={setSort}
+          />
         </CardContent>
       </Card>
 

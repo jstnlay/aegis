@@ -124,6 +124,17 @@ export const RISK_LEVEL_LABELS: Record<RiskLevel, string> = {
   high: "High",
 }
 
+/**
+ * Severity rank per risk level, ascending from lowest to highest.
+ *
+ * Derived from the declared order of `RISK_LEVELS` rather than the strings, so
+ * sorting a column by risk level reads low → moderate → high instead of
+ * alphabetically (which would give high, low, moderate).
+ */
+export const RISK_LEVEL_ORDER: Record<RiskLevel, number> = Object.fromEntries(
+  RISK_LEVELS.map((level, index) => [level, index])
+) as Record<RiskLevel, number>
+
 /** `RiskAlert.Status.choices`. */
 export type RiskAlertStatus =
   "active" | "under_monitoring" | "resolved" | "escalated"
@@ -353,6 +364,22 @@ export const CONSULTATION_PRIORITIES: readonly ConsultationPriority[] = [
   "medium",
   "low",
 ] as const
+
+/**
+ * Severity rank per consultation priority.
+ *
+ * `CONSULTATION_PRIORITIES` is declared most-urgent-first (high, medium, low),
+ * which is the right order for a filter but the wrong one for an ascending
+ * sort: alphabetically a priority column would read high, low, medium. Sorting
+ * ascending therefore uses the reversed rank so it reads low → medium → high.
+ */
+export const CONSULTATION_PRIORITY_RANK: Record<ConsultationPriority, number> =
+  Object.fromEntries(
+    CONSULTATION_PRIORITIES.map((level, index) => [
+      level,
+      CONSULTATION_PRIORITIES.length - index,
+    ])
+  ) as Record<ConsultationPriority, number>
 
 export const CONSULTATION_PRIORITY_LABELS: Record<
   ConsultationPriority,
