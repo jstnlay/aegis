@@ -160,7 +160,7 @@ describe("AttendancePage (student)", () => {
   it("renders the attendance heading", async () => {
     renderPage()
     expect(
-      await screen.findByRole("heading", { name: "Attendance", level: 1 })
+      await screen.findByRole("heading", { name: "Attendance", level: 2 })
     ).toBeInTheDocument()
   })
 

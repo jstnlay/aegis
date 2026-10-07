@@ -96,9 +96,9 @@ export function ParentSupportPage({ child }: SupportProps) {
             className="size-5 text-muted-foreground"
             aria-hidden="true"
           />
-          <h1 className="text-2xl font-bold text-foreground">
+          <h2 className="text-2xl font-bold text-foreground">
             {child.student_name}&apos;s Student Support
-          </h1>
+          </h2>
         </div>
         <p className="text-sm text-muted-foreground">
           A read-only record of the Guidance Office&apos;s involvement with{" "}

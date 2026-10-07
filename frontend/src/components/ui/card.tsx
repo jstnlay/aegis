@@ -32,9 +32,35 @@ function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
-function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
+/**
+ * A card's title.
+ *
+ * PH11.2 §16.4 requires `h1`–`h6` in hierarchical order with no skipped levels.
+ * `CardTitle` rendered a `<div>`, so every card title in the application — the
+ * "Average Grade", "Risk alerts", "Profile", "Linked Students" and so on — was
+ * missing from the heading outline entirely. A screen-reader user navigating by
+ * heading found the page `h1` and then nothing but raw text.
+ *
+ * It renders an `<h3>` by default, which is the level that is correct for a
+ * titled region nested inside a page: `h1` is the page (owned by the header),
+ * `h2` the page's own sections, `h3` the regions within them. Callers override
+ * with `as` when a card sits at a different depth, and `as="div"` is available
+ * for the cards that genuinely are not sections and should not add a heading —
+ * a stat tile, for instance.
+ *
+ * The classes are unchanged from the `<div>` version, so the visual result is
+ * identical; only the element and its semantics differ.
+ */
+function CardTitle({
+  className,
+  as: Comp = "h3",
+  ...props
+}: React.ComponentProps<"h3"> & {
+  /** Element or component to render. Defaults to `h3`; use `"div"` to opt out. */
+  as?: React.ElementType
+}) {
   return (
-    <div
+    <Comp
       data-slot="card-title"
       className={cn(
         "font-heading text-base leading-snug font-medium group-data-[size=sm]/card:text-sm",

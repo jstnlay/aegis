@@ -45,6 +45,23 @@ function DialogOverlay({
   )
 }
 
+/**
+ * The dialog surface.
+ *
+ * `max-h-[85svh] overflow-y-auto` moved into the primitive in PH11.11. Six
+ * dialogs already carried `max-h-[90vh] overflow-y-auto` at their call site and
+ * three did not; because the content is `position: fixed`, a dialog taller than
+ * a short or landscape viewport pushed its footer buttons — Cancel, Save,
+ * Create — past the bottom edge with no way to scroll to them. Inheriting the
+ * cap is the only arrangement that cannot be forgotten by the next dialog.
+ *
+ * `svh` rather than `vh` so the cap is measured against the small viewport: on
+ * mobile browsers `vh` excludes the collapsing URL bar, which made a `90vh`
+ * dialog taller than what was actually visible.
+ *
+ * `sm:max-w-sm` remains the default; callers pass their own width and this
+ * deliberately does not constrain height, so a caller's explicit height wins.
+ */
 function DialogContent({
   className,
   children,
@@ -59,7 +76,7 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          "fixed top-1/2 left-1/2 z-50 grid max-h-[85svh] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-lg bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           className
         )}
         {...props}

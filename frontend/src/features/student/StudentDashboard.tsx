@@ -2,6 +2,12 @@ import { useMemo } from "react"
 
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  ErrorNote,
+  PendingMetric,
+  PendingRegion,
+  UnavailableMetric,
+} from "@/components/feedback/Feedback"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/features/auth/AuthContext"
@@ -10,6 +16,49 @@ import {
   useStudentProfileId,
 } from "@/features/student/api"
 import { formatCount, formatPercent } from "@/lib/metric-format"
+
+/**
+ * One headline figure, with its three states kept distinct.
+ *
+ * PH11.11. Identical in shape to the admin and guidance tiles and deliberately
+ * built the same way, so the pattern has one definition across the five role
+ * dashboards instead of five hand-rolled variants that drift — which is exactly
+ * how the student tiles ended up printing "N/A" after a failed request.
+ */
+function MetricCard({
+  title,
+  hint,
+  isLoading,
+  isError,
+  children,
+}: {
+  title: string
+  hint: string
+  isLoading: boolean
+  isError: boolean
+  /** The formatted figure. Rendered only once the request has resolved. */
+  children: React.ReactNode
+}) {
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold">
+          {isLoading ? (
+            <PendingMetric label={title} />
+          ) : isError ? (
+            <UnavailableMetric />
+          ) : (
+            children
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground mt-1">{hint}</p>
+      </CardContent>
+    </Card>
+  )
+}
 
 export function StudentDashboard() {
   const { user } = useAuth()
@@ -29,6 +78,11 @@ export function StudentDashboard() {
     error,
   } = useStudentDashboardData(studentId)
   const dataLoading = loading || profileQuery.isLoading
+  // `error` is `Error | null` — the failure object, not a boolean — so the
+  // boolean the `MetricCard` prop requires is derived here rather than at each of
+  // the four call sites, where `profileError || error` would have type-checked as
+  // `true | Error | null`.
+  const dataError = profileError || Boolean(error)
 
   const displayGrades = useMemo(() => {
     if (dataLoading) return Array(5).fill(null) as (typeof grades)[number][]
@@ -41,9 +95,9 @@ export function StudentDashboard() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-bold text-foreground">
+        <h2 className="text-2xl font-bold text-foreground">
           Student Dashboard
-        </h1>
+        </h2>
         <Badge
           variant="outline"
           className="w-max max-w-full border-border bg-maroon-100 text-maroon-800"
@@ -52,66 +106,43 @@ export function StudentDashboard() {
         </Badge>
       </div>
 
+      {/*
+        PH11.11: the placeholder is announced and the failure is distinct from
+        "no data". Both tiles previously fell back to `formatPercent(undefined)` →
+        "N/A" on a failed request, which claims the backend reported no grade when
+        it reported nothing at all — and the skeletons were silent.
+      */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Average Grade</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {dataLoading ? (
-                <Skeleton className="h-8 w-20" />
-              ) : (
-                formatPercent(averageGrade, 2)
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Overall academic performance
-            </p>
-          </CardContent>
-        </Card>
+        <MetricCard
+          title="Average Grade"
+          hint="Overall academic performance"
+          isLoading={dataLoading}
+          isError={dataError}
+        >
+          {formatPercent(averageGrade, 2)}
+        </MetricCard>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Attendance Rate
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {dataLoading ? (
-                <Skeleton className="h-8 w-20" />
-              ) : (
-                formatPercent(attendance?.attendance_rate, 1)
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {attendance
-                ? `${attendance.present_days} present, ${attendance.absent_days} absent`
-                : "No attendance records"}
-            </p>
-          </CardContent>
-        </Card>
+        <MetricCard
+          title="Attendance Rate"
+          hint={
+            attendance
+              ? `${attendance.present_days} present, ${attendance.absent_days} absent`
+              : "No attendance records"
+          }
+          isLoading={dataLoading}
+          isError={dataError}
+        >
+          {formatPercent(attendance?.attendance_rate, 1)}
+        </MetricCard>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Total Subjects
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {dataLoading ? (
-                <Skeleton className="h-8 w-20" />
-              ) : (
-                formatCount(totalSubjects)
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Subjects with finalized grades
-            </p>
-          </CardContent>
-        </Card>
+        <MetricCard
+          title="Total Subjects"
+          hint="Subjects with finalized grades"
+          isLoading={dataLoading}
+          isError={dataError}
+        >
+          {formatCount(totalSubjects)}
+        </MetricCard>
 
         <Card className="col-span-1 md:col-span-2 lg:col-span-3">
           <CardHeader>
@@ -119,14 +150,18 @@ export function StudentDashboard() {
           </CardHeader>
           <CardContent>
             {dataLoading ? (
-              <div className="space-y-2">
-                <Skeleton className="h-10 w-full" />
-                <Skeleton className="h-10 w-full" />
-              </div>
-            ) : profileError || error ? (
-              <p className="text-sm text-muted-foreground">
-                Unable to load academic progress. Please try again.
-              </p>
+              // PH11.11: announced placeholder — the two grey bars carried no
+              // state at all, so nothing said the section was still arriving.
+              <PendingRegion label="Academic progress">
+                <div className="space-y-2">
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-full" />
+                </div>
+              </PendingRegion>
+            ) : dataError ? (
+              // `ErrorNote` rather than a muted paragraph: this is a failure, and
+              // it must not look like the "no grading period data" line below it.
+              <ErrorNote message="Unable to load academic progress. Please try again." />
             ) : periods.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 No grading period data available

@@ -1,8 +1,9 @@
 import { render, screen } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { describe, expect, it, vi } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { GuidanceDashboard } from "./GuidanceDashboard"
+import { useRiskAlerts } from "@/features/guidance/api"
 import type { User } from "@/types/auth"
 
 vi.mock("@/features/auth/AuthContext", () => ({
@@ -43,47 +44,67 @@ const stats = {
   assessment_completion_rate: 50,
 }
 
+/**
+ * One resolved risk alert.
+ *
+ * `risk_factors` uses the real AI object shape, not the PH11.8 `string[]`
+ * assumption, so the card exercises the actual `riskFactorLabel` normalization
+ * rather than a stub that would hide a crash.
+ *
+ * `vi.hoisted` because `vi.mock` is hoisted above every other statement: a
+ * factory that referenced a plain `const` would run before that binding is
+ * initialised and throw a TDZ error, not silently pass.
+ */
+const RISK_ALERT = vi.hoisted(() => ({
+  id: "ra-1",
+  student: "sp-1",
+  student_name: "Ana Reyes",
+  risk_level: "high",
+  risk_factors: [
+    {
+      feature: "attendance_rate",
+      threshold: 0.75,
+      value: 0.62,
+      direction: "below",
+    },
+  ],
+  source: "algorithm",
+  status: "active",
+  assigned_counselor: null,
+  assigned_counselor_name: null,
+  generated_at: "2025-02-01T00:00:00Z",
+  last_updated: "2025-02-01T00:00:00Z",
+  created_at: "2025-02-01T00:00:00Z",
+  updated_at: "2025-02-01T00:00:00Z",
+}))
+
 // Partial mock: the query hooks are stubbed, but `riskFactorLabel` is the real
-// implementation, so the object-shaped factor below exercises the actual
-// normalization rather than a stub that would hide a crash.
+// implementation. `useRiskAlerts` is a `vi.fn` so individual tests can override
+// its state without a second mock factory.
 vi.mock("@/features/guidance/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/features/guidance/api")>()),
+  // `isLoading`, not `isFetching`, is what the dashboard reads since PH11.11:
+  // `isFetching` stays true through a background refetch, which replaced figures
+  // already on screen with grey bars. react-query's `isLoading` is
+  // `isPending && isFetching`, so it is true only before the first result. The
+  // stubs declare the field the component actually consumes; one returning only
+  // `isFetching` would render every tile as "still resolving" by accident and
+  // assert nothing.
   useGuidanceStats: () => ({
     data: stats,
+    isLoading: false,
     isFetching: false,
     isError: false,
   }),
-  useRiskAlerts: () => ({
-    data: [
-      {
-        id: "ra-1",
-        student: "sp-1",
-        student_name: "Ana Reyes",
-        risk_level: "high",
-        // The real AI shape, not the PH11.8 string[] assumption.
-        risk_factors: [
-          {
-            feature: "attendance_rate",
-            threshold: 0.75,
-            value: 0.62,
-            direction: "below",
-          },
-        ],
-        source: "algorithm",
-        status: "active",
-        assigned_counselor: null,
-        assigned_counselor_name: null,
-        generated_at: "2025-02-01T00:00:00Z",
-        last_updated: "2025-02-01T00:00:00Z",
-        created_at: "2025-02-01T00:00:00Z",
-        updated_at: "2025-02-01T00:00:00Z",
-      },
-    ],
+  useRiskAlerts: vi.fn(() => ({
+    isLoading: false,
     isFetching: false,
     isError: false,
-  }),
+    data: [RISK_ALERT],
+  })),
   useConsultations: () => ({
     data: [],
+    isLoading: false,
     isFetching: false,
     isError: false,
   }),
@@ -100,6 +121,72 @@ function renderWithClient() {
     </QueryClientProvider>
   )
 }
+
+/**
+ * PH11.11: the two feed cards must not report a failure as an empty list.
+ *
+ * Both previously rendered "Unable to load risk alerts." / "…consultations." as a
+ * muted `<p>` — visually identical to the "No risk alerts" / "No pending
+ * consultations" line beside it, and announced by nothing. A screen-reader user
+ * was told the counselor has no alerts when the request had in fact failed, and
+ * a sighted user had no way to tell the two apart either. `role="alert"` is the
+ * distinction the shared `ErrorNote` already draws elsewhere.
+ *
+ * The stale-result case is covered too, and it is the one that matters for a
+ * counselor: alerts that loaded and are then re-fetched must stay on screen,
+ * because a background refetch used to blank the list under the reader.
+ */
+describe("PH11.11 feed-card states", () => {
+  function renderWithAlerts(
+    overrides: Partial<ReturnType<typeof useRiskAlerts>> = {}
+  ) {
+    // The default is spelled out rather than spread from a live call: calling
+    // `useRiskAlerts()` here would be a hook call outside a component, which the
+    // rules-of-hooks lint rejects and which would couple the default state to
+    // whatever the mock currently returns.
+    vi.mocked(useRiskAlerts).mockReturnValue({
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      data: [RISK_ALERT],
+      ...overrides,
+    } as ReturnType<typeof useRiskAlerts>)
+    return renderWithClient()
+  }
+
+  afterEach(() => {
+    vi.mocked(useRiskAlerts).mockReturnValue({
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      data: [RISK_ALERT],
+    } as ReturnType<typeof useRiskAlerts>)
+  })
+
+  it("announces a failed alerts request instead of reporting no alerts", () => {
+    renderWithAlerts({ data: undefined, isError: true } as never)
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      /unable to load risk alerts/i
+    )
+    // The empty state must not claim there is simply nothing to act on.
+    expect(screen.queryByText(/No risk alerts/i)).not.toBeInTheDocument()
+  })
+
+  it("still shows the empty state when the request succeeded with no alerts", () => {
+    renderWithAlerts({ data: [] } as never)
+
+    expect(screen.getByText(/No risk alerts/i)).toBeInTheDocument()
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+  })
+
+  it("keeps loaded alerts on screen during a background refetch", () => {
+    // `isFetching` true with data present is exactly what a refetch looks like.
+    renderWithAlerts({ isFetching: true } as never)
+
+    expect(screen.getByText(/Ana Reyes/i)).toBeInTheDocument()
+  })
+})
 
 describe("GuidanceDashboard", () => {
   it("renders loading state", () => {

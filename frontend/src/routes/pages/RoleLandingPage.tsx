@@ -55,9 +55,9 @@ function RoleLandingContent({ role }: RoleLandingProps) {
     <div className="space-y-6">
       <div className="space-y-1">
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold text-foreground">
+          <h2 className="text-2xl font-bold text-foreground">
             {content.title}
-          </h1>
+          </h2>
           <Badge
             variant="outline"
             className="border-border bg-maroon-100 text-maroon-800"
@@ -74,7 +74,7 @@ function RoleLandingContent({ role }: RoleLandingProps) {
         <CardHeader className="gap-1">
           <div className="flex items-center gap-2">
             <Icon className="size-4 text-muted-foreground" aria-hidden="true" />
-            <h2 className="text-lg font-semibold">Getting around</h2>
+            <h3 className="text-lg font-semibold">Getting around</h3>
           </div>
         </CardHeader>
         <CardContent>

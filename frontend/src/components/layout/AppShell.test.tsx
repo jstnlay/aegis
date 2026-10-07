@@ -469,3 +469,200 @@ describe("a page render failure does not unmount the shell", () => {
     expect(screen.queryByRole("alert")).toBeNull()
   })
 })
+
+/* =====================================================================
+   PH11.11 — mobile drawer keyboard contract and route-change focus
+   ===================================================================== */
+
+/**
+ * jsdom's `matchMedia` never matches, because it evaluates no media queries
+ * against a viewport. `Sidebar` needs to know whether it is at the `lg`
+ * breakpoint or below to know whether the drawer is actually off-canvas, so
+ * these tests pin the viewport explicitly. Without this the desktop layout
+ * could not be told apart from the mobile one.
+ */
+function stubViewport(options: { wide: boolean }) {
+  const original = window.matchMedia
+  window.matchMedia = ((query: string) => ({
+    matches: query.includes("min-width") ? options.wide : false,
+    media: query,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  })) as unknown as typeof window.matchMedia
+
+  return () => {
+    window.matchMedia = original
+  }
+}
+
+/**
+ * The shell renders only after the auth bootstrap resolves, so every
+ * assertion here has to wait for it. Waiting on the hamburger is also the
+ * narrowest possible confirmation that the header mounted.
+ */
+async function shellReady() {
+  return screen.findByRole("button", { name: /open navigation/i })
+}
+
+function primaryNav(): HTMLElement {
+  return screen.getByRole("navigation", { name: "Main" })
+}
+
+describe("PH11.11 mobile drawer keyboard contract", () => {
+  it("reports its state and the region it controls", async () => {
+    const restore = stubViewport({ wide: false })
+    try {
+      await renderAuthenticatedApp("student")
+      const trigger = await shellReady()
+
+      // PH11.2 §16.3: the control has to say whether what it controls is open.
+      expect(trigger).toHaveAttribute("aria-expanded", "false")
+      expect(trigger).toHaveAttribute("aria-controls", primaryNav().id)
+    } finally {
+      restore()
+    }
+  })
+
+  it("updates aria-expanded when the drawer is opened", async () => {
+    const restore = stubViewport({ wide: false })
+    try {
+      await renderAuthenticatedApp("student")
+      const trigger = await shellReady()
+
+      fireEvent.click(trigger)
+
+      expect(trigger).toHaveAttribute("aria-expanded", "true")
+    } finally {
+      restore()
+    }
+  })
+
+  it("removes the off-canvas navigation from the tab order while it is closed", async () => {
+    const restore = stubViewport({ wide: false })
+    try {
+      await renderAuthenticatedApp("student")
+      await shellReady()
+
+      // Closed and narrow: the drawer is translated off screen, so its links must
+      // not stay focusable. A keyboard user used to tab invisibly through the
+      // whole navigation before reaching anything on the page.
+      expect(primaryNav()).toHaveAttribute("inert")
+    } finally {
+      restore()
+    }
+  })
+
+  it("keeps the navigation focusable while the drawer is open", async () => {
+    const restore = stubViewport({ wide: false })
+    try {
+      await renderAuthenticatedApp("student")
+      const trigger = await shellReady()
+
+      fireEvent.click(trigger)
+
+      expect(primaryNav()).not.toHaveAttribute("inert")
+    } finally {
+      restore()
+    }
+  })
+
+  it("never marks the navigation inert at desktop width, where it is always visible", async () => {
+    const restore = stubViewport({ wide: true })
+    try {
+      await renderAuthenticatedApp("student")
+      await shellReady()
+
+      // `inert` is a DOM attribute with no responsive variant, so applying it
+      // purely on `open` would strip the navigation from the tab order on the
+      // one layout where the sidebar is permanently on screen.
+      expect(primaryNav()).not.toHaveAttribute("inert")
+    } finally {
+      restore()
+    }
+  })
+
+  it("closes the drawer on Escape", async () => {
+    const restore = stubViewport({ wide: false })
+    try {
+      await renderAuthenticatedApp("student")
+      const trigger = await shellReady()
+
+      fireEvent.click(trigger)
+      expect(primaryNav()).not.toHaveAttribute("inert")
+
+      // PH11.2 §16.3: "Escape key: closes modals, dropdowns, and drawers."
+      fireEvent.keyDown(document, { key: "Escape" })
+
+      expect(primaryNav()).toHaveAttribute("inert")
+    } finally {
+      restore()
+    }
+  })
+
+  it("returns focus to the trigger when the drawer closes", async () => {
+    const restore = stubViewport({ wide: false })
+    try {
+      await renderAuthenticatedApp("student")
+      const trigger = await shellReady()
+
+      trigger.focus()
+      fireEvent.click(trigger)
+      fireEvent.keyDown(document, { key: "Escape" })
+
+      // Focus was inside the drawer, which has just become inert. Leaving it
+      // there drops the reader onto an unreachable element.
+      expect(document.activeElement).toBe(trigger)
+    } finally {
+      restore()
+    }
+  })
+
+  it("moves focus to the main region on navigation", async () => {
+    // Two constraints on this test, both learned the hard way:
+    //
+    // 1. Desktop width, because the sidebar is `inert` at narrow widths while
+    //    closed — which is the other test's point, and correctly hides its links
+    //    from the accessibility tree.
+    // 2. Faculty, not admin. `testRoutes()` mounts `AcademicsLandingPage` at
+    //    `/app/academics` and sends everything else to the dashboard. An admin's
+    //    "Academic Structure" link points at `/app/admin/academics`, which that
+    //    router does not define, so the click bounced back to the dashboard and
+    //    a `findByRole` for the academics page would never resolve.
+    const restore = stubViewport({ wide: true })
+    try {
+      await renderAuthenticatedApp("faculty", "/app/dashboard")
+      await shellReady()
+
+      fireEvent.click(screen.getByRole("link", { name: "Academics" }))
+
+      // The outlet swapped underneath a client-side navigation, so focus has to
+      // be placed deliberately or it stays on the link that is now gone.
+      await screen.findByRole("heading", { name: "Academics", level: 2 })
+      expect(document.activeElement).toBe(
+        document.getElementById("main-content")
+      )
+    } finally {
+      restore()
+    }
+  })
+
+  it("does not steal focus on first render", async () => {
+    const restore = stubViewport({ wide: false })
+    try {
+      await renderAuthenticatedApp("student")
+      await shellReady()
+
+      // Focusing `main` on mount would yank focus away from whatever opened the
+      // shell.
+      expect(document.activeElement).not.toBe(
+        document.getElementById("main-content")
+      )
+    } finally {
+      restore()
+    }
+  })
+})

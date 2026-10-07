@@ -2,6 +2,12 @@ import { useMemo } from "react"
 
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  ErrorNote,
+  PendingMetric,
+  PendingRegion,
+  UnavailableMetric,
+} from "@/components/feedback/Feedback"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/features/auth/AuthContext"
 import {
@@ -10,6 +16,48 @@ import {
   useFacultySubjectAssignments,
 } from "@/features/faculty/api"
 import { formatCount } from "@/lib/metric-format"
+
+/**
+ * One headline figure, with its three states kept distinct.
+ *
+ * PH11.11. Built to the same shape as the student, guidance and admin tiles so
+ * the pattern has one definition across the role dashboards. See the note on the
+ * guidance copy for what the previous hand-rolled version got wrong.
+ */
+function MetricCard({
+  title,
+  hint,
+  isLoading,
+  isError,
+  children,
+}: {
+  title: string
+  hint: string
+  isLoading: boolean
+  isError: boolean
+  /** The formatted figure. Rendered only once the request has resolved. */
+  children: React.ReactNode
+}) {
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold">
+          {isLoading ? (
+            <PendingMetric label={title} />
+          ) : isError ? (
+            <UnavailableMetric />
+          ) : (
+            children
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground mt-1">{hint}</p>
+      </CardContent>
+    </Card>
+  )
+}
 
 function FacultyDashboard() {
   const { user } = useAuth()
@@ -30,9 +78,9 @@ function FacultyDashboard() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-bold text-foreground">
+        <h2 className="text-2xl font-bold text-foreground">
           Faculty Dashboard
-        </h1>
+        </h2>
         <Badge
           variant="outline"
           className="w-max max-w-full border-border bg-maroon-100 text-maroon-800"
@@ -41,66 +89,49 @@ function FacultyDashboard() {
         </Badge>
       </div>
 
+      {/*
+        PH11.11: one note for the metric row, then announced placeholders and a
+        real failure state. The three tiles previously keyed off `isFetching` —
+        true through a background refetch, so a refresh greyed out figures the
+        reader was looking at — and had no failure state at all, printing "N/A"
+        after a failed request, which claims the backend reported no figure rather
+        than that nobody knows.
+      */}
+      {statsQuery.isError ? (
+        <ErrorNote message="Unable to load the faculty statistics. Please try again." />
+      ) : null}
+
       <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Total Students
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {statsQuery.isFetching ? (
-                <Skeleton className="h-8 w-20" />
-              ) : (
-                formatCount(statsQuery.data?.total_students ?? null)
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Active enrollments across all sections
-            </p>
-          </CardContent>
-        </Card>
+        <MetricCard
+          title="Total Students"
+          hint="Active enrollments across all sections"
+          isLoading={statsQuery.isLoading}
+          isError={statsQuery.isError}
+        >
+          {formatCount(statsQuery.data?.total_students ?? null)}
+        </MetricCard>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Pending Grades
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {statsQuery.isFetching ? (
-                <Skeleton className="h-8 w-20" />
-              ) : (
-                formatCount(pendingTotal)
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {statsQuery.data
-                ? `${statsQuery.data.pending_grades} drafts + ${statsQuery.data.pending_submissions} submissions`
-                : "No data"}
-            </p>
-          </CardContent>
-        </Card>
+        <MetricCard
+          title="Pending Grades"
+          hint={
+            statsQuery.data
+              ? `${statsQuery.data.pending_grades} drafts + ${statsQuery.data.pending_submissions} submissions`
+              : "No data"
+          }
+          isLoading={statsQuery.isLoading}
+          isError={statsQuery.isError}
+        >
+          {formatCount(pendingTotal)}
+        </MetricCard>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Sections</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {sectionsQuery.isFetching ? (
-                <Skeleton className="h-8 w-20" />
-              ) : (
-                formatCount(sectionsQuery.data?.length ?? null)
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Assigned teaching sections
-            </p>
-          </CardContent>
-        </Card>
+        <MetricCard
+          title="Sections"
+          hint="Assigned teaching sections"
+          isLoading={sectionsQuery.isLoading}
+          isError={sectionsQuery.isError}
+        >
+          {formatCount(sectionsQuery.data?.length ?? null)}
+        </MetricCard>
       </div>
 
       <Card>
@@ -108,14 +139,12 @@ function FacultyDashboard() {
           <CardTitle>Subject Assignments</CardTitle>
         </CardHeader>
         <CardContent>
-          {assignmentsQuery.isFetching ? (
-            <div className="space-y-2">
+          {assignmentsQuery.isLoading ? (
+            <PendingRegion label="Subject assignments">
               <Skeleton className="h-10 w-full" />
-            </div>
+            </PendingRegion>
           ) : assignmentsQuery.isError ? (
-            <p className="text-sm text-muted-foreground">
-              Unable to load subject assignments. Please try again.
-            </p>
+            <ErrorNote message="Unable to load subject assignments. Please try again." />
           ) : assignmentsQuery.data && assignmentsQuery.data.length > 0 ? (
             <ul className="space-y-2">
               {assignmentsQuery.data.map((assignment, idx) => (
@@ -150,14 +179,12 @@ function FacultyDashboard() {
           <CardTitle>Sections Overview</CardTitle>
         </CardHeader>
         <CardContent>
-          {sectionsQuery.isFetching ? (
-            <div className="space-y-2">
+          {sectionsQuery.isLoading ? (
+            <PendingRegion label="Sections overview">
               <Skeleton className="h-10 w-full" />
-            </div>
+            </PendingRegion>
           ) : sectionsQuery.isError ? (
-            <p className="text-sm text-muted-foreground">
-              Unable to load sections. Please try again.
-            </p>
+            <ErrorNote message="Unable to load sections. Please try again." />
           ) : sectionsQuery.data && sectionsQuery.data.length > 0 ? (
             <ul className="space-y-2">
               {sectionsQuery.data.map((section, idx) => (

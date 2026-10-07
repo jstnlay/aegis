@@ -534,6 +534,12 @@ describe("DataTable state precedence", () => {
   it("shows exactly one state, and never two", () => {
     // Each phase must be distinguishable by role alone, so a screen reader
     // hears exactly one thing: a busy region, an alert, or the table.
+    //
+    // PH11.11 added `role="status"` to `EmptyState`, so "empty" now reports one
+    // status region where it previously reported none. The invariant this suite
+    // protects is unchanged and still exact: one state per phase, and the three
+    // states remain distinguishable — loading and empty are polite `status`,
+    // error is the interrupting `alert`.
     const observed = (phase: "loading" | "error" | "empty" | "ready") => {
       const { unmount } = render(<Stateful phase={phase} />)
       const snapshot = {
@@ -559,7 +565,7 @@ describe("DataTable state precedence", () => {
       emptyText: 0,
     })
     expect(observed("empty")).toEqual({
-      status: 0,
+      status: 1,
       alert: 0,
       table: 0,
       emptyText: 1,
@@ -573,10 +579,13 @@ describe("DataTable state precedence", () => {
   })
 
   it("never renders an empty state as an error", () => {
+    // The claim being protected is that an empty result is not a failure. The
+    // empty state announces politely via `status`; only a failure announces via
+    // `alert`, and the two are never both present.
     render(<Stateful phase="empty" />)
 
     expect(screen.queryAllByRole("alert")).toHaveLength(0)
-    expect(screen.queryAllByRole("status")).toHaveLength(0)
+    expect(screen.queryAllByRole("status")).toHaveLength(1)
   })
 })
 
@@ -875,6 +884,107 @@ describe("DataTable page size", () => {
     render(<Harness />)
 
     expect(screen.getByText(/Showing 1–20 of 45/)).toBeInTheDocument()
+  })
+})
+
+/**
+ * PH11.11 additions: the page-size control's identity and the paginated range
+ * announcement.
+ *
+ * The identity test is a regression test. PH11.9 derived the control's DOM id
+ * from the table's row count and documented that the count was "unique per
+ * rendered table"; it is not, so two tables on one screen with the same number
+ * of rows produced a duplicate `<label for>` and `<select id>`, and every label
+ * resolved to the first table's control. The id is now `useId`-derived, which is
+ * per-instance by construction.
+ */
+describe("DataTable pagination accessibility", () => {
+  const many: Row[] = Array.from({ length: 25 }, (_, index) => ({
+    id: `r${index}`,
+    code: `S-${index}`,
+    name: `Student ${index}`,
+  }))
+  const manyRowKey = (row: Row) => row.id
+
+  function Table({
+    caption,
+    totalCount,
+  }: {
+    caption: string
+    totalCount: number
+  }) {
+    const rows = many.slice(0, Math.min(many.length, totalCount))
+    return (
+      <DataTable
+        caption={caption}
+        columns={COLUMNS}
+        rows={rows}
+        rowKey={manyRowKey}
+        emptyMessage="Nothing"
+        pagination={{
+          page: 1,
+          pageSize: 10,
+          totalCount,
+          onPageChange: vi.fn(),
+        }}
+        pageSizeOptions={[10, 25, 50]}
+        onPageSizeChange={vi.fn()}
+      />
+    )
+  }
+
+  it("gives two tables with the same row count distinct control ids", () => {
+    render(
+      <>
+        <Table caption="First" totalCount={25} />
+        <Table caption="Second" totalCount={25} />
+      </>
+    )
+
+    const selects = screen.getAllByLabelText(/rows per page/i)
+    expect(selects).toHaveLength(2)
+
+    // The defect this replaces: both controls shared one id, so this was 1.
+    const ids = selects.map((select) => select.getAttribute("id"))
+    expect(new Set(ids).size).toBe(2)
+
+    // And each label must resolve to its own control, not the first one.
+    const labels = screen.getAllByText(/rows per page/i)
+    const [first, second] = labels
+    const [firstId, secondId] = ids
+    expect(first?.getAttribute("for")).toBe(firstId)
+    expect(second?.getAttribute("for")).toBe(secondId)
+    expect(firstId).toBeTruthy()
+    expect(secondId).toBeTruthy()
+  })
+
+  it("announces the visible range politely so paging is not silent", () => {
+    render(<Table caption="First" totalCount={25} />)
+
+    // PH11.2 §16.7: dynamic content updates are announced. Without this the
+    // table mutated underneath a screen reader with no indication that the rows
+    // or the range had changed.
+    const summary = screen.getByText(/Showing 1–10 of 25/)
+    expect(summary).toHaveAttribute("aria-live", "polite")
+  })
+
+  it("makes the horizontal scroll container focusable and named", () => {
+    render(
+      <DataTable
+        caption="Students"
+        columns={COLUMNS}
+        rows={ROWS}
+        rowKey={rowKey}
+        emptyMessage="Nothing"
+      />
+    )
+
+    // PH11.2 §12.4 keeps tables as scrolling tables, so the overflow has to be
+    // reachable from the keyboard (WCAG 2.1.1). The region is named from the
+    // caption, which is the name a reader already knows the table by.
+    const region = screen.getByRole("region", { name: "Students" })
+    expect(region).toHaveAttribute("tabindex", "0")
+    expect(region).toContainElement(screen.getByRole("table"))
   })
 })
 

@@ -190,7 +190,7 @@ describe("ConsultationsPage", () => {
     renderPage()
 
     expect(
-      await screen.findByRole("heading", { name: "Consultations", level: 1 })
+      await screen.findByRole("heading", { name: "Consultations", level: 2 })
     ).toBeInTheDocument()
     expect(await screen.findByText("Ana Reyes")).toBeInTheDocument()
     expect(screen.getByText("Ben Cruz")).toBeInTheDocument()
@@ -470,7 +470,14 @@ describe("ConsultationsPage", () => {
     await screen.findByText("Ana Reyes")
 
     fireEvent.click(
-      within(rowFor("Ana Reyes")).getByRole("button", { name: "Update" })
+      // PH11.11: the row trigger now carries an `aria-label` naming the student
+      // and session date. There is one of these per row, so the bare "Update"
+      // gave every button the same accessible name and a screen reader read
+      // "Update, Update, Update…" with no way to tell the rows apart. Matching
+      // the label is what the assistive-technology path actually sees now.
+      within(rowFor("Ana Reyes")).getByRole("button", {
+        name: "Update consultation for Ana Reyes on 2025-02-10",
+      })
     )
     const dialog = await screen.findByRole("dialog")
 
@@ -512,7 +519,10 @@ describe("ConsultationsPage", () => {
     await screen.findByText("Ben Cruz")
 
     fireEvent.click(
-      within(rowFor("Ben Cruz")).getByRole("button", { name: "Update" })
+      // Per-row `aria-label` added in PH11.11; see the note in the patch test.
+      within(rowFor("Ben Cruz")).getByRole("button", {
+        name: "Update consultation for Ben Cruz on 2025-02-08",
+      })
     )
     const dialog = await screen.findByRole("dialog")
 

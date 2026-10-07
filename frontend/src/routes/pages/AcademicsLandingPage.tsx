@@ -34,7 +34,7 @@ export function AcademicsLandingPage() {
             className="size-5 text-muted-foreground"
             aria-hidden="true"
           />
-          <h1 className="text-2xl font-bold text-foreground">Academics</h1>
+          <h2 className="text-2xl font-bold text-foreground">Academics</h2>
         </div>
         <p className="text-sm text-muted-foreground">
           Academic records and grading tools for faculty and administrators.
@@ -43,7 +43,7 @@ export function AcademicsLandingPage() {
 
       <Card>
         <CardHeader className="gap-1">
-          <h2 className="text-lg font-semibold">Academic structure</h2>
+          <h3 className="text-lg font-semibold">Academic structure</h3>
           <CardDescription>
             Academic years, grade levels, sections, subjects, subject
             assignments, schedules and grading periods are administered from the

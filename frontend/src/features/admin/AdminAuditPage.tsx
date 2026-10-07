@@ -146,7 +146,7 @@ export function AdminAuditPage() {
       <div className="flex flex-col gap-1">
         <div className="flex items-center gap-3">
           <Shield className="size-5 text-muted-foreground" aria-hidden="true" />
-          <h1 className="text-2xl font-bold text-foreground">Audit Logs</h1>
+          <h2 className="text-2xl font-bold text-foreground">Audit Logs</h2>
         </div>
         <p className="text-sm text-muted-foreground">
           Every recorded create, update, delete, login, logout, import, export

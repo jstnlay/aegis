@@ -1,5 +1,11 @@
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  ErrorNote,
+  PendingMetric,
+  PendingRegion,
+  UnavailableMetric,
+} from "@/components/feedback/Feedback"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/features/auth/AuthContext"
 import {
@@ -47,9 +53,9 @@ function AdminDashboard() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-bold text-foreground">
+        <h2 className="text-2xl font-bold text-foreground">
           Administration Panel
-        </h1>
+        </h2>
         <Badge
           variant="outline"
           className="w-max max-w-full border-border bg-maroon-100 text-maroon-800"
@@ -62,64 +68,43 @@ function AdminDashboard() {
         </p>
       </div>
 
+      {/*
+        PH11.11: one note for the whole metric row rather than one per tile.
+        The three figures come from a single request, so a failure is a single
+        event, and four identical alerts for one event would interrupt a screen
+        reader four times.
+      */}
+      {metricsQuery.isError ? (
+        <ErrorNote message="Unable to load the school-wide metrics. Please try again." />
+      ) : null}
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Overall Grade Average
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {metricsQuery.isFetching ? (
-                <Skeleton className="h-8 w-20" />
-              ) : (
-                formatPercent(overallGradeAvg, 2)
-              )}
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              School-wide academic performance
-            </p>
-          </CardContent>
-        </Card>
+        <MetricCard
+          title="Overall Grade Average"
+          hint="School-wide academic performance"
+          isLoading={metricsQuery.isLoading}
+          isError={metricsQuery.isError}
+        >
+          {formatPercent(overallGradeAvg, 2)}
+        </MetricCard>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Total Students
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {metricsQuery.isFetching ? (
-                <Skeleton className="h-8 w-20" />
-              ) : (
-                formatCount(totalStudents)
-              )}
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Active student enrollments
-            </p>
-          </CardContent>
-        </Card>
+        <MetricCard
+          title="Total Students"
+          hint="Active student enrollments"
+          isLoading={metricsQuery.isLoading}
+          isError={metricsQuery.isError}
+        >
+          {formatCount(totalStudents)}
+        </MetricCard>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Grade Levels</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {metricsQuery.isFetching ? (
-                <Skeleton className="h-8 w-20" />
-              ) : (
-                formatCount(gradeLevels)
-              )}
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Active grade levels
-            </p>
-          </CardContent>
-        </Card>
+        <MetricCard
+          title="Grade Levels"
+          hint="Active grade levels"
+          isLoading={metricsQuery.isLoading}
+          isError={metricsQuery.isError}
+        >
+          {formatCount(gradeLevels)}
+        </MetricCard>
       </div>
 
       <Card>
@@ -127,10 +112,10 @@ function AdminDashboard() {
           <CardTitle>Risk Distribution</CardTitle>
         </CardHeader>
         <CardContent>
-          {riskDistQuery.isFetching ? (
-            <div className="space-y-2">
+          {riskDistQuery.isLoading ? (
+            <PendingRegion label="Risk distribution">
               <Skeleton className="h-8 w-3/4" />
-            </div>
+            </PendingRegion>
           ) : risk ? (
             <>
               <div className="grid gap-4 md:grid-cols-3">
@@ -171,11 +156,20 @@ function AdminDashboard() {
               ) : null}
             </>
           ) : (
-            <p className="text-sm text-muted-foreground">
-              {riskDistQuery.isError
-                ? "Unable to load the risk distribution. Please try again."
-                : "No risk distribution data available"}
-            </p>
+            /*
+              PH11.11: the failure is reported as a failure, via `role="alert"`.
+              It was a muted paragraph before, which is the one thing a failed
+              request must not be: an unannounced muted line reads as "there is
+              nothing here" rather than "the request failed", and it is
+              indistinguishable from the genuine no-data case below it.
+            */
+            <ErrorNote
+              message={
+                riskDistQuery.isError
+                  ? "Unable to load the risk distribution. Please try again."
+                  : "No risk distribution data is available."
+              }
+            />
           )}
         </CardContent>
       </Card>
@@ -197,6 +191,56 @@ function AdminDashboard() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+/**
+ * One headline figure, with its three states kept distinct.
+ *
+ * PH11.11. The three tiles on this screen were hand-rolled and each had already
+ * drifted: all three keyed the placeholder off `isFetching`, which stays true
+ * during a *refetch*, so a background refresh replaced three real figures with
+ * grey bars and then restored them — and neither state was announced. They also
+ * had no failure state at all, so a failed request rendered `formatPercent(null)`
+ * → "N/A", which claims the backend reported no figure rather than that nobody
+ * knows.
+ *
+ * `isLoading` is `isPending && isFetching` in react-query v5, so it is true only
+ * before the first result — a refetch over figures already on screen leaves them
+ * alone, which is what a reader wants while reading them.
+ */
+function MetricCard({
+  title,
+  hint,
+  isLoading,
+  isError,
+  children,
+}: {
+  title: string
+  hint: string
+  isLoading: boolean
+  isError: boolean
+  /** The formatted figure. Rendered only once the request has resolved. */
+  children: React.ReactNode
+}) {
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold">
+          {isLoading ? (
+            <PendingMetric label={title} />
+          ) : isError ? (
+            <UnavailableMetric />
+          ) : (
+            children
+          )}
+        </div>
+        <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
+      </CardContent>
+    </Card>
   )
 }
 

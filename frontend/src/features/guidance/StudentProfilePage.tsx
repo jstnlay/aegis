@@ -87,7 +87,7 @@ function StudentIdentity({
   return (
     <div className="space-y-1">
       <div className="flex flex-wrap items-center gap-2">
-        <h1 className="text-2xl font-bold text-foreground">{name}</h1>
+        <h2 className="text-2xl font-bold text-foreground">{name}</h2>
         {code ? (
           <Badge variant="outline" className="tabular-nums">
             {code}

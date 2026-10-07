@@ -2,6 +2,10 @@ import { useState } from "react"
 
 import { Badge } from "@/components/ui/badge"
 import {
+  PendingMetric,
+  UnavailableMetric,
+} from "@/components/feedback/Feedback"
+import {
   Card,
   CardContent,
   CardDescription,
@@ -72,7 +76,7 @@ export function ParentAcademicsPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-bold text-foreground">Academic Record</h1>
+        <h2 className="text-2xl font-bold text-foreground">Academic Record</h2>
         <p className="text-sm text-muted-foreground">
           Finalized grades and attendance for each of your linked children.
         </p>
@@ -95,6 +99,7 @@ export function ParentAcademicsPage() {
           gradesError={gradesQuery.isError}
           summaryRows={summaryQuery.data ?? []}
           summaryLoading={summaryQuery.isLoading}
+          summaryError={summaryQuery.isError}
           records={recordsQuery.data ?? []}
           recordsLoading={recordsQuery.isLoading}
           recordsError={recordsQuery.isError}
@@ -181,6 +186,7 @@ function AcademicRecord({
   gradesError,
   summaryRows,
   summaryLoading,
+  summaryError,
   records,
   recordsLoading,
   recordsError,
@@ -200,6 +206,14 @@ function AcademicRecord({
     total_records: number
   }>
   summaryLoading: boolean
+  /**
+   * PH11.11. The summary card previously received no error state at all, so a
+   * failed summary request fell through to the empty branch and rendered "No
+   * attendance summary available" — a claim about the child's attendance drawn
+   * from a request that failed. The grade card had the same problem for its
+   * count line ("Across 0 finalized grades" after a failure).
+   */
+  summaryError: boolean
   records: readonly {
     id: string
     date: string
@@ -224,8 +238,14 @@ function AcademicRecord({
    * The summary query drives this card only. It is deliberately kept separate
    * from the record query: PH11.10 fixed a defect where the record table was
    * handed the *summary* error, so a failed record request rendered as
-   * "No attendance has been recorded yet." — an empty-success state asserting
+   * "No attendance has been recorded yet." - an empty-success state asserting
    * something the API never said.
+   *
+   * PH11.11 completed that separation for the summary *card*, which was still
+   * receiving no error state at all: a failed summary fell through to the empty
+   * branch and told the parent "No attendance summary available", which is a
+   * claim about their child's attendance drawn from a request that failed. See
+   * `summaryError` on the props.
    */
   const present = summaryRows.reduce((s, r) => s + r.present_count, 0)
   const late = summaryRows.reduce((s, r) => s + r.late_count, 0)
@@ -237,7 +257,7 @@ function AcademicRecord({
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-2">
-        <h2 className="text-xl font-bold">{child.student_name}</h2>
+        <h3 className="text-xl font-bold">{child.student_name}</h3>
         <Badge variant="secondary">{child.section_name}</Badge>
         <Badge variant="outline">{child.student_id}</Badge>
       </div>
@@ -249,11 +269,20 @@ function AcademicRecord({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {gradesLoading ? "—" : formatPercent(average, 2)}
+              {gradesLoading ? (
+                <PendingMetric label="Average grade" />
+              ) : gradesError ? (
+                <UnavailableMetric />
+              ) : (
+                formatPercent(average, 2)
+              )}
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              Across {formatCount(withScores.length)} finalized{" "}
-              {withScores.length === 1 ? "grade" : "grades"}
+              {gradesError
+                ? "Grades could not be loaded."
+                : `Across ${formatCount(withScores.length)} finalized ${
+                    withScores.length === 1 ? "grade" : "grades"
+                  }`}
             </p>
           </CardContent>
         </Card>
@@ -264,17 +293,23 @@ function AcademicRecord({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {summaryLoading
-                ? "—"
-                : summaryRows.length === 0
-                  ? "—"
-                  : formatPercent(attendanceRate, 1)}
+              {summaryLoading ? (
+                <PendingMetric label="Attendance" />
+              ) : summaryError ? (
+                <UnavailableMetric />
+              ) : summaryRows.length === 0 ? (
+                <span className="text-base font-normal text-muted-foreground">
+                  Not recorded
+                </span>
+              ) : (
+                formatPercent(attendanceRate, 1)
+              )}
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              {summaryLoading
-                ? "Loading…"
+              {summaryError
+                ? "The attendance summary could not be loaded."
                 : summaryRows.length === 0
-                  ? "No attendance summary available"
+                  ? "No attendance summary has been recorded."
                   : `${present} present · ${late} late · ${absent} absent`}
             </p>
           </CardContent>
@@ -288,10 +323,18 @@ function AcademicRecord({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {gradesLoading ? "—" : formatCount(grades.length)}
+              {gradesLoading ? (
+                <PendingMetric label="Subjects graded" />
+              ) : gradesError ? (
+                <UnavailableMetric />
+              ) : (
+                formatCount(grades.length)
+              )}
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              Finalized grade records
+              {gradesError
+                ? "Finalized grade records could not be loaded."
+                : "Finalized grade records"}
             </p>
           </CardContent>
         </Card>

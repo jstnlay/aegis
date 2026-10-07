@@ -1,3 +1,4 @@
+import { useId } from "react"
 import * as React from "react"
 
 import {
@@ -85,7 +86,14 @@ export interface DataTableColumn<T> {
   sortTieBreak?: (row: T) => string | number | null | undefined
   /** Extra classes for the header cell. */
   headerClassName?: string
-  /** Extra classes for every body cell in this column. */
+  /**
+   * Extra classes for every body cell in this column.
+   *
+   * Cells wrap by default since PH11.11. Pass `"whitespace-nowrap"` here for a
+   * column whose values must stay on one line — a code, a date, a short status —
+   * and `"whitespace-normal align-top min-w-[16rem]"` for one holding free text,
+   * which is the case that used to force a table wider than the screen.
+   */
   cellClassName?: string
 }
 
@@ -183,9 +191,11 @@ export function DataTable<T>({
         The table primitive already wraps the table in `overflow-x-auto`, which
         is the responsive-overflow requirement: below the table's intrinsic
         width the table scrolls inside its own container rather than widening
-        the page.
+        the page. PH11.2 §12.4 requires that behaviour explicitly. `scrollLabel`
+        additionally makes that container focusable and named, so the overflow is
+        reachable from the keyboard rather than only by dragging.
       */}
-      <Table>
+      <Table scrollLabel={caption}>
         <TableCaption className="sr-only">{caption}</TableCaption>
         <TableHeader>
           <TableRow>
@@ -308,13 +318,33 @@ function PaginationControls({
   const sizes = (pageSizeOptions ?? []).filter((size) => size !== pageSize)
   const showPageSize = totalPages > 1 && sizes.length > 0 && onPageSizeChange
 
-  if (totalPages <= 1) return null
+  /*
+   * `useId`, not the row count. PH11.9 derived this from `totalCount` and
+   * claimed the row count was unique per rendered table; it is not. Two tables
+   * on one screen with the same number of rows produced the same `<label for>`
+   * and the same `<select id>`, and every `<label>` then resolved to the first
+   * table's control. `useId` is per-instance, which is the property actually
+   * required, so no caller can collide with another.
+   *
+   * Called before the early return below, because a hook may not be called
+   * conditionally: the control is simply not rendered when there is one page,
+   * but the hook still has to run on every render of this component.
+   */
+  const pageSizeId = `${useId()}-page-size`
 
-  const pageSizeId = `${pageSizeControlId(totalCount)}-page-size`
+  if (totalPages <= 1) return null
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <p className="text-sm text-muted-foreground">
+      {/*
+        The range summary is the polite live region for the whole control: it is
+        the one place that states what changed when the reader pages, changes the
+        page size, or a sort reorders the rows. Without it the table silently
+        mutates underneath a screen reader. `aria-live="polite"` rather than
+        `role="status"` on the container, so the region exists before the text
+        changes and is therefore reliably announced.
+      */}
+      <p aria-live="polite" className="text-sm text-muted-foreground">
         Showing {firstRow}–{lastRow} of {totalCount}
       </p>
       <div className="flex flex-wrap items-center gap-2">
@@ -369,14 +399,4 @@ function PaginationControls({
       </div>
     </div>
   )
-}
-
-/**
- * A DOM id fragment for the page-size control.
- *
- * Several tables can be on one screen, so the id must differ per table. The row
- * count is unique per rendered table and is stable for that table's lifetime.
- */
-function pageSizeControlId(totalCount: number): string {
-  return `rows-${totalCount}`
 }

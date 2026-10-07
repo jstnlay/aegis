@@ -1,3 +1,4 @@
+import { ChoiceField, Field } from "@/components/ui/form-field"
 import { useMemo, useState } from "react"
 
 import { Badge } from "@/components/ui/badge"
@@ -133,7 +134,7 @@ export function AdminUsersPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-bold text-foreground">Users</h1>
+        <h2 className="text-2xl font-bold text-foreground">Users</h2>
         <p className="text-sm text-muted-foreground">
           Every account in the system, and the only account-creation form the
           API exposes.
@@ -301,74 +302,68 @@ function NewUserDialog() {
             )
           }}
         >
-          <div className="space-y-1.5">
-            <Label htmlFor="new-user-email">Email</Label>
-            <Input
-              id="new-user-email"
-              type="email"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-            />
-          </div>
+          {/*
+            PH11.11: the four mandatory fields now go through the shared
+            `Field`/`ChoiceField`, which is the pattern PH11.2 §16.5 asks for.
+
+            Previously every field here was a bare `<Label>` + `<Input>` pair:
+            the labels were bound, but nothing said a field was mandatory. The
+            only signal was a disabled submit button with no stated reason, so a
+            user who focused "Email", typed nothing and tabbed on found an inert
+            button and no way to learn what was missing. Required-ness is now
+            carried by `aria-required` on each control and by a visible asterisk,
+            and the password hint is referenced by `aria-describedby` rather
+            than sitting beside the field as an unassociated paragraph.
+          */}
+          <Field
+            label="Email"
+            id="new-user-email"
+            type="text"
+            value={form.email}
+            onChange={(value) => setForm({ ...form, email: value })}
+            required
+          />
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="new-user-first-name">First name</Label>
-              <Input
-                id="new-user-first-name"
-                value={form.first_name}
-                onChange={(e) =>
-                  setForm({ ...form, first_name: e.target.value })
-                }
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="new-user-last-name">Last name</Label>
-              <Input
-                id="new-user-last-name"
-                value={form.last_name}
-                onChange={(e) =>
-                  setForm({ ...form, last_name: e.target.value })
-                }
-              />
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="new-user-role">Role</Label>
-            <Select
-              value={form.role}
-              onValueChange={(value) =>
-                setForm({ ...form, role: value as UserRole })
-              }
-            >
-              <SelectTrigger id="new-user-role">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {USER_ROLES.map((role) => (
-                  <SelectItem key={role} value={role}>
-                    {USER_ROLE_LABELS[role]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="new-user-password">Initial password</Label>
-            <Input
-              id="new-user-password"
-              type="password"
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
+            <Field
+              label="First name"
+              id="new-user-first-name"
+              value={form.first_name}
+              onChange={(value) => setForm({ ...form, first_name: value })}
+              required
             />
-            {/* Mirrors UserCreateSerializer's min_length=8. */}
-            <p className="text-xs text-muted-foreground">
-              At least 8 characters. The backend validates it against the
-              project password rules.
-            </p>
+            <Field
+              label="Last name"
+              id="new-user-last-name"
+              value={form.last_name}
+              onChange={(value) => setForm({ ...form, last_name: value })}
+              required
+            />
           </div>
+
+          <ChoiceField
+            label="Role"
+            id="new-user-role"
+            value={form.role}
+            onChange={(value) => setForm({ ...form, role: value as UserRole })}
+            options={USER_ROLES.map((role) => ({
+              value: role,
+              label: USER_ROLE_LABELS[role],
+            }))}
+          />
+
+          <Field
+            label="Initial password"
+            id="new-user-password"
+            // `password`, as it was as a hand-rolled `<Input>`. Admitting this form
+            // to the shared `Field` must not have silently unmasked the field.
+            type="password"
+            value={form.password}
+            onChange={(value) => setForm({ ...form, password: value })}
+            required
+            // Mirrors UserCreateSerializer's min_length=8.
+            hint="At least 8 characters. The backend validates it against the project password rules."
+          />
 
           {create.isError ? (
             <ErrorNote message={normalizeApiError(create.error).message} />

@@ -1,7 +1,9 @@
 import { GraduationCap } from "lucide-react"
 import { NavLink } from "react-router-dom"
+import { useCallback, useEffect, useSyncExternalStore } from "react"
 
 import { Badge } from "@/components/ui/badge"
+import { PRIMARY_NAV_ID } from "@/components/layout/Header"
 import { useAuth } from "@/features/auth/AuthContext"
 import {
   getVisibleNavigationForRole,
@@ -101,6 +103,64 @@ function NavGroupSection({ group }: { group: NavGroup }) {
   )
 }
 
+/**
+ * True while the viewport is at least the `lg` breakpoint.
+ *
+ * `inert` is a DOM attribute, not a class, so it cannot be made responsive with
+ * a `max-lg:` prefix the way the drawer's transform is. The sidebar has to be
+ * marked inert only while it is *both* closed and narrow; marking it inert while
+ * closed on a desktop viewport would take the whole navigation out of the tab
+ * order on the one layout where it is permanently visible.
+ *
+ * `useSyncExternalStore` rather than a `matchMedia` listener in an effect: the
+ * snapshot is read during render, so the first paint after a resize already has
+ * the right value instead of one frame of the wrong one.
+ */
+function useIsWideViewport(): boolean {
+  const query = "(min-width: 64rem)"
+
+  const subscribe = useCallback((onChange: () => void) => {
+    if (typeof window === "undefined" || !window.matchMedia) return () => {}
+    const list = window.matchMedia(query)
+    list.addEventListener("change", onChange)
+    return () => list.removeEventListener("change", onChange)
+  }, [])
+
+  const getSnapshot = useCallback(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return true
+    return window.matchMedia(query).matches
+  }, [])
+
+  // `true` on the server and in a test environment without `matchMedia`: the
+  // desktop layout is the safe default, because the alternative would strip the
+  // navigation from the tab order when nothing can tell us the viewport is narrow.
+  const getServerSnapshot = useCallback(() => true, [])
+
+  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
+}
+
+/**
+ * Closes the mobile drawer on Escape.
+ *
+ * A `keydown` listener on the document rather than on the `<aside>`, because the
+ * drawer is not a focus trap — the reader is free to tab out of it into the page
+ * behind it, and Escape has to work wherever focus happens to be while the
+ * drawer is open. Guarded on `active` so no listener exists at all when the
+ * drawer is closed.
+ */
+function useEscapeToClose(active: boolean, onEscape: () => void) {
+  useEffect(() => {
+    if (!active) return
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onEscape()
+    }
+
+    document.addEventListener("keydown", onKeyDown)
+    return () => document.removeEventListener("keydown", onKeyDown)
+  }, [active, onEscape])
+}
+
 export function Sidebar({
   open,
   onOpenChange,
@@ -111,6 +171,20 @@ export function Sidebar({
   const { user } = useAuth()
   const navigation = user ? getVisibleNavigationForRole(user.role) : []
 
+  const close = useCallback(() => onOpenChange(false), [onOpenChange])
+  const isWide = useIsWideViewport()
+  useEscapeToClose(open, close)
+
+  /*
+   * PH11.11. While the drawer is closed on a narrow viewport it was translated
+   * off screen but still in the DOM, so its links stayed in the tab order: a
+   * keyboard user tabbed invisibly through the entire navigation before reaching
+   * anything on the page, and a screen reader announced it as available content.
+   * `inert` removes it from both while it is off screen, and is reverted the
+   * moment it is open or the viewport is wide.
+   */
+  const inertWhenOffCanvas = !open && !isWide
+
   return (
     <>
       {/* Mobile backdrop */}
@@ -118,12 +192,13 @@ export function Sidebar({
         <div
           className="fixed inset-0 z-40 bg-foreground/40 lg:hidden"
           aria-hidden="true"
-          onClick={() => onOpenChange(false)}
+          onClick={close}
         />
       ) : null}
 
       <aside
         aria-label="Primary"
+        data-state={open ? "open" : "closed"}
         className={cn(
           "flex w-64 flex-col border-r border-sidebar-border bg-sidebar transition-transform duration-normal ease-out motion-reduce:transition-none max-lg:fixed max-lg:inset-y-0 max-lg:left-0 max-lg:-translate-x-full lg:static lg:translate-x-0",
           open && "max-lg:translate-x-0"
@@ -131,7 +206,12 @@ export function Sidebar({
       >
         <Brand />
 
-        <nav className="flex-1 overflow-y-auto px-2 py-2" aria-label="Main">
+        <nav
+          id={PRIMARY_NAV_ID}
+          className="flex-1 overflow-y-auto px-2 py-2"
+          aria-label="Main"
+          inert={inertWhenOffCanvas}
+        >
           <ul>
             {navigation.map((group) => (
               <NavGroupSection key={group.heading} group={group} />

@@ -183,7 +183,7 @@ describe("RiskAlertsPage", () => {
     renderPage()
 
     expect(
-      await screen.findByRole("heading", { name: "Risk Alerts", level: 1 })
+      await screen.findByRole("heading", { name: "Risk Alerts", level: 2 })
     ).toBeInTheDocument()
 
     await waitFor(() => {

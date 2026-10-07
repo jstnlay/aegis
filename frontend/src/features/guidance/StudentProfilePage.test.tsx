@@ -278,13 +278,20 @@ function renderPage() {
  * its name are still required exactly as before. This test file was flaky at
  * PH11.9's baseline commit (reproduced 3 failures in 4 full-suite runs, passing
  * when the file runs alone), so the flake predates this phase.
+ *
+ * `level: 2` since PH11.11. This page was mounted directly, without the shell,
+ * so it used to carry the document's own `h1`. Under `AppShell` the header owns
+ * the `h1` and the page's title sits one level below it, which is why the level
+ * is now asserted as 2 rather than dropped — the heading is still required, and
+ * the level is still pinned, because a silent change of either is exactly the
+ * regression this helper exists to catch.
  */
 const RESOLVE_TIMEOUT_MS = 5000
 
 function findStudentHeading() {
   return screen.findByRole(
     "heading",
-    { name: "Ana Reyes", level: 1 },
+    { name: "Ana Reyes", level: 2 },
     { timeout: RESOLVE_TIMEOUT_MS }
   )
 }

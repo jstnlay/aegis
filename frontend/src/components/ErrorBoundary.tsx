@@ -1,4 +1,4 @@
-import { Component, type ErrorInfo, type ReactNode } from "react"
+import { Component, createRef, type ErrorInfo, type ReactNode } from "react"
 
 import { Button } from "@/components/ui/button"
 
@@ -41,8 +41,24 @@ export class ErrorBoundary extends Component<
 > {
   state: ErrorBoundaryState = { error: null }
 
+  /**
+   * PH11.11: the fallback container, focused when an error is caught.
+   *
+   * `role="alert"` already announces the failure, but only the content. The
+   * element that had focus — usually inside the subtree that just unmounted — is
+   * gone, so focus fell back to `<body>` and the reader's next Tab press
+   * restarted from the top of a page whose state they had just lost track of.
+   * Focusing the recovery panel states where they now are and puts the Retry
+   * button one Tab away.
+   */
+  private alertRef = createRef<HTMLDivElement>()
+
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { error }
+  }
+
+  componentDidMount(): void {
+    this.focusAlert()
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
@@ -63,6 +79,20 @@ export class ErrorBoundary extends Component<
       (key, index) => !Object.is(key, prevProps.resetKeys?.[index])
     )
     if (changed) this.reset()
+    else this.focusAlert()
+  }
+
+  /**
+   * Focus the recovery panel, once it is on screen.
+   *
+   * Called from `componentDidMount` and `componentDidUpdate` rather than
+   * `componentDidCatch` because the ref is not attached until the fallback has
+   * actually rendered; both lifecycle points run after that commit. Guarded
+   * because `ref` is null whenever a caller supplied its own `fallback` — this
+   * only applies to the built-in one.
+   */
+  private focusAlert(): void {
+    this.alertRef.current?.focus()
   }
 
   reset = (): void => {
@@ -80,7 +110,9 @@ export class ErrorBoundary extends Component<
     return (
       <div
         role="alert"
-        className="mx-auto flex w-full max-w-2xl flex-col gap-4 rounded-lg border border-destructive/40 bg-destructive/5 p-6"
+        tabIndex={-1}
+        ref={this.alertRef}
+        className="mx-auto flex w-full max-w-2xl flex-col gap-4 rounded-lg border border-destructive/40 bg-destructive/5 p-6 focus:outline-none"
       >
         <div className="space-y-1">
           <h2 className="text-lg font-semibold text-foreground">
@@ -113,7 +145,7 @@ export class ErrorBoundary extends Component<
           </details>
         ) : null}
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button onClick={this.reset}>Try again</Button>
           <Button variant="outline" onClick={() => window.location.reload()}>
             Reload the page

@@ -2,6 +2,12 @@ import { useMemo, useState } from "react"
 
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  ErrorNote,
+  PendingMetric,
+  PendingRegion,
+  UnavailableMetric,
+} from "@/components/feedback/Feedback"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/features/auth/AuthContext"
@@ -9,6 +15,51 @@ import { useLinkedStudents } from "@/features/parent/api"
 import { useStudentDashboardData } from "@/features/student/api"
 import { letterGradeBadgeClass } from "@/lib/grade-badge"
 import { formatPercent } from "@/lib/metric-format"
+
+/**
+ * One headline figure, with its three states kept distinct.
+ *
+ * PH11.12. This page reads the same `useStudentDashboardData` hook as
+ * `StudentDashboard` and presents the same two figures, so it was the one place
+ * left where the identical data was rendered with a different treatment: silent
+ * skeletons, a muted failure line sitting beside the empty line, and `N/A` after a
+ * failed request. Two views of one record must not look like two different
+ * features.
+ */
+function MetricCard({
+  title,
+  hint,
+  isLoading,
+  isError,
+  children,
+}: {
+  title: string
+  hint: string
+  isLoading: boolean
+  isError: boolean
+  /** The formatted figure. Rendered only once the request has resolved. */
+  children: React.ReactNode
+}) {
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold">
+          {isLoading ? (
+            <PendingMetric label={title} />
+          ) : isError ? (
+            <UnavailableMetric />
+          ) : (
+            children
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground mt-1">{hint}</p>
+      </CardContent>
+    </Card>
+  )
+}
 
 function ParentDashboard() {
   const { user } = useAuth()
@@ -44,7 +95,7 @@ function ParentDashboard() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-bold text-foreground">Parent Portal</h1>
+        <h2 className="text-2xl font-bold text-foreground">Parent Portal</h2>
         <Badge
           variant="outline"
           className="w-max max-w-full border-border bg-maroon-100 text-maroon-800"
@@ -59,11 +110,11 @@ function ParentDashboard() {
         </CardHeader>
         <CardContent>
           {studentsLoading ? (
-            <Skeleton className="h-10 w-full" />
+            <PendingRegion label="Linked students">
+              <Skeleton className="h-10 w-full" />
+            </PendingRegion>
           ) : linkedStudentsError ? (
-            <p className="text-sm text-muted-foreground">
-              Unable to load linked students. Please try again.
-            </p>
+            <ErrorNote message="Unable to load linked students. Please try again." />
           ) : linkedStudents.length > 0 ? (
             <div className="space-y-2">
               <p className="text-sm text-muted-foreground">
@@ -113,56 +164,36 @@ function ParentDashboard() {
       {selectedChildId && (
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="mb-4">
-            <h2 className="text-xl font-bold">
+            <h3 className="text-xl font-bold">
               {selectedStudent?.student_name ?? "Student"}&apos;s Dashboard
-            </h2>
+            </h3>
             <p className="text-sm text-muted-foreground">
               {selectedStudent?.section_name}
             </p>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  Average Grade
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {dataLoading ? (
-                    <Skeleton className="h-8 w-20" />
-                  ) : (
-                    formatPercent(averageGrade, 2)
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Overall academic performance
-                </p>
-              </CardContent>
-            </Card>
+            <MetricCard
+              title="Average Grade"
+              hint="Overall academic performance"
+              isLoading={dataLoading}
+              isError={Boolean(dataError)}
+            >
+              {formatPercent(averageGrade, 2)}
+            </MetricCard>
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  Attendance Rate
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {dataLoading ? (
-                    <Skeleton className="h-8 w-20" />
-                  ) : (
-                    formatPercent(attendance?.attendance_rate, 1)
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {attendance
-                    ? `${attendance.present_days} present, ${attendance.absent_days} absent`
-                    : "No attendance records"}
-                </p>
-              </CardContent>
-            </Card>
+            <MetricCard
+              title="Attendance Rate"
+              hint={
+                attendance
+                  ? `${attendance.present_days} present, ${attendance.absent_days} absent`
+                  : "No attendance records"
+              }
+              isLoading={dataLoading}
+              isError={Boolean(dataError)}
+            >
+              {formatPercent(attendance?.attendance_rate, 1)}
+            </MetricCard>
           </div>
 
           <Card className="mt-4">
@@ -171,15 +202,15 @@ function ParentDashboard() {
             </CardHeader>
             <CardContent>
               {dataLoading ? (
-                <div className="space-y-3">
-                  <Skeleton className="h-9 w-full" />
-                  <Skeleton className="h-10 w-full" />
-                  <Skeleton className="h-10 w-full" />
-                </div>
+                <PendingRegion label="Academic progress">
+                  <div className="space-y-3">
+                    <Skeleton className="h-9 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                  </div>
+                </PendingRegion>
               ) : dataError ? (
-                <p className="text-sm text-muted-foreground">
-                  Unable to load academic progress. Please try again.
-                </p>
+                <ErrorNote message="Unable to load academic progress. Please try again." />
               ) : periods.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   No grading period data available
@@ -258,13 +289,11 @@ function ParentDashboard() {
             </CardHeader>
             <CardContent>
               {dataLoading ? (
-                <div className="space-y-3">
+                <PendingRegion label="Recent grades">
                   <Skeleton className="h-10 w-full" />
-                </div>
+                </PendingRegion>
               ) : dataError ? (
-                <p className="text-sm text-muted-foreground">
-                  Unable to load grades. Please try again.
-                </p>
+                <ErrorNote message="Unable to load grades. Please try again." />
               ) : allGrades.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   No finalized grades available

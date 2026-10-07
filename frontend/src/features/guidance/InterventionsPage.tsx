@@ -1,6 +1,7 @@
 import { ClipboardList } from "lucide-react"
 import { useMemo, useState, type FormEvent } from "react"
 
+import { EmptyState, ErrorNote } from "@/components/feedback/Feedback"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -19,6 +20,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { Field } from "@/components/ui/form-field"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -74,27 +76,10 @@ function PageHeading({
           className="size-5 text-muted-foreground"
           aria-hidden="true"
         />
-        <h1 className="text-2xl font-bold text-foreground">{title}</h1>
+        <h2 className="text-2xl font-bold text-foreground">{title}</h2>
       </div>
       <p className="text-sm text-muted-foreground">{description}</p>
     </div>
-  )
-}
-
-function ErrorNote({ message }: { message: string }) {
-  return (
-    <div
-      role="alert"
-      className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
-    >
-      <span>{message}</span>
-    </div>
-  )
-}
-
-function EmptyState({ message }: { message: string }) {
-  return (
-    <p className="py-6 text-center text-sm text-muted-foreground">{message}</p>
   )
 }
 
@@ -233,7 +218,7 @@ function NewInterventionDialog() {
       <DialogTrigger asChild>
         <Button>New intervention</Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>New intervention</DialogTitle>
           <DialogDescription>
@@ -244,7 +229,18 @@ function NewInterventionDialog() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="intervention-student">Student</Label>
+            {/*
+              Mandatory. Marked with a visible asterisk and `aria-required`; the
+              asterisk is a sibling of the label, because anything inside
+              `<label>` becomes part of the control's accessible name and would be
+              read as "Student *" rather than "Student, required".
+            */}
+            <div className="flex items-center gap-1">
+              <Label htmlFor="intervention-student">Student</Label>
+              <span aria-hidden="true" className="text-destructive">
+                *
+              </span>
+            </div>
             <Select
               value={studentId}
               onValueChange={(value) => {
@@ -253,7 +249,7 @@ function NewInterventionDialog() {
               }}
               disabled={rosterQuery.isLoading || roster.length === 0}
             >
-              <SelectTrigger id="intervention-student">
+              <SelectTrigger id="intervention-student" aria-required="true">
                 <SelectValue
                   placeholder={
                     rosterQuery.isLoading
@@ -275,25 +271,46 @@ function NewInterventionDialog() {
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="intervention-start">Plan start date</Label>
-              <Input
-                id="intervention-start"
-                type="date"
-                value={planStartDate}
-                onChange={(event) => setPlanStartDate(event.target.value)}
-              />
-            </div>
+            {/*
+              `Field` carries the required marking for the plan start date: the
+              asterisk outside the label and `aria-required` on the control. It
+              is fully controlled with no error state, which is the shape `Field`
+              exists for.
+            */}
+            <Field
+              label="Plan start date"
+              id="intervention-start"
+              type="date"
+              required
+              value={planStartDate}
+              onChange={setPlanStartDate}
+            />
+            {/*
+              The review date stays hand-rolled because its failure message is
+              `role="alert"`: the error is announced when it appears, so the
+              control has to be the thing that locates it — `aria-invalid` marks
+              the field as the one at fault and `aria-describedby` makes focusing
+              it read the message. `aria-describedby` is only present while the
+              message is rendered, so the reference is never dangling.
+            */}
             <div className="space-y-1.5">
               <Label htmlFor="intervention-review">Target review date</Label>
               <Input
                 id="intervention-review"
                 type="date"
+                aria-invalid={reviewBeforeStart || undefined}
+                aria-describedby={
+                  reviewBeforeStart ? "intervention-review-error" : undefined
+                }
                 value={targetReviewDate}
                 onChange={(event) => setTargetReviewDate(event.target.value)}
               />
               {reviewBeforeStart ? (
-                <p role="alert" className="text-xs text-destructive">
+                <p
+                  id="intervention-review-error"
+                  role="alert"
+                  className="text-xs text-destructive"
+                >
                   The review date cannot be earlier than the plan start date.
                 </p>
               ) : (
@@ -402,7 +419,18 @@ function EditStepDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button type="button" size="xs" variant="outline">
+        {/*
+          One of these per step in the plan. The bare verb repeated down a list
+          gave every button the same accessible name, so the buttons could not be
+          told apart; the label names the step's order and title and still
+          contains the visible "Update" (WCAG 2.5.3).
+        */}
+        <Button
+          type="button"
+          size="xs"
+          variant="outline"
+          aria-label={`Update step ${step.order}, ${step.title}`}
+        >
           Update
         </Button>
       </DialogTrigger>
@@ -413,14 +441,13 @@ function EditStepDialog({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor={`step-title-${step.id}`}>Title</Label>
-            <Input
-              id={`step-title-${step.id}`}
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-            />
-          </div>
+          <Field
+            label="Title"
+            id={`step-title-${step.id}`}
+            required
+            value={title}
+            onChange={setTitle}
+          />
 
           <div className="space-y-1.5">
             <Label htmlFor={`step-description-${step.id}`}>Description</Label>
@@ -455,16 +482,36 @@ function EditStepDialog({
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor={`step-order-${step.id}`}>Order</Label>
+              {/*
+                The order is mandatory — `InterventionStep.clean()` rejects
+                anything below 1 — so it carries `aria-required` alongside the
+                visible marker, and its failure message is linked back to the
+                control by `aria-describedby` so focusing the field reads it.
+              */}
+              <div className="flex items-center gap-1">
+                <Label htmlFor={`step-order-${step.id}`}>Order</Label>
+                <span aria-hidden="true" className="text-destructive">
+                  *
+                </span>
+              </div>
               <Input
                 id={`step-order-${step.id}`}
                 type="number"
                 min={1}
+                aria-required="true"
+                aria-invalid={orderInvalid || undefined}
+                aria-describedby={
+                  orderInvalid ? `step-order-${step.id}-error` : undefined
+                }
                 value={order}
                 onChange={(event) => setOrder(event.target.value)}
               />
               {orderInvalid ? (
-                <p role="alert" className="text-xs text-destructive">
+                <p
+                  id={`step-order-${step.id}-error`}
+                  role="alert"
+                  className="text-xs text-destructive"
+                >
                   Order must be 1 or greater.
                 </p>
               ) : null}
@@ -537,14 +584,13 @@ function AddStepForm({ interventionId }: { interventionId: string }) {
       className="space-y-3 rounded-md border border-border p-3"
       aria-label="Add step"
     >
-      <div className="space-y-1.5">
-        <Label htmlFor="new-step-title">Step title</Label>
-        <Input
-          id="new-step-title"
-          value={title}
-          onChange={(event) => setTitle(event.target.value)}
-        />
-      </div>
+      <Field
+        label="Step title"
+        id="new-step-title"
+        required
+        value={title}
+        onChange={setTitle}
+      />
 
       <div className="space-y-1.5">
         <Label htmlFor="new-step-description">Description</Label>
@@ -579,16 +625,28 @@ function AddStepForm({ interventionId }: { interventionId: string }) {
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="new-step-order">Order</Label>
+          <div className="flex items-center gap-1">
+            <Label htmlFor="new-step-order">Order</Label>
+            <span aria-hidden="true" className="text-destructive">
+              *
+            </span>
+          </div>
           <Input
             id="new-step-order"
             type="number"
             min={1}
+            aria-required="true"
+            aria-invalid={orderInvalid || undefined}
+            aria-describedby={orderInvalid ? "new-step-order-error" : undefined}
             value={order}
             onChange={(event) => setOrder(event.target.value)}
           />
           {orderInvalid ? (
-            <p role="alert" className="text-xs text-destructive">
+            <p
+              id="new-step-order-error"
+              role="alert"
+              className="text-xs text-destructive"
+            >
               Order must be 1 or greater.
             </p>
           ) : null}
@@ -644,10 +702,16 @@ function AddNoteForm({ interventionId }: { interventionId: string }) {
       aria-label="Add progress note"
     >
       <div className="space-y-1.5">
-        <Label htmlFor="new-note-text">Progress note</Label>
+        <div className="flex items-center gap-1">
+          <Label htmlFor="new-note-text">Progress note</Label>
+          <span aria-hidden="true" className="text-destructive">
+            *
+          </span>
+        </div>
         <textarea
           id="new-note-text"
           rows={3}
+          aria-required="true"
           value={noteText}
           onChange={(event) => setNoteText(event.target.value)}
           className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring"
@@ -698,11 +762,21 @@ function ManagePlanDialog({ intervention }: { intervention: Intervention }) {
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button type="button" size="xs" variant="outline">
+        {/*
+          One of these per row on a page of up to 25 plans, and the bare verb
+          gave them all the same accessible name. The label names the student and
+          the plan's start date and still contains the visible "Manage plan".
+        */}
+        <Button
+          type="button"
+          size="xs"
+          variant="outline"
+          aria-label={`Manage plan for ${intervention.student_name}, started ${intervention.plan_start_date}`}
+        >
           Manage plan
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Intervention plan</DialogTitle>
           <DialogDescription>
@@ -714,7 +788,7 @@ function ManagePlanDialog({ intervention }: { intervention: Intervention }) {
         </DialogHeader>
 
         <section className="space-y-3">
-          <h3 className="text-sm font-semibold">Steps ({steps.length})</h3>
+          <h4 className="text-sm font-semibold">Steps ({steps.length})</h4>
 
           {stepsQuery.isLoading ? (
             <Skeleton className="h-16 w-full" />
@@ -757,9 +831,9 @@ function ManagePlanDialog({ intervention }: { intervention: Intervention }) {
         </section>
 
         <section className="space-y-3">
-          <h3 className="text-sm font-semibold">
+          <h4 className="text-sm font-semibold">
             Progress notes ({notes.length})
-          </h3>
+          </h4>
 
           {notesQuery.isLoading ? (
             <Skeleton className="h-16 w-full" />

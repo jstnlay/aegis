@@ -1,3 +1,4 @@
+import { Tabs } from "@/components/ui/tabs"
 import { FileText } from "lucide-react"
 import { useState } from "react"
 
@@ -82,9 +83,9 @@ export function AdminDataPage() {
             className="size-5 text-muted-foreground"
             aria-hidden="true"
           />
-          <h1 className="text-2xl font-bold text-foreground">
+          <h2 className="text-2xl font-bold text-foreground">
             Imports &amp; Exports
-          </h1>
+          </h2>
         </div>
         <p className="text-sm text-muted-foreground">
           Bulk data movement in and out, with the per-row results of every
@@ -92,31 +93,17 @@ export function AdminDataPage() {
         </p>
       </div>
 
-      <div
-        className="flex flex-wrap gap-2"
-        role="tablist"
-        aria-label="Data operations"
-      >
-        {(
-          [
-            { id: "imports", label: "Imports" },
-            { id: "exports", label: "Exports" },
-          ] as const
-        ).map((entry) => (
-          <Button
-            key={entry.id}
-            role="tab"
-            type="button"
-            variant={tab === entry.id ? "default" : "outline"}
-            aria-selected={tab === entry.id}
-            onClick={() => setTab(entry.id)}
-          >
-            {entry.label}
-          </Button>
-        ))}
-      </div>
-
-      {tab === "imports" ? <ImportsCard /> : <ExportsCard />}
+      {/* PH11.11: shared `Tabs` — adds `aria-controls`, a real `tabpanel`, and
+          arrow-key roving focus. See `components/ui/tabs.tsx`. */}
+      <Tabs
+        label="Data operations"
+        value={tab}
+        onValueChange={setTab}
+        items={[
+          { id: "imports", label: "Imports", content: <ImportsCard /> },
+          { id: "exports", label: "Exports", content: <ExportsCard /> },
+        ]}
+      />
     </div>
   )
 }

@@ -71,7 +71,7 @@ describe("AcademicsPage (student)", () => {
   it("renders the read-only grade record heading", async () => {
     renderPage()
     expect(
-      await screen.findByRole("heading", { name: "Academics", level: 1 })
+      await screen.findByRole("heading", { name: "Academics", level: 2 })
     ).toBeInTheDocument()
     expect(
       screen.getByText(/Grades appear here once they are finalized/i)
@@ -109,7 +109,7 @@ describe("AcademicsPage (faculty)", () => {
   it("offers draft grade encoding", async () => {
     renderPage()
     expect(
-      await screen.findByRole("heading", { name: "Academics", level: 1 })
+      await screen.findByRole("heading", { name: "Academics", level: 2 })
     ).toBeInTheDocument()
     expect(screen.getByText(/Encode a grade/i)).toBeInTheDocument()
     expect(
@@ -154,7 +154,7 @@ describe("AcademicsPage hooks wiring", () => {
   it("never calls the encode endpoint during render", async () => {
     authState.user = makeUser("faculty")
     renderPage()
-    await screen.findByRole("heading", { name: "Academics", level: 1 })
+    await screen.findByRole("heading", { name: "Academics", level: 2 })
     // The encode mutation must be opt-in via an explicit submit.
     const { apiClient } = await import("@/lib/api")
     expect(apiClient.post).not.toHaveBeenCalled()
@@ -163,7 +163,7 @@ describe("AcademicsPage hooks wiring", () => {
   it("fetches subject assignments and grading periods for the faculty form", async () => {
     authState.user = makeUser("faculty")
     renderPage()
-    await screen.findByRole("heading", { name: "Academics", level: 1 })
+    await screen.findByRole("heading", { name: "Academics", level: 2 })
 
     const urls = mockedFetchAllPages.mock.calls.map((c) => c[0])
     expect(urls).toContain("/academics/subject-assignments/")
@@ -173,7 +173,7 @@ describe("AcademicsPage hooks wiring", () => {
   it("does not fetch section-wide grade lists for a student", async () => {
     authState.user = makeUser("student")
     renderPage()
-    await screen.findByRole("heading", { name: "Academics", level: 1 })
+    await screen.findByRole("heading", { name: "Academics", level: 2 })
 
     const urls = mockedFetchAllPages.mock.calls.map((c) => c[0])
     // Students must only ever ask for their own finalized grades.

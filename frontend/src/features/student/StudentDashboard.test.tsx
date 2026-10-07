@@ -75,7 +75,24 @@ describe("StudentDashboard", () => {
     } as unknown as ReturnType<typeof useStudentDashboardData>)
 
     renderWithClient(<StudentDashboard />)
-    expect(screen.getByText(/Average Grade/i)).toBeInTheDocument()
+    // PH11.11: scoped to the heading. The tile now renders the phrase twice — its
+    // `CardTitle` and the visually-hidden label inside the loading `role="status"`
+    // region — so a bare `getByText` is genuinely ambiguous. Matching the heading
+    // is the stronger claim: it pins that the tile is labelled by a heading, which
+    // the loose text match never checked, and it still fails if the label goes.
+    expect(
+      screen.getByRole("heading", { name: /Average Grade/i })
+    ).toBeInTheDocument()
+    // The skeleton announces itself rather than sitting silent.
+    // `getAllByRole` because three tiles plus the progress section are all pending
+    // at once, and each is its own live region — four separate announcements of
+    // four separate things, which is the intent.
+    const pending = screen.getAllByRole("status")
+    expect(pending.length).toBeGreaterThan(0)
+    for (const region of pending) {
+      expect(region).toHaveAttribute("aria-busy", "true")
+    }
+    expect(pending[0]).toHaveTextContent(/Average Grade/i)
   })
 
   it("describes Total Subjects as subjects with finalized grades, not assessments", () => {

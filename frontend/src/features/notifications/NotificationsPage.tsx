@@ -175,7 +175,7 @@ export function NotificationsPage() {
       <div className="space-y-1">
         <div className="flex items-center gap-3">
           <Bell className="size-5 text-muted-foreground" aria-hidden="true" />
-          <h1 className="text-2xl font-bold text-foreground">Notifications</h1>
+          <h2 className="text-2xl font-bold text-foreground">Notifications</h2>
         </div>
         <p className="text-sm text-muted-foreground">
           Alerts and updates addressed to your account.

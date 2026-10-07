@@ -143,6 +143,12 @@ export function SubjectTrendChart({
                 tick={{ fill: AXIS_COLOR, fontSize: 12 }}
                 tickLine={false}
                 axisLine={{ stroke: GRID_COLOR }}
+                // PH11.11. Period names are free text ("Second Semester") and this
+                // is the widest-label chart in the set. Without a gap requirement
+                // Recharts overlapped them at narrow widths. Dropping a tick loses
+                // nothing: the tooltip carries every period's value and the frame's
+                // `aria-label` names them all.
+                minTickGap={8}
               />
               <YAxis
                 domain={SCORE_DOMAIN}
@@ -153,7 +159,7 @@ export function SubjectTrendChart({
                 width={40}
               />
               <Tooltip
-                content={({ active, label, payload }) => {
+                content={({ active, payload, label }) => {
                   if (!active || !payload?.length) return null
                   return (
                     <div className="rounded-md border border-border bg-background p-2 text-sm shadow-sm">

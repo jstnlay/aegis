@@ -8,6 +8,7 @@ import { RiskDistributionChart } from "./RiskDistributionChart"
 import { RoleDistributionChart } from "./RoleDistributionChart"
 import { SubjectTrendChart } from "./SubjectTrendChart"
 import { AcademicTrendChart, AttendanceTrendChart } from "./TrendCharts"
+import { SectionPerformanceChart } from "./SectionPerformanceChart"
 import {
   formatCountValue,
   formatPercentValue,
@@ -664,5 +665,74 @@ describe("SubjectTrendChart", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       /Trends are unavailable/i
     )
+  })
+})
+
+/**
+ * PH11.11 — score unit on `SectionPerformanceChart`.
+ *
+ * `SectionPerformance.grade_average` is the mean of `Grade.score`, a raw 0–100
+ * point value, not a ratio. The chart's own description already said "as points
+ * out of 100" while the number written on the bar went through `formatPercent`
+ * and gained a `%` sign, so the same figure was labelled in two different units
+ * on one card.
+ *
+ * What jsdom can and cannot prove is stated plainly, because the limit is real:
+ * Recharts measures its container, which jsdom reports as zero, so the bar and
+ * its `LabelList` text are never rendered here and the formatter's output cannot
+ * be read off the DOM. What *is* asserted below is the unit contract that
+ * formatter is required to honour — asserted on the chart's own accessible label
+ * and description, and on the shared formatter it now delegates to, which has its
+ * own test above pinning that it emits no `%`. A browser check would be needed to
+ * see the rendered bar text; see the phase note.
+ */
+describe("SectionPerformanceChart", () => {
+  const section = {
+    section_id: "sec-1",
+    section_name: "Bonifacio",
+    grade_level: "Grade 7",
+    grade_average: 85,
+    total_students: 40,
+    total_grades: 120,
+  }
+
+  it("states the score in points out of 100, never as a percentage", async () => {
+    renderChart(
+      <SectionPerformanceChart
+        sectionId="sec-1"
+        data={section as never}
+        isLoading={false}
+        error={null}
+      />
+    )
+
+    const label =
+      (await screen.findByRole("img")).getAttribute("aria-label") ?? ""
+    expect(label).toContain("85.00 out of 100")
+    expect(label).not.toContain("%")
+
+    // The description is rendered as text, so the unit is asserted there too —
+    // it is the sentence a sighted reader uses to interpret the bar.
+    const description = document.body.textContent ?? ""
+    expect(description).toContain("points out of 100")
+    expect(description).not.toContain("%")
+  })
+
+  it("does not plot a section with no finalized grades as a zero", async () => {
+    renderChart(
+      <SectionPerformanceChart
+        sectionId="sec-1"
+        data={{ ...section, grade_average: null } as never}
+        isLoading={false}
+        error={null}
+      />
+    )
+
+    // A zero-height bar would read as "every student scored nothing", which the
+    // backend never said. The empty state names the real reason instead.
+    expect(
+      await screen.findByText(/No finalized grades are recorded for this/i)
+    ).toBeInTheDocument()
+    expect(screen.queryByRole("img")).not.toBeInTheDocument()
   })
 })

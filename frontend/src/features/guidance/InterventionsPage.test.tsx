@@ -236,7 +236,7 @@ describe("InterventionsPage", () => {
     renderPage()
 
     expect(
-      await screen.findByRole("heading", { name: "Interventions", level: 1 })
+      await screen.findByRole("heading", { name: "Interventions", level: 2 })
     ).toBeInTheDocument()
     expect(await screen.findByText("Ana Reyes")).toBeInTheDocument()
     expect(screen.getByText("Ben Cruz")).toBeInTheDocument()
@@ -535,9 +535,12 @@ describe("InterventionsPage", () => {
     await within(dialog).findByText("Weekly check-in")
 
     fireEvent.click(
+      // PH11.11: the per-step trigger now carries an `aria-label` naming the
+      // step's order and title, because a plan's steps each rendered a button
+      // whose only accessible name was "Update".
       within(
         dialog.querySelector('[data-step-id="st-1"]') as HTMLElement
-      ).getByRole("button", { name: "Update" })
+      ).getByRole("button", { name: "Update step 1, Weekly check-in" })
     )
     const editDialog = await screen.findByRole("dialog")
 

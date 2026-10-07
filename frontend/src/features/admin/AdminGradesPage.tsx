@@ -182,7 +182,7 @@ export function AdminGradesPage() {
             className="size-5 text-muted-foreground"
             aria-hidden="true"
           />
-          <h1 className="text-2xl font-bold text-foreground">Grades</h1>
+          <h2 className="text-2xl font-bold text-foreground">Grades</h2>
         </div>
         <p className="text-sm text-muted-foreground">
           Every grade record across the school.

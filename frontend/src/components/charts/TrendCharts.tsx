@@ -100,6 +100,10 @@ export function AcademicTrendChart() {
                 tick={{ fill: AXIS_COLOR, fontSize: 12 }}
                 tickLine={false}
                 axisLine={{ stroke: GRID_COLOR }}
+                // PH11.11. Same requirement as the attendance axis below: period
+                // names are free text, so they overlapped at narrow widths unless
+                // Recharts is told to drop the ones it cannot space.
+                minTickGap={16}
               />
               <YAxis
                 domain={SCORE_DOMAIN}

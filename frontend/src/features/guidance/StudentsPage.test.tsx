@@ -177,7 +177,7 @@ describe("StudentsPage", () => {
     renderPage()
 
     expect(
-      await screen.findByRole("heading", { name: "Students", level: 1 })
+      await screen.findByRole("heading", { name: "Students", level: 2 })
     ).toBeInTheDocument()
     expect(
       screen.getByText("Students with guidance activity")

@@ -19,6 +19,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { Field } from "@/components/ui/form-field"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -32,6 +33,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import {
   Table,
   TableBody,
+  TableCaption,
   TableCell,
   TableHead,
   TableHeader,
@@ -76,7 +78,7 @@ function PageHeading() {
           className="size-5 text-muted-foreground"
           aria-hidden="true"
         />
-        <h1 className="text-2xl font-bold text-foreground">Assessments</h1>
+        <h2 className="text-2xl font-bold text-foreground">Assessments</h2>
       </div>
       <p className="text-sm text-muted-foreground">
         The wellness and behavioral assessments you created. Build a plan, add
@@ -151,7 +153,7 @@ function NewAssessmentDialog({ students }: { students: GuidanceStudent[] }) {
       <DialogTrigger asChild>
         <Button>New assessment</Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>New assessment</DialogTitle>
           <DialogDescription>
@@ -160,14 +162,13 @@ function NewAssessmentDialog({ students }: { students: GuidanceStudent[] }) {
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="assessment-title">Title</Label>
-            <Input
-              id="assessment-title"
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-            />
-          </div>
+          <Field
+            label="Title"
+            id="assessment-title"
+            required
+            value={title}
+            onChange={setTitle}
+          />
 
           <div className="space-y-1.5">
             <Label htmlFor="assessment-type">Type</Label>
@@ -213,15 +214,30 @@ function NewAssessmentDialog({ students }: { students: GuidanceStudent[] }) {
                 id="assessment-time-limit"
                 type="number"
                 min={1}
+                aria-invalid={limitInvalid || undefined}
+                aria-describedby={
+                  limitInvalid
+                    ? "assessment-time-limit-error"
+                    : "assessment-time-limit-hint"
+                }
                 value={timeLimit}
                 onChange={(event) => setTimeLimit(event.target.value)}
               />
               {limitInvalid ? (
-                <p role="alert" className="text-xs text-destructive">
+                <p
+                  id="assessment-time-limit-error"
+                  role="alert"
+                  className="text-xs text-destructive"
+                >
                   Must be a whole number of minutes.
                 </p>
               ) : (
-                <p className="text-xs text-muted-foreground">Optional.</p>
+                <p
+                  id="assessment-time-limit-hint"
+                  className="text-xs text-muted-foreground"
+                >
+                  Optional.
+                </p>
               )}
             </div>
             <div className="space-y-1.5">
@@ -404,10 +420,28 @@ function AddQuestionForm({
       aria-label="Add question"
     >
       <div className="space-y-1.5">
-        <Label htmlFor="question-text">Question text</Label>
+        {/*
+          Every id in this form is suffixed with the assessment id. The form is
+          rendered once per draft assessment from inside the page's `.map()`, so
+          the previous static ids (`question-text`, `question-order`, …) existed
+          two or more times as soon as a second draft was on screen, and every
+          `<label for>` resolved to the first instance — a label pointing at
+          somebody else's control, which is an HTML validity error and a WCAG
+          4.1.1 / 3.3.2 failure. The sibling forms in this file already scope
+          their ids per instance (`step-title-${step.id}`), so this matches.
+        */}
+        <div className="flex items-center gap-1">
+          <Label htmlFor={`question-text-${assessment.id}`}>
+            Question text
+          </Label>
+          <span aria-hidden="true" className="text-destructive">
+            *
+          </span>
+        </div>
         <textarea
-          id="question-text"
+          id={`question-text-${assessment.id}`}
           rows={2}
+          aria-required="true"
           value={questionText}
           onChange={(event) => setQuestionText(event.target.value)}
           className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring"
@@ -416,7 +450,9 @@ function AddQuestionForm({
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <Label htmlFor="question-type">Question type</Label>
+          <Label htmlFor={`question-type-${assessment.id}`}>
+            Question type
+          </Label>
           <Select
             value={questionType}
             onValueChange={(value) => {
@@ -430,7 +466,7 @@ function AddQuestionForm({
               }
             }}
           >
-            <SelectTrigger id="question-type">
+            <SelectTrigger id={`question-type-${assessment.id}`}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -443,25 +479,50 @@ function AddQuestionForm({
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="question-order">Order</Label>
+          <div className="flex items-center gap-1">
+            <Label htmlFor={`question-order-${assessment.id}`}>Order</Label>
+            <span aria-hidden="true" className="text-destructive">
+              *
+            </span>
+          </div>
           <Input
-            id="question-order"
+            id={`question-order-${assessment.id}`}
             type="number"
             min={1}
+            aria-required="true"
+            aria-invalid={orderInvalid || orderTaken || undefined}
+            aria-describedby={
+              orderInvalid || orderTaken
+                ? `question-order-${assessment.id}-error`
+                : `question-order-${assessment.id}-hint`
+            }
             value={order}
             onChange={(event) => setOrderOverride(event.target.value)}
           />
+          {/* Two messages, one id: they are mutually exclusive, so the id is
+              never rendered twice and is only referenced while present. */}
           {orderInvalid ? (
-            <p role="alert" className="text-xs text-destructive">
+            <p
+              id={`question-order-${assessment.id}-error`}
+              role="alert"
+              className="text-xs text-destructive"
+            >
               Order must be 1 or greater.
             </p>
           ) : orderTaken ? (
-            <p role="alert" className="text-xs text-destructive">
+            <p
+              id={`question-order-${assessment.id}-error`}
+              role="alert"
+              className="text-xs text-destructive"
+            >
               Order {parsedOrder} is already used by another question in this
               assessment.
             </p>
           ) : (
-            <p className="text-xs text-muted-foreground">
+            <p
+              id={`question-order-${assessment.id}-hint`}
+              className="text-xs text-muted-foreground"
+            >
               Defaults to {nextOrder}, one past the highest existing order.
             </p>
           )}
@@ -470,12 +531,22 @@ function AddQuestionForm({
 
       {takesOptions ? (
         <div className="space-y-1.5">
-          <Label htmlFor="question-options">
-            {questionType === "likert" ? "Scale points" : "Options"}
-          </Label>
+          <div className="flex items-center gap-1">
+            <Label htmlFor={`question-options-${assessment.id}`}>
+              {questionType === "likert" ? "Scale points" : "Options"}
+            </Label>
+            <span aria-hidden="true" className="text-destructive">
+              *
+            </span>
+          </div>
           <textarea
-            id="question-options"
+            id={`question-options-${assessment.id}`}
             rows={3}
+            aria-required="true"
+            aria-invalid={optionsTooFew || undefined}
+            aria-describedby={`question-options-${assessment.id}-${
+              optionsTooFew ? "error" : "hint"
+            }`}
             value={optionsText}
             onChange={(event) => setOptionsText(event.target.value)}
             placeholder={"One per line, e.g.\nStrongly agree\nAgree"}
@@ -489,8 +560,18 @@ function AddQuestionForm({
             `options` was an unconstrained JSONField — and removed the client
             check on that basis. The constraint is enforced by the model's
             clean(), so the form blocks the submit and names the field.
+
+            This paragraph is the error, not just a caption: it turns red and
+            replaces the count when the field is short, so it carries
+            `role="alert"` to be announced and an id for `aria-describedby` to
+            point at. It previously had no role at all and was therefore only
+            marked visually.
           */}
           <p
+            id={`question-options-${assessment.id}-${
+              optionsTooFew ? "error" : "hint"
+            }`}
+            role={optionsTooFew ? "alert" : undefined}
             className={
               optionsTooFew
                 ? "text-xs text-destructive"
@@ -507,13 +588,31 @@ function AddQuestionForm({
       ) : null}
 
       <div className="space-y-1.5">
-        <Label htmlFor="question-answer">Correct answer</Label>
+        {/*
+          The correct answer is genuinely optional — an essay question has none,
+          and the copy below says so — so it is not marked required. It still
+          has two failure modes the server enforces (`multiple_choice` answers
+          must name one of the options; `true_false` answers must be exactly
+          "True" or "False"), and the same red paragraph covers both, so it is
+          treated as the field's error and linked back to the control.
+        */}
+        <Label htmlFor={`question-answer-${assessment.id}`}>
+          Correct answer
+        </Label>
         <Input
-          id="question-answer"
+          id={`question-answer-${assessment.id}`}
+          aria-invalid={answerNotAnOption || answerNotBoolean || undefined}
+          aria-describedby={`question-answer-${assessment.id}-${
+            answerNotAnOption || answerNotBoolean ? "error" : "hint"
+          }`}
           value={correctAnswer}
           onChange={(event) => setCorrectAnswer(event.target.value)}
         />
         <p
+          id={`question-answer-${assessment.id}-${
+            answerNotAnOption || answerNotBoolean ? "error" : "hint"
+          }`}
+          role={answerNotAnOption || answerNotBoolean ? "alert" : undefined}
           className={
             answerNotAnOption || answerNotBoolean
               ? "text-xs text-destructive"
@@ -613,10 +712,22 @@ function QuestionList({ questions }: { questions: AssessmentQuestion[] }) {
   )
 }
 
-/** Result monitoring for one assessment. */
+/**
+ * Result monitoring for one assessment.
+ *
+ * `assessment` is needed for the caption. Several of these render on one page,
+ * stacked inside the assessment cards, and they all carry the identical
+ * "Student / Status / Score / Percentage" header — so without a caption a screen
+ * reader announced several indistinguishable tables and the reader could not
+ * tell whose results they were. The caption is the table's accessible name, and
+ * it is screen-reader-only because the card heading above already says it
+ * visually.
+ */
 function ResultsForAssessment({
+  assessment,
   results,
 }: {
+  assessment: GuidanceAssessment
   results: GuidanceAssessmentResult[]
 }) {
   if (results.length === 0) {
@@ -641,12 +752,20 @@ function ResultsForAssessment({
 
   return (
     <Table>
+      {/* Must be the first child of `<table>`, which is where the HTML parser
+          expects it. */}
+      <TableCaption className="sr-only">
+        Results for {assessment.title}
+      </TableCaption>
       <TableHeader>
         <TableRow>
-          <TableHead>Student</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead>Score</TableHead>
-          <TableHead>Percentage</TableHead>
+          {/* `scope="col"` so a screen reader announces the column as a header
+              for the cells under it, rather than reading the header row as four
+              unrelated labels. */}
+          <TableHead scope="col">Student</TableHead>
+          <TableHead scope="col">Status</TableHead>
+          <TableHead scope="col">Score</TableHead>
+          <TableHead scope="col">Percentage</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -818,7 +937,7 @@ export function AssessmentsPage() {
                 >
                   <div className="space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="font-semibold">{assessment.title}</h2>
+                      <h3 className="font-semibold">{assessment.title}</h3>
                       <Badge variant="secondary">
                         {ASSESSMENT_TYPE_LABELS[
                           assessment.assessment_type as GuidanceAssessmentType
@@ -858,10 +977,24 @@ export function AssessmentsPage() {
                       surfaced if it still refuses.
                     */}
                     {!assessment.is_published ? (
+                      /*
+                       * There is one of these per card and the bare verb gave
+                       * them all the same accessible name. The label names the
+                       * assessment and still contains the visible "Deploy"
+                       * (WCAG 2.5.3); it follows the in-flight state too, since
+                       * `aria-label` overrides the visible "Deploying…" text
+                       * and that progress would otherwise be lost.
+                       */
                       <Button
                         type="button"
                         size="sm"
                         disabled={deploy.isPending}
+                        aria-label={
+                          deploy.isPending &&
+                          deploy.variables?.id === assessment.id
+                            ? `Deploying ${assessment.title}`
+                            : `Deploy ${assessment.title}`
+                        }
                         onClick={() => deploy.mutate({ id: assessment.id })}
                       >
                         {deploy.isPending &&
@@ -870,7 +1003,16 @@ export function AssessmentsPage() {
                           : "Deploy"}
                       </Button>
                     ) : (
-                      <span className="text-xs text-muted-foreground">
+                      /*
+                       * `role="status"`: a successful deploy was previously
+                       * conveyed only by this button quietly turning into plain
+                       * text, which is not an announcement. The whole element is
+                       * the confirmation, so it is the region.
+                       */
+                      <span
+                        role="status"
+                        className="text-xs text-muted-foreground"
+                      >
                         Deployed. The server blocks a second deploy.
                       </span>
                     )}
@@ -886,6 +1028,7 @@ export function AssessmentsPage() {
                     />
                   ) : (
                     <ResultsForAssessment
+                      assessment={assessment}
                       results={resultsByAssessment.get(assessment.id) ?? []}
                     />
                   )}

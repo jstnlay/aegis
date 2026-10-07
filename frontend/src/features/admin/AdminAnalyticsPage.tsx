@@ -1,6 +1,11 @@
 import { LayoutDashboard } from "lucide-react"
 import { useState } from "react"
 
+import {
+  ErrorNote,
+  PendingMetric,
+  UnavailableMetric,
+} from "@/components/feedback/Feedback"
 import { Card, CardContent } from "@/components/ui/card"
 import {
   Select,
@@ -60,7 +65,7 @@ export function AdminAnalyticsPage() {
             className="size-5 text-muted-foreground"
             aria-hidden="true"
           />
-          <h1 className="text-2xl font-bold text-foreground">Analytics</h1>
+          <h2 className="text-2xl font-bold text-foreground">Analytics</h2>
         </div>
         <p className="text-sm text-muted-foreground">
           School-wide and section-level aggregates. No individual student record
@@ -68,13 +73,28 @@ export function AdminAnalyticsPage() {
         </p>
       </div>
 
+      {/*
+        PH11.11: the three headline figures had no state handling at all. They read
+        `…?.total_students ?? null`, and `formatCount(null)` is "N/A" — so while the
+        request was in flight, and after it failed, the page asserted three
+        measurements that were never made. "N/A" is the right answer when the
+        backend reports no figure; it is the wrong answer when there is no answer.
+      */}
+      {schoolWideQuery.isError ? (
+        <ErrorNote message="Unable to load the school-wide metrics. Please try again." />
+      ) : null}
+
       <div className="grid gap-4 md:grid-cols-3">
         <MetricCard
           label="Active students"
+          isLoading={schoolWideQuery.isLoading}
+          isError={schoolWideQuery.isError}
           value={formatCount(schoolWideQuery.data?.total_students ?? null)}
         />
         <MetricCard
           label="Overall grade average"
+          isLoading={schoolWideQuery.isLoading}
+          isError={schoolWideQuery.isError}
           value={formatPercent(
             schoolWideQuery.data?.overall_grade_average ?? null,
             2
@@ -82,6 +102,8 @@ export function AdminAnalyticsPage() {
         />
         <MetricCard
           label="Grade levels"
+          isLoading={schoolWideQuery.isLoading}
+          isError={schoolWideQuery.isError}
           value={formatCount(schoolWideQuery.data?.grade_levels ?? null)}
         />
       </div>
@@ -146,12 +168,37 @@ export function AdminAnalyticsPage() {
   )
 }
 
-function MetricCard({ label, value }: { label: string; value: string }) {
+/**
+ * One headline figure, with its three states kept distinct.
+ *
+ * See the note at the call site. `value` is only rendered once the request has
+ * resolved, and even then it may legitimately read "N/A" — that is the backend
+ * reporting no figure, which is a real answer, unlike a failure.
+ */
+function MetricCard({
+  label,
+  value,
+  isLoading,
+  isError,
+}: {
+  label: string
+  value: string
+  isLoading: boolean
+  isError: boolean
+}) {
   return (
     <Card>
       <CardContent className="pt-6">
         <p className="text-sm font-medium text-muted-foreground">{label}</p>
-        <p className="text-2xl font-bold">{value}</p>
+        <p className="text-2xl font-bold">
+          {isLoading ? (
+            <PendingMetric label={label} />
+          ) : isError ? (
+            <UnavailableMetric />
+          ) : (
+            value
+          )}
+        </p>
       </CardContent>
     </Card>
   )

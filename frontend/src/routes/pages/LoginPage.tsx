@@ -35,7 +35,8 @@ const loginSchema = z.object({
 type LoginFormValues = z.infer<typeof loginSchema>
 
 export function LoginPage() {
-  const { status, isAuthenticated, mustChangePassword, login } = useAuth()
+  const { status, isAuthenticated, mustChangePassword, sessionExpired, login } =
+    useAuth()
   const [serverError, setServerError] = useState<string | null>(null)
 
   const form = useForm<LoginFormValues>({
@@ -91,6 +92,30 @@ export function LoginPage() {
               noValidate
               aria-busy={isSubmitting}
             >
+              {/*
+                PH11.11. `sessionExpired` is the explanation for arriving here
+                without having signed out. `role="status"`, not `alert`: nothing
+                failed because of a mistake, and the reader should not be
+                interrupted — but they must be told, because the alternative is a
+                bare sign-in form that looks like a normal visit while the page
+                behind it has been unmounted along with any unsaved input. It is
+                polite rather than silent because the user is mid-task, not
+                debugging anything.
+
+                The copy deliberately does not blame the user and does not blame
+                the network: the refresh flow already exhausted its one retry
+                before setting this, so "your session has ended, please sign in
+                again" is what the code actually knows.
+              */}
+              {sessionExpired ? (
+                <p
+                  role="status"
+                  className="rounded-sm border border-border bg-muted/60 px-3 py-2 text-sm text-muted-foreground"
+                >
+                  Your session has ended. Please sign in again to continue.
+                </p>
+              ) : null}
+
               {serverError ? (
                 <div
                   role="alert"

@@ -96,6 +96,16 @@ export function GradeLevelPerformanceChart() {
                 tick={{ fill: AXIS_COLOR, fontSize: 12 }}
                 tickLine={false}
                 axisLine={{ stroke: GRID_COLOR }}
+                /*
+                  PH11.11. Grade-level names are unbounded free text — "Senior High
+                  School - Accountancy" is a realistic one — so on a phone's width
+                  Recharts was drawing every tick on top of its neighbours into an
+                  unreadable band. `minTickGap` makes it drop ticks that cannot be
+                  spaced rather than overlapping them. Nothing is lost: every level
+                  remains in the tooltip, and the full set is named in the frame's
+                  `aria-label`, which is what a non-sighted reader gets.
+                */
+                minTickGap={8}
               />
               <YAxis
                 domain={SCORE_DOMAIN}

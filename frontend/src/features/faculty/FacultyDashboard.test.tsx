@@ -46,6 +46,18 @@ function renderWithClient(ui: React.ReactElement) {
 describe("FacultyDashboard", () => {
   it("renders loading state", () => {
     renderWithClient(<FacultyDashboard />)
-    expect(screen.getByText(/Total Students/i)).toBeInTheDocument()
+    // PH11.11: scoped to the heading. The tile now renders the phrase twice — its
+    // `CardTitle` and the visually-hidden label inside the loading `role="status"`
+    // region — so a bare `getByText` is ambiguous. Matching the heading is the
+    // stronger claim: it pins that the tile is labelled by a heading, which the
+    // loose text match never checked.
+    expect(
+      screen.getByRole("heading", { name: /Total Students/i })
+    ).toBeInTheDocument()
+    // The placeholder announces itself rather than sitting silent.
+    const pending = screen.getAllByRole("status")
+    expect(pending.length).toBeGreaterThan(0)
+    expect(pending[0]).toHaveAttribute("aria-busy", "true")
+    expect(pending[0]).toHaveTextContent(/Total Students/i)
   })
 })

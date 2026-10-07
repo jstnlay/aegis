@@ -3,6 +3,11 @@ import { useMemo, useState } from "react"
 
 import { Badge } from "@/components/ui/badge"
 import {
+  PendingMetric,
+  PendingRegion,
+  UnavailableMetric,
+} from "@/components/feedback/Feedback"
+import {
   Card,
   CardContent,
   CardDescription,
@@ -105,7 +110,7 @@ export function AdminAttendancePage() {
             className="size-5 text-muted-foreground"
             aria-hidden="true"
           />
-          <h1 className="text-2xl font-bold text-foreground">Attendance</h1>
+          <h2 className="text-2xl font-bold text-foreground">Attendance</h2>
         </div>
         <p className="text-sm text-muted-foreground">
           School-wide attendance oversight.
@@ -134,22 +139,67 @@ export function AdminAttendancePage() {
         <CardHeader>
           <CardTitle>Attendance totals</CardTitle>
           <CardDescription>
-            {summary.length} student
-            {summary.length === 1 ? "" : "s"} in scope.
+            {/*
+              PH11.11: the scope line no longer counts while the summary is in
+              flight or after it failed. `summary` falls back to an empty array, so
+              "0 students in scope" was printed over a request that had not
+              answered — a claim about the school, made from no data.
+            */}
+            {summaryQuery.isLoading
+              ? "Counting students in scope."
+              : summaryQuery.isError
+                ? "The number of students in scope could not be loaded."
+                : `${summary.length} student${summary.length === 1 ? "" : "s"} in scope.`}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <TotalCard label="Present" value={totals.present} />
-            <TotalCard label="Late" value={totals.late} />
-            <TotalCard label="Absent" value={totals.absent} />
-            <TotalCard
-              label="Attendance rate"
-              value={
-                totals.rate === null ? "N/A" : `${totals.rate.toFixed(1)}%`
-              }
-            />
-          </div>
+          {/*
+            The four totals are derived from the summary rows, so they inherit its
+            three states. Rendering `totals.present` while the request was in
+            flight produced a real-looking `0`, and `N/A` after a failure, when
+            the honest state was neither: the first is a measurement that was
+            never taken and the second claims the backend reported no attendance
+            at all.
+          */}
+          {summaryQuery.isLoading ? (
+            <PendingRegion label="Attendance totals">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {(
+                  ["Present", "Late", "Absent", "Attendance rate"] as const
+                ).map((label) => (
+                  <TotalCard
+                    key={label}
+                    label={label}
+                    value={<PendingMetric label={label} className="h-7 w-16" />}
+                  />
+                ))}
+              </div>
+            </PendingRegion>
+          ) : summaryQuery.isError ? (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {(["Present", "Late", "Absent", "Attendance rate"] as const).map(
+                (label) => (
+                  <TotalCard
+                    key={label}
+                    label={label}
+                    value={<UnavailableMetric />}
+                  />
+                )
+              )}
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <TotalCard label="Present" value={totals.present} />
+              <TotalCard label="Late" value={totals.late} />
+              <TotalCard label="Absent" value={totals.absent} />
+              <TotalCard
+                label="Attendance rate"
+                value={
+                  totals.rate === null ? "N/A" : `${totals.rate.toFixed(1)}%`
+                }
+              />
+            </div>
+          )}
 
           <SummaryTable
             rows={summary}
@@ -247,7 +297,12 @@ function TotalCard({
   value,
 }: {
   label: string
-  value: string | number
+  /**
+   * The figure, or a state element when the request has not resolved or failed.
+   * A `ReactNode` rather than `string | number` because "not yet known" and
+   * "not available" are elements, not numbers — see the note at the call site.
+   */
+  value: React.ReactNode
 }) {
   return (
     <div className="rounded-md border border-border p-3">

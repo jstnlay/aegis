@@ -1,5 +1,11 @@
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  ErrorNote,
+  PendingMetric,
+  PendingRegion,
+  UnavailableMetric,
+} from "@/components/feedback/Feedback"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/features/auth/AuthContext"
 import {
@@ -21,6 +27,56 @@ function byGeneratedAtDesc(a: RiskAlert, b: RiskAlert): number {
 }
 
 const MAX_ALERT_CARDS = 5
+
+/**
+ * One headline figure, with its three states kept distinct.
+ *
+ * PH11.11. All four tiles read the same `/guidance/stats/` response, so they were
+ * three lines of identical markup each — and had drifted in the same way: the
+ * placeholder was keyed off `isFetching`, which stays true through a background
+ * refetch, so refreshing the page replaced four real counts with grey bars; and
+ * no tile had a failure state, so a failed request rendered
+ * `formatCount(undefined)` → "N/A", claiming the backend reported no figure
+ * rather than that the figure is unknown.
+ *
+ * `isLoading` is `isPending && isFetching` in react-query v5, so it is true only
+ * before the first result and a refetch leaves the figures already on screen
+ * alone.
+ */
+function MetricCard({
+  title,
+  hint,
+  isLoading,
+  isError,
+  children,
+}: {
+  title: string
+  hint: string
+  isLoading: boolean
+  isError: boolean
+  /** The formatted figure. Rendered only once the request has resolved. */
+  children: React.ReactNode
+}) {
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold">
+          {isLoading ? (
+            <PendingMetric label={title} />
+          ) : isError ? (
+            <UnavailableMetric />
+          ) : (
+            children
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground mt-1">{hint}</p>
+      </CardContent>
+    </Card>
+  )
+}
 
 function GuidanceDashboard() {
   const { user } = useAuth()
@@ -47,7 +103,7 @@ function GuidanceDashboard() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-bold text-foreground">Guidance Center</h1>
+        <h2 className="text-2xl font-bold text-foreground">Guidance Center</h2>
         <Badge
           variant="outline"
           className="w-max max-w-full border-border bg-maroon-100 text-maroon-800"
@@ -56,84 +112,51 @@ function GuidanceDashboard() {
         </Badge>
       </div>
 
+      {/*
+        PH11.11: one note for the metric row. All four figures come from a single
+        `/guidance/stats/` request, so its failure is one event, and four
+        identical alerts would interrupt a screen reader four times.
+      */}
+      {statsQuery.isError ? (
+        <ErrorNote message="Unable to load the guidance statistics. Please try again." />
+      ) : null}
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Cases</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {statsQuery.isFetching ? (
-                <Skeleton className="h-8 w-20" />
-              ) : (
-                formatCount(stats?.active_cases)
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Open risk alerts (not yet resolved)
-            </p>
-          </CardContent>
-        </Card>
+        <MetricCard
+          title="Active Cases"
+          hint="Open risk alerts (not yet resolved)"
+          isLoading={statsQuery.isLoading}
+          isError={statsQuery.isError}
+        >
+          {formatCount(stats?.active_cases)}
+        </MetricCard>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              At-Risk Students
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {statsQuery.isFetching ? (
-                <Skeleton className="h-8 w-20" />
-              ) : (
-                formatCount(stats?.at_risk_students)
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Distinct students with an open moderate/high alert
-            </p>
-          </CardContent>
-        </Card>
+        <MetricCard
+          title="At-Risk Students"
+          hint="Distinct students with an open moderate/high alert"
+          isLoading={statsQuery.isLoading}
+          isError={statsQuery.isError}
+        >
+          {formatCount(stats?.at_risk_students)}
+        </MetricCard>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Pending Follow-up
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {statsQuery.isFetching ? (
-                <Skeleton className="h-8 w-20" />
-              ) : (
-                formatCount(stats?.pending_follow_up)
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Your ongoing and follow-up consultations
-            </p>
-          </CardContent>
-        </Card>
+        <MetricCard
+          title="Pending Follow-up"
+          hint="Your ongoing and follow-up consultations"
+          isLoading={statsQuery.isLoading}
+          isError={statsQuery.isError}
+        >
+          {formatCount(stats?.pending_follow_up)}
+        </MetricCard>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Assessment Completion
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {statsQuery.isFetching ? (
-                <Skeleton className="h-8 w-20" />
-              ) : (
-                formatPercent(stats?.assessment_completion_rate, 0)
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Completed vs started assessments
-            </p>
-          </CardContent>
-        </Card>
+        <MetricCard
+          title="Assessment Completion"
+          hint="Completed vs started assessments"
+          isLoading={statsQuery.isLoading}
+          isError={statsQuery.isError}
+        >
+          {formatPercent(stats?.assessment_completion_rate, 0)}
+        </MetricCard>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -142,14 +165,21 @@ function GuidanceDashboard() {
             <CardTitle>Risk Alert Cards</CardTitle>
           </CardHeader>
           <CardContent>
-            {riskAlertsQuery.isFetching ? (
-              <div className="space-y-2">
+            {/*
+                PH11.11: `isFetching` → `isLoading`, and the failure became an
+                `ErrorNote`. `isFetching` stays true through a background
+                refetch, so a refresh over alerts already on screen replaced the
+                list with a grey bar. The muted failure paragraph was worse still:
+                it was visually identical to the "No risk alerts" line directly
+                below it and announced nothing, so a failed request read as an
+                empty one.
+              */}
+            {riskAlertsQuery.isLoading ? (
+              <PendingRegion label="Risk alerts">
                 <Skeleton className="h-20 w-full" />
-              </div>
+              </PendingRegion>
             ) : riskAlertsQuery.isError ? (
-              <p className="text-sm text-muted-foreground">
-                Unable to load risk alerts. Please try again.
-              </p>
+              <ErrorNote message="Unable to load risk alerts. Please try again." />
             ) : recentAlerts.length > 0 ? (
               <ul className="space-y-3">
                 {recentAlerts.map((alert) => (
@@ -208,14 +238,12 @@ function GuidanceDashboard() {
             <CardTitle>Recent Consultations</CardTitle>
           </CardHeader>
           <CardContent>
-            {consultationsQuery.isFetching ? (
-              <div className="space-y-2">
+            {consultationsQuery.isLoading ? (
+              <PendingRegion label="Recent consultations">
                 <Skeleton className="h-16 w-full" />
-              </div>
+              </PendingRegion>
             ) : consultationsQuery.isError ? (
-              <p className="text-sm text-muted-foreground">
-                Unable to load consultations. Please try again.
-              </p>
+              <ErrorNote message="Unable to load consultations. Please try again." />
             ) : recentConsultations.length > 0 ? (
               <ul className="space-y-3">
                 {recentConsultations.map((consultation) => (

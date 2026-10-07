@@ -25,7 +25,7 @@ import {
   toChartValue,
 } from "@/components/charts/chart-config"
 import type { SectionPerformance } from "@/features/admin/api"
-import { formatCount, formatPercent } from "@/lib/metric-format"
+import { formatCount } from "@/lib/metric-format"
 
 /**
  * One section's aggregate, from `/analytics/sections/{id}/performance/`.
@@ -111,6 +111,12 @@ export function SectionPerformanceChart({
                 tick={{ fill: AXIS_COLOR, fontSize: 12 }}
                 tickLine={false}
                 axisLine={{ stroke: GRID_COLOR }}
+                // PH11.11. Section names are free text. This chart plots exactly one
+                // bar, so there is never more than one tick — but a long section
+                // name still has to be allowed to clip rather than widen the axis
+                // and push the plot off a phone screen. The full name is in the
+                // card title, the tooltip and the frame's `aria-label`.
+                minTickGap={8}
               />
               <YAxis
                 domain={SCORE_DOMAIN}
@@ -154,8 +160,21 @@ export function SectionPerformanceChart({
                 <LabelList
                   dataKey="average"
                   position="top"
+                  /*
+                    PH11.11. This was `formatPercent`, which appends a `%` sign —
+                    wrong for this series. `SectionPerformance.grade_average` is
+                    the mean of `Grade.score`, a raw 0–100 point value
+                    (`DecimalField(max_digits=5, decimal_places=2)`,
+                    serializer-validated to 0–100), which PH11.7 established is
+                    points out of 100. The bar therefore said "85.0%" for a score
+                    of 85.00 out of 100: a unit the backend never reported, on the
+                    one chart whose own description already said "as points out of
+                    100". `formatScoreValue` is what every other score label in
+                    the app uses, so the units are now consistent across the chart
+                    set.
+                  */
                   formatter={(value: unknown) =>
-                    formatPercent(Number(value), 1)
+                    formatScoreValue(Number(value))
                   }
                   style={{ fill: AXIS_COLOR, fontSize: 12 }}
                 />

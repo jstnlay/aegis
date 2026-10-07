@@ -139,7 +139,19 @@ describe("ParentDashboard", () => {
 
     renderWithClient(<ParentDashboard />)
 
-    expect(screen.getByText(/Linked Students/i)).toBeInTheDocument()
+    // PH11.12: scoped to the heading. The card now renders the phrase twice — its
+    // `CardTitle` and the visually-hidden label inside the loading `role="status"`
+    // region — so a bare `getByText` is ambiguous. Matching the heading is the
+    // stronger claim: it pins that the card is labelled by a heading, which the
+    // loose text match never checked, and it still fails if the label goes.
+    expect(
+      screen.getByRole("heading", { name: /Linked Students/i })
+    ).toBeInTheDocument()
+    // The placeholder announces itself rather than sitting silent.
+    expect(screen.getAllByRole("status")[0]).toHaveAttribute(
+      "aria-busy",
+      "true"
+    )
   })
 
   it("renders the Academic Progress section from the fetched grading-period data", async () => {

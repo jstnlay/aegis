@@ -123,9 +123,24 @@ for (const role of allRoles) {
     `${role} page title resolves from navigation config`
   )
 }
+/*
+ * PH11.13. This assertion said `admin` should see the bare `academics` route,
+ * which stopped being true in PH11.9 and was never updated: that phase moved the
+ * administrator's academic structure onto `admin/academics` and removed `admin`
+ * from `/app/academics` entirely, so the smoke script has been failing ever since.
+ *
+ * The correction is to assert the route that exists *and* to pin the removal that
+ * PH11.9 made deliberately — `admin` reaching the student/faculty Academics page
+ * would serve them a view built for a `StudentProfile` an administrator does not
+ * have, so asserting it stays out is the stronger statement, not the weaker one.
+ */
 checkTrue(
-  navigation.isRouteVisibleToRole("admin", "academics"),
-  "admin navigation includes the academics route"
+  navigation.isRouteVisibleToRole("admin", "admin/academics"),
+  "admin navigation includes the admin academics route"
+)
+checkTrue(
+  !navigation.isRouteVisibleToRole("admin", "academics"),
+  "admin navigation excludes the student/faculty academics route"
 )
 checkTrue(
   !navigation.isRouteVisibleToRole("parent", "users"),

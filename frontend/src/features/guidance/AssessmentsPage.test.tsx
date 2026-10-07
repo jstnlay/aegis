@@ -184,7 +184,7 @@ describe("AssessmentsPage", () => {
     renderPage()
 
     expect(
-      await screen.findByRole("heading", { name: "Assessments", level: 1 })
+      await screen.findByRole("heading", { name: "Assessments", level: 2 })
     ).toBeInTheDocument()
     expect(await screen.findByText("Wellness Check-In")).toBeInTheDocument()
     expect(screen.getByText("Behavior Review")).toBeInTheDocument()
@@ -521,6 +521,93 @@ describe("assessment authoring", () => {
     ).toBeInTheDocument()
   })
 
+  /**
+   * Serves two drafts instead of the shared fixture's one.
+   *
+   * The collision only exists with two or more draft cards on screen, because
+   * `QuestionsBlock` renders `AddQuestionForm` for a draft and a plain list for a
+   * published one. Stubbed per test rather than added to the shared `assessments`
+   * fixture so the other tests keep asserting against the exact list they were
+   * written for.
+   */
+  function stubTwoDrafts() {
+    const drafts = [
+      { ...assessments[1], id: "a-2", title: "Behavior Review" },
+      {
+        ...assessments[1],
+        id: "a-4",
+        title: "Belonging Check",
+        description: "A second draft.",
+        question_count: 0,
+      },
+    ]
+    mockedFetchAllPages.mockImplementation(async (url: string) => {
+      if (url.includes("/assessments/assessments/")) {
+        return { count: drafts.length, results: drafts }
+      }
+      if (url.includes("/assessments/assessment-results/")) {
+        return { count: 0, results: [] }
+      }
+      if (url.includes("/assessments/assessment-questions/")) {
+        return { count: 0, results: [] }
+      }
+      return { count: 0, results: [] }
+    })
+  }
+
+  it("renders no duplicate DOM ids with two drafts on screen", async () => {
+    // PH11.11 regression. `AddQuestionForm` is rendered once per draft
+    // assessment from inside the page's `.map()`, and its five controls used
+    // static ids (`question-text`, `question-type`, `question-order`,
+    // `question-options`, `question-answer`). With a second draft present, each
+    // id existed twice and every `<label for>` resolved to the FIRST instance —
+    // so the second form's labels all named the first form's controls. Duplicate
+    // ids are an HTML validity error and a WCAG 4.1.1 / 3.3.2 failure.
+    stubTwoDrafts()
+
+    renderPage()
+    await screen.findByText("Belonging Check")
+
+    const drafts = await screen.findAllByRole("form", { name: "Add question" })
+    expect(drafts).toHaveLength(2)
+    const [firstCard, secondCard] = drafts as [HTMLElement, HTMLElement]
+
+    // Wait for both cards to have settled before asserting on the whole
+    // document, or the assertion could pass simply because one card had not
+    // mounted its form yet.
+    await within(firstCard).findByRole("button", { name: "Add question" })
+    await within(secondCard).findByRole("button", { name: "Add question" })
+
+    const seen = new Map<string, number>()
+    for (const node of Array.from(document.querySelectorAll("[id]"))) {
+      seen.set(node.id, (seen.get(node.id) ?? 0) + 1)
+    }
+    expect([...seen.entries()].filter(([, count]) => count > 1)).toEqual([])
+  })
+
+  it("labels each draft's question controls with that draft's own field", async () => {
+    // The consequence of the ids being per-assessment: the label/control
+    // association resolves inside the card it belongs to, so typing in the
+    // second draft's "Question text" cannot land in the first draft's textarea.
+    stubTwoDrafts()
+
+    renderPage()
+    await screen.findByText("Belonging Check")
+
+    const drafts = await screen.findAllByRole("form", { name: "Add question" })
+    expect(drafts).toHaveLength(2)
+    const [firstCard, secondCard] = drafts as [HTMLElement, HTMLElement]
+
+    const first = within(firstCard).getByLabelText(/question text/i)
+    const second = within(secondCard).getByLabelText(/question text/i)
+
+    expect(first).not.toBe(second)
+    fireEvent.change(second, { target: { value: "Only the second draft" } })
+
+    expect(second).toHaveValue("Only the second draft")
+    expect(first).toHaveValue("")
+  })
+
   it("creates a question at the questions endpoint", async () => {
     mockedPost.mockResolvedValue({ data: {} } as never)
 
@@ -823,7 +910,12 @@ describe("assessment authoring", () => {
     const draft = screen
       .getByText("Behavior Review")
       .closest("[data-assessment-id]") as HTMLElement
-    fireEvent.click(within(draft).getByRole("button", { name: "Deploy" }))
+    // PH11.11: the deploy button now carries an `aria-label` naming the
+    // assessment. One of these renders per card, so the bare "Deploy" gave every
+    // button the same accessible name and the rows could not be told apart.
+    fireEvent.click(
+      within(draft).getByRole("button", { name: "Deploy Behavior Review" })
+    )
 
     await waitFor(() => {
       expect(mockedPost).toHaveBeenCalledWith(
@@ -841,7 +933,11 @@ describe("assessment authoring", () => {
       .getByText("Wellness Check-In")
       .closest("[data-assessment-id]") as HTMLElement
     expect(
-      within(published).queryByRole("button", { name: "Deploy" })
+      // Matches the `aria-label` PH11.11 added, so this assertion is about the
+      // absent control rather than passing vacuously.
+      within(published).queryByRole("button", {
+        name: "Deploy Wellness Check-In",
+      })
     ).toBeNull()
     expect(
       within(published).getByText(/blocks a second deploy/i)
@@ -859,7 +955,9 @@ describe("assessment authoring", () => {
     const draft = screen
       .getByText("Behavior Review")
       .closest("[data-assessment-id]") as HTMLElement
-    fireEvent.click(within(draft).getByRole("button", { name: "Deploy" }))
+    fireEvent.click(
+      within(draft).getByRole("button", { name: "Deploy Behavior Review" })
+    )
 
     expect(
       await screen.findByText(/Cannot publish assessment without questions/i)
@@ -875,7 +973,9 @@ describe("assessment authoring", () => {
     const draft = screen
       .getByText("Behavior Review")
       .closest("[data-assessment-id]") as HTMLElement
-    fireEvent.click(within(draft).getByRole("button", { name: "Deploy" }))
+    fireEvent.click(
+      within(draft).getByRole("button", { name: "Deploy Behavior Review" })
+    )
 
     expect(
       await screen.findByText(/Assessment is already published/i)

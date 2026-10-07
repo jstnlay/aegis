@@ -2,6 +2,7 @@ import { ClipboardCheck } from "lucide-react"
 import { useState } from "react"
 
 import { Badge } from "@/components/ui/badge"
+import { ErrorNote } from "@/components/feedback/Feedback"
 import {
   Card,
   CardContent,
@@ -83,7 +84,7 @@ export function ParentAssessmentsPage() {
             className="size-5 text-muted-foreground"
             aria-hidden="true"
           />
-          <h1 className="text-2xl font-bold text-foreground">Assessments</h1>
+          <h2 className="text-2xl font-bold text-foreground">Assessments</h2>
         </div>
         <p className="text-sm text-muted-foreground">
           Assessments published to your children, and the results they
@@ -267,11 +268,11 @@ function AssessmentQuestions({ assessmentId }: { assessmentId: string }) {
   }
   if (detailQuery.isError) {
     return (
-      <div
-        role="alert"
-        className="m-3 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
-      >
-        Unable to load the questions for this assessment.
+      // PH11.12: `ErrorNote` rather than a hand-rolled copy of its markup. This was
+      // the one error in the parent surface rendered without the shared alert's
+      // icon, so the same failure looked different here than everywhere else.
+      <div className="m-3">
+        <ErrorNote message="Unable to load the questions for this assessment." />
       </div>
     )
   }

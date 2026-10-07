@@ -88,12 +88,18 @@ function makeNormalizedError(
 /* ---------- Tiny probe / harness components --------------------------- */
 
 function Probe() {
-  const { status, user: currentUser, mustChangePassword } = useAuth()
+  const {
+    status,
+    user: currentUser,
+    mustChangePassword,
+    sessionExpired,
+  } = useAuth()
   return (
     <div>
       <span data-testid="status">{status}</span>
       <span data-testid="must-change">{String(mustChangePassword)}</span>
       <span data-testid="user-email">{currentUser?.email ?? ""}</span>
+      <span data-testid="session-expired">{String(sessionExpired)}</span>
     </div>
   )
 }
@@ -405,6 +411,67 @@ describe("session expiration", () => {
 
     expect(screen.getByTestId("status")).toHaveTextContent("unauthenticated")
     expect(screen.getByTestId("user-email")).toHaveTextContent("")
+  })
+
+  /*
+   * PH11.11: expiry has to be *explainable*.
+   *
+   * Both transitions clear the tokens and set `unauthenticated`, and both send
+   * the user to `/login`, so without a flag the sign-in page could not say why
+   * they were back there. `sessionExpired` is that flag, and `LoginPage` renders
+   * it as a polite status — a user mid-task needs to be told, but nothing failed
+   * because of a mistake they made, so it must not interrupt.
+   *
+   * The second test is the one that stops the explanation from becoming a lie: it
+   * must not survive a successful sign-in, or a later unrelated failure would
+   * resurrect it.
+   */
+  it("marks the session as expired so the sign-in page can explain it", async () => {
+    tokenStorage.setTokens(tokenPair.access, tokenPair.refresh)
+    mockedRestore.mockReturnValue(tokenPair)
+    mockedMe.mockResolvedValue(user)
+
+    renderAuth()
+
+    await waitFor(() => {
+      expect(screen.getByTestId("status")).toHaveTextContent("authenticated")
+    })
+    expect(screen.getByTestId("session-expired")).toHaveTextContent("false")
+
+    await act(async () => {
+      apiState.emitSessionExpired()
+    })
+
+    expect(screen.getByTestId("session-expired")).toHaveTextContent("true")
+  })
+
+  it("clears the expired flag once the user signs in again", async () => {
+    tokenStorage.setTokens(tokenPair.access, tokenPair.refresh)
+    mockedRestore.mockReturnValue(tokenPair)
+    mockedMe.mockResolvedValue(user)
+
+    renderAuth()
+
+    await waitFor(() => {
+      expect(screen.getByTestId("status")).toHaveTextContent("authenticated")
+    })
+    await act(async () => {
+      apiState.emitSessionExpired()
+    })
+    expect(screen.getByTestId("session-expired")).toHaveTextContent("true")
+
+    mockedLogin.mockResolvedValue({
+      access: "new-access",
+      refresh: "new-refresh",
+      must_change_password: false,
+    })
+
+    await act(async () => {
+      await harnessRef?.login("student@school.edu", "pw")
+    })
+
+    expect(screen.getByTestId("session-expired")).toHaveTextContent("false")
+    expect(screen.getByTestId("status")).toHaveTextContent("authenticated")
   })
 
   it("clears restricted state and becomes authenticated after a successful password change", async () => {

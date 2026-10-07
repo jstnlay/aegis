@@ -86,7 +86,7 @@ describe("AccountSettingsPage", () => {
     renderPage()
 
     expect(
-      await screen.findByRole("heading", { name: "Account settings", level: 1 })
+      await screen.findByRole("heading", { name: "Account settings", level: 2 })
     ).toBeInTheDocument()
     expect(mockedGet).toHaveBeenCalledWith("/accounts/me/")
 

@@ -1,3 +1,4 @@
+import { Tabs } from "@/components/ui/tabs"
 import { FileText } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
@@ -58,7 +59,7 @@ export function AdminCmsPage() {
             className="size-5 text-muted-foreground"
             aria-hidden="true"
           />
-          <h1 className="text-2xl font-bold text-foreground">Content</h1>
+          <h2 className="text-2xl font-bold text-foreground">Content</h2>
         </div>
         <p className="text-sm text-muted-foreground">
           Announcements and resources published to the school through the CMS.
@@ -82,31 +83,26 @@ export function AdminCmsPage() {
         <CardContent />
       </Card>
 
-      <div className="flex flex-wrap gap-2" role="tablist" aria-label="Content">
-        {(
-          [
-            { id: "announcements", label: "Announcements" },
-            { id: "resources", label: "Resources" },
-          ] as const
-        ).map((entry) => (
-          <button
-            key={entry.id}
-            type="button"
-            role="tab"
-            aria-selected={tab === entry.id}
-            onClick={() => setTab(entry.id)}
-            className={
-              tab === entry.id
-                ? "rounded-sm bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
-                : "rounded-sm border border-border px-3 py-2 text-sm font-medium hover:bg-muted"
-            }
-          >
-            {entry.label}
-          </button>
-        ))}
-      </div>
-
-      {tab === "announcements" ? <AnnouncementsCard /> : <ResourcesCard />}
+      {/*
+        PH11.11: the hand-rolled tab strip is replaced by the shared `Tabs`.
+        This page's tabs had no `focus-visible:` rule at all — they were plain
+        `<button>`s with hand-written classes rather than the shared `Button` —
+        so a keyboard user had no visible focus indicator on either state. It is
+        also the only page of the three that did not use the shared `Button`.
+      */}
+      <Tabs
+        label="Content"
+        value={tab}
+        onValueChange={setTab}
+        items={[
+          {
+            id: "announcements",
+            label: "Announcements",
+            content: <AnnouncementsCard />,
+          },
+          { id: "resources", label: "Resources", content: <ResourcesCard /> },
+        ]}
+      />
     </div>
   )
 }

@@ -312,8 +312,13 @@ describe("PH11.8 guidance routes", () => {
 
     // The roster is empty in this harness, so the page falls back to the
     // generic heading. The point is that the param route resolves at all.
+    //
+    // `level: 2` since PH11.11: under `AppShell` the header owns the document's
+    // `h1`, so each page's own title is the level below it. The level is still
+    // pinned rather than omitted, because a silent change of it is the
+    // regression this assertion exists to catch.
     expect(
-      await screen.findByRole("heading", { name: "Student", level: 1 })
+      await screen.findByRole("heading", { name: "Student", level: 2 })
     ).toBeInTheDocument()
     expect(
       screen.getByRole("link", { name: /back to roster/i })
@@ -478,8 +483,18 @@ describe("PH11.8 guidance routes", () => {
       marker: /Answer keys are never shared with parents/i,
     },
     {
+      // PH11.11. The marker changed because the page's states were separated.
+      // With no linked children the route previously rendered "No student
+      // selected — Choose a linked student above", which is an instruction to
+      // operate a select that has nothing in it; and it rendered identically
+      // whether the roster was genuinely empty or the request had failed. The
+      // roster is empty in this harness (every mocked response is an empty
+      // envelope), so the empty state is the correct outcome and is now its own
+      // copy. The assertion is unchanged in strength: still a marker unique to
+      // the route's body, still required to appear for a parent and to be absent
+      // for every other role.
       path: "/app/parent/support",
-      marker: /Choose a linked student above/i,
+      marker: /This account has no linked children/i,
     },
   ]
 
@@ -525,7 +540,10 @@ describe("PH11.8 guidance routes", () => {
     authState.user = makeUser("parent")
     renderAt("/app/parent/support")
 
-    await screen.findByText(/Choose a linked student above/i)
+    // PH11.11: the marker follows the route's own copy for an empty roster — see
+    // the note on `PARENT_ROUTES`. The point of this test is the `for` loop below,
+    // which is unchanged: no mutation vocabulary is reachable by a parent.
+    await screen.findByText(/This account has no linked children/i)
 
     for (const label of [
       /acknowledge/i,
@@ -591,10 +609,15 @@ describe("PH11.8 guidance routes", () => {
       authState.user = makeUser(role)
       const view = renderAt("/app/account-settings")
 
+      // `level: 2` and the page's own casing: since PH11.11 the shell header owns
+      // the document's `h1` and renders the navigation label ("Account
+      // Settings"), while this page carries its own title heading one level
+      // below it. The assertion deliberately targets the page's heading rather
+      // than the header's, so it cannot pass on the header alone.
       expect(
         await screen.findByRole("heading", {
           name: "Account settings",
-          level: 1,
+          level: 2,
         }),
         role
       ).toBeInTheDocument()

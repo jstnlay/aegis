@@ -52,7 +52,7 @@ function PageHeading({
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-3">
         <Calendar className="size-5 text-muted-foreground" aria-hidden="true" />
-        <h1 className="text-2xl font-bold text-foreground">{title}</h1>
+        <h2 className="text-2xl font-bold text-foreground">{title}</h2>
       </div>
       <p className="text-sm text-muted-foreground">{description}</p>
     </div>
@@ -122,24 +122,37 @@ function StudentAttendance() {
           ) : (recordsQuery.data ?? []).length === 0 ? (
             <EmptyState message="No attendance records found." />
           ) : (
-            <Table>
+            <Table scrollLabel="Attendance records">
+              {/*
+                PH11.11. The caption was the last child of `<table>`, which is not
+                a valid position — the HTML parser expects it first, so the element
+                was not reliably associated with the table and a screen reader had
+                no accessible name for it. Moved to the front, where the parser
+                puts it. `scope="col"` added to the headings for the same reason
+                `DataTable` carries it: without it the header row reads as three
+                unrelated labels rather than as headers for the cells beneath.
+              */}
+              <TableCaption className="sr-only">
+                One record per student and date
+              </TableCaption>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Section</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead scope="col">Date</TableHead>
+                  <TableHead scope="col">Section</TableHead>
+                  <TableHead scope="col">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {(recordsQuery.data ?? []).map((r) => (
                   <TableRow key={r.id}>
-                    <TableCell>{r.date}</TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      {r.date}
+                    </TableCell>
                     <TableCell>{r.section_name}</TableCell>
                     <TableCell>{ATTENDANCE_STATUS_LABELS[r.status]}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
-              <TableCaption>One record per student/date.</TableCaption>
             </Table>
           )}
         </CardContent>
@@ -163,28 +176,49 @@ function StudentAttendance() {
           ) : (summaryQuery.data ?? []).length === 0 ? (
             <EmptyState message="No attendance summary data." />
           ) : (
-            <Table>
+            <Table scrollLabel="Attendance summary">
+              {/*
+                PH11.11. This table had no caption at all, so it had no accessible
+                name — and the record table above it, once it gained one, would
+                have been the only thing on the page that announced what it held.
+                `scope="col"` and `whitespace-nowrap` on the counts follow the same
+                reasoning as the record table: the numbers read better on one line
+                and the headings have to be headers for the cells beneath them.
+              */}
+              <TableCaption className="sr-only">
+                Attendance totals by section
+              </TableCaption>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Section</TableHead>
-                  <TableHead className="text-right">Present</TableHead>
-                  <TableHead className="text-right">Late</TableHead>
-                  <TableHead className="text-right">Absent</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
+                  <TableHead scope="col">Section</TableHead>
+                  <TableHead scope="col" className="text-right">
+                    Present
+                  </TableHead>
+                  <TableHead scope="col" className="text-right">
+                    Late
+                  </TableHead>
+                  <TableHead scope="col" className="text-right">
+                    Absent
+                  </TableHead>
+                  <TableHead scope="col" className="text-right">
+                    Total
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {(summaryQuery.data ?? []).map((s, idx) => (
                   <TableRow key={idx}>
                     <TableCell>{s.section_name}</TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right tabular-nums">
                       {s.present_count}
                     </TableCell>
-                    <TableCell className="text-right">{s.late_count}</TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right tabular-nums">
+                      {s.late_count}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
                       {s.absent_count}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right tabular-nums">
                       {s.total_records}
                     </TableCell>
                   </TableRow>
@@ -413,15 +447,26 @@ function FacultyAttendance() {
           ) : records.length === 0 ? (
             <EmptyState message="No attendance records in your sections yet." />
           ) : (
-            <Table>
+            <Table scrollLabel="Attendance records">
+              {/*
+                PH11.11. No caption, no `scope`, and no `scrollLabel`. The last of
+                those matters most on this table: six columns of a faculty view is
+                the one hand-rolled table here wide enough to overflow a phone, and
+                `scrollLabel` is what makes the overflow reachable from the
+                keyboard rather than only by dragging. `nowrap` keeps the date and
+                the ID on one line; the recorder's name is free text and wraps.
+              */}
+              <TableCaption className="sr-only">
+                Attendance records in your sections
+              </TableCaption>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Student</TableHead>
-                  <TableHead>ID</TableHead>
-                  <TableHead>Section</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Recorded by</TableHead>
+                  <TableHead scope="col">Date</TableHead>
+                  <TableHead scope="col">Student</TableHead>
+                  <TableHead scope="col">ID</TableHead>
+                  <TableHead scope="col">Section</TableHead>
+                  <TableHead scope="col">Status</TableHead>
+                  <TableHead scope="col">Recorded by</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

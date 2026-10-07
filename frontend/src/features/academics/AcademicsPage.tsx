@@ -1,6 +1,13 @@
-import { AlertCircle, BookOpen, Info, Lock } from "lucide-react"
+import { BookOpen, Info, Lock } from "lucide-react"
 import { useMemo, useState, type FormEvent } from "react"
 
+import {
+  EmptyState,
+  ErrorNote,
+  PendingMetric,
+  PendingRegion,
+  UnavailableMetric,
+} from "@/components/feedback/Feedback"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -45,7 +52,7 @@ import {
 import { useAuth } from "@/features/auth/AuthContext"
 import { useStudentProfileId } from "@/features/student/api"
 import { AcademicsLandingPage } from "@/routes/pages/AcademicsLandingPage"
-import { normalizeApiError } from "@/lib/error"
+import { getFieldError, normalizeApiError } from "@/lib/error"
 
 /* -------------------------------------------------------------------------- */
 /* Shared pieces                                                              */
@@ -62,21 +69,9 @@ function PageHeading({
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-3">
         <BookOpen className="size-5 text-muted-foreground" aria-hidden="true" />
-        <h1 className="text-2xl font-bold text-foreground">{title}</h1>
+        <h2 className="text-2xl font-bold text-foreground">{title}</h2>
       </div>
       <p className="text-sm text-muted-foreground">{description}</p>
-    </div>
-  )
-}
-
-function ErrorNote({ message }: { message: string }) {
-  return (
-    <div
-      role="alert"
-      className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
-    >
-      <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-      <span>{message}</span>
     </div>
   )
 }
@@ -122,19 +117,32 @@ function GradeTable({
   showStudent?: boolean
 }) {
   return (
-    <Table>
+    <Table scrollLabel={caption}>
+      {/*
+        PH11.11. `scrollLabel` added. This is a five-to-seven column table with a
+        `Subject`, `Section` and `Grading period` column of free text, so it is the
+        one hand-rolled table in this file that can exceed a phone's width — and
+        with no focusable, named scroll container its overflow was reachable only
+        by dragging. The caption was already first, which is the only valid
+        position; it stays visible rather than `sr-only` because here it carries a
+        count ("12 of 40 grade records") that is worth reading.
+      */}
       <TableCaption className="text-xs text-muted-foreground">
         {caption}
       </TableCaption>
       <TableHeader>
         <TableRow>
-          {showStudent ? <TableHead>Student</TableHead> : null}
-          <TableHead>Subject</TableHead>
-          {showStudent ? <TableHead>Section</TableHead> : null}
-          <TableHead>Grading period</TableHead>
-          <TableHead className="text-right">Score (0&ndash;100)</TableHead>
-          <TableHead className="text-right">Letter</TableHead>
-          <TableHead>Status</TableHead>
+          {showStudent ? <TableHead scope="col">Student</TableHead> : null}
+          <TableHead scope="col">Subject</TableHead>
+          {showStudent ? <TableHead scope="col">Section</TableHead> : null}
+          <TableHead scope="col">Grading period</TableHead>
+          <TableHead scope="col" className="text-right">
+            Score (0&ndash;100)
+          </TableHead>
+          <TableHead scope="col" className="text-right">
+            Letter
+          </TableHead>
+          <TableHead scope="col">Status</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -162,7 +170,14 @@ function GradeTable({
             <TableCell className="text-muted-foreground">
               {grade.grading_period_name ?? "Unassigned"}
             </TableCell>
-            <TableCell className="text-right">
+            {/*
+              PH11.11. `tabular-nums` on the score so the decimal points line up
+              down the column, and `whitespace-nowrap` because a score split across
+              two lines reads as two numbers. The subject, section and period cells
+              keep the new wrapping default — those are the free-text columns that
+              made this table wider than the screen.
+            */}
+            <TableCell className="text-right whitespace-nowrap tabular-nums">
               <ScoreCell score={grade.score} />
             </TableCell>
             <TableCell className="text-right">
@@ -179,12 +194,6 @@ function GradeTable({
         ))}
       </TableBody>
     </Table>
-  )
-}
-
-function EmptyState({ message }: { message: string }) {
-  return (
-    <p className="py-6 text-center text-sm text-muted-foreground">{message}</p>
   )
 }
 
@@ -240,7 +249,18 @@ function StudentAcademics() {
           <CardContent>
             <div className="text-2xl font-bold">
               {loading ? (
-                <Skeleton className="h-8 w-24" />
+                // PH11.11: announced placeholder. This skeleton was grey, silent
+                // and stateless — a reader heard the page title and nothing about
+                // the figure still arriving.
+                <PendingMetric
+                  label="Average of recorded scores"
+                  className="h-8 w-24"
+                />
+              ) : gradesQuery.isError ? (
+                // PH11.11: a failure is not "Not recorded". The card previously
+                // printed the same muted line for both, which told the student
+                // they had no grades when the request had simply failed.
+                <UnavailableMetric />
               ) : average === null ? (
                 <span className="text-muted-foreground">Not recorded</span>
               ) : (
@@ -262,7 +282,9 @@ function StudentAcademics() {
           <CardContent>
             <div className="text-2xl font-bold">
               {loading ? (
-                <Skeleton className="h-8 w-16" />
+                <PendingMetric label="Finalized grades" className="h-8 w-16" />
+              ) : gradesQuery.isError ? (
+                <UnavailableMetric />
               ) : (
                 String(grades.length)
               )}
@@ -284,11 +306,13 @@ function StudentAcademics() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div className="space-y-2">
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-            </div>
+            <PendingRegion label="Grade record">
+              <div className="space-y-2">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+            </PendingRegion>
           ) : gradesQuery.isError ? (
             <ErrorNote message={normalizeApiError(gradesQuery.error).message} />
           ) : grades.length === 0 ? (
@@ -319,7 +343,47 @@ const STATUS_FILTERS: ReadonlyArray<{
   { value: "finalized", label: "Finalized" },
 ]
 
-function GradeEncodeForm({ onEncoded }: { onEncoded?: () => void }) {
+/**
+ * Label plus the visible required marker for a hand-rolled control.
+ *
+ * The marker is a *sibling* of the `<label>`, never a child. An element inside
+ * the label is part of its text content, so the control's accessible name would
+ * become "Student *" and every announcement would state the requirement twice —
+ * once from the name, once from `aria-required`. `FieldLabel` in
+ * `@/components/ui/form-field` takes the same position for the same reason.
+ *
+ * This form cannot use `ChoiceField` even though it is fully controlled state:
+ * the student and period selects are `disabled` until an assignment is chosen,
+ * and their placeholders explain *why* the list is unavailable ("Select an
+ * assignment first", "Loading enrolled students"). `ChoiceField` has no
+ * `disabled` and no placeholder prop, so adopting it would silently drop both
+ * the keyboard gating and the explanation of it.
+ */
+function RequiredLabel({
+  htmlFor,
+  children,
+}: {
+  htmlFor: string
+  children: string
+}) {
+  return (
+    <div className="flex items-center gap-1">
+      <Label htmlFor={htmlFor}>{children}</Label>
+      <span aria-hidden="true" className="text-destructive">
+        *
+      </span>
+    </div>
+  )
+}
+
+/** `id` of the form-level error node the failing control points at. */
+const ENCODE_ERROR_ID = "encode-grade-error"
+
+function GradeEncodeForm({
+  onEncoded,
+}: {
+  onEncoded?: (grade: Grade) => void
+}) {
   const assignmentsQuery = useSubjectAssignments()
   const periodsQuery = useGradingPeriods()
   const encodeMutation = useEncodeGrade()
@@ -354,7 +418,7 @@ function GradeEncodeForm({ onEncoded }: { onEncoded?: () => void }) {
     if (!assignmentId || !studentId || !periodId) return
 
     const trimmedScore = score.trim()
-    await encodeMutation.mutateAsync({
+    const grade = await encodeMutation.mutateAsync({
       student: studentId,
       subject_assignment: assignmentId,
       grading_period: periodId,
@@ -362,7 +426,7 @@ function GradeEncodeForm({ onEncoded }: { onEncoded?: () => void }) {
     })
 
     reset()
-    onEncoded?.()
+    onEncoded?.(grade)
   }
 
   const loadingOptions = assignmentsQuery.isLoading || periodsQuery.isLoading
@@ -370,6 +434,22 @@ function GradeEncodeForm({ onEncoded }: { onEncoded?: () => void }) {
     assignmentsQuery.isError || periodsQuery.isError
       ? normalizeApiError(assignmentsQuery.error ?? periodsQuery.error).message
       : null
+
+  /*
+    `GradeEncodeSerializer` keys its validation errors by the request field
+    names, so these are the four controls a 400 can actually name. A failure the
+    view raises itself arrives as a bare `{"detail": ...}` body, which maps to
+    none of them and correctly leaves every control untouched — the note below is
+    still announced, it just is not attributed to a field that did nothing
+    wrong.
+  */
+  const assignmentError = getFieldError(
+    encodeMutation.error,
+    "subject_assignment"
+  )
+  const studentError = getFieldError(encodeMutation.error, "student")
+  const periodError = getFieldError(encodeMutation.error, "grading_period")
+  const scoreError = getFieldError(encodeMutation.error, "score")
 
   return (
     <Card>
@@ -385,7 +465,9 @@ function GradeEncodeForm({ onEncoded }: { onEncoded?: () => void }) {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="encode-assignment">Subject assignment</Label>
+            <RequiredLabel htmlFor="encode-assignment">
+              Subject assignment
+            </RequiredLabel>
             <Select
               value={assignmentId}
               onValueChange={(value) => {
@@ -395,7 +477,12 @@ function GradeEncodeForm({ onEncoded }: { onEncoded?: () => void }) {
               }}
               disabled={loadingOptions || assignments.length === 0}
             >
-              <SelectTrigger id="encode-assignment">
+              <SelectTrigger
+                id="encode-assignment"
+                aria-required="true"
+                aria-invalid={assignmentError ? true : undefined}
+                aria-describedby={assignmentError ? ENCODE_ERROR_ID : undefined}
+              >
                 <SelectValue
                   placeholder={
                     assignments.length === 0
@@ -415,13 +502,18 @@ function GradeEncodeForm({ onEncoded }: { onEncoded?: () => void }) {
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="encode-student">Student</Label>
+            <RequiredLabel htmlFor="encode-student">Student</RequiredLabel>
             <Select
               value={studentId}
               onValueChange={setStudentId}
               disabled={!assignmentId || enrollmentsQuery.isLoading}
             >
-              <SelectTrigger id="encode-student">
+              <SelectTrigger
+                id="encode-student"
+                aria-required="true"
+                aria-invalid={studentError ? true : undefined}
+                aria-describedby={studentError ? ENCODE_ERROR_ID : undefined}
+              >
                 <SelectValue
                   placeholder={
                     !assignmentId
@@ -446,13 +538,20 @@ function GradeEncodeForm({ onEncoded }: { onEncoded?: () => void }) {
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label htmlFor="encode-period">Grading period</Label>
+              <RequiredLabel htmlFor="encode-period">
+                Grading period
+              </RequiredLabel>
               <Select
                 value={periodId}
                 onValueChange={setPeriodId}
                 disabled={!assignmentId || periods.length === 0}
               >
-                <SelectTrigger id="encode-period">
+                <SelectTrigger
+                  id="encode-period"
+                  aria-required="true"
+                  aria-invalid={periodError ? true : undefined}
+                  aria-describedby={periodError ? ENCODE_ERROR_ID : undefined}
+                >
                   <SelectValue
                     placeholder={
                       periods.length === 0
@@ -471,6 +570,12 @@ function GradeEncodeForm({ onEncoded }: { onEncoded?: () => void }) {
               </Select>
             </div>
 
+            {/*
+              The score is optional on purpose: `Grade.score` is nullable and the
+              backend accepts `null`, so marking it required would be a lie. It is
+              still a control a 400 can name (`validate_score` rejects anything
+              outside 0–100), so it carries the error wiring but no marker.
+            */}
             <div className="space-y-1.5">
               <Label htmlFor="encode-score">Score (0&ndash;100)</Label>
               <Input
@@ -483,14 +588,29 @@ function GradeEncodeForm({ onEncoded }: { onEncoded?: () => void }) {
                 value={score}
                 onChange={(e) => setScore(e.target.value)}
                 placeholder="Optional"
+                aria-invalid={scoreError ? true : undefined}
+                aria-describedby={scoreError ? ENCODE_ERROR_ID : undefined}
               />
             </div>
           </div>
 
+          {/*
+            The wrapper carries the id rather than `ErrorNote` itself, which takes
+            only a message. That is enough: `aria-describedby` resolves against
+            the referenced element's subtree text, which is exactly the note's own
+            message, so focusing the offending control re-states the failure
+            against that control instead of only alerting it in general.
+
+            `encodeMutation.isError` and `isSuccess` are mutually exclusive in
+            react-query, so the confirmation below can never render beside a
+            failure it would contradict.
+          */}
           {encodeMutation.isError ? (
-            <ErrorNote
-              message={normalizeApiError(encodeMutation.error).message}
-            />
+            <div id={ENCODE_ERROR_ID}>
+              <ErrorNote
+                message={normalizeApiError(encodeMutation.error).message}
+              />
+            </div>
           ) : null}
 
           <Button
@@ -586,11 +706,13 @@ function FacultyAcademics() {
           </div>
 
           {gradesQuery.isLoading ? (
-            <div className="space-y-2">
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-            </div>
+            <PendingRegion label="Grade records">
+              <div className="space-y-2">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+            </PendingRegion>
           ) : gradesQuery.isError ? (
             <ErrorNote message={normalizeApiError(gradesQuery.error).message} />
           ) : visibleGrades.length === 0 ? (

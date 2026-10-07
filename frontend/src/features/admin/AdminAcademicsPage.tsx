@@ -1,3 +1,5 @@
+import { ChoiceField, Field } from "@/components/ui/form-field"
+import { Tabs, type TabItem } from "@/components/ui/tabs"
 import { BookOpen } from "lucide-react"
 import { useState } from "react"
 
@@ -13,15 +15,6 @@ import {
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table"
 import { useDataTablePagination } from "@/components/ui/data-table-pagination"
 import { ErrorNote } from "@/components/feedback/Feedback"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import {
   useAcademicYears,
   useEnrollments,
@@ -72,18 +65,38 @@ type Tab =
   | "grading-periods"
   | "enrollments"
 
-const TABS: readonly { id: Tab; label: string }[] = [
-  { id: "academic-years", label: "Academic years" },
-  { id: "grade-levels", label: "Grade levels" },
-  { id: "sections", label: "Sections" },
-  { id: "subjects", label: "Subjects" },
-  { id: "assignments", label: "Subject assignments" },
-  { id: "grading-periods", label: "Grading periods" },
-  { id: "enrollments", label: "Enrollments" },
-]
-
 export function AdminAcademicsPage() {
   const [tab, setTab] = useState<Tab>("sections")
+
+  /*
+    PH11.12: id, label and content are declared once. PH11.11 introduced the
+    shared `Tabs`, which needs each tab's *content* alongside its label, and the
+    first draft kept the old label-only array and recovered the labels with
+    `TABS.find(t => t.id === …)!.label` — seven linear scans, seven non-null
+    assertions, and two places to change when a tab is added or renamed. One
+    array, typed so the tab state and the panels cannot drift apart.
+  */
+  const tabs: readonly TabItem<Tab>[] = [
+    {
+      id: "academic-years",
+      label: "Academic years",
+      content: <AcademicYearsCard />,
+    },
+    { id: "grade-levels", label: "Grade levels", content: <GradeLevelsCard /> },
+    { id: "sections", label: "Sections", content: <SectionsCard /> },
+    { id: "subjects", label: "Subjects", content: <SubjectsCard /> },
+    {
+      id: "assignments",
+      label: "Subject assignments",
+      content: <SubjectAssignmentsCard />,
+    },
+    {
+      id: "grading-periods",
+      label: "Grading periods",
+      content: <GradingPeriodsCard />,
+    },
+    { id: "enrollments", label: "Enrollments", content: <EnrollmentsCard /> },
+  ]
 
   return (
     <div className="space-y-6">
@@ -93,9 +106,9 @@ export function AdminAcademicsPage() {
             className="size-5 text-muted-foreground"
             aria-hidden="true"
           />
-          <h1 className="text-2xl font-bold text-foreground">
+          <h2 className="text-2xl font-bold text-foreground">
             Academic Structure
-          </h1>
+          </h2>
         </div>
         <p className="text-sm text-muted-foreground">
           The academic year, grade levels, sections, subjects, subject
@@ -104,32 +117,15 @@ export function AdminAcademicsPage() {
         </p>
       </div>
 
-      <div
-        className="flex flex-wrap gap-2"
-        role="tablist"
-        aria-label="Academic structure"
-      >
-        {TABS.map((entry) => (
-          <Button
-            key={entry.id}
-            role="tab"
-            type="button"
-            variant={tab === entry.id ? "default" : "outline"}
-            aria-selected={tab === entry.id}
-            onClick={() => setTab(entry.id)}
-          >
-            {entry.label}
-          </Button>
-        ))}
-      </div>
-
-      {tab === "academic-years" ? <AcademicYearsCard /> : null}
-      {tab === "grade-levels" ? <GradeLevelsCard /> : null}
-      {tab === "sections" ? <SectionsCard /> : null}
-      {tab === "subjects" ? <SubjectsCard /> : null}
-      {tab === "assignments" ? <SubjectAssignmentsCard /> : null}
-      {tab === "grading-periods" ? <GradingPeriodsCard /> : null}
-      {tab === "enrollments" ? <EnrollmentsCard /> : null}
+      {/* PH11.11: shared `Tabs` — adds `aria-controls`, a real `tabpanel`, and
+          arrow-key roving focus across all seven tabs. See
+          `components/ui/tabs.tsx`. */}
+      <Tabs
+        label="Academic structure"
+        value={tab}
+        onValueChange={setTab}
+        items={tabs}
+      />
     </div>
   )
 }
@@ -140,21 +136,42 @@ const PAGE_SIZE = 25
 /** Page sizes offered for those tables. */
 const PAGE_SIZE_OPTIONS = [25, 50, 100] as const
 
-/** Delete button plus its pending state, shared by every table's Actions column. */
+/**
+ * Delete button plus its pending state, shared by every table's Actions column.
+ *
+ * `size="sm"` replaced `size="xs"` in PH11.11. `xs` is `h-6` — 24px — which is
+ * below PH11.2 §16.6's stated 32px floor for buttons, before its ~44px
+ * practical target is even considered, and this is the destructive control in
+ * every one of these tables, where a mis-tap is not recoverable.
+ *
+ * Only this control is widened. PH11.4 recorded that the shared design system's
+ * 36px control height is deliberately not being widened to chase a larger touch
+ * target, and that decision is not this phase's to overturn; `sm` (`h-8`, 32px)
+ * meets the documented minimum without touching the system.
+ *
+ * `aria-label` added in the same pass: the button's accessible name was the bare
+ * word "Delete", repeated once per row, so a screen reader's button list read
+ * "Delete, Delete, Delete…" with no way to tell the rows apart. `subject` names
+ * what is being deleted.
+ */
 function DeleteButton({
   onDelete,
   pending,
+  subject,
 }: {
   onDelete: () => void
   pending: boolean
+  /** Identifies the row, so the control is distinguishable from every other. */
+  subject: string
 }) {
   return (
     <Button
       type="button"
       variant="destructive"
-      size="xs"
+      size="sm"
       disabled={pending}
       onClick={onDelete}
+      aria-label={`Delete ${subject}`}
     >
       Delete
     </Button>
@@ -194,6 +211,7 @@ function AcademicYearsCard() {
       cell: (row) => (
         <DeleteButton
           pending={remove.isPending}
+          subject={row.name}
           onDelete={() => remove.mutate(row.id)}
         />
       ),
@@ -301,6 +319,7 @@ function GradeLevelsCard() {
       cell: (row) => (
         <DeleteButton
           pending={remove.isPending}
+          subject={row.name}
           onDelete={() => remove.mutate(row.id)}
         />
       ),
@@ -426,6 +445,7 @@ function SectionsCard() {
       cell: (row) => (
         <DeleteButton
           pending={remove.isPending}
+          subject={row.name}
           onDelete={() => remove.mutate(row.id)}
         />
       ),
@@ -569,6 +589,7 @@ function SubjectsCard() {
       cell: (row) => (
         <DeleteButton
           pending={remove.isPending}
+          subject={row.name}
           onDelete={() => remove.mutate(row.id)}
         />
       ),
@@ -714,6 +735,7 @@ function SubjectAssignmentsCard() {
       cell: (row) => (
         <DeleteButton
           pending={remove.isPending}
+          subject={`${row.subject_name} in ${row.section_name}`}
           onDelete={() => remove.mutate(row.id)}
         />
       ),
@@ -877,6 +899,7 @@ function GradingPeriodsCard() {
       cell: (row) => (
         <DeleteButton
           pending={remove.isPending}
+          subject={row.name}
           onDelete={() => remove.mutate(row.id)}
         />
       ),
@@ -1086,6 +1109,7 @@ function EnrollmentsCard() {
       cell: (row) => (
         <DeleteButton
           pending={remove.isPending}
+          subject={`${row.student_name} in ${row.section_name}`}
           onDelete={() => remove.mutate(row.id)}
         />
       ),
@@ -1204,86 +1228,8 @@ function EnrollmentsCard() {
 }
 
 /* ------------------------------------------------------------------ */
-/* Form field primitives                                               */
+/* Error mapping                                                       */
 /* ------------------------------------------------------------------ */
-
-/**
- * A labelled text/date/number field controlled by its parent card.
- *
- * The value lives in the card's form state and every keystroke is reported
- * upward through `onChange`. A previous revision kept `useState` inside this
- * component and handed the child its *own* setter, which meant the card's form
- * object was never written: `canSubmit` read from that object stayed `false`
- * forever and six of the seven create forms could not be submitted at all. The
- * field is therefore fully controlled — it renders the control itself so the
- * label, the id and any error message stay bound to one another.
- */
-function Field({
-  label,
-  id,
-  value,
-  onChange,
-  type = "text",
-  placeholder,
-  min,
-  max,
-  step,
-  required = false,
-  error,
-}: {
-  label: string
-  id: string
-  value: string
-  onChange: (value: string) => void
-  type?: "text" | "date" | "number"
-  placeholder?: string
-  min?: number
-  max?: number
-  step?: number
-  required?: boolean
-  error?: string | null
-}) {
-  const errorId = `${id}-error`
-
-  return (
-    <div className="space-y-1.5">
-      <Label htmlFor={id}>{label}</Label>
-      <Input
-        id={id}
-        type={type}
-        value={value}
-        placeholder={placeholder}
-        min={min}
-        max={max}
-        step={step}
-        required={required}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={error ? errorId : undefined}
-        onChange={(event) => onChange(event.target.value)}
-      />
-      <FieldError id={errorId} message={error} />
-    </div>
-  )
-}
-
-/**
- * The inline message for one field, announced when it appears and linked to
- * the control by `aria-describedby`.
- */
-function FieldError({
-  id,
-  message,
-}: {
-  id: string
-  message: string | null | undefined
-}) {
-  if (!message) return null
-  return (
-    <p id={id} className="text-xs text-destructive">
-      {message}
-    </p>
-  )
-}
 
 /**
  * The messages the API returned for this form, keyed by request field name.
@@ -1334,56 +1280,3 @@ const OPAQUE_ERROR_FIELDS = new Set([
   "__all__",
   "root",
 ])
-
-/** A labelled select. `optional` adds a "None" entry representing "". */
-function ChoiceField({
-  label,
-  id,
-  value,
-  onChange,
-  options,
-  optional = false,
-  emptyLabel,
-  required = false,
-  error,
-}: {
-  label: string
-  id: string
-  value: string
-  onChange: (value: string) => void
-  options: readonly { value: string; label: string }[]
-  optional?: boolean
-  emptyLabel?: string
-  required?: boolean
-  error?: string | null
-}) {
-  const errorId = `${id}-error`
-
-  return (
-    <div className="space-y-1.5">
-      <Label htmlFor={id}>{label}</Label>
-      <Select value={value} onValueChange={onChange}>
-        <SelectTrigger
-          id={id}
-          aria-required={required || undefined}
-          aria-invalid={error ? true : undefined}
-          aria-describedby={error ? errorId : undefined}
-        >
-          <SelectValue placeholder={`Select ${label.toLowerCase()}`} />
-        </SelectTrigger>
-        <SelectContent>
-          {optional ? <SelectItem value="">None</SelectItem> : null}
-          {options.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
-              {option.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <FieldError id={errorId} message={error} />
-      {options.length === 0 && emptyLabel ? (
-        <p className="text-xs text-muted-foreground">{emptyLabel}</p>
-      ) : null}
-    </div>
-  )
-}

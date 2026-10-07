@@ -75,7 +75,7 @@ function PageHeading({
           className="size-5 text-muted-foreground"
           aria-hidden="true"
         />
-        <h1 className="text-2xl font-bold text-foreground">{title}</h1>
+        <h2 className="text-2xl font-bold text-foreground">{title}</h2>
       </div>
       <p className="text-sm text-muted-foreground">{description}</p>
     </div>
@@ -274,13 +274,27 @@ function NewAlertDialog() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="alert-student">Student</Label>
+            {/*
+              The student is mandatory — the submit button stays disabled
+              without one — and the requirement is now carried two ways: the
+              visible asterisk for the sighted reader and `aria-required` on the
+              trigger for the programmatic one. The asterisk is a SIBLING of the
+              label, never a child: anything inside `<label>` counts towards the
+              control's accessible name, which would make it "Student *" and
+              have every announcement say the requirement twice.
+            */}
+            <div className="flex items-center gap-1">
+              <Label htmlFor="alert-student">Student</Label>
+              <span aria-hidden="true" className="text-destructive">
+                *
+              </span>
+            </div>
             <Select
               value={studentId}
               onValueChange={setStudentId}
               disabled={rosterQuery.isLoading || roster.length === 0}
             >
-              <SelectTrigger id="alert-student">
+              <SelectTrigger id="alert-student" aria-required="true">
                 <SelectValue
                   placeholder={
                     rosterQuery.isLoading
@@ -448,6 +462,14 @@ export function RiskAlertsPage() {
       {
         key: "factors",
         header: "Factors",
+        /*
+         * Free text, and unbounded length: an AI-derived alert whose factor does
+         * not map to a known label renders the raw key (`riskFactorLabel` falls
+         * back to the raw value), so this cell can be far wider than any column
+         * label. Wrapping plus a minimum width keeps it readable instead of
+         * pushing the rest of the row off screen.
+         */
+        cellClassName: "whitespace-normal align-top min-w-[12rem]",
         cell: (row) =>
           row.risk_factors.length === 0 ? (
             <span className="text-muted-foreground">—</span>
@@ -577,6 +599,22 @@ export function RiskAlertsPage() {
 
           {transition.isError ? (
             <ErrorNote message={normalizeApiError(transition.error).message} />
+          ) : null}
+
+          {/*
+            A successful transition is just as much a change to the page as a
+            failed one, and it used to be silent: the row's status badge and its
+            button set both mutate after the refetch, but nothing announced it,
+            so a screen-reader user got no confirmation that the action landed.
+            `role="status"` rather than `alert` because nothing went wrong and
+            the reader should not be interrupted — the same distinction
+            `Feedback.tsx` draws between `ErrorNote` and `EmptyState`.
+          */}
+          {transition.isSuccess && transition.variables ? (
+            <p role="status" className="text-sm text-muted-foreground">
+              {RISK_ALERT_TRANSITION_LABELS[transition.variables.transition]}{" "}
+              recorded. The alert list has been refreshed.
+            </p>
           ) : null}
 
           <DataTable

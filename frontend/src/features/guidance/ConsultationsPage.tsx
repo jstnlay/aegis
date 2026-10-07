@@ -1,5 +1,5 @@
 import { MessageSquareText } from "lucide-react"
-import { useMemo, useState, type FormEvent } from "react"
+import { useCallback, useMemo, useState, type FormEvent } from "react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -19,6 +19,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { Field } from "@/components/ui/form-field"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -73,7 +74,7 @@ function PageHeading({
           className="size-5 text-muted-foreground"
           aria-hidden="true"
         />
-        <h1 className="text-2xl font-bold text-foreground">{title}</h1>
+        <h2 className="text-2xl font-bold text-foreground">{title}</h2>
       </div>
       <p className="text-sm text-muted-foreground">{description}</p>
     </div>
@@ -224,8 +225,17 @@ function ConcernCategoryPicker({
  * There is deliberately no counselor field: `counselor` is a read-only
  * serializer field that `perform_create` sets from the caller, and the list is
  * already scoped to that caller.
+ *
+ * `onSaved` exists because the dialog closes on success, which unmounts
+ * everything inside it — including any confirmation the form might render. The
+ * live region that reports the save therefore has to live on the page, outside
+ * this component; this only tells the page what to say.
  */
-function NewConsultationDialog() {
+function NewConsultationDialog({
+  onSaved,
+}: {
+  onSaved: (message: string) => void
+}) {
   const rosterQuery = useStudentRoster()
   const create = useCreateConsultation()
 
@@ -275,6 +285,7 @@ function NewConsultationDialog() {
       setNotes("")
       setNextSessionDate("")
       setOpen(false)
+      onSaved("Consultation recorded. The sessions list has been refreshed.")
     } catch {
       // Surfaced from `create.isError` below; a failed create keeps the dialog
       // open with the entered values so nothing has to be retyped.
@@ -286,7 +297,7 @@ function NewConsultationDialog() {
       <DialogTrigger asChild>
         <Button>New consultation</Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>New consultation</DialogTitle>
           <DialogDescription>
@@ -297,13 +308,25 @@ function NewConsultationDialog() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="consultation-student">Student</Label>
+            {/*
+              Mandatory, and the requirement is now marked both ways: the
+              asterisk for the sighted reader, `aria-required` on the trigger for
+              the programmatic one. The asterisk sits outside the `<label>` so the
+              accessible name stays exactly "Student" — anything inside the label
+              is part of the name and would be announced as "Student *".
+            */}
+            <div className="flex items-center gap-1">
+              <Label htmlFor="consultation-student">Student</Label>
+              <span aria-hidden="true" className="text-destructive">
+                *
+              </span>
+            </div>
             <Select
               value={studentId}
               onValueChange={setStudentId}
               disabled={rosterQuery.isLoading || roster.length === 0}
             >
-              <SelectTrigger id="consultation-student">
+              <SelectTrigger id="consultation-student" aria-required="true">
                 <SelectValue
                   placeholder={
                     rosterQuery.isLoading
@@ -325,20 +348,38 @@ function NewConsultationDialog() {
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
+            {/*
+              `Field` rather than a hand-rolled label+`Input` pair: the session
+              date is fully controlled, mandatory, and has no error state, which
+              is exactly the shape `Field` was extracted for. It renders the
+              asterisk outside the label and sets `aria-required` itself, so the
+              accessible name stays the field name.
+            */}
+            <Field
+              label="Session date"
+              id="consultation-date"
+              type="date"
+              required
+              value={sessionDate}
+              onChange={setSessionDate}
+            />
+            {/*
+              The session time stays hand-rolled: `Field` accepts only
+              "text" | "date" | "number", and a `type="time"` control must not be
+              silently downgraded to a text input. Marked the same way by hand —
+              asterisk outside the label, `aria-required` on the control.
+            */}
             <div className="space-y-1.5">
-              <Label htmlFor="consultation-date">Session date</Label>
-              <Input
-                id="consultation-date"
-                type="date"
-                value={sessionDate}
-                onChange={(event) => setSessionDate(event.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="consultation-time">Session time</Label>
+              <div className="flex items-center gap-1">
+                <Label htmlFor="consultation-time">Session time</Label>
+                <span aria-hidden="true" className="text-destructive">
+                  *
+                </span>
+              </div>
               <Input
                 id="consultation-time"
                 type="time"
+                aria-required="true"
                 value={sessionTime}
                 onChange={(event) => setSessionTime(event.target.value)}
               />
@@ -373,10 +414,16 @@ function NewConsultationDialog() {
           />
 
           <div className="space-y-1.5">
-            <Label htmlFor="consultation-notes">Session notes</Label>
+            <div className="flex items-center gap-1">
+              <Label htmlFor="consultation-notes">Session notes</Label>
+              <span aria-hidden="true" className="text-destructive">
+                *
+              </span>
+            </div>
             <textarea
               id="consultation-notes"
               rows={4}
+              aria-required="true"
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring"
@@ -460,8 +507,10 @@ function NewConsultationDialog() {
  */
 function EditConsultationDialog({
   consultation,
+  onSaved,
 }: {
   consultation: Consultation
+  onSaved: (message: string) => void
 }) {
   const update = useUpdateConsultation()
 
@@ -495,6 +544,9 @@ function EditConsultationDialog({
         },
       })
       setOpen(false)
+      onSaved(
+        `Consultation for ${consultation.student_name} on ${consultation.session_date} updated.`
+      )
     } catch {
       // Surfaced from `update.isError` below.
     }
@@ -503,11 +555,24 @@ function EditConsultationDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button type="button" size="xs" variant="outline">
+        {/*
+          One of these renders per row, up to a page of them. The visible verb
+          alone gave every button the same accessible name, so a screen reader
+          read "Update, Update, Update…" with nothing to tell the rows apart.
+          The label names the student and date the button acts on and still
+          contains the visible "Update", which WCAG 2.5.3 (Label in Name)
+          requires.
+        */}
+        <Button
+          type="button"
+          size="xs"
+          variant="outline"
+          aria-label={`Update consultation for ${consultation.student_name} on ${consultation.session_date}`}
+        >
           Update
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Update consultation</DialogTitle>
           <DialogDescription>
@@ -569,12 +634,18 @@ function EditConsultationDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor={`consultation-edit-notes-${consultation.id}`}>
-              Session notes
-            </Label>
+            <div className="flex items-center gap-1">
+              <Label htmlFor={`consultation-edit-notes-${consultation.id}`}>
+                Session notes
+              </Label>
+              <span aria-hidden="true" className="text-destructive">
+                *
+              </span>
+            </div>
             <textarea
               id={`consultation-edit-notes-${consultation.id}`}
               rows={4}
+              aria-required="true"
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring"
@@ -650,6 +721,19 @@ export function ConsultationsPage() {
   const [priority, setPriority] = useState<ConsultationPriority | "all">("all")
   const [search, setSearch] = useState("")
   const [sort, setSort] = useState<DataTableSort | null>(null)
+
+  /*
+   * Success confirmation for a create or an edit.
+   *
+   * Both dialogs close on success, and closing unmounts the portal — so a
+   * confirmation rendered inside either form would be destroyed before it could
+   * be read. The live region therefore lives here, on the page, and the dialogs
+   * report through `onSaved`.
+   */
+  const [notice, setNotice] = useState<string | null>(null)
+  const announceSaved = useCallback((message: string) => {
+    setNotice(message)
+  }, [])
 
   const consultations = useMemo(
     () => consultationsQuery.data ?? [],
@@ -763,10 +847,12 @@ export function ConsultationsPage() {
       {
         key: "actions",
         header: "Actions",
-        cell: (row) => <EditConsultationDialog consultation={row} />,
+        cell: (row) => (
+          <EditConsultationDialog consultation={row} onSaved={announceSaved} />
+        ),
       },
     ],
-    [codeByStudent]
+    [announceSaved, codeByStudent]
   )
 
   /*
@@ -804,7 +890,7 @@ export function ConsultationsPage() {
                 session first.
               </CardDescription>
             </div>
-            <NewConsultationDialog />
+            <NewConsultationDialog onSaved={announceSaved} />
           </div>
         </CardHeader>
 
@@ -849,6 +935,18 @@ export function ConsultationsPage() {
               />
             </div>
           </div>
+
+          {/*
+            Polite, not `alert`: a successful save is not an interruption, and
+            the reader has just moved focus back to the trigger that opened the
+            dialog. Placed directly above the table it confirms, because that is
+            the content that changed.
+          */}
+          {notice ? (
+            <p role="status" className="text-sm text-muted-foreground">
+              {notice}
+            </p>
+          ) : null}
 
           <DataTable
             caption="Consultations"

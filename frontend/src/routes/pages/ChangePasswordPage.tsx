@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Navigate, Link } from "react-router-dom"
 import { KeyRound, Loader2, CheckCircle2 } from "lucide-react"
 import { useForm } from "react-hook-form"
@@ -50,6 +50,18 @@ export function ChangePasswordPage() {
   } = useAuth()
   const [serverError, setServerError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const successHeadingRef = useRef<HTMLHeadingElement>(null)
+
+  /*
+   * PH11.11: focus the confirmation once the success panel exists.
+   *
+   * `success` unmounts the form, so focus — wherever it was — falls back to
+   * `<body>`. Focusing the new heading is what tells the reader the flow
+   * completed and that a "Continue to AEGIS" button is now the only thing left.
+   */
+  useEffect(() => {
+    if (success) successHeadingRef.current?.focus()
+  }, [success])
 
   const form = useForm<ChangePasswordFormValues>({
     resolver: zodResolver(changePasswordSchema),
@@ -65,13 +77,32 @@ export function ChangePasswordPage() {
 
   if (success) {
     return (
-      <div className="flex min-h-svh items-center justify-center bg-background px-4 py-10">
+      /*
+        PH11.11. Setting `success` unmounted the entire form, which took the
+        focused submit button with it and left focus on `<body>`. The `role="alert"`
+        region that had been reporting failures was unmounted in the same commit,
+        so the confirmation was not announced either — the reader was left in
+        silence at the one moment in this flow that mattered.
+
+        The wrapper is the live region, not the heading: `role="status"` on the
+        `<h1>` would replace its heading role and stop it appearing in a heading
+        list. Focusing the heading locates the reader, and the surrounding status
+        region announces the change.
+      */
+      <div
+        role="status"
+        className="flex min-h-svh items-center justify-center bg-background px-4 py-10"
+      >
         <Card className="w-full max-w-md">
           <CardHeader className="gap-2 text-center">
             <div className="mx-auto flex size-12 items-center justify-center rounded-md bg-success text-success-foreground">
               <CheckCircle2 className="size-6" aria-hidden="true" />
             </div>
-            <h1 className="text-xl font-bold text-foreground">
+            <h1
+              ref={successHeadingRef}
+              tabIndex={-1}
+              className="text-xl font-bold text-foreground focus:outline-none"
+            >
               Password updated
             </h1>
             <CardDescription>

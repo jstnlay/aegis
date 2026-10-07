@@ -49,7 +49,7 @@ function PageHeading() {
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-3">
         <Users className="size-5 text-muted-foreground" aria-hidden="true" />
-        <h1 className="text-2xl font-bold text-foreground">Students</h1>
+        <h2 className="text-2xl font-bold text-foreground">Students</h2>
       </div>
       <p className="text-sm text-muted-foreground">
         Students with guidance activity — risk alerts, your consultations, your

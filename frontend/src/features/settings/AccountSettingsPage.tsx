@@ -49,7 +49,7 @@ function PageHeading() {
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-3">
         <Settings className="size-5 text-muted-foreground" aria-hidden="true" />
-        <h1 className="text-2xl font-bold text-foreground">Account settings</h1>
+        <h2 className="text-2xl font-bold text-foreground">Account settings</h2>
       </div>
       <p className="text-sm text-muted-foreground">
         Your own profile and password. Role, status, and sign-in identity are
