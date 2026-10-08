@@ -353,7 +353,7 @@ export function useChildResults(studentId: string | null) {
     enabled: Boolean(studentId),
     queryFn: async () => {
       const { results } = await fetchAllPages<ParentAssessmentResult>(
-        "/assessments/results/"
+        "/assessments/assessment-results/"
       )
       return results.filter((row) => row.student === studentId)
     },

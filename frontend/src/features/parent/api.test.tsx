@@ -200,6 +200,27 @@ describe("useChildResults", () => {
     expect(result.current.data?.map((r) => r.id)).toEqual(["r1", "r3"])
   })
 
+  it("requests the registered results route, not a guessed path", async () => {
+    /*
+     * Regression: this hook used to call `/assessments/results/`, which is not
+     * a registered route. `apps/assessments/urls.py` registers exactly
+     * `assessments`, `assessment-questions`, `assessment-results`, so the old
+     * path 404'd in production while the mocked `fetchAllPages` test passed.
+     * The URL itself must therefore be asserted, not just the filtering.
+     */
+    mockedFetchAllPages.mockResolvedValue({ count: 0, results: [] })
+
+    const { result } = renderHook(() => useChildResults("sp-1"), {
+      wrapper: createWrapper(),
+    })
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    expect(mockedFetchAllPages).toHaveBeenCalledWith(
+      "/assessments/assessment-results/"
+    )
+  })
+
   it("does not request results before a child is selected", () => {
     const { result } = renderHook(() => useChildResults(null), {
       wrapper: createWrapper(),
