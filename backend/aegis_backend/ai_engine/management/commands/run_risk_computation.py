@@ -6,18 +6,20 @@ RiskScore + RiskAlert (+ notifications).
 
 Run via Celery beat / cron:
     python manage.py run_risk_computation
+
+Requires a trained model on disk (ai_engine/saved_models/decision_tree_v1.pkl).
+Write one with `python manage.py train_risk_model`. When the model is absent this
+command refuses to run rather than inventing a score: an unfitted estimator would
+raise, and a fabricated 0 would read as real risk data.
 """
 
 import logging
-from datetime import date
 
 from django.core.management.base import BaseCommand
-from django.utils import timezone
 
 from ai_engine.feature_engine import compute_student_features
 from ai_engine.risk_service import integrate_risk_result
-from ai_engine.risk_scorer import predict_single
-from ai_engine.config import PASSING_GRADE
+from ai_engine.risk_scorer import load_model, predict_single
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +76,16 @@ class Command(BaseCommand):
             )
             return
 
+        # A trained estimator is required. Never fall back to a placeholder.
+        try:
+            model, _metadata = load_model()
+        except FileNotFoundError:
+            self.stderr.write(
+                "No trained risk model found. Run `manage.py train_risk_model` "
+                "first; refusing to compute risk without one."
+            )
+            return
+
         # All active students (optionally scoped by academic year via enrollment)
         students = StudentProfile.objects.filter(is_active=True)
 
@@ -111,7 +123,7 @@ class Command(BaseCommand):
                 processed += 1
                 continue
 
-            prediction = predict_single(features, model=None)
+            prediction = predict_single(model, features, "v1")
 
             if not dry_run:
                 result = integrate_risk_result(

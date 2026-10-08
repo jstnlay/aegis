@@ -1213,9 +1213,112 @@ class ModelValidationTest(TestCase):
         }
         self.assertNotEqual(validate_feature_keys(bad), [])
 
-    def test_prediction_label_vocabulary(self):
+def test_prediction_label_vocabulary(self):
         """Unknown predicted label is flagged invalid."""
         from ai_engine.validation import validate_prediction_labels
         self.assertTrue(validate_prediction_labels({"risk_level": "high"}))
         self.assertTrue(validate_prediction_labels({"risk_level": None}))
         self.assertFalse(validate_prediction_labels({"risk_level": "critical"}))
+
+
+class RunRiskComputationCommandTest(AIEngineTestBase):
+    """
+    The batch command must reach RiskScore without raising.
+
+    It previously called predict_single(features, model=None) against the
+    signature predict_single(model, feature_dict, model_version), so it raised
+    TypeError on the first student with data and no test ever invoked it.
+    """
+
+    def train_and_save_model(self, path):
+        """Train on this class's fixtures and persist to `path`."""
+        from ai_engine.feature_engine import compute_student_features
+        from ai_engine.labeler import rule_based_label
+        from ai_engine.risk_scorer import save_model, train
+
+        datasets = []
+        for i in range(15):
+            user = User.objects.create_user(
+                email=f"cmd{i}@ai.test", password="pass12345",
+                first_name=f"Cmd{i}", last_name="Student", role="student",
+            )
+            sp = StudentProfile.objects.create(
+                user=user,
+                student_id=f"CM{i:04d}",
+                grade_level=self.grade_level,
+                section=self.section,
+                enrollment_date=date(2024, 6, 10),
+            )
+            Enrollment.objects.create(
+                student=sp, section=self.section,
+                academic_year=self.academic_year,
+                date_enrolled=date(2024, 6, 10), is_active=True,
+            )
+            high = i % 3 == 0
+            scores = (
+                [92, 90, 88] if high else
+                ([75, 72, 70] if i % 3 == 1 else [60, 58, 62])
+            )
+            self.add_grades(sp, [
+                (self.sa_math, self.gp_q2, Decimal(str(scores[0]))),
+                (self.sa_eng, self.gp_q2, Decimal(str(scores[1]))),
+                (self.sa_sci, self.gp_q2, Decimal(str(scores[2]))),
+            ])
+            self.add_attendance(sp, self.section, 10, 10 if high else 6)
+
+            features = compute_student_features(
+                sp, [self.gp_q1, self.gp_q2], self.academic_year
+            )
+            features["label"] = rule_based_label(features)
+            datasets.append(features)
+
+        model, metadata = train(datasets)
+        save_model(model, metadata, path=path)
+
+    def test_missing_model_refuses_to_compute(self):
+        """With no trained model on disk the command reports and stops."""
+        import io
+        from pathlib import Path
+        from unittest.mock import patch
+        from django.core.management import call_command
+
+        import ai_engine.risk_scorer as risk_scorer
+
+        RiskScore.objects.all().delete()
+
+        missing = Path("/nonexistent/aegis/decision_tree_v1.pkl")
+        out, err = io.StringIO(), io.StringIO()
+
+        with patch.object(risk_scorer, "MODEL_PATH", missing):
+            call_command("run_risk_computation", stdout=out, stderr=err)
+
+        self.assertIn("train_risk_model", err.getvalue())
+        # No fabricated rows: nothing was written.
+        self.assertEqual(RiskScore.objects.count(), 0)
+
+    def test_command_persists_risk_scores(self):
+        """With a trained model, the command writes one RiskScore per student."""
+        import io
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        from django.core.management import call_command
+
+        import ai_engine.risk_scorer as risk_scorer
+
+        RiskScore.objects.all().delete()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            model_path = Path(tmp) / "decision_tree_v1.pkl"
+            self.train_and_save_model(model_path)
+
+            out = io.StringIO()
+            with patch.object(risk_scorer, "MODEL_PATH", model_path):
+                call_command("run_risk_computation", stdout=out)
+
+            # Every student with computable data got a RiskScore row.
+            self.assertGreater(
+                RiskScore.objects.filter(computation_status="ready").count(), 0
+            )
+            # No student was skipped by an exception.
+            self.assertIn("processed", out.getvalue())
