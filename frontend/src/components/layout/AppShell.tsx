@@ -5,6 +5,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { Header } from "@/components/layout/Header"
 import { Sidebar } from "@/components/layout/Sidebar"
 import { SkipLink } from "@/components/layout/SkipLink"
+import { ChatbotPanel } from "@/features/chatbot/ChatbotPanel"
 
 /**
  * Shared application shell for all five roles (admin, faculty, guidance,
@@ -20,6 +21,7 @@ import { SkipLink } from "@/components/layout/SkipLink"
 export function AppShell() {
   const location = useLocation()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [chatOpen, setChatOpen] = useState(false)
   const [lastPath, setLastPath] = useState(location.pathname)
   const menuButtonRef = useRef<HTMLButtonElement>(null)
   const wasMenuOpen = useRef(false)
@@ -93,6 +95,32 @@ export function AppShell() {
 
         <main id="main-content" className="flex-1 scroll-mt-14" tabIndex={-1}>
           <div className="mx-auto w-full max-w-6xl px-4 py-6 lg:px-6">
+            {/*
+              A sibling of the outlet rather than a route. The assistant is a
+              persistent side tool, so opening it must not navigate away from
+              whatever the user was reading — and the transcript is component
+              state, so it is discarded on navigation, which is the honest
+              behaviour for a chat that does not persist anything.
+            */}
+            <div className="mb-4 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setChatOpen((open) => !open)}
+                aria-expanded={chatOpen}
+                aria-controls="chatbot-panel"
+                className="rounded-md border border-border px-3 py-1.5 text-sm font-medium hover:bg-accent"
+              >
+                {chatOpen ? "Close assistant" : "Ask the assistant"}
+              </button>
+            </div>
+
+            <div id="chatbot-panel">
+              <ChatbotPanel
+                open={chatOpen}
+                onClose={() => setChatOpen(false)}
+              />
+            </div>
+
             <ErrorBoundary resetKeys={[location.pathname]}>
               <Outlet />
             </ErrorBoundary>

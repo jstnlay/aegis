@@ -163,9 +163,15 @@ describe("role-aware sidebar", () => {
       "/app/attendance"
     )
 
-    // Planned roadmap items are informative but never fake routes.
-    expect(screen.queryByRole("link", { name: "Assessments" })).toBeNull()
-    expect(screen.getByText("Assessments")).toBeInTheDocument()
+    // Assessments is now a real student route (`student/assessments`), for
+    // taking and reviewing objective 2.4. The planned `Reports` entry remains
+    // informative and non-navigable rather than pointing at a fake route.
+    expect(screen.getByRole("link", { name: "Assessments" })).toHaveAttribute(
+      "href",
+      "/app/student/assessments"
+    )
+    expect(screen.queryByRole("link", { name: "Reports" })).toBeNull()
+    expect(screen.getByText("Reports")).toBeInTheDocument()
     expect(screen.getAllByText("Planned").length).toBeGreaterThan(0)
   })
 

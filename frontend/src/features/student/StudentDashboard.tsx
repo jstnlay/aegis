@@ -15,6 +15,7 @@ import {
   useStudentDashboardData,
   useStudentProfileId,
 } from "@/features/student/api"
+import { RecommendationsCard } from "@/features/student/RecommendationsCard"
 import { formatCount, formatPercent } from "@/lib/metric-format"
 
 /**
@@ -222,6 +223,8 @@ export function StudentDashboard() {
             )}
           </CardContent>
         </Card>
+
+        <RecommendationsCard studentId={profileQuery.data ?? null} />
       </div>
     </div>
   )
