@@ -38,24 +38,37 @@ HELP_PATTERNS = [
     r"\bano kaya mo\b",
 ]
 
-# Navigation patterns
+# Navigation patterns.
+#
+# Requires a UI noun, not just "find". "How do I find my grades?" is genuinely
+# ambiguous — the user may want the grade — and it resolves to ask_grade, which
+# is the more useful reading. Only an explicit page/menu/section reference counts
+# as navigation, so this never steals a content question that happens to start
+# with "how do I find".
 NAVIGATION_PATTERNS = [
-    r"\b(where|how)\s*(do|can)\s*(i|to)\s*(find|see|view)\b",
-    r"\b(how|paano)\s*.*\b(navigate|access)\b",
+    r"\b(where|how)\s*(do|can|to)\s*(i|we)\s*(find|see|view|access|go to)\s+(the\s+)?(page|menu|screen|section|tab|button)\b",
+    r"\b(how|paano)\s+.*\b(navigate|navigation)\b",
+    r"\b(where)\s+(do|can)\s+(i|we)\s+go\b",
+    r"\b(nasa|saan)\s+ako\s+(ma)?\s*(kita|nakita|makita)\b",
 ]
 
-# Grade patterns
+# Grade patterns. `point|points` is included because "how many points did I get"
+# is the most natural way a student asks about a score; without it the message
+# fell through to subject-help on the subject name alone.
 GRADE_PATTERNS = [
-    r"\b(grade|grades|mark|marks|score|scores)\b",
+    r"\b(grade|grades|mark|marks|score|scores|point|points)\b",
     r"\bano\s+.*\b(grade)\b",
     r"\b(grade ko|my grade|anong grade)\b",
+    r"\bhow many\s+(points|marks)\b",
 ]
 
 # Academic performance
 PERFORMANCE_PATTERNS = [
-    r"\b(performance|academic)\b",
+    r"\b(performance|academic|academically)\b",
     r"\b(gawa|ginagawa)\s*(ko|sa)\b",
-    r"\bhow\s*(am|i)\s*(doing|performing)\b",
+    r"\b(how|am)\s*(am|i)\s*(doing|performing)\b",
+    r"\b(am i)\s+(doing well|improving|getting better)\b",
+    r"\b(overall)\s+(performance|academic)\b",
 ]
 
 # Subject help
@@ -70,22 +83,49 @@ RESOURCE_PATTERNS = [
     r"\b(magaaral|study|learn)\b",
 ]
 
-# Study strategy
+# Study strategy. `how do i study` is matched before the bare `study` token in
+# RESOURCE_PATTERNS because both fire on it, and "how do I study better" is a
+# method question, not a request for a document.
 STRATEGY_PATTERNS = [
-    r"\b(strategy|technique|tips|study plan|how to study)\b",
-    r"\b(paano mag-aral|paano mag aral)\b",
+    r"\b(strategy|technique|tips|study plan|how to study|how should i study)\b",
+    r"\b(paano mag-aral|paano mag aral|pano mag-aaral)\b",
+    r"\b(how)\s+(do|can|should)\s+(i|we)\s+(study|review|prepare)\b",
 ]
 
 # Recommendation
 RECOMMENDATION_PATTERNS = [
-    r"\b(recommend|suggest|what should (i|we) (study|review|do))\b",
+    r"\b(recommend|suggest|suggestion)\w*",
+    r"\bwhat should (i|we) (study|review|do)\b",
+    r"\b(what|ano)\s+(should|can)\s+(i|we)\s+(review|study|do)\b",
     r"\b(recommendation)\b",
+    r"\b(any)\s+(suggestion|recommendation|advice|tip)\b",
+    r"\b(need)\s+(suggestion|recommendation|advice)\b",
 ]
 
 # Attendance
+#
+# `absen` covers the Filipino stem used bare ("ilang absen ko"), which the
+# English-only `absent\w*` never matched, so the message fell through to
+# UNKNOWN and the bot answered "I didn't fully understand". `pasok`/`late`/
+# `tardiness` are how it is actually asked in Taglish.
 ATTENDANCE_PATTERNS = [
-    r"\b(attendance|absent|present|late|tardiness)\b",
+    r"\b(attendance|absent|absences|absence|absent\w*|present|late|tardiness|tardy)\b",
+    r"\b(absen|pasok|late|oras)\b",
     r"\b(pasok)\b",
+    r"\b(ilan|how many)\s+(ang\s+)?(absen|missed)\w*",
+    r"\b(how many|ilan)\s+(times|days)\s+(did|ng)\s+(i|ko)\s+(miss|absent|skip)",
+]
+
+# Attendance *status* — "how am I doing on attendance", as opposed to the raw
+# count. Separated from ASK_ATTENDANCE because a student asking whether they are
+# in trouble is asking a different question from one asking for a number, and
+# they get different answers. Without this branch the intent was declared in
+# `taxonomy.ChatIntent` and gated per role, but no code path could ever return it.
+ATTENDANCE_STATUS_PATTERNS = [
+    r"\b(am i|how am i|are i)\s+(doing|ok|fine)\b.*\b(attend\w*)\b",
+    r"\b(attend\w*)\s+(record|status|rate)\b",
+    r"\b(ok|okay|fine|good)\s+ba\s+(ang\s+)?(attend\w*|pasok)\b",
+    r"\b(attend\w*)\s+ko\b",
 ]
 
 # Assessment
@@ -97,6 +137,19 @@ ASSESSMENT_PATTERNS = [
 # Assessment schedule
 SCHEDULE_PATTERNS = [
     r"\b(schedule|when|date|anong araw)\b",
+    r"\b(kailan|ano ang araw)\b",
+    r"\b(when is|what time is)\b",
+]
+
+# Assessment *instructions* — how an assessment is administered, as opposed to
+# when it happens (`assessment_schedule`) or what it covers (`ask_assessment`).
+# Declared in `taxonomy.ChatIntent` and gated per role from PH9, but with no
+# branch able to return it until now.
+INSTRUCTIONS_PATTERNS = [
+    r"\b(how|instruction\w*|direction\w*|guideline\w*|rule\w*)\b.*\b(assess|quiz|exam|test)\w*",
+    r"\b(assess|quiz|exam|test)\w*\b.*\b(instruction|how many question|how long|how many minutes|pass|open book)\b",
+    r"\b(paano)\s+(mag\s*submit|magkwento|sumagot|mag-answer)",
+    r"\b(ano ang)\s+(instruction\w*|pano)\b",
 ]
 
 # Guidance help
@@ -111,15 +164,53 @@ CONCERN_PATTERNS = [
 ]
 
 # Request counselor
+#
+# `makipag-usap` / `makipagkilala` are how "I want to talk to someone" is
+# actually written in Taglish. Without them, "gusto ko makipag-usap sa
+# counselor" fell through to GUIDANCE_HELP (a bare `counselor` match) and
+# answered "Guidance is available to support you" — which is not what was asked.
+# The explicit talk-to-someone phrasing is what distinguishes the two intents.
 COUNSELOR_PATTERNS = [
     r"\b(counselor|guidance)\s*(appointment|meet|schedule)\b",
     r"\b(meet|talk|speak)\s*(with|to)?\s*(a|counselor|someone|guidance)\b",
+    r"\b(makipag-usap|makipag-usap|makipagkilala|kausap)\b",
+    r"\b(gusto| gusto)\s*ko\s+(makipag|makipag-?usap)\w*",
 ]
 
 # Urgent concern patterns (FR-031 escalation)
+#
+# Precision matters more than recall here, and not for a subtle reason: a match
+# here dispatches a real BEHAVIORAL_WARNING notification to a guidance counselor
+# (service.create_escalation). A broad bare `\bhurt\b` or `\bkill\b` escalated
+# "I hurt my ankle playing basketball" and "I'm killing it in math" — a
+# counselor paged about a sprained ankle, which trains staff to ignore the
+# channel and makes a real crisis notice less likely to be read.
+#
+# So self-harm wording is matched as a phrase with the first-person subject
+# attached, not as a bare verb:
+#   hurt      -> "hurt myself", "hurting myself", "I want to hurt ..."
+#   kill      -> "kill myself", "killing myself", "want to kill ..."
+# A bare "hurt"/"kill" is deliberately NOT a trigger. Recessive phrasing that
+# names no actor ("want to disappear", "don't want to be here") is covered by
+# the self-harm phrase patterns below.
 URGENT_PATTERNS = [
-    r"\b(urgent|emergency|crisis|suicide|self.harm|hurt|kill)\b",
-    r"\b(help me now|i need help now)\b",
+    # Explicit, unambiguous escalation requests.
+    r"\b(urgent|emergency|crisis)\b",
+    r"\b(help me now|i need help now|need help immediately)\b",
+    # Named crisis services / self-harm methods.
+    r"\b(suicide|suicidal|self.harm|self-harm)\b",
+    # First-person self-harm. The subject must be attached so "I hurt my ankle"
+    # does not match.
+    r"\b(hurt|harm|harming|hurts)\s+(my|my\s*own)self\b",
+    r"\b(hurt|harm|harming|hurts)\s+myself\b",
+    r"\b(been|always|constantly|keep|keeps|keeping)\s+(hurting|harming|hurt|harm)\s+myself\b",
+    r"\b(kill|killing|kills)\s+(my|my\s*own)self\b",
+    r"\b(kill|killing)\s+myself\b",
+    r"\b(want|wants|wanted|wish|wishes)\s+to\s+(kill|hurt|harm)\b",
+    r"\b(going|gonna|plan|planning|planning)\s+to\s+(kill|hurt|harm)\b",
+    # Recessive phrasing with no actor named.
+    r"\b(don'?t|do not)\s+want\s+to\s+(live|be here|exist)\b",
+    r"\bwant\s+to\s+disappear\b",
 ]
 
 # Subject names for entity extraction
@@ -239,13 +330,21 @@ def classify_intent(text: str) -> ChatIntent:
     if any(re.search(p, lower) for p in GUIDANCE_HELP_PATTERNS):
         return ChatIntent.GUIDANCE_HELP
 
-    # Assessment
+    # Assessment. Instructions are checked before schedule because
+    # "How many questions is the quiz?" contains "how", which SCHEDULE treats as
+    # a when-question; a duration/rule question is not a scheduling question.
     if any(re.search(p, lower) for p in ASSESSMENT_PATTERNS):
+        if any(re.search(p, lower) for p in INSTRUCTIONS_PATTERNS):
+            return ChatIntent.ASSESSMENT_INSTRUCTIONS
         if any(re.search(p, lower) for p in SCHEDULE_PATTERNS):
             return ChatIntent.ASSESSMENT_SCHEDULE
         return ChatIntent.ASK_ASSESSMENT
 
-    # Attendance
+    # Attendance. Status is checked before the raw count because
+    # "Am I doing okay with my attendance?" matches both, and the status
+    # reading is the one the student meant.
+    if any(re.search(p, lower) for p in ATTENDANCE_STATUS_PATTERNS):
+        return ChatIntent.ASK_ATTENDANCE_STATUS
     if any(re.search(p, lower) for p in ATTENDANCE_PATTERNS):
         return ChatIntent.ASK_ATTENDANCE
 

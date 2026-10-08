@@ -62,3 +62,9 @@ cms/*.log
 frontend/node_modules/
 frontend/dist/
 frontend/.env.*
+
+# Local agent execution contract. Machine-specific: the hard boundaries and the
+# PH11 phase plan describe the workflow of one checkout, not the system. Kept out
+# of the repository so it cannot drift into the contract other clones follow.
+AGENTS.md
+
