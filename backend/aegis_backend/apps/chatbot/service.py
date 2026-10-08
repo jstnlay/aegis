@@ -163,8 +163,62 @@ def build_context(user, intent: ChatIntent, entities: list) -> dict[str, Any]:
         if user.role == "student":
             context["student_id"] = str(user.student_profile.id)
             context["scope"] = "own"
+        elif user.role == "parent":
+            # A parent has no student_profile of their own; the data functions
+            # resolve which linked child from the ParentStudentLink rows. With
+            # more than one child the caller must disambiguate, so the count is
+            # recorded here for the reply to use.
+            context["scope"] = "linked_student"
+            context["linked_student_count"] = _linked_student_count(user)
 
     return context
+
+
+def _linked_student_count(user) -> int:
+    """How many students this parent is linked to."""
+    if user.role != "parent":
+        return 0
+    from apps.accounts.models import ParentStudentLink
+
+    return ParentStudentLink.objects.filter(
+        parent=user.parent_profile
+    ).count()
+
+
+def resolve_target_student(user):
+    """
+    Resolve which student a data question is about.
+
+    Returns a `StudentProfile`, or `None` when it cannot be determined.
+
+    Never guesses. A parent with more than one linked child returns `None` here,
+    so the reply asks which child rather than answering about whichever one
+    sorted first — reporting a real child's grades against a question about a
+    sibling is worse than asking a follow-up.
+
+    Name-based disambiguation is deliberately absent. `parse_message` extracts
+    only `subject` and `topic` entities (`policies._extract_entities`); there is
+    no `person` entity type in `ChatEntity`, so there is nothing to match a
+    child's name against. Adding one is an NLP change to the parser, not a
+    lookup change, and would arrive with the classifier work rather than be
+    assumed here.
+    """
+    if user.role == "student":
+        return getattr(user, "student_profile", None)
+
+    if user.role != "parent":
+        return None
+
+    from apps.accounts.models import ParentStudentLink
+
+    linked = ParentStudentLink.objects.filter(parent=user.parent_profile).select_related(
+        "student__user"
+    )
+
+    if linked.count() != 1:
+        return None
+
+    return linked.first().student
 
 
 # ---------------------------------------------------------------------------
@@ -351,9 +405,26 @@ class ChatbotResponse:
         }
 
 
-def _deterministic_reply(user, intent: ChatIntent, entities, context) -> str:
+def _deterministic_reply(user, intent: ChatIntent, entities, context, data=None) -> str:
     """Generate a deterministic reply for supported intents."""
     from apps.chatbot.taxonomy import ChatEntity
+
+    data = data or {}
+
+    # A parent's data question with several linked children and no child named
+    # is ambiguous. Saying so is the honest answer; picking one would report a
+    # real child's grades against a question about another.
+    if user.role == "parent" and intent in (
+        ChatIntent.ASK_GRADE,
+        ChatIntent.ASK_ACADEMIC_PERFORMANCE,
+        ChatIntent.ASK_ATTENDANCE,
+        ChatIntent.ASK_ATTENDANCE_STATUS,
+    ):
+        if not any(k in data for k in ("grade_summary", "attendance_summary")):
+            return (
+                "I can answer that, but you have more than one linked student. "
+                "Which student do you mean? Tell me their name or student number."
+            )
 
     if intent == ChatIntent.GREETING:
         return f"Hello, {user.first_name}! I can help with AEGIS. What do you need?"
@@ -452,13 +523,19 @@ def handle_message(
         ChatIntent.ASK_GRADE,
         ChatIntent.ASK_ACADEMIC_PERFORMANCE,
     ):
-        if hasattr(user, "student_profile"):
-            summary = get_student_grade_summary(user, user.student_profile)
+        # Resolves to the caller's own profile for a student, or to a linked
+        # child for a parent. It returns None rather than guessing when a
+        # parent has several children and named none, so the reply can ask
+        # which child rather than answer about the wrong one.
+        target = resolve_target_student(user)
+        if target is not None:
+            summary = get_student_grade_summary(user, target)
             if summary:
                 data["grade_summary"] = summary
     elif intent in (ChatIntent.ASK_ATTENDANCE, ChatIntent.ASK_ATTENDANCE_STATUS):
-        if hasattr(user, "student_profile"):
-            summary = get_student_attendance_summary(user, user.student_profile)
+        target = resolve_target_student(user)
+        if target is not None:
+            summary = get_student_attendance_summary(user, target)
             if summary:
                 data["attendance_summary"] = summary
     elif intent == ChatIntent.ASK_LEARNING_RESOURCE:
@@ -480,7 +557,7 @@ def handle_message(
         )
 
     # Deterministic fallback / low-confidence
-    reply = _deterministic_reply(user, intent, entities, context)
+    reply = _deterministic_reply(user, intent, entities, context, data)
     degraded = use_llm and not (llm_result and llm_result.get("valid"))
     return ChatbotResponse(
         reply=reply,
