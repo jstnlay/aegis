@@ -280,3 +280,82 @@ def load_model(path: Path | None = None) -> tuple[DecisionTreeClassifier, dict[s
     with open(load_path, "rb") as f:
         payload = pickle.load(f)
     return payload["model"], payload["metadata"]
+
+
+def save_stored_model(
+    model: DecisionTreeClassifier,
+    metadata: dict[str, Any],
+    *,
+    version: str = "v1",
+    academic_year=None,
+) -> Any:
+    """
+    Persist a trained model as a `RiskModelArtifact` row.
+
+    The database is the store because the deployment host has no persistent
+    disk: a model written to MODEL_PATH is lost on every deploy, and
+    `run_risk_computation` then refuses to score anyone. Persisting here means a
+    retrain is the only thing that changes the model, and it is auditable.
+
+    Returns the saved artifact. The new artifact activates immediately and any
+    previously active artifact of the same version is superseded, so a stale
+    tree cannot be picked up afterwards.
+    """
+    from apps.guidance.models import RiskModelArtifact
+
+    # Supersede first. A partial unique index allows only one active row per
+    # version, so inserting before deactivating would violate it.
+    RiskModelArtifact.objects.filter(
+        version=version, is_active=True
+    ).update(is_active=False)
+
+    artifact = RiskModelArtifact(
+        version=version,
+        payload=pickle.dumps({"model": model, "metadata": metadata}),
+        metadata=dict(metadata),
+        academic_year=academic_year,
+        n_samples=metadata.get("n_samples", 0),
+        is_active=True,
+    )
+    artifact.save()
+    return artifact
+
+
+def load_stored_model(version: str = "v1") -> tuple[DecisionTreeClassifier, dict[str, Any]] | None:
+    """
+    Load the active stored artifact for `version`.
+
+    Returns (model, metadata), or None when no active artifact exists or the
+    stored bytes cannot be read. Returning None rather than raising is what lets
+    `run_risk_computation` print an instruction and stop instead of raising a
+    traceback at the operator.
+
+    A corrupt or incompatible artifact is treated as absent: an unreadable
+    estimator cannot be scored with, and silently substituting a fallback would
+    fabricate a risk level.
+    """
+    from apps.guidance.models import RiskModelArtifact
+
+    artifact = (
+        RiskModelArtifact.objects.filter(version=version, is_active=True)
+        .order_by("-created_at")
+        .first()
+    )
+    if artifact is None:
+        return None
+
+    try:
+        payload = pickle.loads(bytes(artifact.payload))
+    except Exception:
+        logger.exception(
+            "Stored risk model for version %s could not be unpickled; "
+            "treating it as absent.",
+            version,
+        )
+        return None
+
+    model = payload.get("model")
+    if model is None:
+        return None
+
+    return model, payload.get("metadata") or {}

@@ -81,7 +81,7 @@ class Command(BaseCommand):
         from ai_engine.config import DT_MIN_SAMPLES_SPLIT
         from ai_engine.feature_engine import compute_student_features
         from ai_engine.labeler import reviewed_label
-        from ai_engine.risk_scorer import MODEL_PATH, save_model, train
+        from ai_engine.risk_scorer import save_stored_model, train
 
         from apps.academics.models import AcademicYear, GradingPeriod
         from apps.accounts.models import StudentProfile
@@ -207,8 +207,30 @@ class Command(BaseCommand):
             self.stdout.write("\nDry run: nothing written.")
             return
 
-        path = save_model(model, metadata)
-        self.stdout.write(self.style.SUCCESS(f"\nSaved to {path}"))
+        # Record which cohort produced this model, so a later run can say when
+        # the stored model predates the current year rather than scoring
+        # silently against the wrong baseline.
+        metadata = dict(metadata)
+        metadata["academic_year_id"] = str(academic_year.id)
+        metadata["academic_year_name"] = academic_year.name
+        metadata["label_source"] = "rule_based"
+        metadata["label_caveat"] = (
+            "Labels come from labeler.rule_based_label, a rubric computed from "
+            "the same features the model is scored on. Accuracy against these "
+            "labels is circular and is not evidence that the model predicts "
+            "real student risk."
+        )
+
+        artifact = save_stored_model(
+            model, metadata, version="v1", academic_year=academic_year
+        )
         self.stdout.write(
+            self.style.SUCCESS(
+                f"\nStored RiskModelArtifact {artifact.pk} "
+                f"(version v1, active, {artifact.n_samples} samples)"
+            )
+        )
+        self.stdout.write(
+            "The model now lives in the database, so it survives a redeploy. "
             "Run `manage.py run_risk_computation` to score active students."
         )

@@ -1273,49 +1273,49 @@ class TrainRiskModelCommandTest(AIEngineTestBase):
         return datasets
 
     def test_trains_and_persists_a_model(self):
-        import tempfile
-        from pathlib import Path
+        """
+        The artifact lands in the database, not on disk: the deployment host
+        has no persistent disk, so a file would be lost on every deploy.
+        """
         from io import StringIO
 
-        from ai_engine.risk_scorer import MODEL_PATH, load_model
+        from ai_engine.risk_scorer import load_stored_model
+        from apps.guidance.models import RiskModelArtifact
 
         self._seed_students()
+        RiskModelArtifact.objects.all().delete()
 
-        with tempfile.TemporaryDirectory() as tmp:
-            target = Path(tmp) / "decision_tree_v1.pkl"
-            out, err = StringIO(), StringIO()
+        out, err = StringIO(), StringIO()
+        call_command("train_risk_model", stdout=out, stderr=err)
 
-            with unittest.mock.patch(
-                "ai_engine.risk_scorer.MODEL_PATH", target
-            ):
-                call_command("train_risk_model", stdout=out, stderr=err)
+        self.assertEqual(RiskModelArtifact.objects.count(), 1)
 
-            self.assertTrue(target.exists(), "model file was not written")
+        artifact = RiskModelArtifact.objects.get()
+        self.assertTrue(artifact.is_active)
+        self.assertEqual(artifact.n_samples, 15)
+        self.assertEqual(artifact.academic_year, self.academic_year)
 
-            model, metadata = load_model(target)
-            self.assertIsNotNone(model)
-            self.assertEqual(metadata["n_samples"], 15)
+        loaded = load_stored_model("v1")
+        self.assertIsNotNone(loaded, "stored model could not be loaded")
+        model, metadata = loaded
+        self.assertIsNotNone(model)
+        self.assertEqual(metadata["n_samples"], 15)
 
     def test_dry_run_writes_nothing(self):
-        import tempfile
-        from pathlib import Path
         from io import StringIO
 
-        from ai_engine.risk_scorer import MODEL_PATH
+        from apps.guidance.models import RiskModelArtifact
 
         self._seed_students()
+        RiskModelArtifact.objects.all().delete()
 
-        with tempfile.TemporaryDirectory() as tmp:
-            target = Path(tmp) / "decision_tree_v1.pkl"
-            out = StringIO()
+        out = StringIO()
+        call_command("train_risk_model", dry_run=True, stdout=out)
 
-            with unittest.mock.patch(
-                "ai_engine.risk_scorer.MODEL_PATH", target
-            ):
-                call_command("train_risk_model", dry_run=True, stdout=out)
-
-            self.assertFalse(target.exists(), "dry run wrote a model")
-            self.assertIn("Dry run", out.getvalue())
+        self.assertEqual(
+            RiskModelArtifact.objects.count(), 0, "dry run stored a model"
+        )
+        self.assertIn("Dry run", out.getvalue())
 
     def test_reports_the_label_circularity(self):
         """
@@ -1323,79 +1323,96 @@ class TrainRiskModelCommandTest(AIEngineTestBase):
         evidence that it predicts real risk. That warning must reach the
         operator, not just the module docstring.
         """
-        import tempfile
-        from pathlib import Path
         from io import StringIO
 
         self._seed_students()
+        err = StringIO()
 
-        with tempfile.TemporaryDirectory() as tmp:
-            target = Path(tmp) / "decision_tree_v1.pkl"
-            err = StringIO()
+        call_command(
+            "train_risk_model", dry_run=True, stdout=StringIO(), stderr=err,
+        )
 
-            with unittest.mock.patch(
-                "ai_engine.risk_scorer.MODEL_PATH", target
-            ):
-                call_command(
-                    "train_risk_model", dry_run=True, stdout=StringIO(),
-                    stderr=err,
-                )
-
-            self.assertIn("rule-generated", err.getvalue().lower())
+        self.assertIn("rule-generated", err.getvalue().lower())
 
     def test_refuses_below_the_minimum_sample_count(self):
         """
         Persisting a model fitted on a handful of rows would produce confident
         output with no basis. The command refuses instead.
         """
-        import tempfile
-        from pathlib import Path
         from io import StringIO
 
+        from apps.guidance.models import RiskModelArtifact
+
         self._seed_students(count=15)
+        RiskModelArtifact.objects.all().delete()
+        err = StringIO()
 
-        with tempfile.TemporaryDirectory() as tmp:
-            target = Path(tmp) / "decision_tree_v1.pkl"
-            err = StringIO()
+        call_command(
+            "train_risk_model", minimum_samples=10_000, stdout=StringIO(),
+            stderr=err,
+        )
 
-            with unittest.mock.patch(
-                "ai_engine.risk_scorer.MODEL_PATH", target
-            ):
-                call_command(
-                    "train_risk_model", minimum_samples=10_000, stdout=StringIO(),
-                    stderr=err,
-                )
+        self.assertEqual(RiskModelArtifact.objects.count(), 0)
+        self.assertIn("Refusing to persist", err.getvalue())
 
-            self.assertFalse(target.exists())
-            self.assertIn("Refusing to persist", err.getvalue())
+    def test_retraining_supersedes_the_previous_artifact(self):
+        """
+        At most one active artifact per version, enforced by a partial unique
+        constraint, so a stale tree cannot be scored after a retrain.
+        """
+        from io import StringIO
+
+        from apps.guidance.models import RiskModelArtifact
+
+        self._seed_students()
+        RiskModelArtifact.objects.all().delete()
+
+        call_command("train_risk_model", stdout=StringIO(), stderr=StringIO())
+        first = RiskModelArtifact.objects.get(is_active=True)
+
+        call_command("train_risk_model", stdout=StringIO(), stderr=StringIO())
+
+        self.assertEqual(RiskModelArtifact.objects.count(), 2)
+        self.assertEqual(RiskModelArtifact.objects.filter(is_active=True).count(), 1)
+
+        first.refresh_from_db()
+        self.assertFalse(first.is_active, "previous artifact stayed active")
+
+    def test_stored_metadata_carries_the_label_caveat(self):
+        from io import StringIO
+
+        from apps.guidance.models import RiskModelArtifact
+
+        self._seed_students()
+        RiskModelArtifact.objects.all().delete()
+        call_command("train_risk_model", stdout=StringIO(), stderr=StringIO())
+
+        metadata = RiskModelArtifact.objects.get().metadata
+        self.assertEqual(metadata["label_source"], "rule_based")
+        self.assertIn("circular", metadata["label_caveat"].lower())
+        self.assertEqual(
+            metadata["academic_year_name"], self.academic_year.name
+        )
 
     def test_trained_model_is_loadable_by_the_risk_command(self):
         """
-        The point of this command. train writes an artifact, then
+        The point of this command. train stores an artifact, then
         run_risk_computation loads it and writes RiskScore rows.
         """
-        import tempfile
-        from pathlib import Path
         from io import StringIO
 
-        import ai_engine.risk_scorer as risk_scorer
-        from apps.guidance.models import RiskScore
+        from apps.guidance.models import RiskModelArtifact, RiskScore
 
         self._seed_students()
+        RiskModelArtifact.objects.all().delete()
 
-        with tempfile.TemporaryDirectory() as tmp:
-            target = Path(tmp) / "decision_tree_v1.pkl"
+        call_command("train_risk_model", stdout=StringIO(), stderr=StringIO())
+        RiskScore.objects.all().delete()
+        call_command("run_risk_computation", stdout=StringIO())
 
-            with unittest.mock.patch.object(
-                risk_scorer, "MODEL_PATH", target
-            ):
-                call_command("train_risk_model", stdout=StringIO(), stderr=StringIO())
-                RiskScore.objects.all().delete()
-                call_command("run_risk_computation", stdout=StringIO())
-
-            self.assertGreater(
-                RiskScore.objects.filter(computation_status="ready").count(), 0
-            )
+        self.assertGreater(
+            RiskScore.objects.filter(computation_status="ready").count(), 0
+        )
 
 
 class RunRiskComputationCommandTest(AIEngineTestBase):
@@ -1453,49 +1470,135 @@ class RunRiskComputationCommandTest(AIEngineTestBase):
         save_model(model, metadata, path=path)
 
     def test_missing_model_refuses_to_compute(self):
-        """With no trained model on disk the command reports and stops."""
+        """
+        With no stored model the command reports and stops rather than
+        fabricating a score.
+        """
         import io
-        from pathlib import Path
-        from unittest.mock import patch
+
         from django.core.management import call_command
 
-        import ai_engine.risk_scorer as risk_scorer
+        from apps.guidance.models import RiskModelArtifact
 
         RiskScore.objects.all().delete()
+        RiskModelArtifact.objects.all().delete()
 
-        missing = Path("/nonexistent/aegis/decision_tree_v1.pkl")
         out, err = io.StringIO(), io.StringIO()
-
-        with patch.object(risk_scorer, "MODEL_PATH", missing):
-            call_command("run_risk_computation", stdout=out, stderr=err)
+        call_command("run_risk_computation", stdout=out, stderr=err)
 
         self.assertIn("train_risk_model", err.getvalue())
         # No fabricated rows: nothing was written.
         self.assertEqual(RiskScore.objects.count(), 0)
 
-    def test_command_persists_risk_scores(self):
-        """With a trained model, the command writes one RiskScore per student."""
+    def test_inactive_artifact_is_not_loaded(self):
+        """
+        A superseded artifact must not be scored, even when it is the only one
+        left in the table.
+        """
         import io
-        import tempfile
-        from pathlib import Path
-        from unittest.mock import patch
+        from io import StringIO
+
         from django.core.management import call_command
 
-        import ai_engine.risk_scorer as risk_scorer
+        from apps.guidance.models import RiskModelArtifact
 
+        self._seed_for_command()
         RiskScore.objects.all().delete()
+        RiskModelArtifact.objects.all().delete()
 
-        with tempfile.TemporaryDirectory() as tmp:
-            model_path = Path(tmp) / "decision_tree_v1.pkl"
-            self.train_and_save_model(model_path)
+        call_command("train_risk_model", stdout=StringIO(), stderr=StringIO())
+        RiskModelArtifact.objects.update(is_active=False)
 
-            out = io.StringIO()
-            with patch.object(risk_scorer, "MODEL_PATH", model_path):
-                call_command("run_risk_computation", stdout=out)
+        err = StringIO()
+        call_command("run_risk_computation", stdout=StringIO(), stderr=err)
 
-            # Every student with computable data got a RiskScore row.
-            self.assertGreater(
-                RiskScore.objects.filter(computation_status="ready").count(), 0
+        self.assertIn("train_risk_model", err.getvalue())
+        self.assertEqual(
+            RiskScore.objects.filter(computation_status="ready").count(), 0
+        )
+
+    def test_unreadable_artifact_is_treated_as_absent(self):
+        """
+        A corrupt or incompatible artifact cannot be scored with. Treating it
+        as absent is correct; substituting a fallback would fabricate a risk
+        level.
+        """
+        import io
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        from apps.guidance.models import RiskModelArtifact
+
+        self._seed_for_command()
+        RiskScore.objects.all().delete()
+        RiskModelArtifact.objects.all().delete()
+
+        call_command("train_risk_model", stdout=StringIO(), stderr=StringIO())
+        RiskModelArtifact.objects.update(payload=b"not a pickle")
+
+        err = StringIO()
+        call_command("run_risk_computation", stdout=StringIO(), stderr=err)
+
+        self.assertIn("train_risk_model", err.getvalue())
+        self.assertEqual(
+            RiskScore.objects.filter(computation_status="ready").count(), 0
+        )
+
+    def _seed_for_command(self):
+        """A small varied cohort so training produces a usable estimator."""
+        for i in range(15):
+            user = User.objects.create_user(
+                email=f"cmdseed{i}@ai.test", password="pass12345",
+                first_name=f"Cmds{i}", last_name="Student", role="student",
             )
-            # No student was skipped by an exception.
-            self.assertIn("processed", out.getvalue())
+            sp = StudentProfile.objects.create(
+                user=user,
+                student_id=f"CS{i:04d}",
+                grade_level=self.grade_level,
+                section=self.section,
+                enrollment_date=date(2024, 6, 10),
+            )
+            Enrollment.objects.create(
+                student=sp, section=self.section,
+                academic_year=self.academic_year,
+                date_enrolled=date(2024, 6, 10), is_active=True,
+            )
+            scores = (
+                [92, 90, 88] if i % 3 == 0
+                else ([75, 72, 70] if i % 3 == 1 else [58, 55, 60])
+            )
+            self.add_grades(sp, [
+                (self.sa_math, self.gp_q2, Decimal(str(scores[0]))),
+                (self.sa_eng, self.gp_q2, Decimal(str(scores[1]))),
+                (self.sa_sci, self.gp_q2, Decimal(str(scores[2]))),
+            ])
+            self.add_attendance(sp, self.section, 10, 10 if i % 3 == 0 else 5)
+
+    def test_command_persists_risk_scores(self):
+        """
+        End to end through the stored artifact: train, then score. This is the
+        path the deployed system takes, and it is the one the original
+        TypeError broke with no test covering it.
+        """
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        from apps.guidance.models import RiskModelArtifact
+
+        self._seed_for_command()
+        RiskScore.objects.all().delete()
+        RiskModelArtifact.objects.all().delete()
+
+        call_command("train_risk_model", stdout=StringIO(), stderr=StringIO())
+
+        out = StringIO()
+        call_command("run_risk_computation", stdout=out)
+
+        # Every student with computable data got a RiskScore row.
+        self.assertGreater(
+            RiskScore.objects.filter(computation_status="ready").count(), 0
+        )
+        # No student was skipped by an exception.
+        self.assertIn("processed", out.getvalue())

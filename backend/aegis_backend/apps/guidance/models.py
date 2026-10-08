@@ -153,6 +153,106 @@ class ConsultationRecord(TimestampedModel):
         super().save(*args, **kwargs)
 
 
+class RiskModelArtifact(TimestampedModel):
+    """
+    The trained Decision Tree, stored in the database.
+
+    Why this exists rather than a file on disk
+    -------------------------------------------
+    The model was originally written to
+    `ai_engine/saved_models/decision_tree_v1.pkl` by
+    `risk_scorer.save_model`. That works locally and is not durable in
+    deployment: the host has no persistent disk, so the artifact is lost on
+    every deploy or instance restart, and `run_risk_computation` then correctly
+    refuses to score anyone. A risk pipeline that silently stops producing
+    alerts after a redeploy is worse than one that is visibly stopped.
+
+    The artifact lives beside RiskScore and RiskAlert, which are the other risk
+    domain records, and it is the only one of the three that is deliberately
+    overwritten rather than appended: RiskScore is a computation *history* and
+    RiskAlert is *actionable state*, while the estimator is a derived, fully
+    reproducible function of the labelled dataset. Keeping every past tree would
+    be storage for something `train_risk_model` can rebuild from the database
+    in seconds.
+
+    `activate()` enforces at most one active artifact per version, so a stale
+    tree cannot be scored by accident after a retrain.
+
+    `payload` is a pickled estimator. That is not a reviewable format and is not
+    meant to be: it is loaded only by `ai_engine.risk_scorer.load_stored_model`,
+    and the model it contains carries a warning about its own labels. The
+    `metadata` JSON beside it is the part worth reading.
+    """
+
+    version = models.CharField(
+        max_length=32,
+        default="v1",
+        help_text="Model version identifier, e.g. 'v1'.",
+    )
+    payload = models.BinaryField(
+        help_text="Pickled sklearn estimator. Loaded only by ai_engine.",
+    )
+    metadata = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text=(
+            "Training metadata: sample count, classes, feature importances, "
+            "and the labelling caveat."
+        ),
+    )
+    academic_year = models.ForeignKey(
+        "academics.AcademicYear",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="risk_model_artifacts",
+        help_text="Academic year this model was trained against.",
+    )
+    n_samples = models.PositiveIntegerField(
+        default=0,
+        help_text="Number of labelled samples the model was fitted on.",
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Only one artifact per version may be active.",
+    )
+
+    class Meta(TimestampedModel.Meta):
+        verbose_name = "risk model artifact"
+        verbose_name_plural = "risk model artifacts"
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["version"],
+                condition=models.Q(is_active=True),
+                name="unique_active_risk_model_per_version",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.version} "
+            f"({'active' if self.is_active else 'superseded'}, "
+            f"{self.n_samples} samples)"
+        )
+
+    def activate(self, *, commit: bool = True):
+        """
+        Make this the artifact loaded for its version.
+
+        Supersedes any other active artifact of the same version first, so the
+        partial unique constraint holds and no stale tree can be picked up by
+        `load_stored_model` after a retrain.
+        """
+        RiskModelArtifact.objects.filter(
+            version=self.version, is_active=True
+        ).exclude(pk=self.pk).update(is_active=False)
+        self.is_active = True
+        if commit:
+            self.save(update_fields=["is_active", "updated_at"])
+        return self
+
+
 class RiskScore(TimestampedModel):
     """
     Machine-generated risk computation result/history.

@@ -19,7 +19,7 @@ from django.core.management.base import BaseCommand
 
 from ai_engine.feature_engine import compute_student_features
 from ai_engine.risk_service import integrate_risk_result
-from ai_engine.risk_scorer import load_model, predict_single
+from ai_engine.risk_scorer import load_stored_model, predict_single
 
 logger = logging.getLogger(__name__)
 
@@ -77,14 +77,25 @@ class Command(BaseCommand):
             return
 
         # A trained estimator is required. Never fall back to a placeholder.
-        try:
-            model, _metadata = load_model()
-        except FileNotFoundError:
+        stored = load_stored_model()
+        if stored is None:
             self.stderr.write(
-                "No trained risk model found. Run `manage.py train_risk_model` "
-                "first; refusing to compute risk without one."
+                "No active risk model is stored. Run "
+                "`manage.py train_risk_model` first; refusing to compute risk "
+                "without one."
             )
             return
+        model, _metadata = stored
+
+        if academic_year.id != getattr(_metadata.get("academic_year_id"), "hex", None):
+            # Not fatal. A model trained on last year's cohort still produces a
+            # score, but the operator should know which year it learned from.
+            trained_year = _metadata.get("academic_year_name")
+            if trained_year and trained_year != academic_year.name:
+                self.stderr.write(
+                    f"Warning: the stored model was trained against "
+                    f"{trained_year}, not {academic_year.name}."
+                )
 
         # All active students (optionally scoped by academic year via enrollment)
         students = StudentProfile.objects.filter(is_active=True)
