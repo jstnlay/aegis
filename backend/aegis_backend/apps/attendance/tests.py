@@ -624,12 +624,43 @@ class AttendanceBatchImportTest(AttendanceTestBase):
             HTTP_AUTHORIZATION=f"Bearer {self._get_token(self.faculty_user)}"
         )
 
-    def test_batch_import_returns_501(self):
+    def test_batch_import_delegates_to_data_import(self):
+        """
+        The attendance batch-import route now delegates to the data_import app
+        pinned to import_type="attendance". It used to return 501.
+
+        This asserts the delegation contract only; the attendance parsing and
+        row-scoring pipeline is covered by apps/data_import/tests.py.
+        """
         response = self.client.post(
             "/api/v1/attendance/records/batch-import/",
             format="multipart",
         )
-        self.assertEqual(response.status_code, status.HTTP_501_NOT_IMPLEMENTED)
+        self.assertNotEqual(response.status_code, status.HTTP_501_NOT_IMPLEMENTED)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("file", response.data["error"]["details"])
+
+    def test_batch_import_forces_attendance_import_type(self):
+        """The recorded job type is attendance regardless of the request body."""
+        from io import BytesIO
+
+        from apps.data_import.constants import JobStatus
+        from apps.data_import.models import ImportJob
+
+        self.client.post(
+            "/api/v1/attendance/records/batch-import/",
+            {
+                "import_type": "students",
+                "file": BytesIO(b"student_id,first_name\nS1,Ana\n"),
+            },
+            format="multipart",
+        )
+
+        job = ImportJob.objects.latest("created_at")
+        self.assertEqual(job.import_type, "attendance")
+        self.assertEqual(job.uploaded_by, self.faculty_user)
+        # Student columns cannot satisfy the attendance column contract.
+        self.assertEqual(job.status, JobStatus.FAILED)
 
 
 # ===========================================================================

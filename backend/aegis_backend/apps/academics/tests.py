@@ -674,12 +674,55 @@ class GradeBatchImportTest(AcademicsTestBase):
         from rest_framework_simplejwt.tokens import RefreshToken
         return str(RefreshToken.for_user(user).access_token)
 
-    def test_batch_import_returns_501(self):
+    def test_batch_import_delegates_to_data_import(self):
+        """
+        The grades batch-import route now delegates to the data_import app
+        pinned to import_type="grades". It used to return 501.
+
+        These assertions check the delegation contract (the request reaches the
+        data_import create path), not the parsing pipeline itself, which
+        apps/data_import/tests.py covers directly.
+        """
+        from io import BytesIO
+
+        # No file supplied -> data_import's serializer rejects it. That proves
+        # the request reached the real pipeline instead of returning 501.
         response = self.client.post(
             "/api/v1/academics/grades/batch-import/",
             format="multipart",
         )
-        self.assertEqual(response.status_code, status.HTTP_501_NOT_IMPLEMENTED)
+        self.assertNotEqual(response.status_code, status.HTTP_501_NOT_IMPLEMENTED)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("file", response.data["error"]["details"])
+
+    def test_batch_import_forces_grades_import_type(self):
+        """
+        A caller cannot redirect a grades upload into another import type.
+
+        The route overwrites import_type before delegating, so the job is always
+        recorded as a grades import regardless of what the request body claims.
+        Faculty also lack authority over student imports, so this must hold.
+        """
+        from io import BytesIO
+
+        from apps.data_import.constants import JobStatus
+        from apps.data_import.models import ImportJob
+
+        response = self.client.post(
+            "/api/v1/academics/grades/batch-import/",
+            {
+                "import_type": "students",
+                "file": BytesIO(b"student_id,first_name\nS1,Ana\n"),
+            },
+            format="multipart",
+        )
+
+        job = ImportJob.objects.latest("created_at")
+        self.assertEqual(job.import_type, "grades")
+        self.assertEqual(job.uploaded_by, self.faculty_user)
+        # The students rows cannot satisfy the grades column contract.
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(job.status, JobStatus.FAILED)
 
 
 # ===========================================================================

@@ -601,11 +601,19 @@ class GradeViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["post"], url_path="batch-import")
     def batch_import(self, request):
         """
-        POST /grades/batch-import/
-        Placeholder for future batch grade import.
-        Returns 501 for now; full implementation deferred to data_import.
+        POST /academics/grades/batch-import/
+
+        Convenience alias for ``POST /data-import/jobs/`` pinned to
+        ``import_type="grades"``. The grades import pipeline already exists in
+        the data_import app; this route only forces the import type so a caller
+        cannot post a students file to a grades endpoint. Role authority,
+        throttling, parsing, row processing and auditing are all still enforced
+        by the data_import app.
         """
-        return Response(
-            {"detail": "Batch import not yet implemented. Use /data-import/ when available."},
-            status=status.HTTP_501_NOT_IMPLEMENTED,
-        )
+        raw = request._request
+        raw.POST = raw.POST.copy()
+        raw.POST["import_type"] = "grades"
+
+        from apps.data_import.views import ImportJobViewSet
+
+        return ImportJobViewSet.as_view({"post": "create"})(raw)

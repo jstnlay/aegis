@@ -300,18 +300,18 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
     def batch_import(self, request):
         """
         POST /attendance/records/batch-import/
-        Placeholder for future batch attendance import.
-        Returns 501 for now; full implementation deferred to data_import.
+
+        Convenience alias for ``POST /data-import/jobs/`` pinned to
+        ``import_type="attendance"``. See the equivalent grades route; the
+        attendance pipeline and its faculty scoping live in the data_import app.
         """
-        return Response(
-            {
-                "detail": (
-                    "Batch import not yet implemented. "
-                    "Use /data-import/ when available."
-                )
-            },
-            status=status.HTTP_501_NOT_IMPLEMENTED,
-        )
+        raw = request._request
+        raw.POST = raw.POST.copy()
+        raw.POST["import_type"] = "attendance"
+
+        from apps.data_import.views import ImportJobViewSet
+
+        return ImportJobViewSet.as_view({"post": "create"})(raw)
 
     @action(detail=False, methods=["get"], url_path="summary")
     def summary(self, request):
