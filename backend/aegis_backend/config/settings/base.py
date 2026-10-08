@@ -43,6 +43,9 @@ LOCAL_APPS = [
     "apps.guidance",
     "apps.assessments",
     "apps.analytics",  # PH9: role-controlled analytics aggregation API
+    # Recommendations: the HTTP surface for ai_engine/recommender.py, which is
+    # a pure computation package with no routes of its own.
+    "apps.recommendations",
     "apps.cms",  # Phase 7: Strapi integration adapter (webhook + read-through proxy)
     "apps.data_import",  # Phase 8: CSV/XLSX data import + controlled export
     "apps.notifications",

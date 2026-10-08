@@ -21,6 +21,8 @@ urlpatterns = [
     path("data-import/", include("apps.data_import.urls")),
     # Analytics (Phase 9): /analytics/ role-controlled aggregation API.
     path("analytics/", include("apps.analytics.urls")),
+    # Recommendations: the read/write surface for ai_engine/recommender.py.
+    path("recommendations/", include("apps.recommendations.urls")),
     # Chatbot (Phase 9): /chatbot/ deterministic service boundary.
     path("chatbot/", include("apps.chatbot.urls")),
     # Audit (Phase 10.10): /audit/logs/ read-only administrator API.
