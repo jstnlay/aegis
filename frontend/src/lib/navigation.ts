@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   MessageSquare,
   Shield,
+  Upload,
   UserCog,
   Users,
   type LucideIcon,
@@ -271,20 +272,32 @@ const PARENT_SUPPORT: NavItem = {
 }
 
 /**
- * Faculty/admin assessment roadmap entry.
+ * Admin assessment roadmap entry.
  *
  * Deliberately *not* the same object as `GUIDANCE_ASSESSMENTS` below. PH11.8
  * shipped `/app/assessments` for guidance, but `RequireRole` keeps that route
- * guidance-only, so faculty and admin keep an honest planned entry rather than a
- * link that would bounce off the guard. When their assessment surface lands it
- * gets its own route.
+ * guidance-only, so admin keeps an honest planned entry rather than a link that
+ * would bounce off the guard.
+ *
+ * Student and faculty no longer share this entry. Student have a real surface
+ * at `student/assessments` for taking and reviewing, and faculty at
+ * `faculty/assessments` for authoring academic assessments.
  */
 const ASSESSMENTS: NavItem = {
   route: "assessments",
   label: "Assessments",
   icon: ClipboardCheck,
-  allowedRoles: ["faculty", "admin"],
+  allowedRoles: ["admin"],
   status: "planned",
+}
+
+/** Student assessments: take and review results (objective 2.4). */
+const STUDENT_ASSESSMENTS: NavItem = {
+  route: "student/assessments",
+  label: "Assessments",
+  icon: ClipboardCheck,
+  allowedRoles: ["student"],
+  status: "available",
 }
 
 /** PH11.8: the guidance assessments surface, backed by a real route. */
@@ -293,6 +306,40 @@ const GUIDANCE_ASSESSMENTS: NavItem = {
   label: "Assessments",
   icon: ClipboardCheck,
   allowedRoles: ["guidance"],
+  status: "available",
+}
+
+/**
+ * Faculty assessments, academic only.
+ *
+ * `Assessment.clean()` requires an academic assessment to have
+ * `creator_role="faculty"`, and `AssessmentViewSet.get_queryset` returns only
+ * the caller's own assessments — so this surface is academic-only by server
+ * scope. Wellness and behavioral assessments stay on `GUIDANCE_ASSESSMENTS`.
+ *
+ * Its own route rather than the shared `assessments` path, which `RequireRole`
+ * keeps guidance-only.
+ */
+const FACULTY_ASSESSMENTS: NavItem = {
+  route: "faculty/assessments",
+  label: "Assessments",
+  icon: ClipboardCheck,
+  allowedRoles: ["faculty"],
+  status: "available",
+}
+
+/**
+ * Faculty bulk upload (Final_Revision objective 1.2.3).
+ *
+ * Distinct from the admin "Imports & Exports" entry: that one is admin-only and
+ * offers all four import types, while this is scoped to the two faculty may
+ * upload (`ALL_FACULTY_IMPORT_TYPES`) and lists only the caller's own jobs.
+ */
+const FACULTY_IMPORT: NavItem = {
+  route: "faculty/import",
+  label: "Batch Upload",
+  icon: Upload,
+  allowedRoles: ["faculty"],
   status: "available",
 }
 
@@ -415,7 +462,7 @@ const STUDENT_NAVIGATION: readonly NavGroup[] = [
   OVERVIEW_GROUP,
   {
     heading: "Learning",
-    items: [ACADEMICS, ATTENDANCE, ASSESSMENTS, REPORTS],
+    items: [ACADEMICS, ATTENDANCE, STUDENT_ASSESSMENTS, REPORTS],
   },
   {
     heading: "Communication",
@@ -455,7 +502,13 @@ const FACULTY_NAVIGATION: readonly NavGroup[] = [
   OVERVIEW_GROUP,
   {
     heading: "Teaching",
-    items: [ACADEMICS, ATTENDANCE, ASSESSMENTS, REPORTS],
+    items: [
+      ACADEMICS,
+      ATTENDANCE,
+      FACULTY_ASSESSMENTS,
+      FACULTY_IMPORT,
+      REPORTS,
+    ],
   },
   {
     heading: "Communication",
@@ -576,6 +629,9 @@ export function getPageTitle(pathname: string): string {
     ATTENDANCE,
     ASSESSMENTS,
     GUIDANCE_ASSESSMENTS,
+    FACULTY_ASSESSMENTS,
+    STUDENT_ASSESSMENTS,
+    FACULTY_IMPORT,
     REPORTS,
     RISK_ALERTS,
     CONSULTATIONS,

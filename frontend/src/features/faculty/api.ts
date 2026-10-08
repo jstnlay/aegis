@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { apiClient } from "@/lib/api"
 import { fetchAllPages } from "@/lib/pagination"
 import type { Page } from "@/types/api"
@@ -48,6 +48,90 @@ const queryKeys = {
   sections: ["academics", "sections"] as const,
   facultyEnrollments: ["enrollments", "faculty"] as const,
   dashboardStats: ["analytics", "faculty", "dashboard"] as const,
+  importJobs: ["faculty", "import-jobs"] as const,
+}
+
+/**
+ * The two import types faculty may upload.
+ *
+ * `ALL_FACULTY_IMPORT_TYPES` in `apps/data_import/constants.py` is exactly
+ * these two; `students` and `guidance_records` are admin-only. Each maps to the
+ * batch-import alias that pins `import_type` server-side, so the faculty page
+ * cannot post a file under the wrong type.
+ */
+export const FACULTY_IMPORT_TYPES = [
+  { type: "grades", label: "Grades", path: "/academics/grades/batch-import/" },
+  {
+    type: "attendance",
+    label: "Attendance",
+    path: "/attendance/records/batch-import/",
+  },
+] as const
+
+export type FacultyImportType = (typeof FACULTY_IMPORT_TYPES)[number]["type"]
+
+export interface FacultyImportJob {
+  id: string
+  file_name: string
+  import_type: string
+  status: string
+  total_rows: number
+  processed_rows: number
+  error_rows: number
+  created_at: string
+  completed_at: string | null
+  error_log: Array<{ code: string; message: string }>
+}
+
+/**
+ * This faculty's own import jobs.
+ *
+ * `ImportJobViewSet.get_queryset` returns only jobs the caller uploaded for a
+ * faculty user, so this list is already scoped server-side.
+ */
+export function useFacultyImportJobs() {
+  return useQuery<FacultyImportJob[], Error>({
+    queryKey: queryKeys.importJobs,
+    queryFn: async () => {
+      const { results } =
+        await fetchAllPages<FacultyImportJob>("/data-import/jobs/")
+      return results
+    },
+  })
+}
+
+/**
+ * Upload a grades or attendance file.
+ *
+ * The pipeline runs synchronously server-side, so this resolves only once the
+ * job is terminal. It posts to the batch-import alias rather than
+ * `/data-import/jobs/` so the server pins the import type.
+ */
+export function useFacultyImportJob() {
+  const queryClient = useQueryClient()
+  return useMutation<
+    FacultyImportJob,
+    Error,
+    { file: File; importType: FacultyImportType }
+  >({
+    mutationFn: async ({ file, importType }) => {
+      const target = FACULTY_IMPORT_TYPES.find((t) => t.type === importType)
+      if (!target) {
+        throw new Error(`Unsupported import type: ${importType}`)
+      }
+      const body = new FormData()
+      body.append("file", file)
+      const { data } = await apiClient.post<FacultyImportJob>(
+        target.path,
+        body,
+        { headers: { "Content-Type": "multipart/form-data" } }
+      )
+      return data
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.importJobs })
+    },
+  })
 }
 
 export function useFacultySubjectAssignments() {

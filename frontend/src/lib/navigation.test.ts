@@ -59,6 +59,11 @@ describe("role navigation configuration", () => {
       "admin/data",
       "admin/cms",
       "admin/audit",
+      // Faculty assessments and bulk upload, each backed by a real route in `appRoutes`
+      "faculty/assessments",
+      "faculty/import",
+      // Student assessments, likewise
+      "student/assessments",
     ]
 
     for (const role of ROLES) {
@@ -120,6 +125,7 @@ describe("role navigation configuration", () => {
       "attendance",
       "dashboard",
       "notifications",
+      "student/assessments",
     ])
   })
 
@@ -275,22 +281,41 @@ describe("role navigation configuration", () => {
     }
   })
 
-  it("keeps the faculty assessments entry planned", () => {
+  it("gives faculty a real assessments surface, guidance keeps its own", () => {
     /*
      * `/app/assessments` still resolves to the guidance page, which
-     * `RequireRole` keeps guidance-only. Faculty therefore keeps an honest
-     * planned entry rather than a link that would bounce off the guard.
+     * `RequireRole` keeps guidance-only. Faculty therefore have their own route
+     * at `faculty/assessments` covering the academic assessments they author,
+     * and must not be sent to the guidance path by the shared planned entry.
+     *
+     * The split mirrors `Assessment.clean()`: academic requires
+     * creator_role="faculty", wellness and behavioral require
+     * creator_role="guidance", so the two surfaces cannot overlap.
      */
-    const item = getNavItemsForRole("faculty").find(
-      (i) => i.route === "assessments"
+    const facultyItem = getNavItemsForRole("faculty").find(
+      (i) => i.route === "faculty/assessments"
     )
-    expect(item).toBeDefined()
-    expect(item?.status).toBe("planned")
+    expect(facultyItem).toBeDefined()
+    expect(facultyItem?.status).toBe("available")
+
+    // The shared planned entry no longer reaches faculty.
+    expect(
+      getNavItemsForRole("faculty").find((i) => i.route === "assessments")
+    ).toBeUndefined()
 
     const guidanceItem = getNavItemsForRole("guidance").find(
       (i) => i.route === "assessments"
     )
     expect(guidanceItem?.status).toBe("available")
+  })
+
+  it("does not route guidance or other roles to the faculty assessments page", () => {
+    for (const role of ["guidance", "admin", "student", "parent"] as const) {
+      expect(
+        getNavItemsForRole(role).find((i) => i.route === "faculty/assessments"),
+        role
+      ).toBeUndefined()
+    }
   })
 
   /**

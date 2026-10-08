@@ -20,12 +20,15 @@ import {
   RoleDashboardRedirect,
   RoleLandingPage,
 } from "@/routes/pages/RoleLandingPage"
+import { StudentAssessmentsPage } from "@/features/student/StudentAssessmentsPage"
 import { StudentDashboard } from "@/features/student/StudentDashboard"
 import { ParentDashboard } from "@/features/parent/ParentDashboard"
 import { ParentAcademicsPage } from "@/features/parent/ParentAcademicsPage"
 import { ParentAssessmentsPage } from "@/features/parent/ParentAssessmentsPage"
 import { ParentSupportRoute } from "@/features/parent/ParentSupportRoute"
+import { FacultyAssessmentsPage } from "@/features/faculty/FacultyAssessmentsPage"
 import { FacultyDashboard } from "@/features/faculty/FacultyDashboard"
+import { FacultyImportPage } from "@/features/faculty/FacultyImportPage"
 import { GuidanceDashboard } from "@/features/guidance/GuidanceDashboard"
 import { AdminDashboard } from "@/features/admin/AdminDashboard"
 import { AdminAcademicsPage } from "@/features/admin/AdminAcademicsPage"
@@ -119,6 +122,53 @@ export const appRoutes: RouteObject[] = [
             element: (
               <RequireRole allowedRoles={["student", "faculty"]}>
                 <AttendancePage />
+              </RequireRole>
+            ),
+          },
+          {
+            /*
+             * Student assessments (objective 2.4).
+             *
+             * `AssessmentViewSet.get_queryset` returns, for a student, only
+             * published assessments targeting them or their section, and
+             * `AssessmentResultViewSet.get_queryset` returns only their own
+             * submissions. The page therefore filters by nothing itself.
+             */
+            path: "student/assessments",
+            element: (
+              <RequireRole allowedRoles={["student"]}>
+                <StudentAssessmentsPage />
+              </RequireRole>
+            ),
+          },
+          {
+            /*
+             * Faculty assessments, academic only.
+             *
+             * Its own route rather than the shared `assessments` path, which
+             * `RequireRole` keeps guidance-only for their wellness/behavioral
+             * assessments. The split mirrors `Assessment.clean()`: academic
+             * requires `creator_role="faculty"`, wellness and behavioral require
+             * `creator_role="guidance"`, so the two surfaces cannot overlap.
+             */
+            path: "faculty/assessments",
+            element: (
+              <RequireRole allowedRoles={["faculty"]}>
+                <FacultyAssessmentsPage />
+              </RequireRole>
+            ),
+          },
+          {
+            /*
+             * Faculty bulk upload. Its own route because `/app/assessments`
+             * belongs to guidance and the import surface must not collide with
+             * it. The backend scopes the listing to the caller's own jobs and
+             * accepts only grades/attendance from faculty.
+             */
+            path: "faculty/import",
+            element: (
+              <RequireRole allowedRoles={["faculty"]}>
+                <FacultyImportPage />
               </RequireRole>
             ),
           },
