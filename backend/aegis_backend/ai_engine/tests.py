@@ -11,10 +11,12 @@ Covers:
 - Student Interaction tracking
 """
 
+import unittest.mock
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
+from django.core.management import call_command
 from django.test import TestCase
 from django.utils import timezone
 
@@ -1219,6 +1221,181 @@ def test_prediction_label_vocabulary(self):
         self.assertTrue(validate_prediction_labels({"risk_level": "high"}))
         self.assertTrue(validate_prediction_labels({"risk_level": None}))
         self.assertFalse(validate_prediction_labels({"risk_level": "critical"}))
+
+
+class TrainRiskModelCommandTest(AIEngineTestBase):
+    """
+    `run_risk_computation` refuses to run and names this command, so the two
+    must be tested together: train writes an artifact the risk command can
+    actually load.
+    """
+
+    def _seed_students(self, count=15):
+        """Enough varied students for the labeler to produce all three classes."""
+        from ai_engine.feature_engine import compute_student_features
+
+        datasets = []
+        for i in range(count):
+            user = User.objects.create_user(
+                email=f"train{i}@ai.test", password="pass12345",
+                first_name=f"Train{i}", last_name="Student", role="student",
+            )
+            sp = StudentProfile.objects.create(
+                user=user,
+                student_id=f"TR{i:04d}",
+                grade_level=self.grade_level,
+                section=self.section,
+                enrollment_date=date(2024, 6, 10),
+            )
+            Enrollment.objects.create(
+                student=sp, section=self.section,
+                academic_year=self.academic_year,
+                date_enrolled=date(2024, 6, 10), is_active=True,
+            )
+            if i % 3 == 0:
+                scores = [92, 90, 88]
+                present = 10
+            elif i % 3 == 1:
+                scores = [75, 72, 70]
+                present = 6
+            else:
+                scores = [58, 55, 60]
+                present = 3
+            self.add_grades(sp, [
+                (self.sa_math, self.gp_q2, Decimal(str(scores[0]))),
+                (self.sa_eng, self.gp_q2, Decimal(str(scores[1]))),
+                (self.sa_sci, self.gp_q2, Decimal(str(scores[2]))),
+            ])
+            self.add_attendance(sp, self.section, 10, present)
+            datasets.append(compute_student_features(
+                sp, [self.gp_q1, self.gp_q2], self.academic_year
+            ))
+        return datasets
+
+    def test_trains_and_persists_a_model(self):
+        import tempfile
+        from pathlib import Path
+        from io import StringIO
+
+        from ai_engine.risk_scorer import MODEL_PATH, load_model
+
+        self._seed_students()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "decision_tree_v1.pkl"
+            out, err = StringIO(), StringIO()
+
+            with unittest.mock.patch(
+                "ai_engine.risk_scorer.MODEL_PATH", target
+            ):
+                call_command("train_risk_model", stdout=out, stderr=err)
+
+            self.assertTrue(target.exists(), "model file was not written")
+
+            model, metadata = load_model(target)
+            self.assertIsNotNone(model)
+            self.assertEqual(metadata["n_samples"], 15)
+
+    def test_dry_run_writes_nothing(self):
+        import tempfile
+        from pathlib import Path
+        from io import StringIO
+
+        from ai_engine.risk_scorer import MODEL_PATH
+
+        self._seed_students()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "decision_tree_v1.pkl"
+            out = StringIO()
+
+            with unittest.mock.patch(
+                "ai_engine.risk_scorer.MODEL_PATH", target
+            ):
+                call_command("train_risk_model", dry_run=True, stdout=out)
+
+            self.assertFalse(target.exists(), "dry run wrote a model")
+            self.assertIn("Dry run", out.getvalue())
+
+    def test_reports_the_label_circularity(self):
+        """
+        The model reproduces labeler.rule_based_label, so its accuracy is not
+        evidence that it predicts real risk. That warning must reach the
+        operator, not just the module docstring.
+        """
+        import tempfile
+        from pathlib import Path
+        from io import StringIO
+
+        self._seed_students()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "decision_tree_v1.pkl"
+            err = StringIO()
+
+            with unittest.mock.patch(
+                "ai_engine.risk_scorer.MODEL_PATH", target
+            ):
+                call_command(
+                    "train_risk_model", dry_run=True, stdout=StringIO(),
+                    stderr=err,
+                )
+
+            self.assertIn("rule-generated", err.getvalue().lower())
+
+    def test_refuses_below_the_minimum_sample_count(self):
+        """
+        Persisting a model fitted on a handful of rows would produce confident
+        output with no basis. The command refuses instead.
+        """
+        import tempfile
+        from pathlib import Path
+        from io import StringIO
+
+        self._seed_students(count=15)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "decision_tree_v1.pkl"
+            err = StringIO()
+
+            with unittest.mock.patch(
+                "ai_engine.risk_scorer.MODEL_PATH", target
+            ):
+                call_command(
+                    "train_risk_model", minimum_samples=10_000, stdout=StringIO(),
+                    stderr=err,
+                )
+
+            self.assertFalse(target.exists())
+            self.assertIn("Refusing to persist", err.getvalue())
+
+    def test_trained_model_is_loadable_by_the_risk_command(self):
+        """
+        The point of this command. train writes an artifact, then
+        run_risk_computation loads it and writes RiskScore rows.
+        """
+        import tempfile
+        from pathlib import Path
+        from io import StringIO
+
+        import ai_engine.risk_scorer as risk_scorer
+        from apps.guidance.models import RiskScore
+
+        self._seed_students()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "decision_tree_v1.pkl"
+
+            with unittest.mock.patch.object(
+                risk_scorer, "MODEL_PATH", target
+            ):
+                call_command("train_risk_model", stdout=StringIO(), stderr=StringIO())
+                RiskScore.objects.all().delete()
+                call_command("run_risk_computation", stdout=StringIO())
+
+            self.assertGreater(
+                RiskScore.objects.filter(computation_status="ready").count(), 0
+            )
 
 
 class RunRiskComputationCommandTest(AIEngineTestBase):
