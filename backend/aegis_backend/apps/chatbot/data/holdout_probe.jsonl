@@ -1,0 +1,68 @@
+{"text": "hi!", "intent": "greeting"}
+{"text": "magandang gabi", "intent": "greeting"}
+{"text": "evening", "intent": "greeting"}
+{"text": "what are you able to do", "intent": "help"}
+{"text": "help me please", "intent": "help"}
+{"text": "ano ang kaya mong gawin", "intent": "help"}
+{"text": "where do i find the dashboard screen", "intent": "system_navigation"}
+{"text": "how do i get to the settings menu", "intent": "system_navigation"}
+{"text": "saan ako pupunta para sa profile", "intent": "system_navigation"}
+{"text": "asdkjh", "intent": "unknown"}
+{"text": "qwerasdf", "intent": "unknown"}
+{"text": "zxcvbnm", "intent": "unknown"}
+{"text": "what is my english grade", "intent": "ask_grade"}
+{"text": "whats my mark in filipino", "intent": "ask_grade"}
+{"text": "ano grade ko sa science", "intent": "ask_grade"}
+{"text": "my score for the quiz", "intent": "ask_grade"}
+{"text": "magkano ang score ko", "intent": "ask_grade"}
+{"text": "how am i doing in class", "intent": "ask_academic_performance"}
+{"text": "is my academic performance improving", "intent": "ask_academic_performance"}
+{"text": "okay ba academic standing ko", "intent": "ask_academic_performance"}
+{"text": "patulong ako sa filipino", "intent": "ask_subject_help"}
+{"text": "i need help with quadratic", "intent": "ask_subject_help"}
+{"text": "tulong nga ako sa english", "intent": "ask_subject_help"}
+{"text": "do you have a handout for science", "intent": "ask_learning_resource"}
+{"text": "may lesson kayo sa biology", "intent": "ask_learning_resource"}
+{"text": "looking for study material", "intent": "ask_learning_resource"}
+{"text": "is there a module for geometry", "intent": "ask_learning_resource"}
+{"text": "any tips for studying", "intent": "ask_study_strategy"}
+{"text": "pano ako mag-aaral ng maayos", "intent": "ask_study_strategy"}
+{"text": "what study strategy works", "intent": "ask_study_strategy"}
+{"text": "how should i review", "intent": "ask_study_strategy"}
+{"text": "what do you recommend i study", "intent": "ask_recommendation"}
+{"text": "suggest something for improvement", "intent": "ask_recommendation"}
+{"text": "any recommendation po", "intent": "ask_recommendation"}
+{"text": "ano dapat kong gawin", "intent": "ask_recommendation"}
+{"text": "what is my absense record", "intent": "ask_attendance"}
+{"text": "how many times have i been absent", "intent": "ask_attendance"}
+{"text": "ilan ang aking absence", "intent": "ask_attendance"}
+{"text": "my attendance rate", "intent": "ask_attendance"}
+{"text": "check my attendnce", "intent": "ask_attendance"}
+{"text": "am i okay with my attendence", "intent": "ask_attendance_status"}
+{"text": "okay ba ang attendance ko", "intent": "ask_attendance_status"}
+{"text": "will my attendance be a problem", "intent": "ask_attendance_status"}
+{"text": "what is the exam about", "intent": "ask_assessment"}
+{"text": "anong saklaw ng test", "intent": "ask_assessment"}
+{"text": "tell me about the quarterly test", "intent": "ask_assessment"}
+{"text": "kailan ang final exam", "intent": "assessment_schedule"}
+{"text": "when is the long test", "intent": "assessment_schedule"}
+{"text": "ano ang araw ng assessment", "intent": "assessment_schedule"}
+{"text": "what time is the quiz", "intent": "assessment_schedule"}
+{"text": "what are the rules for the quiz", "intent": "assessment_instructions"}
+{"text": "how many items are in the assessment", "intent": "assessment_instructions"}
+{"text": "can i review my notes during the exam", "intent": "assessment_instructions"}
+{"text": "paano ko isusumite ang quiz", "intent": "assessment_instructions"}
+{"text": "does guidance have counselling services", "intent": "guidance_help"}
+{"text": "what can the guidance office offer", "intent": "guidance_help"}
+{"text": "may guidance counselor ba", "intent": "guidance_help"}
+{"text": "i feel overwhelmed", "intent": "express_concern"}
+{"text": "kinakabahan na ako", "intent": "express_concern"}
+{"text": "i am struggling with my classes", "intent": "express_concern"}
+{"text": "bothered ako", "intent": "express_concern"}
+{"text": "can i speak to the counselor", "intent": "request_counselor"}
+{"text": "gusto ko makipag-usap sa guidance", "intent": "request_counselor"}
+{"text": "how do i set an appointment with guidance", "intent": "request_counselor"}
+{"text": "pwede ba kong makipagkilala", "intent": "request_counselor"}
+{"text": "i need emergency help", "intent": "urgent_concern"}
+{"text": "i am going to hurt myself", "intent": "urgent_concern"}
+{"text": "someone keeps harassing me", "intent": "urgent_concern"}
