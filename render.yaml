@@ -16,11 +16,26 @@
 # Build order is deliberate and load-bearing:
 #     pip install -> migrate -> provision_qa_accounts -> seed_qa_dataset
 #     -> gunicorn starts
-# provision_qa_accounts writes accounts and seed_qa_dataset hangs records off
-# those accounts, so both must run after migrate and must finish before gunicorn
-# serves traffic. seed_qa_dataset is idempotent and transactional: re-running it
-# on every deploy reuses the existing rows instead of duplicating them, and a
-# failure rolls the whole dataset back rather than leaving a half-seeded school.
+#     provision_qa_accounts writes accounts and seed_qa_dataset hangs records off
+#     those accounts, so both must run after migrate and must finish before gunicorn
+#     serves traffic. seed_qa_dataset is idempotent and transactional: re-running it
+#     on every deploy reuses the existing rows instead of duplicating them, and a
+#     failure rolls the whole dataset back rather than leaving a half-seeded school.
+#
+#     train_risk_model is last because it trains on the data the two steps above
+#     create: it computes features from graded, enrolled students and would find
+#     none before seed_qa_dataset runs. The model is stored in the database
+#     (RiskModelArtifact) because this host has no persistent disk, so without this
+#     step every deploy would leave run_risk_computation with nothing to load.
+#
+#     It is expected to refuse on a dataset too small to train -- the command
+#     reports the shortfall and exits 0 rather than persisting a model fitted on
+#     too few rows, so a small DEV dataset does not block a deploy. Only a genuine
+#     error fails the build, which is correct: if risk training is broken, that
+#     should be visible.
+#
+#     Retraining supersedes the previous artifact. Only one is active per version,
+#     enforced by a partial unique constraint.
 #
 # The shared DEV/QA service intentionally runs config.settings.development
 # (DEBUG=True, ALLOWED_HOSTS=["*"]). Production hardening is separate work.
@@ -38,6 +53,7 @@ services:
       && python manage.py migrate --settings=config.settings.development
       && python manage.py provision_qa_accounts --settings=config.settings.development
       && python manage.py seed_qa_dataset --settings=config.settings.development
+      && python manage.py train_risk_model --settings=config.settings.development
     startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
     # No healthCheckPath: this Django project exposes no health endpoint, and
     # inventing one would misrepresent the service. Do not add /healthz or

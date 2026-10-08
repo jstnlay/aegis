@@ -1394,6 +1394,36 @@ class TrainRiskModelCommandTest(AIEngineTestBase):
             metadata["academic_year_name"], self.academic_year.name
         )
 
+    def test_refusal_paths_do_not_raise(self):
+        """
+        render.yaml chains `train_risk_model` into the build, so every expected
+        refusal has to exit 0. A dataset too small to train is a normal
+        condition on a fresh DEV database and must not block a deploy; only a
+        genuine error should fail the build.
+        """
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        from apps.guidance.models import RiskModelArtifact
+
+        # No students at all: nothing to train on.
+        RiskModelArtifact.objects.all().delete()
+        err = StringIO()
+        call_command("train_risk_model", stdout=StringIO(), stderr=err)
+        self.assertEqual(RiskModelArtifact.objects.count(), 0)
+        self.assertIn("enough data", err.getvalue())
+
+        # Too few samples: refuses to persist, still no exception.
+        self._seed_students(count=15)
+        RiskModelArtifact.objects.all().delete()
+        err = StringIO()
+        call_command(
+            "train_risk_model", minimum_samples=10_000, stdout=StringIO(),
+            stderr=err,
+        )
+        self.assertEqual(RiskModelArtifact.objects.count(), 0)
+
     def test_trained_model_is_loadable_by_the_risk_command(self):
         """
         The point of this command. train stores an artifact, then
