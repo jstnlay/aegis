@@ -394,12 +394,13 @@ describe("role landing content", () => {
    Unauthorized role route behavior
    ===================================================================== */
 describe("unauthorized role route behavior", () => {
-  it("redirects a student away from /app/academics", async () => {
+  it("tells a student /app/academics is restricted", async () => {
     await renderAuthenticatedApp("student", "/app/academics")
 
-    // RequireRole sends the student back to the shared dashboard.
+    // RequireRole keeps the URL and says why instead of silently moving the
+    // user; neither the academics surface nor the dashboard copy appears.
     const heading = await screen.findByRole("heading", {
-      name: "Student Portal",
+      name: /Access restricted/i,
     })
     expect(heading).toBeDefined()
     expect(screen.queryByText(/Getting started/)).toBeNull()

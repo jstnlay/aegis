@@ -63,6 +63,7 @@ EXPORT_DOMAIN_MODELS = {
     ExportType.GRADES: "academics.Grade",
     ExportType.ATTENDANCE: "attendance.AttendanceRecord",
     ExportType.STUDENTS: "accounts.StudentProfile",
+    ExportType.ADVISORY: "accounts.StudentProfile",
 }
 
 
@@ -240,8 +241,8 @@ class ImportJobViewSet(viewsets.ModelViewSet):
 
         grades / attendance / students write real records via their
         importers.  guidance_records has no domain importer yet; for that
-        type alone we preserve the legacy parse-only behavior so existing
-        admin imports still complete.
+        type alone the file is parsed but nothing is stored, and the job
+        says so instead of reporting a completed import.
         """
         from .importers.attendance import AttendanceImporter
         from .importers.grades import GradeImporter
@@ -257,15 +258,32 @@ class ImportJobViewSet(viewsets.ModelViewSet):
             StudentImporter(job, records, job.uploaded_by).process(headers)
             return
 
-        # Legacy parse-only path for not-yet-implemented domain types.
+        # No domain importer for this type.  The rows parsed cleanly, but
+        # nothing is written, so nothing may be reported as SUCCESS: that
+        # would let an admin conclude guidance records reached the
+        # database.  Rows are SKIPPED and the job fails with an explicit
+        # reason, which also keeps it out of the successful-import audit.
+        skip_message = (
+            "Parsed but not stored: this import type has no domain importer "
+            "yet, so no records were written."
+        )
         for record in records:
-            record.status = RecordStatus.SUCCESS
-            record.error_message = ""
+            record.status = RecordStatus.SKIPPED
+            record.error_message = skip_message
             record.save()
         job.total_rows = len(records)
-        job.processed_rows = len(records)
+        job.processed_rows = 0
         job.error_rows = 0
-        job.status = JobStatus.COMPLETED
+        job.error_log = [
+            {
+                "code": ImportErrorCode.UNSUPPORTED_IMPORT_TYPE,
+                "message": (
+                    f"No importer is available for '{job.import_type}', so the "
+                    "file was parsed but no records were imported."
+                ),
+            }
+        ]
+        job.status = JobStatus.FAILED
         job.save()
 
 
@@ -333,6 +351,19 @@ class ExportViewMixin(APIView):
                     "The export could not be generated.",
                 )
             )
+
+        # TC-FAC-19: an authorised-but-empty scope must answer with a message,
+        # not with a header-only file. A one-row CSV looks like a successful
+        # export until someone opens it and finds no records, and the QA log
+        # recorded exactly that as the failure mode.
+        if not rows:
+            return self._export_error(
+                ExportError(
+                    ExportErrorCode.EXPORT_EMPTY,
+                    "No data is available for this export.",
+                )
+            )
+
         try:
             payload = build_export_payload(self.export_type, rows, file_format)
         except ExportError as exc:
@@ -401,3 +432,14 @@ class StudentsExportView(ExportViewMixin):
     """GET /api/v1/data-import/exports/students/ (admin only)"""
 
     export_type = ExportType.STUDENTS
+
+
+class AdvisoryExportView(ExportViewMixin):
+    """
+    GET /api/v1/data-import/exports/advisory/ (faculty only).
+
+    FR-016 / TC-FAC-20: a per-student aggregate of the caller's own advisory
+    class — attendance counts and grade average over that class only.
+    """
+
+    export_type = ExportType.ADVISORY

@@ -15,6 +15,7 @@ from ..views import (
     GradingPeriodViewSet,
     ScheduleViewSet,
     SectionViewSet,
+    StudentProfileManageView,
     SubjectAssignmentViewSet,
     SubjectViewSet,
 )
@@ -34,4 +35,13 @@ app_name = "academics"
 
 urlpatterns = [
     path("", include(router.urls)),
+    # FR-007 / TC-FAC-03/04: faculty management of an advisory student's
+    # profile. Kept off the router because it is retrieve/update only — no
+    # create (student accounts are provisioned administratively), no delete
+    # (a profile lives as long as the account).
+    path(
+        "student-profiles/<uuid:pk>/",
+        StudentProfileManageView.as_view(),
+        name="student-profile-manage",
+    ),
 ]

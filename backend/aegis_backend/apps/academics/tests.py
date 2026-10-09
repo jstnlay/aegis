@@ -1064,3 +1064,288 @@ class SEC013GradeEnrollmentIntegrityTest(AcademicsTestBase):
         )
         with self.assertRaises(ValidationError):
             g.full_clean()
+
+
+# ===========================================================================
+# FR-007: faculty management of advisory student profiles (TC-FAC-03/04)
+# ===========================================================================
+
+
+class StudentProfileManageTest(AcademicsTestBase):
+    """GET/PATCH /api/v1/academics/student-profiles/{id}/."""
+
+    URL = "/api/v1/academics/student-profiles/{id}/"
+
+    def valid_payload(self, **overrides):
+        payload = {
+            "grade_level": str(self.g8.id),
+            "section": str(self.section_b.id),
+            "guardian_contact": "0917-555-0100",
+            "date_of_birth": "2010-04-15",
+        }
+        payload.update(overrides)
+        return payload
+
+    def profile_url(self, profile):
+        return self.URL.format(id=profile.id)
+
+    def _as_faculty(self):
+        self.client.force_authenticate(user=self.faculty_user)
+
+    def test_faculty_reads_the_advisory_profile_form(self):
+        self._as_faculty()
+        response = self.client.get(self.profile_url(self.student_profile))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["student_name"], "Stu dent")
+        self.assertEqual(response.data["student_id"], "STU-001")
+        self.assertEqual(response.data["is_active"], True)
+        # Identity/enrollment fields are never writable through this surface.
+        self.assertNotIn("enrollment_date", response.data)
+        self.assertNotIn("user", response.data)
+
+    def test_faculty_updates_an_advisory_student_profile(self):
+        # TC-FAC-03.
+        self._as_faculty()
+        response = self.client.patch(
+            self.profile_url(self.student_profile),
+            data=self.valid_payload(),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.student_profile.refresh_from_db()
+        self.assertEqual(self.student_profile.guardian_contact, "0917-555-0100")
+        self.assertEqual(
+            str(self.student_profile.date_of_birth), "2010-04-15"
+        )
+        self.assertEqual(self.student_profile.grade_level, self.g8)
+        self.assertEqual(self.student_profile.section, self.section_b)
+
+    def test_update_without_a_required_field_is_rejected(self):
+        # TC-FAC-04: an incomplete profile must not be stored.
+        self._as_faculty()
+        response = self.client.patch(
+            self.profile_url(self.student_profile),
+            data=self.valid_payload(guardian_contact=None),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("guardian_contact", response.data["error"]["details"])
+        self.student_profile.refresh_from_db()
+        self.assertIsNone(self.student_profile.guardian_contact)
+        self.assertIsNone(self.student_profile.date_of_birth)
+
+    def test_blank_guardian_contact_is_rejected(self):
+        self._as_faculty()
+        response = self.client.patch(
+            self.profile_url(self.student_profile),
+            data=self.valid_payload(guardian_contact="   "),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("guardian_contact", response.data["error"]["details"])
+        self.student_profile.refresh_from_db()
+        self.assertIsNone(self.student_profile.guardian_contact)
+
+    def test_section_must_belong_to_the_grade_level(self):
+        self._as_faculty()
+        response = self.client.patch(
+            self.profile_url(self.student_profile),
+            data=self.valid_payload(section=str(self.section_a.id)),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("section", response.data["error"]["details"])
+        self.student_profile.refresh_from_db()
+        self.assertEqual(self.student_profile.section, self.section_a)
+
+    def test_future_date_of_birth_is_rejected(self):
+        self._as_faculty()
+        response = self.client.patch(
+            self.profile_url(self.student_profile),
+            data=self.valid_payload(date_of_birth="2999-01-01"),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("date_of_birth", response.data["error"]["details"])
+        self.student_profile.refresh_from_db()
+        self.assertIsNone(self.student_profile.date_of_birth)
+
+    def test_student_outside_the_advisory_sections_is_not_visible(self):
+        # TC-FAC-12's rule applied to profiles: an out-of-scope record must
+        # not be confirmed to exist, so the endpoint answers 404.
+        self._as_faculty()
+        response = self.client.patch(
+            self.profile_url(self.student2_profile),
+            data=self.valid_payload(),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.student2_profile.refresh_from_db()
+        self.assertEqual(self.student2_profile.section, self.section_b)
+        self.assertIsNone(self.student2_profile.guardian_contact)
+
+    def test_admin_can_update_any_student_profile(self):
+        self.client.force_authenticate(user=self.admin_user)
+        response = self.client.patch(
+            self.profile_url(self.student2_profile),
+            data=self.valid_payload(),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.student2_profile.refresh_from_db()
+        self.assertEqual(self.student2_profile.guardian_contact, "0917-555-0100")
+
+    def test_non_faculty_roles_are_outside_the_surface(self):
+        for user in (
+            self.student_user,
+            self.parent_user,
+            self.guidance_user,
+        ):
+            self.client.force_authenticate(user=user)
+            response = self.client.get(
+                self.profile_url(self.student_profile)
+            )
+            self.assertEqual(
+                response.status_code,
+                status.HTTP_403_FORBIDDEN,
+                user.email,
+            )
+
+    def test_unauthenticated_access_is_rejected(self):
+        self.client.force_authenticate(user=None)
+        response = self.client.get(self.profile_url(self.student_profile))
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+
+# ===========================================================================
+# FR-011: faculty grade updates (TC-FAC-11 / TC-FAC-12)
+# ===========================================================================
+
+
+class FacultyGradeUpdateTest(AcademicsTestBase):
+    """PATCH /api/v1/academics/grades/{id}/."""
+
+    URL = "/api/v1/academics/grades/{id}/"
+
+    def _faculty_patch(self, grade, payload):
+        self.client.force_authenticate(user=self.faculty_user)
+        return self.client.patch(
+            self.URL.format(id=grade.id), data=payload, format="json"
+        )
+
+    def test_faculty_updates_their_own_encoded_grade(self):
+        # TC-FAC-11.
+        response = self._faculty_patch(
+            self.grade1,
+            {"score": "91.25", "remarks": "Recomputed after the correction."},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.grade1.refresh_from_db()
+        self.assertEqual(self.grade1.score, Decimal("91.25"))
+        self.assertEqual(
+            self.grade1.remarks, "Recomputed after the correction."
+        )
+        # The encoder never changes, whatever the payload claims.
+        self.assertEqual(self.grade1.encoded_by, self.faculty_profile)
+
+    def test_out_of_range_score_is_rejected_and_kept(self):
+        response = self._faculty_patch(self.grade1, {"score": "140"})
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("score", response.data["error"]["details"])
+        self.grade1.refresh_from_db()
+        self.assertEqual(self.grade1.score, Decimal("85.50"))
+
+    def test_faculty_cannot_finalize_their_own_grade(self):
+        response = self._faculty_patch(self.grade1, {"status": "finalized"})
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.grade1.refresh_from_db()
+        self.assertEqual(self.grade1.status, Grade.StatusChoices.DRAFT)
+
+    def test_faculty_cannot_reclaim_another_grade_as_their_own(self):
+        response = self._faculty_patch(
+            self.grade1, {"encoded_by": str(self.faculty2_profile.id)}
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.grade1.refresh_from_db()
+        self.assertEqual(self.grade1.encoded_by, self.faculty_profile)
+
+    def test_faculty_cannot_update_a_grade_outside_their_assignments(self):
+        # TC-FAC-12: the grade belongs to faculty2's subject assignment.
+        self.client.force_authenticate(user=self.faculty2_user)
+        response = self.client.patch(
+            self.URL.format(id=self.grade1.id),
+            data={"score": "10.00"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.grade1.refresh_from_db()
+        self.assertEqual(self.grade1.score, Decimal("85.50"))
+
+    def test_student_cannot_update_any_grade(self):
+        self.client.force_authenticate(user=self.student_user)
+        response = self.client.patch(
+            self.URL.format(id=self.grade1.id),
+            data={"score": "100.00"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.grade1.refresh_from_db()
+        self.assertEqual(self.grade1.score, Decimal("85.50"))
+
+    def test_admin_can_update_and_finalize(self):
+        self.client.force_authenticate(user=self.admin_user)
+        response = self.client.patch(
+            self.URL.format(id=self.grade1.id),
+            data={"score": "99.00", "status": "submitted"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.grade1.refresh_from_db()
+        self.assertEqual(self.grade1.score, Decimal("99.00"))
+        self.assertEqual(self.grade1.status, Grade.StatusChoices.SUBMITTED)
+
+    def test_faculty_cannot_revise_a_finalized_grade(self):
+        # `finalize` is admin-only, so a finalized grade is published: an
+        # encoder rewriting it would silently change a number students and
+        # parents have already read.
+        self.grade1.status = Grade.StatusChoices.FINALIZED
+        self.grade1.save()
+        response = self._faculty_patch(self.grade1, {"score": "70.00"})
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.grade1.refresh_from_db()
+        self.assertEqual(self.grade1.score, Decimal("85.50"))
+
+    def test_admin_may_still_revise_a_finalized_grade(self):
+        # The lock above is the faculty boundary, not a database constraint:
+        # administration keeps full CRUD, including corrections after
+        # publication.
+        self.grade1.status = Grade.StatusChoices.FINALIZED
+        self.grade1.save()
+        self.client.force_authenticate(user=self.admin_user)
+        response = self.client.patch(
+            self.URL.format(id=self.grade1.id),
+            data={"score": "95.00"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.grade1.refresh_from_db()
+        self.assertEqual(self.grade1.score, Decimal("95.00"))

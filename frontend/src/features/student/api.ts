@@ -3,6 +3,15 @@ import { useQuery } from "@tanstack/react-query"
 import { apiClient } from "@/lib/api"
 import { fetchAllPages } from "@/lib/pagination"
 
+/**
+ * Bucket label for a finalized grade that carries no grading period.
+ *
+ * Used in exactly one place on both sides — building the period buckets and
+ * normalizing each grade's `grading_period` — so a row can never be grouped
+ * under one key and then filtered by another.
+ */
+const UNASSIGNED_PERIOD = "Unassigned"
+
 export interface AttendanceSummary {
   present_days: number
   late_days: number
@@ -153,7 +162,12 @@ export function useStudentDashboardData(studentId: string) {
         subject_code: g.subject_code,
         score: g.score,
         letter_grade: g.letter_grade,
-        grading_period: g.grading_period_name ?? "",
+        // Normalized to the same key the period buckets are built from. A row
+        // with no grading period used to keep `""` here while being grouped as
+        // "Unassigned", so the default period filter matched nothing and every
+        // grade dropped out of the average — which is how a student with
+        // finalized grades saw N/A on the dashboard while Academics listed them.
+        grading_period: g.grading_period_name?.trim() || UNASSIGNED_PERIOD,
       }))
     },
   })
@@ -173,7 +187,7 @@ export function useStudentDashboardData(studentId: string) {
     const grades = gradesQuery.data ?? []
     const byPeriod = new Map<string, number[]>()
     for (const g of grades) {
-      const key = g.grading_period || "Unassigned"
+      const key = g.grading_period || UNASSIGNED_PERIOD
       const scores = byPeriod.get(key) ?? []
       if (g.score !== null) scores.push(g.score)
       byPeriod.set(key, scores)

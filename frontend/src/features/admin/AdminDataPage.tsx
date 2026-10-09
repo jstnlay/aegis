@@ -52,9 +52,10 @@ import { normalizeApiError } from "@/lib/error"
  *
  * One import type needs a caveat the UI must not hide: `guidance_records` is an
  * accepted `ImportType` and an admin may submit it, but
- * `_dispatch_domain_processing` has no guidance importer and falls through to
- * the legacy parse-only path, which marks rows successful without writing any
- * domain record. The form labels it accordingly.
+ * `_dispatch_domain_processing` has no guidance importer behind it, so the
+ * file is parsed, every row comes back `skipped`, and the job fails rather
+ * than claiming an import that never happened. The form labels it
+ * accordingly.
  *
  * Exports: three separate GET endpoints returning a **file**, not a job list.
  * They are a download rather than a query, and each requires `?file_format` —
@@ -256,9 +257,9 @@ function ImportsCard() {
 
             {IMPORT_TYPE_PARSES_ONLY.includes(importType) ? (
               <p className="text-xs text-muted-foreground">
-                {IMPORT_TYPE_LABELS[importType]} currently validates and reports
-                rows only — it does not write guidance records, because the
-                backend has no guidance importer behind this type.
+                {IMPORT_TYPE_LABELS[importType]} is not backed by an importer
+                yet. The file is checked and every row reported, but the job
+                fails and no guidance records are written.
               </p>
             ) : null}
 

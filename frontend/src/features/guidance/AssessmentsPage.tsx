@@ -972,9 +972,11 @@ export function AssessmentsPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     {/*
                       The deploy action is the real server endpoint. It 400s
-                      when the assessment is already published, so the control
-                      is only offered for a draft and the server message is
-                      surfaced if it still refuses.
+                      when the assessment is already published *or* has no
+                      questions, so the control is only offered for a draft
+                      that can actually be published — offering it on a
+                      question-less draft produced nothing but that 400 — and
+                      the server message is surfaced if it still refuses.
                     */}
                     {!assessment.is_published ? (
                       /*
@@ -984,24 +986,37 @@ export function AssessmentsPage() {
                        * (WCAG 2.5.3); it follows the in-flight state too, since
                        * `aria-label` overrides the visible "Deploying…" text
                        * and that progress would otherwise be lost.
+                       *
+                       * A draft with no questions cannot be deployed: the
+                       * button is disabled and the reason is stated in text,
+                       * not left to a failed request.
                        */
-                      <Button
-                        type="button"
-                        size="sm"
-                        disabled={deploy.isPending}
-                        aria-label={
-                          deploy.isPending &&
+                      <>
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={
+                            deploy.isPending || assessment.question_count === 0
+                          }
+                          aria-label={
+                            deploy.isPending &&
+                            deploy.variables?.id === assessment.id
+                              ? `Deploying ${assessment.title}`
+                              : `Deploy ${assessment.title}`
+                          }
+                          onClick={() => deploy.mutate({ id: assessment.id })}
+                        >
+                          {deploy.isPending &&
                           deploy.variables?.id === assessment.id
-                            ? `Deploying ${assessment.title}`
-                            : `Deploy ${assessment.title}`
-                        }
-                        onClick={() => deploy.mutate({ id: assessment.id })}
-                      >
-                        {deploy.isPending &&
-                        deploy.variables?.id === assessment.id
-                          ? "Deploying…"
-                          : "Deploy"}
-                      </Button>
+                            ? "Deploying…"
+                            : "Deploy"}
+                        </Button>
+                        {assessment.question_count === 0 ? (
+                          <p className="text-xs text-muted-foreground">
+                            Add at least one question before deploying.
+                          </p>
+                        ) : null}
+                      </>
                     ) : (
                       /*
                        * `role="status"`: a successful deploy was previously

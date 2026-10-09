@@ -57,6 +57,7 @@ from apps.academics.models import (
     Grade,
     GradeLevel,
     GradingPeriod,
+    Schedule,
     Section,
     Subject,
     SubjectAssignment,
@@ -93,6 +94,7 @@ SEEDED_MODELS = (
     Section,
     Subject,
     SubjectAssignment,
+    Schedule,
     GradingPeriod,
     Enrollment,
     Grade,
@@ -238,6 +240,43 @@ class SeedDatasetTestCase(TestCase):
                 SubjectAssignment.objects.filter(section=section).count(),
                 len(seed_module.LEARNING_AREAS),
             )
+
+    def test_every_section_has_a_weekly_period_for_each_learning_area(self):
+        """
+        TC-STU-04 (class schedule) reads `ScheduleViewSet`, and the dataset
+        never wrote a ``Schedule`` at all before this seed phase — a student
+        verifying that the timetable "matches the student's actual
+        enrollment" against an empty table would be verifying nothing.
+        """
+        self.assertEqual(
+            Schedule.objects.count(),
+            len(seed_module.SECTION_PLAN) * len(seed_module.LEARNING_AREAS),
+        )
+        for section in Section.objects.all():
+            rows = Schedule.objects.filter(subject_assignment__section=section)
+            self.assertEqual(rows.count(), len(seed_module.LEARNING_AREAS))
+            # Two of the section's own periods must never share a slot.
+            collisions = (
+                rows.values("day_of_week", "start_time")
+                .annotate(n=Count("id"))
+                .filter(n__gt=1)
+            )
+            self.assertEqual(list(collisions), [])
+            for row in rows:
+                self.assertLess(row.start_time, row.end_time)
+                self.assertIn(
+                    row.day_of_week, ("mon", "tue", "wed", "thu", "fri")
+                )
+
+    def test_student_qa_section_has_periods_across_several_weekdays(self):
+        profile = StudentProfile.objects.get(user__email=QA_STUDENT_EMAIL)
+        rows = Schedule.objects.filter(
+            subject_assignment__section=profile.section
+        )
+        self.assertEqual(rows.count(), len(seed_module.LEARNING_AREAS))
+        self.assertGreaterEqual(
+            rows.values("day_of_week").distinct().count(), 3
+        )
 
     def test_exactly_three_grading_periods_named_term_1_to_3(self):
         year = AcademicYear.objects.get(is_current=True)

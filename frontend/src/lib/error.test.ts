@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest"
 import {
   getFieldError,
   getFieldErrors,
+  hydrateBlobError,
   isHttpError,
   normalizeApiError,
 } from "@/lib/error"
@@ -116,6 +117,56 @@ describe("normalizeApiError", () => {
 
     expect(isHttpError(error, 401)).toBe(true)
     expect(isHttpError(error, 400)).toBe(false)
+  })
+})
+
+describe("hydrateBlobError", () => {
+  it("reads the envelope back out of a blob error body", async () => {
+    // A failed export request asks for bytes, so the JSON envelope arrives
+    // as a Blob: without hydration the real cause is lost.
+    const error = axiosError(
+      400,
+      new Blob(
+        [
+          JSON.stringify(
+            envelopeBody(
+              "EXPORT_EMPTY",
+              "No data is available for this export."
+            )
+          ),
+        ],
+        { type: "application/json" }
+      )
+    )
+
+    await hydrateBlobError(error)
+
+    const normalized = normalizeApiError(error)
+    expect(normalized.code).toBe("EXPORT_EMPTY")
+    expect(normalized.message).toBe("No data is available for this export.")
+    expect(normalized.status).toBe(400)
+  })
+
+  it("leaves a non-JSON blob untouched and still reports the status", async () => {
+    const blob = new Blob(["<html>bad gateway</html>"], {
+      type: "text/html",
+    })
+    const error = axiosError(502, blob)
+
+    await hydrateBlobError(error)
+
+    expect(error.response?.data).toBe(blob)
+    const normalized = normalizeApiError(error)
+    expect(normalized.message).toContain("502")
+  })
+
+  it("does nothing for a non-blob body or a missing response", async () => {
+    const plain = axiosError(400, envelopeBody("ERROR", "Nope."))
+    await hydrateBlobError(plain)
+    expect(plain.response?.data).toMatchObject({ success: false })
+
+    const network = new AxiosError("Network Error", "NETWORK_ERROR")
+    await expect(hydrateBlobError(network)).resolves.toBeUndefined()
   })
 })
 

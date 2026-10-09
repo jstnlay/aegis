@@ -2,6 +2,7 @@ import {
   Bell,
   BookOpen,
   CalendarCheck,
+  CalendarDays,
   ClipboardCheck,
   ClipboardList,
   FileText,
@@ -94,6 +95,24 @@ const ATTENDANCE: NavItem = {
   label: "Attendance",
   icon: CalendarCheck,
   allowedRoles: ["student", "faculty"],
+  status: "available",
+}
+
+/**
+ * Class schedule (TC-STU-04 / FR-018).
+ *
+ * The Cycle 1 QA log recorded this as "missing feature: class schedule page is
+ * not available in the system navigation". The endpoint was never missing —
+ * `ScheduleViewSet` returns a student their own section's timetable — so this
+ * is the surface that was. Student only: faculty see the same rows through
+ * their own assignments and parent through `parent/academics`, neither of
+ * which is this page.
+ */
+const SCHEDULE: NavItem = {
+  route: "schedule",
+  label: "Schedule",
+  icon: CalendarDays,
+  allowedRoles: ["student"],
   status: "available",
 }
 
@@ -329,16 +348,33 @@ const FACULTY_ASSESSMENTS: NavItem = {
 }
 
 /**
- * Faculty bulk upload (Final_Revision objective 1.2.3).
+ * Faculty bulk upload + controlled downloads (Final_Revision objective 1.2.3;
+ * TC-FAC-18 / TC-FAC-19).
  *
  * Distinct from the admin "Imports & Exports" entry: that one is admin-only and
  * offers all four import types, while this is scoped to the two faculty may
- * upload (`ALL_FACULTY_IMPORT_TYPES`) and lists only the caller's own jobs.
+ * upload (`ALL_FACULTY_IMPORT_TYPES`), lists only the caller's own jobs, and
+ * offers only the two export types faculty may reach.
  */
 const FACULTY_IMPORT: NavItem = {
   route: "faculty/import",
-  label: "Batch Upload",
+  label: "Imports & Exports",
   icon: Upload,
+  allowedRoles: ["faculty"],
+  status: "available",
+}
+
+/**
+ * Advisory class roster + behavioral notes (TC-FAC-07 / TC-FAC-08).
+ *
+ * Faculty-only: the roster endpoint and the behavioral-note write endpoint
+ * are both scoped to the faculty role server-side, so this entry never
+ * appears for any other role.
+ */
+const FACULTY_ADVISORY: NavItem = {
+  route: "faculty/advisory",
+  label: "Advisory Class",
+  icon: Users,
   allowedRoles: ["faculty"],
   status: "available",
 }
@@ -462,7 +498,7 @@ const STUDENT_NAVIGATION: readonly NavGroup[] = [
   OVERVIEW_GROUP,
   {
     heading: "Learning",
-    items: [ACADEMICS, ATTENDANCE, STUDENT_ASSESSMENTS, REPORTS],
+    items: [ACADEMICS, SCHEDULE, ATTENDANCE, STUDENT_ASSESSMENTS, REPORTS],
   },
   {
     heading: "Communication",
@@ -505,6 +541,7 @@ const FACULTY_NAVIGATION: readonly NavGroup[] = [
     items: [
       ACADEMICS,
       ATTENDANCE,
+      FACULTY_ADVISORY,
       FACULTY_ASSESSMENTS,
       FACULTY_IMPORT,
       REPORTS,
@@ -627,11 +664,13 @@ export function getPageTitle(pathname: string): string {
     DASHBOARD,
     ACADEMICS,
     ATTENDANCE,
+    SCHEDULE,
     ASSESSMENTS,
     GUIDANCE_ASSESSMENTS,
     FACULTY_ASSESSMENTS,
     STUDENT_ASSESSMENTS,
     FACULTY_IMPORT,
+    FACULTY_ADVISORY,
     REPORTS,
     RISK_ALERTS,
     CONSULTATIONS,

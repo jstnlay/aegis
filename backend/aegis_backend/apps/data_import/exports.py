@@ -1,10 +1,12 @@
 """
-Controlled export service (Phase 8.8).
+Controlled export service (Phase 8.8; FR-016 advisory kind added with
+TC-FAC-20).
 
-Builds server-authorized, role-scoped querysets for the three authorized
-export kinds (grades / attendance / students) and renders them to CSV or
-XLSX.  Exports always operate on server-authorized querysets — never fetch
-unrestricted rows and filter afterward.
+Builds server-authorized, role-scoped querysets for the authorized export
+kinds (grades / attendance / students, plus the faculty-only advisory class
+summary) and renders them to CSV or XLSX.  Exports always operate on
+server-authorized querysets — never fetch unrestricted rows and filter
+afterward.
 
 Design lock-ins:
 - Students export is admin-only and anonymized by default (no email, DOB,
@@ -71,10 +73,27 @@ STUDENT_EXPORT_COLUMNS = [
     "is_active",
 ]
 
+# Faculty-only advisory class summary (FR-016 / TC-FAC-20). One row per
+# student in the caller's own class, with that student's attendance counts
+# and grade aggregate over the same scope.
+ADVISORY_EXPORT_COLUMNS = [
+    "student_id",
+    "student_name",
+    "grade_level",
+    "section",
+    "attendance_present",
+    "attendance_late",
+    "attendance_absent",
+    "attendance_total",
+    "grades_recorded",
+    "grade_average",
+]
+
 _COLUMN_MAP = {
     ExportType.GRADES: GRADE_EXPORT_COLUMNS,
     ExportType.ATTENDANCE: ATTENDANCE_EXPORT_COLUMNS,
     ExportType.STUDENTS: STUDENT_EXPORT_COLUMNS,
+    ExportType.ADVISORY: ADVISORY_EXPORT_COLUMNS,
 }
 
 
@@ -281,6 +300,74 @@ def _student_queryset():
     )
 
 
+def _advisory_queryset_for(user):
+    """
+    Build the faculty-only advisory class summary queryset.
+
+    One annotated row per student in the sections the caller advises or
+    teaches — the same scope the faculty roster uses. Every aggregate is
+    restricted to that class, so a student who also appears in another
+    faculty's section does not contribute their rows here.
+
+    A student with no attendance rows gets real zero counts (the class has
+    recorded none); a student with no scored grades gets a blank average,
+    never `0.00`, because "no grades recorded" and "an average of zero" are
+    different facts.
+    """
+    from django.db.models import Avg, Count, Q
+
+    from apps.accounts.models import StudentProfile
+    from apps.attendance.models import AttendanceRecord
+
+    fp = _profile(user)
+    if fp is None:
+        return StudentProfile.objects.none()
+
+    section_ids = _faculty_section_ids(fp)
+    if not section_ids:
+        return StudentProfile.objects.none()
+
+    attendance_scope = Q(attendance_records__section_id__in=section_ids)
+    grade_scope = Q(grades__subject_assignment__faculty=fp)
+
+    return (
+        StudentProfile.objects.filter(
+            enrollments__section_id__in=section_ids,
+            enrollments__is_active=True,
+        )
+        .distinct()
+        .select_related("user", "grade_level", "section")
+        .annotate(
+            attendance_present=Count(
+                "attendance_records",
+                filter=attendance_scope
+                & Q(attendance_records__status=AttendanceRecord.Status.PRESENT),
+                distinct=True,
+            ),
+            attendance_late=Count(
+                "attendance_records",
+                filter=attendance_scope
+                & Q(attendance_records__status=AttendanceRecord.Status.LATE),
+                distinct=True,
+            ),
+            attendance_absent=Count(
+                "attendance_records",
+                filter=attendance_scope
+                & Q(attendance_records__status=AttendanceRecord.Status.ABSENT),
+                distinct=True,
+            ),
+            attendance_total=Count(
+                "attendance_records", filter=attendance_scope, distinct=True
+            ),
+            grades_recorded=Count(
+                "grades", filter=grade_scope, distinct=True
+            ),
+            grade_average=Avg("grades__score", filter=grade_scope, distinct=True),
+        )
+        .order_by("user__last_name", "user__first_name", "student_id")
+    )
+
+
 def _student_full_name(sp):
     return sp.user.get_full_name().strip() or sp.student_id
 
@@ -334,10 +421,30 @@ def student_rows(queryset):
         }
 
 
+def advisory_rows(queryset):
+    """Yield per-student advisory class summary rows (FR-016 / TC-FAC-20)."""
+    for sp in queryset:
+        average = sp.grade_average
+        yield {
+            "student_id": sp.student_id,
+            "student_name": _student_full_name(sp),
+            "grade_level": sp.grade_level.name if sp.grade_level else "",
+            "section": sp.section.name if sp.section else "",
+            "attendance_present": sp.attendance_present,
+            "attendance_late": sp.attendance_late,
+            "attendance_absent": sp.attendance_absent,
+            "attendance_total": sp.attendance_total,
+            "grades_recorded": sp.grades_recorded,
+            # Blank rather than 0.00 when nothing is scored yet.
+            "grade_average": "" if average is None else f"{average:.2f}",
+        }
+
+
 _ROW_BUILDERS = {
     ExportType.GRADES: grade_rows,
     ExportType.ATTENDANCE: attendance_rows,
     ExportType.STUDENTS: student_rows,
+    ExportType.ADVISORY: advisory_rows,
 }
 
 
@@ -413,6 +520,16 @@ def export_queryset_for(export_type, user):
                 "Student export is available to administrators only.",
             )
         qs = _student_queryset()
+    elif export_type == ExportType.ADVISORY:
+        # Faculty-only: an advisory class summary is an aggregate of exactly
+        # one faculty member's own class, so there is nothing for another
+        # role (including admin) to read.
+        if user.role != "faculty":
+            raise ExportError(
+                ExportErrorCode.PERMISSION_DENIED,
+                "The advisory class summary is available to faculty only.",
+            )
+        qs = _advisory_queryset_for(user)
     else:
         raise ExportError(
             ExportErrorCode.UNSUPPORTED_EXPORT_TYPE,

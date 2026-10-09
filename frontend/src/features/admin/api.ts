@@ -96,6 +96,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useCallback, useMemo } from "react"
 
 import { apiClient } from "@/lib/api"
+import { filenameFromDisposition } from "@/lib/export"
 import { fetchAllPages } from "@/lib/pagination"
 
 /* ========================================================================== */
@@ -971,68 +972,14 @@ export function useCreateImportJob() {
   })
 }
 
-export type ExportKind = "grades" | "attendance" | "students"
-
-/**
- * Trigger a controlled export download.
- *
- * These are three separate GET endpoints returning a **file**, not a job
- * resource, so they are a download and not a query. `?file_format` is required
- * and anything other than csv/xlsx is rejected with a 400.
- *
- * `students` is admin-only; grades and attendance are available to staff.
- */
-export async function downloadExport(
-  kind: ExportKind,
-  format: "csv" | "xlsx"
-): Promise<void> {
-  const response = await apiClient.get(`/data-import/exports/${kind}/`, {
-    params: { file_format: format },
-    responseType: "blob",
-  })
-
-  const filename = filenameFromDisposition(
-    response.headers["content-disposition"]
-  )
-  const blobUrl = URL.createObjectURL(response.data as Blob)
-  try {
-    const anchor = document.createElement("a")
-    anchor.href = blobUrl
-    anchor.download = filename ?? `aegis-${kind}.${format}`
-    document.body.appendChild(anchor)
-    anchor.click()
-    anchor.remove()
-  } finally {
-    // Releasing the object URL is not optional: without it the downloaded blob
-    // is retained for the lifetime of the document.
-    URL.revokeObjectURL(blobUrl)
-  }
-}
-
-/**
- * Pull the filename out of a `Content-Disposition` header.
- *
- * The backend builds it with `build_content_disposition()`, which RFC 5987
- * encodes as `filename*=UTF-8''...`. The plain `filename="..."` parameter is
- * read as a fallback for the non-ASCII case.
- */
-export function filenameFromDisposition(
-  header: string | undefined | null
-): string | null {
-  if (!header) return null
-
-  const extended = /filename\*=UTF-8''([^;]+)/i.exec(header)
-  if (extended?.[1]) {
-    try {
-      return decodeURIComponent(extended[1])
-    } catch {
-      return extended[1]
-    }
-  }
-
-  const plain = /filename="([^"]+)"/i.exec(header)
-  return plain?.[1] ?? null
-}
+/* Controlled export downloads live in `@/lib/export` — the same endpoint is
+ * driven by the admin data page and the faculty import page. Re-exported
+ * here so existing admin imports keep working. */
+export {
+  downloadExport,
+  filenameFromDisposition,
+  type ExportKind,
+} from "@/lib/export"
 
 /* ========================================================================== */
 /* §6 Audit log — read-only                                                   */

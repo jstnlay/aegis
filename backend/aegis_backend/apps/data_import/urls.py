@@ -10,6 +10,7 @@ from django.urls import path
 from rest_framework.routers import DefaultRouter
 
 from .views import (
+    AdvisoryExportView,
     AttendanceExportView,
     GradesExportView,
     ImportJobViewSet,
@@ -37,5 +38,10 @@ urlpatterns = [
         "exports/students/",
         StudentsExportView.as_view(),
         name="export-students",
+    ),
+    path(
+        "exports/advisory/",
+        AdvisoryExportView.as_view(),
+        name="export-advisory",
     ),
 ]

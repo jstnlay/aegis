@@ -687,3 +687,74 @@ class FacultyCannotAccessUnrelatedSectionTest(AttendanceTestBase):
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+# ===========================================================================
+# TC-FAC-17: faculty summary counts must not be multiplied by joins
+# ===========================================================================
+
+
+class FacultySummaryCountTest(AttendanceTestBase):
+    """
+    `GET /attendance/summary/` groups by student and section.
+
+    The faculty scope used to be expressed as a join through
+    `section__subject_assignments__faculty`, a multi-valued relation. A
+    `.values().annotate()` over that filter groups on the wrong key, so the
+    endpoint returned one group per attendance record, each counting every
+    subject assignment in the section: a class with 3 records reported 24
+    (3 records x 8 assignments). The advisory class summary reads this
+    endpoint, so the page showed the same inflated numbers.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {self._get_token(self.faculty_user)}"
+        )
+        # Other faculty teaching the same section: the relation the old filter
+        # joined through, and what made the counts multiply.
+        for index in range(3):
+            Subject.objects.create(
+                name=f"Extra {index}", code=f"EXT-ATT-{index}",
+                grade_level=self.g7,
+            )
+        for index, subject in enumerate(
+            Subject.objects.filter(code__startswith="EXT-ATT-")
+        ):
+            SubjectAssignment.objects.create(
+                subject=subject, faculty=self.faculty2_profile,
+                section=self.section_a, academic_year=self.ay,
+            )
+
+    def test_summary_returns_one_row_per_student_with_real_counts(self):
+        response = self.client.get("/api/v1/attendance/summary/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        rows = [
+            entry for entry in response.data
+            if str(entry["student"]) == str(self.student_profile.id)
+        ]
+        # One row for the student in this section, not one row per record.
+        self.assertEqual(len(rows), 1)
+        row = rows[0]
+        # The three real records: 1 present, 1 absent, 1 late.
+        self.assertEqual(row["present_count"], 1)
+        self.assertEqual(row["absent_count"], 1)
+        self.assertEqual(row["late_count"], 1)
+        self.assertEqual(row["total_records"], 3)
+
+    def test_summary_scope_is_unchanged_for_other_faculty(self):
+        # The section scoping must still hide another faculty's section.
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {self._get_token(self.faculty2_user)}"
+        )
+        response = self.client.get("/api/v1/attendance/summary/")
+        rows = [
+            entry for entry in response.data
+            if str(entry["student"]) == str(self.student_profile.id)
+        ]
+        # faculty2 teaches section_a too now, so they still see the student,
+        # but only the records belonging to their visible sections.
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["total_records"], 3)

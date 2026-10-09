@@ -163,6 +163,31 @@ async function openSelect(trigger: HTMLElement) {
   fireEvent.keyDown(trigger, { key: "ArrowDown" })
 }
 
+/**
+ * Serves the shared list with the draft `a-2` carrying questions.
+ *
+ * Deploy is withheld on a question-less draft because the server 400s one, so
+ * any test that exercises the deploy control itself needs a draft that could
+ * actually be published.
+ */
+function stubDraftWithQuestions() {
+  const list = assessments.map((item) =>
+    item.id === "a-2" ? { ...item, question_count: 2 } : item
+  )
+  mockedFetchAllPages.mockImplementation(async (url: string) => {
+    if (url.includes("/assessments/assessments/")) {
+      return { count: list.length, results: list }
+    }
+    if (url.includes("/assessments/assessment-results/")) {
+      return { count: results.length, results }
+    }
+    if (url.includes("/assessments/assessment-questions/")) {
+      return { count: questions.length, results: questions }
+    }
+    return { count: 0, results: [] }
+  })
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   mockedFetchAllPages.mockImplementation(async (url: string) => {
@@ -903,6 +928,7 @@ describe("assessment authoring", () => {
 
   it("deploys a draft through the real deploy action", async () => {
     mockedPost.mockResolvedValue({ data: {} } as never)
+    stubDraftWithQuestions()
 
     renderPage()
     await screen.findByText("Behavior Review")
@@ -944,28 +970,32 @@ describe("assessment authoring", () => {
     ).toBeInTheDocument()
   })
 
-  it("surfaces the server refusal when deploy has no questions", async () => {
-    mockedPost.mockRejectedValue(
-      new Error("Cannot publish assessment without questions.")
-    )
-
+  it("holds deploy back on a question-less draft instead of inviting a 400", async () => {
     renderPage()
     await screen.findByText("Behavior Review")
 
     const draft = screen
       .getByText("Behavior Review")
       .closest("[data-assessment-id]") as HTMLElement
-    fireEvent.click(
-      within(draft).getByRole("button", { name: "Deploy Behavior Review" })
-    )
-
+    // a-2 is a draft with `question_count: 0`, which the server refuses to
+    // publish ("Cannot publish assessment without questions."). The control is
+    // withheld and the reason is stated, rather than firing a request the
+    // backend cannot accept.
+    const deployButton = within(draft).getByRole("button", {
+      name: "Deploy Behavior Review",
+    })
+    expect(deployButton).toBeDisabled()
     expect(
-      await screen.findByText(/Cannot publish assessment without questions/i)
+      within(draft).getByText(/add at least one question before deploying/i)
     ).toBeInTheDocument()
+
+    fireEvent.click(deployButton)
+    expect(mockedPost).not.toHaveBeenCalled()
   })
 
   it("surfaces the server refusal when already published", async () => {
     mockedPost.mockRejectedValue(new Error("Assessment is already published."))
+    stubDraftWithQuestions()
 
     renderPage()
     await screen.findByText("Behavior Review")

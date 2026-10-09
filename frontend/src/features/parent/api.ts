@@ -57,6 +57,7 @@ import { useQuery } from "@tanstack/react-query"
 
 import { apiClient } from "@/lib/api"
 import { fetchAllPages } from "@/lib/pagination"
+import type { RiskFactor } from "@/lib/risk-factor"
 
 /* -------------------------------------------------------------------------- */
 /* Child resolution                                                            */
@@ -369,7 +370,12 @@ export interface ParentRiskAlert {
   student: string
   student_name: string
   risk_level: string
-  risk_factors: string[]
+  /**
+   * The AI engine writes objects here and counselors write strings — the same
+   * field the guidance surface renders. Typed as `string[]` this used to hand
+   * React a raw object and unmount the page; see `@/lib/risk-factor`.
+   */
+  risk_factors: RiskFactor[]
   source: string
   status: string
   assigned_counselor_name: string | null

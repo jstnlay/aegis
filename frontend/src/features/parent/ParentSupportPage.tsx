@@ -36,6 +36,7 @@ import {
   type ParentRiskAlert,
 } from "@/features/parent/api"
 import { useDataTablePagination } from "@/components/ui/data-table-pagination"
+import { riskFactorLabel } from "@/lib/risk-factor"
 import {
   consultationStatusBadgeClass,
   riskLevelBadgeClass,
@@ -206,7 +207,13 @@ const alertColumns: readonly DataTableColumn<ParentRiskAlert>[] = [
         <ul className="space-y-0.5">
           {alert.risk_factors.map((factor, index) => (
             <li key={`${alert.id}-factor-${index}`} className="text-xs">
-              {factor}
+              {/*
+                The AI engine stores objects here (`{feature, value,
+                threshold, direction}`) and counselors store free text.
+                Rendering the raw entry used to hand React an object and
+                unmount the page.
+              */}
+              {riskFactorLabel(factor) || "Unlabelled factor"}
             </li>
           ))}
         </ul>

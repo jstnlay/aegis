@@ -22,10 +22,12 @@ import {
 } from "@/routes/pages/RoleLandingPage"
 import { StudentAssessmentsPage } from "@/features/student/StudentAssessmentsPage"
 import { StudentDashboard } from "@/features/student/StudentDashboard"
+import { StudentSchedulePage } from "@/features/student/StudentSchedulePage"
 import { ParentDashboard } from "@/features/parent/ParentDashboard"
 import { ParentAcademicsPage } from "@/features/parent/ParentAcademicsPage"
 import { ParentAssessmentsPage } from "@/features/parent/ParentAssessmentsPage"
 import { ParentSupportRoute } from "@/features/parent/ParentSupportRoute"
+import { FacultyAdvisoryPage } from "@/features/faculty/FacultyAdvisoryPage"
 import { FacultyAssessmentsPage } from "@/features/faculty/FacultyAssessmentsPage"
 import { FacultyDashboard } from "@/features/faculty/FacultyDashboard"
 import { FacultyImportPage } from "@/features/faculty/FacultyImportPage"
@@ -127,6 +129,21 @@ export const appRoutes: RouteObject[] = [
           },
           {
             /*
+             * Class schedule (TC-STU-04 / FR-018).
+             *
+             * `ScheduleViewSet` returns, for a student, only the schedules of
+             * their own section and is read-only for every non-admin role, so
+             * the page renders the rows the server chose and filters nothing.
+             */
+            path: "schedule",
+            element: (
+              <RequireRole allowedRoles={["student"]}>
+                <StudentSchedulePage />
+              </RequireRole>
+            ),
+          },
+          {
+            /*
              * Student assessments (objective 2.4).
              *
              * `AssessmentViewSet.get_queryset` returns, for a student, only
@@ -169,6 +186,20 @@ export const appRoutes: RouteObject[] = [
             element: (
               <RequireRole allowedRoles={["faculty"]}>
                 <FacultyImportPage />
+              </RequireRole>
+            ),
+          },
+          {
+            /*
+             * Advisory class roster + behavioral notes (TC-FAC-07 / 08).
+             * Faculty-only: the roster comes from the role-scoped enrollment
+             * queryset and `BehavioralNoteViewSet` accepts writes from
+             * `IsFacultyUser` alone, so no other role may land here.
+             */
+            path: "faculty/advisory",
+            element: (
+              <RequireRole allowedRoles={["faculty"]}>
+                <FacultyAdvisoryPage />
               </RequireRole>
             ),
           },

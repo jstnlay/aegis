@@ -88,6 +88,7 @@ from apps.academics.models import (
     Grade,
     GradeLevel,
     GradingPeriod,
+    Schedule,
     Section,
     Subject,
     SubjectAssignment,
@@ -682,6 +683,7 @@ class Command(BaseCommand):
             staff = self._seed_faculty(User, grade_levels)
             sections = self._seed_sections(academic_year, grade_levels, staff)
             assignments = self._seed_subject_assignments(academic_year, sections, subjects, staff)
+            self._seed_schedules(assignments)
             students = self._seed_students(User, grade_levels, sections)
             self._seed_enrollments(academic_year, students)
             profiles = self._seed_profiles(qa_users, staff, students)
@@ -1003,6 +1005,44 @@ class Command(BaseCommand):
                     {"faculty": staff["teacher_for"][(level_number, code)]},
                 )
                 assignments.setdefault(level_number, {})[code] = assignment
+        return assignments
+
+    def _seed_schedules(self, assignments):
+        """
+        One weekly class period per (section, learning area).
+
+        The Cycle 1 QA log recorded TC-STU-04 as "missing feature: class
+        schedule page is not available in the system navigation". The page now
+        exists, and this gives it rows to display: the dataset never wrote a
+        ``Schedule`` at all, so a student verifying that the timetable "matches
+        the student's actual enrollment" against an empty table would be
+        verifying nothing.
+
+        The slot table is deliberately collision-free within a section — the
+        day comes from ``index % 5`` and the slot from ``index // 5``, so the
+        eight learning areas land on eight distinct (day, start) pairs — and
+        identical across sections, the way a shared period structure works.
+        ``Schedule.clean()`` requires ``end_time > start_time``, which both
+        slots satisfy.
+        """
+        days = ("mon", "tue", "wed", "thu", "fri")
+        slots = ((time(7, 30), time(8, 30)), (time(9, 0), time(10, 0)))
+        for level_number, areas in assignments.items():
+            for index, (code, _name) in enumerate(LEARNING_AREAS):
+                start, end = slots[index // len(days)]
+                self._get_or_create(
+                    Schedule,
+                    "Schedule",
+                    {
+                        "subject_assignment": areas[code],
+                        "day_of_week": days[index % len(days)],
+                        "start_time": start,
+                    },
+                    {
+                        "end_time": end,
+                        "room": f"R{level_number}0{(index // len(days)) + 1}",
+                    },
+                )
         return assignments
 
     def _student_email(self, roster_index):

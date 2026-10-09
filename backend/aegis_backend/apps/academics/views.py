@@ -5,13 +5,16 @@ Provides scoped querysets per role and enforces both role-level
 and data-scope permissions as required by Phase 2 authorization rules.
 """
 
-from rest_framework import viewsets, status
+from rest_framework import generics, viewsets, status
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
 from core.permissions import (
     IsAdminUser,
     IsAdminOrReadOnly,
+    IsFacultyOrAdminUser,
+    IsFacultyOwnerOfGrade,
     IsFacultyUser,
     IsFacultyOwnerOfAssignment,
     IsStudentUser,
@@ -40,6 +43,7 @@ from .serializers import (
     GradingPeriodSerializer,
     ScheduleSerializer,
     SectionSerializer,
+    StudentProfileManageSerializer,
     SubjectAssignmentSerializer,
     SubjectSerializer,
 )
@@ -389,6 +393,60 @@ def models_Q_or_enrollment_sections(faculty_profile):
     return q
 
 
+def models_Q_or_advisory_student_profiles(faculty_profile):
+    """
+    Build a Q for the student profiles a faculty member may manage.
+
+    Same scope as the roster: a student is in scope when they have an
+    enrollment in a section the faculty advises or teaches.
+    """
+    from django.db.models import Q
+
+    return (
+        Q(enrollments__section__adviser=faculty_profile)
+        | Q(enrollments__section__subject_assignments__faculty=faculty_profile)
+    )
+
+
+# ---------------------------------------------------------------------------
+# Student profile management (FR-007)
+# ---------------------------------------------------------------------------
+
+
+class StudentProfileManageView(generics.RetrieveUpdateAPIView):
+    """
+    Retrieve / update an advisory student's profile (FR-007, TC-FAC-03/04).
+
+    - GET   /api/v1/academics/student-profiles/{id}/ — the profile to fill
+    - PATCH /api/v1/academics/student-profiles/{id}/ — save it
+
+    Admin sees every profile; faculty sees only students enrolled in the
+    sections they advise or teach. Every other role is outside this surface
+    entirely, so an out-of-scope or unknown profile answers 404 rather than
+    confirming that the record exists (TC-FAC-12's resource-hiding rule).
+    """
+
+    serializer_class = StudentProfileManageSerializer
+    permission_classes = [IsFacultyOrAdminUser]
+
+    def get_queryset(self):
+        from apps.accounts.models import StudentProfile
+
+        user = self.request.user
+        qs = StudentProfile.objects.select_related("user", "grade_level", "section")
+
+        if user.role == "admin":
+            return qs
+        if user.role == "faculty":
+            fp = _get_faculty_profile(user)
+            if fp is None:
+                return StudentProfile.objects.none()
+            return qs.filter(
+                models_Q_or_advisory_student_profiles(fp)
+            ).distinct()
+        return StudentProfile.objects.none()
+
+
 # ---------------------------------------------------------------------------
 # Grade ViewSet
 # ---------------------------------------------------------------------------
@@ -406,6 +464,8 @@ class GradeViewSet(viewsets.ModelViewSet):
 
     Custom actions:
     - POST /grades/encode/ — Faculty encodes a single grade
+    - POST /grades/batch-import/ — Faculty batch-imports grades
+    - POST /grades/{id}/finalize/ — Admin publishes a grade
     """
 
     serializer_class = GradeSerializer
@@ -413,6 +473,11 @@ class GradeViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ("encode", "batch_import"):
             return [IsFacultyUser()]
+        if self.action in ("update", "partial_update"):
+            # FR-011 / TC-FAC-11: an encoder may revise their own grade.
+            # TC-FAC-12: another faculty's grade is refused by the object
+            # check, which requires the unscoped queryset below.
+            return [IsFacultyOwnerOfGrade()]
         if self.action in ("finalize",):
             return [IsAdminUser()]
         return [IsAdminOrReadOnly()]
@@ -423,6 +488,7 @@ class GradeViewSet(viewsets.ModelViewSet):
             "student__user",
             "subject_assignment__subject",
             "subject_assignment__section",
+            "subject_assignment__faculty__user",
             "grading_period",
             "encoded_by__user",
         ).all()
@@ -441,6 +507,12 @@ class GradeViewSet(viewsets.ModelViewSet):
             qs = qs.filter(grading_period_id=grading_period_id)
         if grade_status:
             qs = qs.filter(status=grade_status)
+
+        # An update is authorized per object, not by queryset, so the
+        # unscoped rows must be reachable here for the object check to
+        # answer at all (`IsFacultyOwnerOfGrade` denies the out-of-scope one).
+        if self.action in ("update", "partial_update"):
+            return qs
 
         if user.role == "admin":
             return qs
@@ -466,6 +538,37 @@ class GradeViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         fp = _get_faculty_profile(self.request.user)
         serializer.save(encoded_by=fp)
+
+    def perform_update(self, serializer):
+        """
+        FR-011: faculty revise a grade's content, not its lifecycle.
+
+        `status` (draft → submitted → finalized) is a workflow a faculty
+        member does not own: finalizing is `POST /grades/{id}/finalize/`,
+        an administrator action, and `encoded_by` never changes after the
+        fact. Both stay writable for admin, whose edits go through the same
+        serializer.
+        """
+        if self.request.user.role == "faculty":
+            disputed = [
+                field
+                for field in ("status", "encoded_by")
+                if field in serializer.validated_data
+            ]
+            if disputed:
+                raise PermissionDenied(
+                    "Changing "
+                    + ", ".join(disputed)
+                    + " is an administrator operation."
+                )
+            # `POST /grades/{id}/finalize/` is admin-only, so a finalized grade
+            # is published: an encoder revising it after publication would
+            # silently change a number students and parents already read.
+            if serializer.instance.status == Grade.StatusChoices.FINALIZED:
+                raise PermissionDenied(
+                    "A finalized grade can no longer be changed."
+                )
+        serializer.save()
 
     @action(detail=False, methods=["post"], url_path="encode")
     def encode(self, request):

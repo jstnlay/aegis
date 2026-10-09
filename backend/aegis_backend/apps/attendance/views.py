@@ -68,11 +68,26 @@ def _get_linked_student_ids(user):
     )
 
 
-def _faculty_section_q(faculty_profile):
-    """Build a Q for sections visible to a faculty member."""
-    return Q(section__adviser=faculty_profile) | Q(
-        section__subject_assignments__faculty=faculty_profile
+def _faculty_section_ids(faculty_profile):
+    """
+    Section IDs a faculty may see (adviser or assigned subject).
+
+    Used instead of a join-based `Q(section__subject_assignments__faculty=...)`
+    wherever a queryset is counted: `subject_assignments` is a multi-valued
+    relation, so such a filter makes every `.values().annotate()` group on the
+    wrong key and multiply rows (TC-FAC-17 — a class with 15 records was
+    reported as 120, one group per record each counting all 8 subject
+    assignments in the section).
+    """
+    from apps.academics.models import Section
+
+    advised = Section.objects.filter(adviser=faculty_profile).values_list(
+        "id", flat=True
     )
+    assigned = faculty_profile.subject_assignments.values_list(
+        "section_id", flat=True
+    )
+    return set(advised) | set(assigned)
 
 
 # ---------------------------------------------------------------------------
@@ -140,7 +155,11 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
             fp = _get_faculty_profile(user)
             if fp is None:
                 return AttendanceRecord.objects.none()
-            return qs.filter(_faculty_section_q(fp)).distinct()
+            # An id-based scope, not the join-based Q: `GET /summary/` groups by
+            # student and section, and a multi-valued relation in that filter
+            # makes every group count the joined rows (TC-FAC-17 — a class of
+            # 15 records was reported as 120).
+            return qs.filter(section_id__in=_faculty_section_ids(fp))
         if user.role == "student":
             sp = _get_student_profile(user)
             if sp is None:

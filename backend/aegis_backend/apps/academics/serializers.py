@@ -4,6 +4,8 @@ Academics serializers.
 
 from rest_framework import serializers
 
+from apps.accounts.models import StudentProfile
+
 from .models import (
     AcademicYear,
     Enrollment,
@@ -141,6 +143,66 @@ class GradingPeriodSerializer(serializers.ModelSerializer):
                 {"end_date": "End date cannot be after the academic year end date."}
             )
         return data
+
+
+class StudentProfileManageSerializer(serializers.ModelSerializer):
+    """
+    Faculty write surface for an advisory student's profile (FR-007).
+
+    Only the fields an adviser legitimately maintains are writable, and each
+    one is required: the QA log treats a profile update that arrives
+    incomplete as an invalid submission that must not be stored
+    (TC-FAC-04), so a partially-filled advisory record is rejected here
+    rather than saved.
+
+    Identity and enrollment bookkeeping stay out of an adviser's scope and
+    are read-only: the school-assigned `student_id`, `enrollment_date`, the
+    linked `User` account, and `is_active` (an administrator decision).
+    """
+
+    student_name = serializers.CharField(source="user.full_name", read_only=True)
+
+    grade_level = serializers.PrimaryKeyRelatedField(
+        queryset=GradeLevel.objects.all()
+    )
+    section = serializers.PrimaryKeyRelatedField(queryset=Section.objects.all())
+    # Blank is not "clear the value": a whitespace-only guardian contact is
+    # the same incomplete record the QA log rejects.
+    guardian_contact = serializers.CharField(
+        max_length=StudentProfile._meta.get_field("guardian_contact").max_length
+    )
+    date_of_birth = serializers.DateField()
+
+    class Meta:
+        model = StudentProfile
+        fields = (
+            "id",
+            "student_name",
+            "student_id",
+            "grade_level",
+            "section",
+            "guardian_contact",
+            "date_of_birth",
+            "is_active",
+        )
+        read_only_fields = ("id", "student_id", "is_active")
+
+    def validate_section(self, value):
+        grade_level = self.initial_data.get("grade_level") or (
+            self.instance.grade_level_id if self.instance else None
+        )
+        if grade_level and str(grade_level) != str(value.grade_level_id):
+            raise serializers.ValidationError(
+                "Section does not belong to the selected grade level."
+            )
+        return value
+
+    def validate_date_of_birth(self, value):
+        from django.utils import timezone
+
+        if value > timezone.localdate():
+            raise serializers.ValidationError("Date of birth cannot be in the future.")
+        return value
 
 
 class EnrollmentSerializer(serializers.ModelSerializer):

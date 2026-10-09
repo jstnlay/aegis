@@ -129,9 +129,25 @@ describe("PH11.7 domain routes", () => {
       marker: /Attendance records tied to you/i,
     },
     {
+      // TC-STU-04. The harness mocks every list as empty, so the marker is
+      // the schedule page's own empty state — a body no other route renders.
+      role: "student",
+      path: "/app/schedule",
+      marker: /No class periods are on record/i,
+    },
+    {
       role: "faculty",
       path: "/app/attendance",
       marker: /Take attendance/i,
+    },
+    {
+      // TC-FAC-03/04/07/08/17. The harness mocks every list as empty, so the
+      // marker is the advisory page's own class-summary description — a body
+      // no other route renders, and one that appears exactly once (the roster
+      // and summary share the same empty-state text).
+      role: "faculty",
+      path: "/app/faculty/advisory",
+      marker: /Counts are attendance records taken/i,
     },
   ]
 
@@ -146,46 +162,47 @@ describe("PH11.7 domain routes", () => {
     }
   )
 
-  it("redirects a parent away from the student-only attendance route", async () => {
+  it("tells a parent the student-only attendance route is restricted", async () => {
     authState.user = makeUser("parent")
     renderAt("/app/attendance")
 
-    // RequireRole bounces to /app -> dashboard -> parent dashboard.
+    // RequireRole stays on the URL and says why (TC-SYS-07): no silent bounce
+    // to the dashboard, and none of the route's content.
     expect(
-      await screen.findByRole("heading", { name: /Parent Portal/i })
+      await screen.findByRole("heading", { name: /Access restricted/i })
     ).toBeInTheDocument()
-    await waitFor(() =>
-      expect(screen.queryByText(/Take attendance/i)).not.toBeInTheDocument()
-    )
+    expect(screen.queryByText(/Take attendance/i)).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole("heading", { name: /Parent Portal/i })
+    ).not.toBeInTheDocument()
   })
 
-  it("redirects guidance away from Academics", async () => {
+  it("tells guidance the Academics route is restricted", async () => {
     authState.user = makeUser("guidance")
     renderAt("/app/academics")
 
     expect(
-      await screen.findByRole("heading", { name: /Guidance Center/i })
+      await screen.findByRole("heading", { name: /Access restricted/i })
     ).toBeInTheDocument()
-    await waitFor(() =>
-      expect(screen.queryByText(/Encode a grade/i)).not.toBeInTheDocument()
-    )
+    expect(screen.queryByText(/Encode a grade/i)).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole("heading", { name: /Guidance Center/i })
+    ).not.toBeInTheDocument()
   })
 
-  it("bounces admin off the student/faculty academics route", async () => {
+  it("tells admin the student/faculty academics route is restricted", async () => {
     /*
      * PH11.9 removed `admin` from this route. It served
      * `AcademicsLandingPage`, a placeholder that pointed admin at "the
      * Administration section of this workspace" — a section that had no routes
-     * at all. Admin now has real pages under /app/admin/*, so RequireRole sends
-     * it to its own dashboard instead.
+     * at all. Admin now has real pages under /app/admin/*, and hitting this
+     * URL as admin gets the restricted message rather than either of those.
      */
     authState.user = makeUser("admin")
     renderAt("/app/academics")
 
     expect(
-      await screen.findByRole("heading", {
-        name: ROLE_CASES.find((c) => c.role === "admin")!.heading,
-      })
+      await screen.findByRole("heading", { name: /Access restricted/i })
     ).toBeInTheDocument()
     // Neither the placeholder copy nor the student grade-record surface.
     expect(
@@ -194,6 +211,44 @@ describe("PH11.7 domain routes", () => {
     expect(
       screen.queryByText(/Grades appear here once they are finalized/i)
     ).not.toBeInTheDocument()
+  })
+
+  it("keeps the student schedule route off every other role", async () => {
+    // TC-STU-04's route is `student`-only, so a direct URL from any other role
+    // gets the same restricted message as every other gated route.
+    for (const role of ["parent", "faculty", "guidance", "admin"] as const) {
+      authState.user = makeUser(role)
+      const view = renderAt("/app/schedule")
+
+      expect(
+        await screen.findByRole("heading", { name: /Access restricted/i }),
+        role
+      ).toBeInTheDocument()
+      expect(
+        screen.queryByText(/No class periods are on record/i)
+      ).not.toBeInTheDocument()
+
+      view.unmount()
+    }
+  })
+
+  it("keeps the faculty advisory route off every other role", async () => {
+    // TC-FAC-03/04: the advisory surface is faculty-only, so a direct URL from
+    // any other role gets the restricted message and none of its content.
+    for (const role of ["student", "parent", "guidance", "admin"] as const) {
+      authState.user = makeUser(role)
+      const view = renderAt("/app/faculty/advisory")
+
+      expect(
+        await screen.findByRole("heading", { name: /Access restricted/i }),
+        role
+      ).toBeInTheDocument()
+      expect(
+        screen.queryByText(/Counts are attendance records taken/i)
+      ).not.toBeInTheDocument()
+
+      view.unmount()
+    }
   })
 
   it("keeps the student and faculty academics route open to both roles", async () => {
@@ -399,7 +454,7 @@ describe("PH11.8 guidance routes", () => {
   )
 
   it.each(ADMIN_ROUTES)(
-    "redirects a non-admin role away from $path",
+    "tells a non-admin role that $path is restricted",
     async ({ path, marker }) => {
       for (const role of [
         "student",
@@ -411,13 +466,10 @@ describe("PH11.8 guidance routes", () => {
         const view = renderAt(path)
 
         expect(
-          await screen.findByRole("heading", {
-            name: ROLE_CASES.find((c) => c.role === role)!.heading,
-          })
+          await screen.findByRole("heading", { name: /Access restricted/i }),
+          role
         ).toBeInTheDocument()
-        await waitFor(() =>
-          expect(screen.queryByText(marker)).not.toBeInTheDocument()
-        )
+        expect(screen.queryByText(marker)).not.toBeInTheDocument()
 
         view.unmount()
       }
@@ -509,20 +561,17 @@ describe("PH11.8 guidance routes", () => {
   )
 
   it.each(PARENT_ROUTES)(
-    "redirects a non-parent role away from $path",
+    "tells a non-parent role that $path is restricted",
     async ({ path, marker }) => {
       for (const role of ["student", "faculty", "guidance", "admin"] as const) {
         authState.user = makeUser(role)
         const view = renderAt(path)
 
         expect(
-          await screen.findByRole("heading", {
-            name: ROLE_CASES.find((c) => c.role === role)!.heading,
-          })
+          await screen.findByRole("heading", { name: /Access restricted/i }),
+          role
         ).toBeInTheDocument()
-        await waitFor(() =>
-          expect(screen.queryByText(marker)).not.toBeInTheDocument()
-        )
+        expect(screen.queryByText(marker)).not.toBeInTheDocument()
 
         view.unmount()
       }
@@ -558,21 +607,18 @@ describe("PH11.8 guidance routes", () => {
   })
 
   it.each(BLOCKED_FOR_OTHERS)(
-    "redirects a non-guidance role away from $path",
+    "tells a non-guidance role that $path is restricted",
     async ({ path, marker }) => {
       for (const role of OTHER_ROLES) {
         authState.user = makeUser(role)
         const view = renderAt(path)
 
-        // RequireRole bounces to the caller's own dashboard.
+        // RequireRole stays on the URL and explains the mismatch.
         expect(
-          await screen.findByRole("heading", {
-            name: ROLE_CASES.find((c) => c.role === role)!.heading,
-          })
+          await screen.findByRole("heading", { name: /Access restricted/i }),
+          role
         ).toBeInTheDocument()
-        await waitFor(() =>
-          expect(screen.queryByText(marker)).not.toBeInTheDocument()
-        )
+        expect(screen.queryByText(marker)).not.toBeInTheDocument()
 
         view.unmount()
       }
@@ -581,15 +627,13 @@ describe("PH11.8 guidance routes", () => {
 
   it("keeps the guidance assessments route away from faculty and admin", async () => {
     // /app/assessments resolves to the guidance page only. Faculty and admin
-    // keep a planned nav entry rather than a link that would bounce.
+    // keep a planned nav entry rather than a link that would hit the gate.
     for (const role of ["faculty", "admin"] as const) {
       authState.user = makeUser(role)
       const view = renderAt("/app/assessments")
 
       expect(
-        await screen.findByRole("heading", {
-          name: ROLE_CASES.find((c) => c.role === role)!.heading,
-        })
+        await screen.findByRole("heading", { name: /Access restricted/i })
       ).toBeInTheDocument()
       expect(
         screen.queryByText(/assessments you created/i)
@@ -676,13 +720,14 @@ describe("role dashboard routes", () => {
     }
   )
 
-  it("redirects a role to its own dashboard when it hits another role's route", async () => {
+  it("tells a role it is restricted from another role's dashboard", async () => {
     authState.user = makeUser("student")
     renderAt("/app/dashboard/admin")
 
-    // RequireRole bounces to /app -> dashboard -> student dashboard.
+    // RequireRole keeps the URL and renders the restricted message; the admin
+    // dashboard body never mounts.
     expect(
-      await screen.findByRole("heading", { name: /Student Dashboard/i })
+      await screen.findByRole("heading", { name: /Access restricted/i })
     ).toBeInTheDocument()
     await waitFor(() =>
       expect(

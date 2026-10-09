@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from "react"
+import { useMemo, useState, type ReactNode } from "react"
 import { Link, useParams } from "react-router-dom"
 
 import { Badge } from "@/components/ui/badge"
@@ -10,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { EmptyState, ErrorNote } from "@/components/feedback/Feedback"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
@@ -42,10 +43,12 @@ import {
   type BehavioralNote,
   type Consultation,
   type GuidanceAssessmentResult,
+  type GuidanceReport,
   type Intervention,
   type RiskAlert,
   type RiskLevel,
 } from "@/features/guidance/api"
+import { downloadCsv } from "@/lib/export"
 import { normalizeApiError } from "@/lib/error"
 import {
   consultationStatusBadgeClass,
@@ -106,19 +109,25 @@ function Section({
   title,
   description,
   children,
+  actions,
 }: {
   title: string
   description?: string
   children: ReactNode
+  /** Section-level actions, rendered next to the title. */
+  actions?: ReactNode
 }) {
   return (
     <Card>
       <CardHeader>
-        <div className="space-y-1">
-          <CardTitle>{title}</CardTitle>
-          {description ? (
-            <CardDescription>{description}</CardDescription>
-          ) : null}
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="space-y-1">
+            <CardTitle>{title}</CardTitle>
+            {description ? (
+              <CardDescription>{description}</CardDescription>
+            ) : null}
+          </div>
+          {actions}
         </div>
       </CardHeader>
       <CardContent className="space-y-3">{children}</CardContent>
@@ -693,11 +702,199 @@ export function StudentProfilePage() {
 
       <Separator />
 
+      <GuidanceReportSection report={reportQuery.data} />
+
+      <Separator />
+
       <p className="text-xs text-muted-foreground">
         Risk alerts, grades, attendance, and behavioral notes are school-wide
         surfaces. Consultations and interventions are private to you, so a
         colleague&apos;s records never appear here.
       </p>
+    </div>
+  )
+}
+
+/**
+ * The individual student guidance report (TC-GUI-08 / TC-GUI-09).
+ *
+ * `GET /guidance/reports/student/{id}/` is the report itself: the server
+ * aggregates the student's behavioral notes, consultations, interventions
+ * and risk-alert history in one call. This section renders that aggregate
+ * and offers it as a file, so "generate a report" and "export the report"
+ * are the same data the counselor is already authorized to read — nothing
+ * is recomputed or padded here.
+ *
+ * The consultation and intervention blocks are school-wide by design (the
+ * view scopes them by student only), so they are labelled as such rather
+ * than presented next to "yours" and read as one counselor's caseload.
+ */
+function GuidanceReportSection({
+  report,
+}: {
+  report: GuidanceReport | undefined
+}) {
+  const [error, setError] = useState<string | null>(null)
+
+  const download = () => {
+    if (!report) return
+    setError(null)
+    try {
+      const rows: string[][] = [
+        ["student_id", "student_name", "section", "metric", "value"],
+        [
+          report.student_id_code,
+          report.student_name,
+          "",
+          "behavioral_positive",
+          String(report.behavioral_note_counts.positive ?? 0),
+        ],
+        [
+          report.student_id_code,
+          report.student_name,
+          "",
+          "behavioral_warning",
+          String(report.behavioral_note_counts.warning ?? 0),
+        ],
+        [
+          report.student_id_code,
+          report.student_name,
+          "",
+          "behavioral_incident",
+          String(report.behavioral_note_counts.incident ?? 0),
+        ],
+        [
+          report.student_id_code,
+          report.student_name,
+          "",
+          "consultations_all_counselors",
+          String(report.consultation_summary.total),
+        ],
+        [
+          report.student_id_code,
+          report.student_name,
+          "",
+          "interventions_all_counselors",
+          String(report.intervention_summary.total),
+        ],
+        [
+          report.student_id_code,
+          report.student_name,
+          "",
+          "interventions_active",
+          String(report.intervention_summary.active),
+        ],
+        [
+          report.student_id_code,
+          report.student_name,
+          "",
+          "risk_alerts_on_record",
+          String(report.risk_alert_history.length),
+        ],
+      ]
+      downloadCsv(`aegis_guidance_report_${report.student_id_code}.csv`, rows)
+    } catch (caught) {
+      setError(normalizeApiError(caught).message)
+    }
+  }
+
+  return (
+    <Section
+      title="Guidance report"
+      description="The server's aggregate for this student: behavioral notes, consultations, interventions and risk-alert history in one view."
+      actions={
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={!report}
+          onClick={download}
+        >
+          Download report (CSV)
+        </Button>
+      }
+    >
+      {error ? <ErrorNote message={error} /> : null}
+      {!report ? (
+        <EmptyState message="The guidance report for this student is not available." />
+      ) : (
+        <div className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <ReportStat
+              label="Positive notes"
+              value={report.behavioral_note_counts.positive ?? 0}
+            />
+            <ReportStat
+              label="Warning notes"
+              value={report.behavioral_note_counts.warning ?? 0}
+            />
+            <ReportStat
+              label="Incident notes"
+              value={report.behavioral_note_counts.incident ?? 0}
+            />
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-md border border-border p-3">
+              <div className="text-xs text-muted-foreground">
+                Consultations (all counselors)
+              </div>
+              <div className="tabular-nums text-xl font-semibold">
+                {report.consultation_summary.total}
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                {Object.entries(report.consultation_summary.by_status)
+                  .map(([key, value]) => `${key}: ${value}`)
+                  .join(" · ") || "No sessions on record."}
+              </div>
+            </div>
+            <div className="rounded-md border border-border p-3">
+              <div className="text-xs text-muted-foreground">
+                Interventions (all counselors)
+              </div>
+              <div className="tabular-nums text-xl font-semibold">
+                {report.intervention_summary.total}
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                {`active ${report.intervention_summary.active} · completed ${report.intervention_summary.completed} · cancelled ${report.intervention_summary.cancelled}`}
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <h4 className="text-sm font-medium">Risk alert history</h4>
+            {report.risk_alert_history.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No risk alerts on record for this student.
+              </p>
+            ) : (
+              <ul className="mt-2 space-y-1">
+                {report.risk_alert_history.map((alert) => (
+                  <li
+                    key={alert.id}
+                    className="flex flex-wrap items-center gap-2 text-sm"
+                  >
+                    <Badge variant="secondary">{alert.risk_level}</Badge>
+                    <span>{alert.status}</span>
+                    <span className="text-muted-foreground">
+                      {alert.source} · {alert.generated_at.slice(0, 10)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
+    </Section>
+  )
+}
+
+function ReportStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-md border border-border p-3">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="tabular-nums text-xl font-semibold">{value}</div>
     </div>
   )
 }

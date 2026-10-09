@@ -208,6 +208,38 @@ export function isHttpError(error: unknown, status: number): boolean {
 }
 
 /**
+ * Reads a blob error body back into JSON before normalization.
+ *
+ * File downloads ask for `responseType: "blob"`, so a failed export arrives
+ * as bytes rather than an object. Without this, normalizeApiError would
+ * report "Request failed with status 400." for a body that names the real
+ * cause (e.g. EXPORT_EMPTY's "No data is available for this export.").
+ *
+ * Mutates `error.response.data` in place when the body parses as the
+ * backend envelope; leaves everything untouched otherwise.
+ */
+export async function hydrateBlobError(error: AxiosError): Promise<void> {
+  const data = error.response?.data
+  if (!(data instanceof Blob)) return
+
+  let text: string
+  try {
+    text = await data.text()
+  } catch {
+    return
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(text)
+    if (envelopeOf(parsed) && error.response) {
+      error.response.data = parsed
+    }
+  } catch {
+    // Not JSON (an HTML error page from a proxy, etc.): keep the blob.
+  }
+}
+
+/**
  * Structured field errors from a 400 VALIDATION_ERROR envelope
  * (`details` is the DRF serializer error dict), for inline form display.
  */

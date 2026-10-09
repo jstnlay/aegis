@@ -354,6 +354,44 @@ export function useEncodeGrade() {
   })
 }
 
+/**
+ * `GradeUpdateSerializer` — the content-only write surface of
+ * `PATCH /grades/{id}/`. `status` and `encoded_by` are intentionally absent:
+ * the server refuses either with 403, so a form that offered them could only
+ * produce a refusal.
+ */
+export interface GradeUpdatePayload {
+  score?: number | null
+  letter_grade?: string | null
+  remarks?: string | null
+}
+
+/**
+ * FR-011 — revises one of the faculty member's own encoded grades.
+ *
+ * The student's own view is backed by the same rows, so both keys are
+ * invalidated on success.
+ */
+export function useUpdateGrade() {
+  const queryClient = useQueryClient()
+  return useMutation<Grade, Error, { id: string; payload: GradeUpdatePayload }>(
+    {
+      mutationFn: async ({ id, payload }) => {
+        const { data } = await apiClient.patch<GradeWireRecord>(
+          `/academics/grades/${id}/`,
+          payload
+        )
+        return mapGrade(data)
+      },
+      onSuccess: () => {
+        void queryClient.invalidateQueries({
+          queryKey: ["academics", "grades"],
+        })
+      },
+    }
+  )
+}
+
 /* -------------------------------------------------------------------------- */
 /* Derived helpers shared by the page                                         */
 /* -------------------------------------------------------------------------- */

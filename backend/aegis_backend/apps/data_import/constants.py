@@ -241,11 +241,17 @@ class ExportType:
     GRADES = "grades"
     ATTENDANCE = "attendance"
     STUDENTS = "students"
+    # FR-016 / TC-FAC-20: the advisory class summary is a per-student
+    # aggregate over a faculty member's own class, not a table dump. It is
+    # deliberately outside `ALL`: that set is the administrator authority
+    # list, and "advisory class" has no meaning outside a faculty profile.
+    ADVISORY = "advisory"
 
     CHOICES = (
         (GRADES, "Grades"),
         (ATTENDANCE, "Attendance"),
         (STUDENTS, "Students"),
+        (ADVISORY, "Advisory class summary"),
     )
 
     ALL = frozenset((GRADES, ATTENDANCE, STUDENTS))
@@ -272,20 +278,23 @@ EXPORT_EXTENSIONS = frozenset({".csv", ".xlsx"})
 # Export role authority matrix (PH8.8)
 # ---------------------------------------------------------------------------
 #
-#   role      | grades export | attendance export | students export
-#   ----------+---------------+-------------------+----------------
-#   faculty   | own subjects  | advisory/assigned | —
-#   admin     | ✓             | ✓                 | ✓
-#   guidance  | read-only*    | read-only*        | —
-#   student   | own rows      | own rows          | —
-#   parent    | linked child  | linked child      | —
+#   role      | grades export | attendance export | students export | advisory
+#   ----------+---------------+---------------+----------------+----------
+#   faculty   | own subjects  | advisory/assigned | —              | own class
+#   admin     | ✓             | ✓                 | ✓              | —
+#   guidance  | read-only*    | read-only*        | —              | —
+#   student   | own rows      | own rows          | —              | —
+#   parent    | linked child  | linked child      | —              | —
 #
 # *Guidance scope matches existing guidance read behavior.
-# Students export is admin-only.
+# Students export is admin-only. The advisory export is faculty-only: it is
+# an aggregate of exactly one class, and nobody else's class exists.
 
 ADMIN_ONLY_EXPORT_TYPES = frozenset({ExportType.STUDENTS})
 ALL_ADMIN_EXPORT_TYPES = frozenset(ExportType.ALL)
-ALL_FACULTY_EXPORT_TYPES = frozenset({ExportType.GRADES, ExportType.ATTENDANCE})
+ALL_FACULTY_EXPORT_TYPES = frozenset(
+    {ExportType.GRADES, ExportType.ATTENDANCE, ExportType.ADVISORY}
+)
 
 
 # ---------------------------------------------------------------------------

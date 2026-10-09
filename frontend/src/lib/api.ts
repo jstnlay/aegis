@@ -1,7 +1,7 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from "axios"
 
 import { tokenStorage } from "@/lib/auth-storage"
-import { normalizeApiError } from "@/lib/error"
+import { hydrateBlobError, normalizeApiError } from "@/lib/error"
 
 /**
  * Centralized HTTP layer for the frozen AEGIS API contract.
@@ -120,6 +120,12 @@ function runSessionExpiredHandlers(): void {
 apiClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
+    // File downloads request `responseType: "blob"`, so a failed export
+    // arrives as bytes: read the JSON envelope back out before normalizing,
+    // otherwise EXPORT_EMPTY's "No data is available…" collapses into
+    // "Request failed with status 400."
+    await hydrateBlobError(error)
+
     const original = error.config as
       (InternalAxiosRequestConfig & { _retry?: boolean }) | undefined
     if (!original) return Promise.reject(normalizeApiError(error))

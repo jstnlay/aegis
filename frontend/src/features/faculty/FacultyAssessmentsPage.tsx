@@ -742,23 +742,37 @@ export function FacultyAssessmentsPage() {
                         same accessible name. The label names the assessment and
                         still contains the visible "Deploy" (WCAG 2.5.3). */}
                     {!assessment.is_published ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        disabled={deploy.isPending}
-                        aria-label={
-                          deploy.isPending &&
+                      /*
+                       * The server 400s a draft without questions, so the
+                       * control is withheld until one exists and the reason is
+                       * stated in text instead of left to a failed request.
+                       */
+                      <>
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={
+                            deploy.isPending || assessment.question_count === 0
+                          }
+                          aria-label={
+                            deploy.isPending &&
+                            deploy.variables?.id === assessment.id
+                              ? `Deploying ${assessment.title}`
+                              : `Deploy ${assessment.title}`
+                          }
+                          onClick={() => deploy.mutate({ id: assessment.id })}
+                        >
+                          {deploy.isPending &&
                           deploy.variables?.id === assessment.id
-                            ? `Deploying ${assessment.title}`
-                            : `Deploy ${assessment.title}`
-                        }
-                        onClick={() => deploy.mutate({ id: assessment.id })}
-                      >
-                        {deploy.isPending &&
-                        deploy.variables?.id === assessment.id
-                          ? "Deploying…"
-                          : "Deploy"}
-                      </Button>
+                            ? "Deploying…"
+                            : "Deploy"}
+                        </Button>
+                        {assessment.question_count === 0 ? (
+                          <p className="text-xs text-muted-foreground">
+                            Add at least one question before deploying.
+                          </p>
+                        ) : null}
+                      </>
                     ) : (
                       /* `role="status"`: a successful deploy was previously only
                          conveyed by the button turning into plain text, which is

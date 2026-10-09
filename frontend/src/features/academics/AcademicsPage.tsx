@@ -46,6 +46,7 @@ import {
   useGradingPeriods,
   useStudentGrades,
   useSubjectAssignments,
+  useUpdateGrade,
   type Grade,
   type GradeStatus,
 } from "@/features/academics/api"
@@ -53,6 +54,15 @@ import { useAuth } from "@/features/auth/AuthContext"
 import { useStudentProfileId } from "@/features/student/api"
 import { AcademicsLandingPage } from "@/routes/pages/AcademicsLandingPage"
 import { getFieldError, normalizeApiError } from "@/lib/error"
+import { Field } from "@/components/ui/form-field"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 /* -------------------------------------------------------------------------- */
 /* Shared pieces                                                              */
@@ -111,10 +121,16 @@ function GradeTable({
   grades,
   caption,
   showStudent = false,
+  onEditGrade,
 }: {
   grades: Grade[]
   caption: string
   showStudent?: boolean
+  /**
+   * Omitted for every read-only surface (the student record). Present,
+   * a faculty member can open the edit form for one of their own grades.
+   */
+  onEditGrade?: (grade: Grade) => void
 }) {
   return (
     <Table scrollLabel={caption}>
@@ -143,6 +159,7 @@ function GradeTable({
             Letter
           </TableHead>
           <TableHead scope="col">Status</TableHead>
+          {onEditGrade ? <TableHead scope="col">Update</TableHead> : null}
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -190,6 +207,18 @@ function GradeTable({
             <TableCell>
               <StatusBadge status={grade.status} />
             </TableCell>
+            {onEditGrade ? (
+              <TableCell>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onEditGrade(grade)}
+                >
+                  Edit
+                </Button>
+              </TableCell>
+            ) : null}
           </TableRow>
         ))}
       </TableBody>
@@ -633,6 +662,7 @@ function GradeEncodeForm({
 function FacultyAcademics() {
   const gradesQuery = useFacultyGrades()
   const [statusFilter, setStatusFilter] = useState<GradeStatus | "all">("all")
+  const [editingGrade, setEditingGrade] = useState<Grade | null>(null)
 
   const grades = useMemo(() => gradesQuery.data ?? [], [gradesQuery.data])
   const counts = useMemo(() => countByStatus(grades), [grades])
@@ -658,10 +688,9 @@ function FacultyAcademics() {
       >
         <Lock className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
         <p>
-          Encoded grades are saved as <strong>draft</strong>. This API has no
-          edit, submit, or finalize transition for faculty, so a draft cannot be
-          changed or released from this page &mdash; administration finalizes
-          submitted results.
+          Encoded grades are saved as <strong>draft</strong>. You can update the
+          score, letter grade and remarks of your own records; moving a grade to
+          submitted or finalized stays with administration.
         </p>
       </div>
 
@@ -728,10 +757,16 @@ function FacultyAcademics() {
               grades={visibleGrades}
               showStudent
               caption={`${visibleGrades.length} of ${grades.length} grade records.`}
+              onEditGrade={setEditingGrade}
             />
           )}
         </CardContent>
       </Card>
+
+      <GradeEditDialog
+        grade={editingGrade}
+        onClose={() => setEditingGrade(null)}
+      />
 
       <div className="flex items-start gap-2 rounded-md border border-border bg-muted/60 p-3 text-sm text-muted-foreground">
         <Info className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
@@ -741,6 +776,132 @@ function FacultyAcademics() {
         </p>
       </div>
     </div>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/* Grade update (FR-011, TC-FAC-11 / TC-FAC-12)                                */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The content-only edit form for one encoded grade.
+ *
+ * The API's write surface for a faculty member is the grade's content —
+ * score, letter grade, remarks — so those are the only controls here. The
+ * lifecycle (`draft → submitted → finalized`) and the encoder never move
+ * through this form: the backend answers 403 to either, and a control that
+ * can only ever be refused should not exist.
+ */
+function GradeEditDialog({
+  grade,
+  onClose,
+}: {
+  grade: Grade | null
+  onClose: () => void
+}) {
+  const updateGrade = useUpdateGrade()
+
+  const [score, setScore] = useState("")
+  const [letter, setLetter] = useState("")
+  const [remarks, setRemarks] = useState("")
+  const [seededId, setSeededId] = useState<string | null>(null)
+
+  if (grade && seededId !== grade.id) {
+    // Re-seed whenever the dialog opens on a different grade.
+    setSeededId(grade.id)
+    setScore(grade.score === null ? "" : String(grade.score))
+    setLetter(grade.letter_grade ?? "")
+    setRemarks(grade.remarks ?? "")
+  }
+
+  const onSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!grade) return
+    const trimmed = score.trim()
+    updateGrade.mutate(
+      {
+        id: grade.id,
+        payload: {
+          score: trimmed === "" ? null : Number(trimmed),
+          letter_grade: letter.trim() === "" ? null : letter.trim(),
+          remarks: remarks.trim() === "" ? null : remarks.trim(),
+        },
+      },
+      { onSuccess: () => onClose() }
+    )
+  }
+
+  const scoreError = getFieldError(updateGrade.error, "score")
+  const letterError = getFieldError(updateGrade.error, "letter_grade")
+  const remarksError = getFieldError(updateGrade.error, "remarks")
+  const saving = updateGrade.isPending
+
+  return (
+    <Dialog
+      open={grade !== null}
+      onOpenChange={(next) => {
+        if (!next) onClose()
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Update grade</DialogTitle>
+          <DialogDescription>
+            {grade
+              ? `${grade.student_name} (${grade.student_id}) — ${grade.subject_name} (${grade.subject_code})`
+              : null}
+          </DialogDescription>
+        </DialogHeader>
+
+        <form
+          className="space-y-3"
+          id="grade-edit-form"
+          onSubmit={onSubmit}
+          noValidate
+        >
+          <Field
+            label="Score (0–100)"
+            id="grade-edit-score"
+            type="number"
+            min={0}
+            max={100}
+            required
+            value={score}
+            onChange={setScore}
+            error={scoreError}
+          />
+          <Field
+            label="Letter grade"
+            id="grade-edit-letter"
+            required
+            value={letter}
+            onChange={setLetter}
+            error={letterError}
+            placeholder="e.g. 1.00"
+          />
+          <Field
+            label="Remarks"
+            id="grade-edit-remarks"
+            value={remarks}
+            onChange={setRemarks}
+            error={remarksError}
+          />
+
+          {updateGrade.isError && !scoreError ? (
+            <ErrorNote message={normalizeApiError(updateGrade.error).message} />
+          ) : null}
+        </form>
+
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" form="grade-edit-form" disabled={saving}>
+            {saving ? "Saving…" : "Save changes"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 

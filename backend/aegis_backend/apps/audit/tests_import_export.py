@@ -629,6 +629,9 @@ class SecurityTest(ImportExportAuditBase):
         self.assertNotIn("removed", text)
 
     def test_passwords_tokens_credentials_never_stored(self):
+        # Seed a student so the roster export succeeds (an empty scope now
+        # answers 400 EXPORT_EMPTY, which would leave this test vacuous).
+        _build_grade_domain("pw")
         for u in User.objects.all():
             u.set_password("SuperSecretAEGIS99!")
             u.save()
@@ -643,6 +646,17 @@ class SecurityTest(ImportExportAuditBase):
         self.assertNotIn("must_change_password", text)
 
     def test_authorization_header_never_stored(self):
+        # Seed a grade so the export succeeds (an empty scope now answers
+        # 400 EXPORT_EMPTY and never reaches the audit hook).
+        dom = _build_grade_domain("hdr")
+        Grade.objects.create(
+            student=dom["student_profile"],
+            subject_assignment=SubjectAssignment.objects.get(pk=dom["subject_assignment"]),
+            grading_period=GradingPeriod.objects.get(pk=dom["grading_period"]),
+            score=90, letter_grade="A", remarks="x",
+            encoded_by=dom["faculty_profile"], status="finalized",
+        )
+        _clear_audit()
         self._auth(self.admin_user)
         self.client.credentials(HTTP_AUTHORIZATION="Bearer AEGIS-SECRET-TOKEN-000")
         resp = self.client.get(

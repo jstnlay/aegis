@@ -1,4 +1,10 @@
-import { render, screen, waitFor, within } from "@testing-library/react"
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import { beforeEach, describe, expect, it, vi } from "vitest"
@@ -637,5 +643,102 @@ describe("StudentProfilePage", () => {
     expect(
       screen.getByRole("link", { name: /back to roster/i })
     ).toHaveAttribute("href", "/app/students")
+  })
+
+  /*
+   * TC-GUI-08 / TC-GUI-09: the individual student guidance report.
+   *
+   * The report endpoint has existed since PH11.8; the QA log recorded both
+   * cases as "not implemented yet" because no screen rendered it or offered it
+   * as a file. These pin the new section: the server's own aggregates, the
+   * honest "all counselors" labelling, and a CSV the caller can download.
+   */
+  describe("StudentProfilePage guidance report (TC-GUI-08/09)", () => {
+    const report = {
+      student: "sp-1",
+      student_name: "Ana Reyes",
+      student_id_code: "S-1001",
+      behavioral_note_counts: { positive: 2, warning: 1, incident: 0 },
+      consultation_summary: {
+        total: 4,
+        by_status: { scheduled: 3, completed: 1 },
+        by_priority: { high: 2, medium: 2 },
+      },
+      intervention_summary: { total: 3, active: 2, completed: 1, cancelled: 0 },
+      risk_alert_history: [
+        {
+          id: "ra-1",
+          risk_level: "moderate",
+          status: "resolved",
+          source: "manual",
+          generated_at: "2026-09-14T00:00:00Z",
+        },
+      ],
+    }
+
+    beforeEach(() => {
+      mockedGet.mockImplementation(async (url: string) => {
+        if (url === "/guidance/reports/student/sp-1/") return { data: report }
+        return { data: [] }
+      })
+    })
+
+    it("renders the server's report aggregates", async () => {
+      renderPage()
+
+      // The section title renders before the report resolves, so wait on a stat.
+      expect(await screen.findByText(/Positive notes/)).toBeInTheDocument()
+      // The label and the count are siblings inside one stat card, so the
+      // assertion reads the card, not the label.
+      const positiveCard = screen.getByText("Positive notes").parentElement
+      expect(positiveCard).toHaveTextContent("Positive notes")
+      expect(positiveCard).toHaveTextContent("2")
+      const warningCard = screen.getByText("Warning notes").parentElement
+      expect(warningCard).toHaveTextContent("1")
+      // The two aggregate blocks are labelled as school-wide, not as this
+      // counselor's own caseload.
+      expect(
+        screen.getByText(/Consultations \(all counselors\)/)
+      ).toBeInTheDocument()
+      expect(
+        screen.getByText(/Interventions \(all counselors\)/)
+      ).toBeInTheDocument()
+      expect(screen.getByText("Risk alert history")).toBeInTheDocument()
+      expect(screen.getByText(/manual · 2026-09-14/)).toBeInTheDocument()
+    })
+
+    it("offers the report as a CSV of the same values", async () => {
+      const blobUrls: string[] = []
+      URL.createObjectURL = vi.fn(() => {
+        const url = `blob:aegis-${blobUrls.length}`
+        blobUrls.push(url)
+        return url
+      })
+      URL.revokeObjectURL = vi.fn()
+
+      renderPage()
+      // The download button exists while the report is still loading (disabled),
+      // and React replaces the node once the aggregate arrives — so query it
+      // after the data is on screen rather than holding a pre-load reference.
+      await screen.findByText(/Positive notes/)
+      fireEvent.click(
+        screen.getByRole("button", { name: /download report \(csv\)/i })
+      )
+
+      await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalledTimes(1))
+
+      const blob = (URL.createObjectURL as ReturnType<typeof vi.fn>).mock
+        .calls[0]?.[0] as Blob
+      expect(blob).toBeInstanceOf(Blob)
+      const text = await blob.text()
+      // Every cell is quoted, so the assertions include the quotes.
+      expect(text).toContain('"metric","value"')
+      expect(text).toContain('"behavioral_positive","2"')
+      expect(text).toContain('"consultations_all_counselors","4"')
+      expect(text).toContain('"risk_alerts_on_record","1"')
+      // A leading formula character must not survive into the file.
+      expect(text).not.toMatch(/[=+@][a-z]/i)
+      expect(URL.revokeObjectURL).toHaveBeenCalled()
+    })
   })
 })

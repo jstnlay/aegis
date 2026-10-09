@@ -73,3 +73,10 @@ AGENTS.md
 # one would only add a stale blob that disagrees with the code that reads it.
 backend/aegis_backend/ai_engine/saved_models/
 
+# QA test-case log for Testing Phase Cycle 1. Evidence of a manual test run
+# against a deployed build, not a source file: the repository never re-executes
+# it (no browser harness exists here), so a committed copy would read as the
+# current state of the system while drifting further from it every commit.
+docs/AEGIS Test Case Log Testing Phase Cycle 1 Complete.md
+
+

@@ -62,8 +62,12 @@ describe("role navigation configuration", () => {
       // Faculty assessments and bulk upload, each backed by a real route in `appRoutes`
       "faculty/assessments",
       "faculty/import",
+      // Advisory class roster + behavioral notes (TC-FAC-07/08)
+      "faculty/advisory",
       // Student assessments, likewise
       "student/assessments",
+      // Student class schedule (TC-STU-04), backed by the `schedule` route
+      "schedule",
     ]
 
     for (const role of ROLES) {
@@ -125,6 +129,7 @@ describe("role navigation configuration", () => {
       "attendance",
       "dashboard",
       "notifications",
+      "schedule",
       "student/assessments",
     ])
   })
@@ -413,6 +418,47 @@ describe("route visibility", () => {
       }
     }
   })
+
+  /**
+   * The class schedule (TC-STU-04) is student-only.
+   *
+   * `ScheduleViewSet` does return rows for every role, but the other roles
+   * already read the same timetable inside their own surfaces (faculty
+   * academics, parent/academics), so a second link for them would duplicate a
+   * screen rather than add one.
+   */
+  it("keeps the schedule route student-only", () => {
+    expect(
+      getNavItemsForRole("student").find((i) => i.route === "schedule")
+    ).toEqual(expect.objectContaining({ status: "available" }))
+
+    for (const role of ["parent", "faculty", "guidance", "admin"] as const) {
+      expect(
+        getNavItemsForRole(role).find((i) => i.route === "schedule"),
+        role
+      ).toBeUndefined()
+    }
+  })
+
+  /**
+   * The advisory class surface (TC-FAC-07 / TC-FAC-08) is faculty-only.
+   *
+   * Both endpoints behind it are scoped to the faculty role server-side
+   * (`EnrollmentViewSet` for the roster, `IsFacultyUser` for note creation),
+   * so a link for any other role could only ever land on a restricted page.
+   */
+  it("keeps the advisory route faculty-only", () => {
+    expect(
+      getNavItemsForRole("faculty").find((i) => i.route === "faculty/advisory")
+    ).toEqual(expect.objectContaining({ status: "available" }))
+
+    for (const role of ["student", "parent", "guidance", "admin"] as const) {
+      expect(
+        getNavItemsForRole(role).find((i) => i.route === "faculty/advisory"),
+        role
+      ).toBeUndefined()
+    }
+  })
 })
 
 describe("page titles from navigation", () => {
@@ -424,6 +470,12 @@ describe("page titles from navigation", () => {
   it("resolves known route titles", () => {
     expect(getPageTitle("/app/academics")).toBe("Academics")
     expect(getPageTitle("/app/attendance")).toBe("Attendance")
+    // TC-STU-04: the schedule route must title itself, or the header above the
+    // page falls back to "Dashboard" while the body renders the timetable.
+    expect(getPageTitle("/app/schedule")).toBe("Schedule")
+    // TC-FAC-07/08: the advisory route must do the same, or the header reads
+    // "Faculty Dashboard" while the body shows the class list.
+    expect(getPageTitle("/app/faculty/advisory")).toBe("Advisory Class")
   })
 
   /**

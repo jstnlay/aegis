@@ -437,6 +437,37 @@ class ImportJobCreateApiTest(DataImportApiBase):
         resp = self._upload("a,b\n1,2\n")
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_import_type_without_an_importer_never_reports_success(self):
+        # TC-ADM-05: guidance_records has no domain importer. Parsing the
+        # file must not be presented as a completed import — the rows were
+        # never stored, so they are skipped, the job fails, and no
+        # successful-import audit event is written.
+        from apps.audit.models import AuditLog
+
+        self._auth(self.admin_user)
+        resp = self._upload(
+            "student_id,notes\nS1,some consultation notes\n",
+            import_type="guidance_records",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        job = ImportJob.objects.get(pk=resp.data["id"])
+        self.assertEqual(job.status, JobStatus.FAILED)
+        self.assertEqual(job.total_rows, 1)
+        self.assertEqual(job.processed_rows, 0)
+        self.assertEqual(job.error_rows, 0)
+        self.assertEqual(
+            job.error_log[0]["code"], ImportErrorCode.UNSUPPORTED_IMPORT_TYPE
+        )
+        self.assertEqual(
+            set(job.records.values_list("status", flat=True)),
+            {RecordStatus.SKIPPED},
+        )
+        self.assertFalse(
+            AuditLog.objects.filter(
+                action="import", object_id=str(job.id)
+            ).exists()
+        )
+
     def test_faculty_cannot_import_students(self):
         self._auth(self.faculty_user)
         resp = self._upload("student_id,name\nS1,Ann\n", import_type="students")

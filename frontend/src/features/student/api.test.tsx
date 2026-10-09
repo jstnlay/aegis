@@ -153,3 +153,59 @@ describe("useStudentDashboardData attendance", () => {
     expect(result.current.attendance?.total_days).toBe(4)
   })
 })
+
+describe("useStudentDashboardData grading periods", () => {
+  /**
+   * Regression for the "finalized grades on Academics, N/A on Dashboard"
+   * report (TC-STU-03).
+   *
+   * A finalized grade whose grading period name is null was grouped into an
+   * "Unassigned" bucket but kept `""` as its own `grading_period`, so the
+   * default period filter matched nothing, every row dropped out of
+   * `filteredGrades`, and the derived average collapsed to null. The same
+   * rows were listed in full on the Academics page.
+   */
+  it("keeps grades with no grading period in the default period", async () => {
+    vi.spyOn(apiClient, "get").mockImplementation((async (url: string) => {
+      if (url.startsWith("/attendance/summary")) return { data: [] }
+      if (url.includes("/metrics/")) {
+        return { data: { status: "ok", data: { has_data: false } } }
+      }
+      throw new Error(`Unexpected request: ${url}`)
+    }) as unknown as typeof apiClient.get)
+
+    mockedFetchAllPages.mockImplementation(async (url: string) => {
+      if (url.includes("/academics/grades/")) {
+        return {
+          count: 1,
+          results: [
+            {
+              subject_name: "Mathematics",
+              subject_code: "MATH",
+              score: 88,
+              letter_grade: "B",
+              grading_period_name: null,
+            },
+          ],
+        }
+      }
+      if (url.includes("/academics/grading-periods/")) {
+        return { count: 0, results: [] }
+      }
+      return { count: 0, results: [] }
+    })
+
+    const { result } = renderHook(
+      () => useStudentDashboardData("profile-uuid"),
+      { wrapper: createWrapper() }
+    )
+
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    expect(result.current.error).toBeFalsy()
+    expect(result.current.grades).toHaveLength(1)
+    expect(result.current.periods).toHaveLength(1)
+    expect(result.current.periods[0]?.period_name).toBe("Unassigned")
+    expect(result.current.averageGrade).toBe(88)
+  })
+})

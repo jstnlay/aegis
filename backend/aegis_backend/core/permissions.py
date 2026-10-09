@@ -31,6 +31,11 @@ class IsStaffOrAdmin(BasePermission):
         return request.user and request.user.is_authenticated and request.user.role in ("faculty", "guidance", "admin")
 
 
+class IsFacultyOrAdminUser(BasePermission):
+    def has_permission(self, request, view):
+        return request.user and request.user.is_authenticated and request.user.role in ("faculty", "admin")
+
+
 class IsAdminOrReadOnly(BasePermission):
     """Admin can perform any method; other authenticated users can only read."""
 
@@ -59,6 +64,36 @@ class IsFacultyOwnerOfAssignment(BasePermission):
             except Exception:
                 return False
             return obj.faculty_id == faculty_profile.id
+        return False
+
+
+class IsFacultyOwnerOfGrade(BasePermission):
+    """
+    Object-level: Faculty can only update grades for their own subject
+    assignments (FR-011).
+
+    `has_permission` is deliberately satisfied for both faculty and admin:
+    the authorization decision belongs to the object, so an out-of-scope
+    update is a refusal the faculty member can act on (403) rather than a
+    404 that hides why the save failed.
+    """
+
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        return request.user.role in ("faculty", "admin")
+
+    def has_object_permission(self, request, view, obj):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        if request.user.role == "admin":
+            return True
+        if request.user.role == "faculty":
+            try:
+                faculty_profile = request.user.faculty_profile
+            except Exception:
+                return False
+            return obj.subject_assignment.faculty_id == faculty_profile.id
         return False
 
 

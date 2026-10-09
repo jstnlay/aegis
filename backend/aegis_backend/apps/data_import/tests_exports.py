@@ -34,6 +34,7 @@ from apps.academics.models import (
 from apps.attendance.models import AttendanceRecord
 from apps.data_import.constants import (
     ADMIN_ONLY_EXPORT_TYPES,
+    ALL_FACULTY_EXPORT_TYPES,
     ExportErrorCode,
     ExportFormat,
     ExportType,
@@ -183,6 +184,35 @@ class ExportApiBase(TestCase):
         decoded = text.decode("utf-8")
         return list(csv.reader(io.StringIO(decoded)))
 
+    def _seed_grade(self, score=90):
+        """Create one grade row in the shared domain.
+
+        An authorised-but-empty export now answers 400 EXPORT_EMPTY
+        (TC-FAC-19), so any test that asserts on the generated file itself
+        must seed at least one row first.
+        """
+        return Grade.objects.create(
+            student=self.dom["s1"], subject_assignment=self.dom["sa_own"],
+            grading_period=self.dom["gp"], score=score, letter_grade="A",
+            remarks="ok", encoded_by=self.dom["fp_own"], status="finalized",
+        )
+
+    def _seed_attendance(self):
+        """Create one attendance row in the shared domain (see `_seed_grade`)."""
+        return AttendanceRecord.objects.create(
+            student=self.dom["s1"], section=self.dom["section"],
+            date="2025-07-01", status="present", recorded_by=self.dom["fp_own"],
+        )
+
+    def assertExportEmpty(self, resp):
+        """Assert the response is the EXPORT_EMPTY envelope, not a file."""
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIsNone(resp.get("Content-Disposition", None))
+        body = resp.json()
+        self.assertFalse(body["success"])
+        self.assertEqual(body["error"]["code"], ExportErrorCode.EXPORT_EMPTY)
+        self.assertIn("No data is available", body["error"]["message"])
+
 
 # ---------------------------------------------------------------------------
 # Authorization
@@ -260,7 +290,9 @@ class ExportSecurityRegressionTest(ExportApiBase):
         self.assertIn(ExportErrorCode.INTERNAL_EXPORT_ERROR, body)
 
     def test_parent_no_link_sees_no_attendance(self):
-        # Parent with no linked child must get zero attendance rows too.
+        # Parent with no linked child has zero attendance rows in scope, so
+        # the export answers with the no-data message (TC-FAC-19) instead of
+        # a file — and certainly never with someone else's rows.
         ParentProfile.objects.create(user=self.parent_user, relationship_to_student="mother")
         AttendanceRecord.objects.create(
             student=self.dom["s1"], section=self.dom["section"],
@@ -269,13 +301,11 @@ class ExportSecurityRegressionTest(ExportApiBase):
         resp = self._get(
             "/api/v1/data-import/exports/attendance/", self.parent_user, file_format="csv"
         )
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        rows = self._csv_rows(resp)[1:]
-        self.assertEqual(rows, [])
+        self.assertExportEmpty(resp)
 
     def test_student_not_in_section_sees_no_attendance(self):
         # A student gets ONLY their own rows; a foreign-section record is
-        # invisible to them.
+        # invisible to them, so their (empty) scope gets no file at all.
         AttendanceRecord.objects.create(
             student=self.dom["s_foreign"], section=self.dom["section_other"],
             date="2025-07-02", status="absent", recorded_by=self.dom["fp_other"],
@@ -283,8 +313,15 @@ class ExportSecurityRegressionTest(ExportApiBase):
         resp = self._get(
             "/api/v1/data-import/exports/attendance/", self.dom["s1"].user, file_format="csv"
         )
-        rows = self._csv_rows(resp)[1:]
-        self.assertEqual(rows, [])
+        self.assertExportEmpty(resp)
+
+    def test_empty_scope_returns_export_empty_envelope(self):
+        # No grades are seeded here, so the admin's own export answers with
+        # the no-data envelope rather than a header-only file.
+        resp = self._get(
+            "/api/v1/data-import/exports/grades/", self.admin_user, file_format="csv"
+        )
+        self.assertExportEmpty(resp)
 
 
 # ---------------------------------------------------------------------------
@@ -391,9 +428,10 @@ class ExportRoleScopeTest(ExportApiBase):
         resp = self._get(
             "/api/v1/data-import/exports/grades/", self.parent_user, file_format="csv"
         )
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        rows = self._csv_rows(resp)[1:]
-        self.assertEqual(rows, [])
+        # Grades exist for other people, but none in this parent's scope:
+        # the export refuses with the no-data message (TC-FAC-19) rather
+        # than handing back an empty file.
+        self.assertExportEmpty(resp)
 
     def test_no_foreign_row_is_ever_present(self):
         # Faculty sees only own; foreign student's data must never leak.
@@ -469,6 +507,13 @@ class ExportStudentTest(ExportApiBase):
 
 
 class ExportFormatTest(ExportApiBase):
+    def setUp(self):
+        super().setUp()
+        # Format assertions inspect a real generated file; an empty scope now
+        # answers 400 EXPORT_EMPTY (TC-FAC-19), so seed one row of each kind.
+        self._seed_grade()
+        self._seed_attendance()
+
     def test_csv_content_type_correct(self):
         resp = self._get("/api/v1/data-import/exports/grades/", self.admin_user, file_format="csv")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
@@ -602,6 +647,7 @@ class ExportLimitThrottleTest(ExportApiBase):
         from django.core.cache import cache
 
         cache.clear()
+        self._seed_grade()  # a real file, so the first request succeeds (200)
         self._auth(self.admin_user)
         with mock.patch.dict(
             "core.throttling.ExportRateThrottle.THROTTLE_RATES",
@@ -676,3 +722,117 @@ class ExportConstantsTest(TestCase):
 
     def test_max_export_rows(self):
         self.assertEqual(MAX_EXPORT_ROWS, 5000)
+
+
+# ---------------------------------------------------------------------------
+# FR-016 / TC-FAC-20 — advisory class summary export
+# ---------------------------------------------------------------------------
+
+
+class AdvisoryExportTest(ExportApiBase):
+    """GET /api/v1/data-import/exports/advisory/."""
+
+    URL = "/api/v1/data-import/exports/advisory/"
+
+    def test_faculty_gets_one_row_per_student_in_their_class(self):
+        # The class has records already (grade + attendance seeded by the
+        # fixtures above); seed the attendance row for a full aggregate row.
+        AttendanceRecord.objects.create(
+            student=self.dom["s1"], section=self.dom["section"],
+            date="2025-07-02", status="absent", recorded_by=self.dom["fp_own"],
+        )
+        self._seed_attendance()
+        self._seed_grade(score=90)
+
+        resp = self._get(self.URL, self.dom["fp_own"].user, file_format="csv")
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        rows = self._csv_rows(resp)
+        self.assertEqual(
+            rows[0],
+            [
+                "student_id", "student_name", "grade_level", "section",
+                "attendance_present", "attendance_late", "attendance_absent",
+                "attendance_total", "grades_recorded", "grade_average",
+            ],
+        )
+        # Only the two students enrolled in the faculty's own section; the
+        # foreign student never appears.
+        body = [row[0] for row in rows[1:]]
+        self.assertIn(self.dom["s1"].student_id, body)
+        self.assertIn(self.dom["s2"].student_id, body)
+        self.assertNotIn(self.dom["s_foreign"].student_id, body)
+
+        # Deterministic ordering by last name: Alpha (Ben) before Zulu (Ana).
+        self.assertEqual(rows[1][0], self.dom["s2"].student_id)
+        self.assertEqual(rows[2][0], self.dom["s1"].student_id)
+
+        # Ana: one present, one absent, one finalized grade of 90.
+        ana = rows[2]
+        self.assertEqual(ana[4], "1")   # present
+        self.assertEqual(ana[5], "0")   # late
+        self.assertEqual(ana[6], "1")   # absent
+        self.assertEqual(ana[7], "2")   # total
+        self.assertEqual(ana[8], "1")   # grades recorded
+        self.assertEqual(ana[9], "90.00")
+
+        # Ben has no attendance and no grades at all: real zero counts and a
+        # blank average, never a fabricated 0.00.
+        ben = rows[1]
+        self.assertEqual(ben[4], "0")
+        self.assertEqual(ben[7], "0")
+        self.assertEqual(ben[8], "0")
+        self.assertEqual(ben[9], "")
+
+    def test_grade_average_is_blank_when_nothing_is_scored(self):
+        resp = self._get(self.URL, self.dom["fp_own"].user, file_format="csv")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        rows = self._csv_rows(resp)
+        self.assertEqual(rows[1][9], "")
+        self.assertEqual(rows[2][9], "")
+
+    def test_faculty_with_no_sections_gets_the_empty_export_envelope(self):
+        other = User.objects.create_user(
+            email="fac_noclass@test.com", password="pass12345", role="faculty",
+        )
+        FacultyProfile.objects.create(user=other, employee_id="E-NONE")
+        self.assertExportEmpty(self._get(self.URL, other, file_format="csv"))
+
+    def test_other_roles_are_outside_the_surface(self):
+        for user in (
+            self.admin_user,
+            self.guidance_user,
+            self.student_user,
+            self.parent_user,
+        ):
+            resp = self._get(self.URL, user, file_format="csv")
+            self.assertEqual(
+                resp.status_code, status.HTTP_403_FORBIDDEN, user.email
+            )
+            body = resp.json()
+            self.assertEqual(
+                body["error"]["code"], ExportErrorCode.PERMISSION_DENIED
+            )
+
+    def test_faculty_export_matrix_includes_the_advisory_summary(self):
+        self.assertEqual(
+            ALL_FACULTY_EXPORT_TYPES,
+            frozenset(
+                {
+                    ExportType.GRADES,
+                    ExportType.ATTENDANCE,
+                    ExportType.ADVISORY,
+                }
+            ),
+        )
+        # The administrator authority set is unchanged: "advisory class" is
+        # not a concept an administrator exports.
+        self.assertNotIn(ExportType.ADVISORY, ExportType.ALL)
+
+    def test_unknown_export_type_stays_unsupported(self):
+        resp = self._get(
+            "/api/v1/data-import/exports/advisory-v2/",
+            self.dom["fp_own"].user,
+            file_format="csv",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)

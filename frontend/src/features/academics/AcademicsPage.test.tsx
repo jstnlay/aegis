@@ -1,5 +1,12 @@
-import { render, screen } from "@testing-library/react"
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { AxiosError, AxiosHeaders } from "axios"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { AcademicsPage } from "@/features/academics/AcademicsPage"
@@ -117,12 +124,14 @@ describe("AcademicsPage (faculty)", () => {
     ).toBeInTheDocument()
   })
 
-  it("states honestly that faculty cannot edit, submit, or finalize", () => {
+  it("states that faculty may update their own grades but not finalize them", () => {
     renderPage()
     expect(
-      screen.getByText(/no\s+edit, submit, or finalize/i)
+      screen.getByText(/update the score, letter grade and remarks/i)
     ).toBeInTheDocument()
-    expect(screen.getByText(/administration finalizes/i)).toBeInTheDocument()
+    expect(
+      screen.getByText(/finalized stays with administration/i)
+    ).toBeInTheDocument()
   })
 
   /**
@@ -187,3 +196,130 @@ describe("AcademicsPage hooks wiring", () => {
 
 // Keep the typed hook import referenced so the mock shape stays honest.
 void useAuth
+
+/*
+ * FR-011 / TC-FAC-11 / TC-FAC-12: the faculty grade update surface.
+ *
+ * The backend gained `PATCH /grades/{id}/` for a grade's own encoder, with
+ * the lifecycle fields (status, encoded_by) refused server-side. These tests
+ * pin the frontend half — the edit form seeded from the record, the
+ * content-only payload, and a server refusal shown rather than swallowed.
+ */
+describe("AcademicsPage (faculty grade update)", () => {
+  const gradeRow = {
+    id: "g-1",
+    student: "sp-1",
+    student_name: "Ana Cruz",
+    student_id: "STU-001",
+    subject_assignment: "sa-1",
+    subject_name: "Mathematics",
+    subject_code: "MATH-101",
+    section_name: "Section A",
+    grading_period: "gp-1",
+    grading_period_name: "First Quarter",
+    score: "88.50",
+    letter_grade: "B+",
+    remarks: null,
+    encoded_by: "fp-1",
+    encoded_by_name: "Dr. Reyes",
+    status: "draft",
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+  }
+
+  beforeEach(() => {
+    authState.user = makeUser("faculty")
+    mockedFetchAllPages.mockImplementation(async (url: string) => {
+      if (url.startsWith("/academics/grades")) {
+        return { count: 1, results: [gradeRow] }
+      }
+      return { count: 0, results: [] }
+    })
+  })
+
+  async function openEditDialog() {
+    renderPage()
+    await screen.findByText("MATH-101")
+    fireEvent.click(await screen.findByRole("button", { name: "Edit" }))
+    return screen.findByRole("dialog")
+  }
+
+  it("saves the updated score with the content-only payload (TC-FAC-11)", async () => {
+    const dialog = await openEditDialog()
+    expect(
+      within(dialog).getByLabelText<HTMLInputElement>("Score (0–100)").value
+    ).toBe("88.5")
+
+    fireEvent.change(within(dialog).getByLabelText("Score (0–100)"), {
+      target: { value: "91" },
+    })
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: /save changes/i })
+    )
+
+    const { apiClient } = await import("@/lib/api")
+    await waitFor(() =>
+      expect(apiClient.patch).toHaveBeenCalledWith(
+        "/academics/grades/g-1/",
+        expect.objectContaining({ score: 91 })
+      )
+    )
+    // The lifecycle is not part of the payload.
+    const payload = vi.mocked(apiClient.patch).mock.calls[0]?.[1] as Record<
+      string,
+      unknown
+    >
+    expect(payload).toBeDefined()
+    expect(payload).not.toHaveProperty("status")
+    expect(payload).not.toHaveProperty("encoded_by")
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+    )
+  })
+
+  it("offers no lifecycle control in the update form", async () => {
+    const dialog = await openEditDialog()
+    expect(within(dialog).queryByLabelText(/status/i)).not.toBeInTheDocument()
+    expect(within(dialog).getByLabelText("Score (0–100)")).toBeInTheDocument()
+    expect(within(dialog).getByLabelText("Letter grade")).toBeInTheDocument()
+  })
+
+  it("shows the server's field error and keeps the dialog open", async () => {
+    const { apiClient } = await import("@/lib/api")
+    vi.mocked(apiClient.patch).mockRejectedValue(
+      new AxiosError(
+        "Request failed with status code 400",
+        undefined,
+        undefined,
+        undefined,
+        {
+          data: {
+            success: false,
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "Score must be between 0 and 100.",
+              details: { score: ["Score must be between 0 and 100."] },
+            },
+          },
+          status: 400,
+          statusText: "",
+          headers: new AxiosHeaders(),
+          config: { headers: new AxiosHeaders() },
+        }
+      )
+    )
+
+    const dialog = await openEditDialog()
+    fireEvent.change(within(dialog).getByLabelText("Score (0–100)"), {
+      target: { value: "140" },
+    })
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: /save changes/i })
+    )
+
+    expect(
+      await within(dialog).findByText("Score must be between 0 and 100.")
+    ).toBeInTheDocument()
+    expect(screen.getByRole("dialog")).toBeInTheDocument()
+  })
+})
