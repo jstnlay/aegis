@@ -210,30 +210,6 @@ export function AdminUsersPage() {
           />
         </CardContent>
       </Card>
-
-      {/*
-        Stated rather than hidden. Each of these is an administrator action a
-        school would reasonably expect, and none has an endpoint. Silently
-        omitting them would leave a tester wondering whether the feature is
-        broken; this says the contract does not include it.
-      */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Not available through this API</CardTitle>
-          <CardDescription>
-            These operations have no endpoint, so this screen offers no control
-            for them. Performing them requires the Django admin site.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ul className="list-inside list-disc space-y-1 text-sm text-muted-foreground">
-            <li>Changing a role on an existing account</li>
-            <li>Deactivating or reactivating an account</li>
-            <li>Deleting an account</li>
-            <li>Resetting another person&apos;s password</li>
-          </ul>
-        </CardContent>
-      </Card>
     </div>
   )
 }

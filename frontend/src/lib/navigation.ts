@@ -400,20 +400,20 @@ const FACULTY_ADVISORY: NavItem = {
  */
 
 /**
- * Roadmap entry for roles with no report surface.
+ * Reports surface.
  *
- * PH11.9 checked for a report or export contract: the only related thing that
- * exists is the controlled CSV/XLSX export family under
- * `/data-import/exports/`, which is a file download available to
- * administrators and is surfaced as "Imports & Exports". No AcademicReport API
- * exists, so this stays planned rather than pointing at one.
+ * The controlled CSV/XLSX export family under `/data-import/exports/` is the
+ * report contract: each kind answers within the caller's own scope (faculty
+ * see their subjects, students their rows, parents their linked children,
+ * admins everything except the faculty-only advisory aggregate). The Reports
+ * page compiles those downloads per role — no separate report model exists.
  */
 const REPORTS: NavItem = {
   route: "reports",
   label: "Reports",
   icon: FileText,
-  allowedRoles: ["faculty", "guidance", "admin", "student"],
-  status: "planned",
+  allowedRoles: ["faculty", "guidance", "admin", "student", "parent"],
+  status: "available",
 }
 
 const RISK_ALERTS: NavItem = {
@@ -520,10 +520,9 @@ const PARENT_NAVIGATION: readonly NavGroup[] = [
      * so leaving them planned would tell the reader a feature is unavailable
      * when it is one click away.
      *
-     * `REPORTS` stays planned. PH11.9 checked for a report contract and there
-     * is none: the only related endpoints are the controlled CSV/XLSX exports
-     * under `/data-import/exports/`, which are administrator file downloads,
-     * not a report a parent can request.
+     * `REPORTS` is available: the controlled exports answer within a
+     * parent's linked-children scope, so the page compiles exactly the
+     * downloads the caller is authorized for.
      */
     items: [PARENT_ACADEMICS, PARENT_ASSESSMENTS, PARENT_SUPPORT, REPORTS],
   },

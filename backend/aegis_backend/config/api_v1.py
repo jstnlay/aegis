@@ -27,4 +27,6 @@ urlpatterns = [
     path("chatbot/", include("apps.chatbot.urls")),
     # Audit (Phase 10.10): /audit/logs/ read-only administrator API.
     path("audit/", include("apps.audit.urls")),
+    # Portfolio: student-authored showcase entries (text + optional link).
+    path("portfolio/", include("apps.portfolio.urls")),
 ]

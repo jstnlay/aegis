@@ -18,6 +18,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table"
 import { useDataTablePagination } from "@/components/ui/data-table-pagination"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import {
   Select,
   SelectContent,
@@ -225,19 +226,21 @@ export function AdminAttendancePage() {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="space-y-1.5">
               <Label htmlFor="admin-attendance-section">Section</Label>
-              <Select value={sectionId} onValueChange={setSectionId}>
-                <SelectTrigger id="admin-attendance-section">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All sections</SelectItem>
-                  {(sectionsQuery.data ?? []).map((section) => (
-                    <SelectItem key={section.id} value={section.id}>
-                      {section.name} — {section.grade_level_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                id="admin-attendance-section"
+                label="Section"
+                value={sectionId}
+                onChange={setSectionId}
+                options={[
+                  { value: "all", label: "All sections" },
+                  ...(sectionsQuery.data ?? []).map((section) => ({
+                    value: section.id,
+                    label: `${section.name} — ${section.grade_level_name}`,
+                  })),
+                ]}
+                placeholder="Select a section"
+                searchPlaceholder="Search sections"
+              />
             </div>
 
             <div className="space-y-1.5">

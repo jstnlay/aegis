@@ -127,7 +127,7 @@ describe("AcademicsPage (faculty)", () => {
   it("states that faculty may update their own grades but not finalize them", () => {
     renderPage()
     expect(
-      screen.getByText(/update the score, letter grade and remarks/i)
+      screen.getByText(/update the score and remarks/i)
     ).toBeInTheDocument()
     expect(
       screen.getByText(/finalized stays with administration/i)
@@ -281,7 +281,9 @@ describe("AcademicsPage (faculty grade update)", () => {
     const dialog = await openEditDialog()
     expect(within(dialog).queryByLabelText(/status/i)).not.toBeInTheDocument()
     expect(within(dialog).getByLabelText("Score (0–100)")).toBeInTheDocument()
-    expect(within(dialog).getByLabelText("Letter grade")).toBeInTheDocument()
+    expect(
+      within(dialog).queryByLabelText("Letter grade")
+    ).not.toBeInTheDocument()
   })
 
   it("shows the server's field error and keeps the dialog open", async () => {

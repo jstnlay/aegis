@@ -58,6 +58,7 @@ import {
   type InterventionStepStatus,
 } from "@/features/guidance/api"
 import { normalizeApiError } from "@/lib/error"
+import { useHideCompleted } from "@/lib/archive"
 import { consultationStatusBadgeClass } from "@/lib/status-badge"
 
 const NO_RISK_ALERT = "none"
@@ -880,16 +881,22 @@ export function InterventionsPage() {
   const [status, setStatus] = useState<InterventionStatus | "all">("all")
   const [search, setSearch] = useState("")
   const [sort, setSort] = useState<DataTableSort | null>(null)
+  const { hideCompleted, setHidden } = useHideCompleted(
+    "aegis:archive:interventions"
+  )
 
   const interventions = useMemo(
     () => interventionsQuery.data ?? [],
     [interventionsQuery.data]
   )
 
-  const visible = useMemo(
-    () => filterInterventions(interventions, { status, search }),
-    [interventions, status, search]
-  )
+  const visible = useMemo(() => {
+    const filtered = filterInterventions(interventions, { status, search })
+    // Archive: completed plans stay on the server; this only hides them.
+    return hideCompleted
+      ? filtered.filter((row) => row.status !== "completed")
+      : filtered
+  }, [interventions, status, search, hideCompleted])
 
   const counts = useMemo(
     () => countInterventionsByStatus(interventions),
@@ -1014,6 +1021,19 @@ export function InterventionsPage() {
               placeholder="Student name"
               onChange={(event) => setSearch(event.target.value)}
             />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              id="interventions-hide-completed"
+              type="checkbox"
+              checked={hideCompleted}
+              onChange={(event) => setHidden(event.target.checked)}
+              className="size-4 accent-primary"
+            />
+            <Label htmlFor="interventions-hide-completed">
+              Hide completed (archive)
+            </Label>
           </div>
 
           <DataTable

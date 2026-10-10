@@ -52,6 +52,7 @@ import {
 } from "@/features/academics/api"
 import { useAuth } from "@/features/auth/AuthContext"
 import { useStudentProfileId } from "@/features/student/api"
+import { StudentPortfolioCard } from "@/features/portfolio/PortfolioCard"
 import { AcademicsLandingPage } from "@/routes/pages/AcademicsLandingPage"
 import { getFieldError, normalizeApiError } from "@/lib/error"
 import { Field } from "@/components/ui/form-field"
@@ -110,6 +111,47 @@ function StatusBadge({ status }: { status: GradeStatus }) {
  * serializer-validated to `0 <= score <= 100`) — not a percentage ratio. The
  * table header carries the "out of 100" scale so the unit is never ambiguous.
  */
+/**
+ * Activity types for an encoded grade (paperwork, term exam, recitation…).
+ *
+ * The backend `Grade` row is unique per (student, subject assignment, grading
+ * period) and carries no activity column, so the type is stored as a
+ * `"[Type] rest"` prefix on `remarks` (max 255 chars) — an interim convention
+ * until a dedicated grade-activity model exists. `parseActivityRemarks`
+ * reverses it; remarks without the prefix report no activity rather than a
+ * guess.
+ */
+const GRADE_ACTIVITY_TYPES = [
+  "Classwork",
+  "Paperwork",
+  "Quiz",
+  "Recitation",
+  "Term exam",
+  "Project",
+  "Performance task",
+] as const
+
+function formatActivityRemarks(
+  activity: string,
+  remarks: string
+): string | null {
+  const text = remarks.trim()
+  const prefix = activity ? `[${activity}]` : ""
+  if (!prefix && !text) return null
+  if (!prefix) return text
+  return text ? `${prefix} ${text}` : prefix
+}
+
+function parseActivityRemarks(remarks: string | null): {
+  activity: string
+  text: string
+} {
+  if (!remarks) return { activity: "", text: "" }
+  const match = remarks.match(/^\[([^\]]+)\]\s*(.*)$/)
+  if (!match) return { activity: "", text: remarks }
+  return { activity: match[1] ?? "", text: (match[2] ?? "").trim() }
+}
+
 function ScoreCell({ score }: { score: number | null }) {
   if (score === null) {
     return <span className="text-muted-foreground">Not recorded</span>
@@ -152,11 +194,9 @@ function GradeTable({
           <TableHead scope="col">Subject</TableHead>
           {showStudent ? <TableHead scope="col">Section</TableHead> : null}
           <TableHead scope="col">Grading period</TableHead>
+          <TableHead scope="col">Activity</TableHead>
           <TableHead scope="col" className="text-right">
             Score (0&ndash;100)
-          </TableHead>
-          <TableHead scope="col" className="text-right">
-            Letter
           </TableHead>
           <TableHead scope="col">Status</TableHead>
           {onEditGrade ? <TableHead scope="col">Update</TableHead> : null}
@@ -187,6 +227,18 @@ function GradeTable({
             <TableCell className="text-muted-foreground">
               {grade.grading_period_name ?? "Unassigned"}
             </TableCell>
+            <TableCell className="text-sm">
+              {(() => {
+                const { activity } = parseActivityRemarks(grade.remarks)
+                return activity ? (
+                  <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-medium">
+                    {activity}
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">&mdash;</span>
+                )
+              })()}
+            </TableCell>
             {/*
               PH11.11. `tabular-nums` on the score so the decimal points line up
               down the column, and `whitespace-nowrap` because a score split across
@@ -196,13 +248,6 @@ function GradeTable({
             */}
             <TableCell className="text-right whitespace-nowrap tabular-nums">
               <ScoreCell score={grade.score} />
-            </TableCell>
-            <TableCell className="text-right">
-              {grade.letter_grade ? (
-                grade.letter_grade
-              ) : (
-                <span className="text-muted-foreground">&mdash;</span>
-              )}
             </TableCell>
             <TableCell>
               <StatusBadge status={grade.status} />
@@ -354,6 +399,8 @@ function StudentAcademics() {
           )}
         </CardContent>
       </Card>
+
+      <StudentPortfolioCard />
     </div>
   )
 }
@@ -425,6 +472,8 @@ function GradeEncodeForm({
   const [studentId, setStudentId] = useState("")
   const [periodId, setPeriodId] = useState("")
   const [score, setScore] = useState("")
+  const [activity, setActivity] = useState("")
+  const [remarks, setRemarks] = useState("")
 
   const selectedAssignment = assignments.find((a) => a.id === assignmentId)
   const sectionId = selectedAssignment?.section ?? null
@@ -440,6 +489,8 @@ function GradeEncodeForm({
     setStudentId("")
     setPeriodId("")
     setScore("")
+    setActivity("")
+    setRemarks("")
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -452,6 +503,7 @@ function GradeEncodeForm({
       subject_assignment: assignmentId,
       grading_period: periodId,
       score: trimmedScore === "" ? null : Number(trimmedScore),
+      remarks: formatActivityRemarks(activity, remarks),
     })
 
     reset()
@@ -623,6 +675,34 @@ function GradeEncodeForm({
             </div>
           </div>
 
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="encode-activity">Activity type</Label>
+              <Select value={activity} onValueChange={setActivity}>
+                <SelectTrigger id="encode-activity">
+                  <SelectValue placeholder="Whole grade (no activity)" />
+                </SelectTrigger>
+                <SelectContent>
+                  {GRADE_ACTIVITY_TYPES.map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {type}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="encode-remarks">Remarks</Label>
+              <Input
+                id="encode-remarks"
+                value={remarks}
+                onChange={(e) => setRemarks(e.target.value)}
+                placeholder="Optional note"
+              />
+            </div>
+          </div>
+
           {/*
             The wrapper carries the id rather than `ErrorNote` itself, which takes
             only a message. That is enough: `aria-describedby` resolves against
@@ -689,8 +769,8 @@ function FacultyAcademics() {
         <Lock className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
         <p>
           Encoded grades are saved as <strong>draft</strong>. You can update the
-          score, letter grade and remarks of your own records; moving a grade to
-          submitted or finalized stays with administration.
+          score and remarks of your own records; moving a grade to submitted or
+          finalized stays with administration.
         </p>
       </div>
 
@@ -787,7 +867,7 @@ function FacultyAcademics() {
  * The content-only edit form for one encoded grade.
  *
  * The API's write surface for a faculty member is the grade's content —
- * score, letter grade, remarks — so those are the only controls here. The
+ * score and remarks — so those are the only controls here. The
  * lifecycle (`draft → submitted → finalized`) and the encoder never move
  * through this form: the backend answers 403 to either, and a control that
  * can only ever be refused should not exist.
@@ -802,16 +882,21 @@ function GradeEditDialog({
   const updateGrade = useUpdateGrade()
 
   const [score, setScore] = useState("")
-  const [letter, setLetter] = useState("")
+  const [activity, setActivity] = useState("")
   const [remarks, setRemarks] = useState("")
   const [seededId, setSeededId] = useState<string | null>(null)
 
   if (grade && seededId !== grade.id) {
     // Re-seed whenever the dialog opens on a different grade.
+    const parsed = parseActivityRemarks(grade.remarks ?? null)
     setSeededId(grade.id)
     setScore(grade.score === null ? "" : String(grade.score))
-    setLetter(grade.letter_grade ?? "")
-    setRemarks(grade.remarks ?? "")
+    setActivity(
+      (GRADE_ACTIVITY_TYPES as readonly string[]).includes(parsed.activity)
+        ? parsed.activity
+        : ""
+    )
+    setRemarks(parsed.text)
   }
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -823,8 +908,7 @@ function GradeEditDialog({
         id: grade.id,
         payload: {
           score: trimmed === "" ? null : Number(trimmed),
-          letter_grade: letter.trim() === "" ? null : letter.trim(),
-          remarks: remarks.trim() === "" ? null : remarks.trim(),
+          remarks: formatActivityRemarks(activity, remarks),
         },
       },
       { onSuccess: () => onClose() }
@@ -832,7 +916,6 @@ function GradeEditDialog({
   }
 
   const scoreError = getFieldError(updateGrade.error, "score")
-  const letterError = getFieldError(updateGrade.error, "letter_grade")
   const remarksError = getFieldError(updateGrade.error, "remarks")
   const saving = updateGrade.isPending
 
@@ -871,21 +954,27 @@ function GradeEditDialog({
             error={scoreError}
           />
           <Field
-            label="Letter grade"
-            id="grade-edit-letter"
-            required
-            value={letter}
-            onChange={setLetter}
-            error={letterError}
-            placeholder="e.g. 1.00"
-          />
-          <Field
             label="Remarks"
             id="grade-edit-remarks"
             value={remarks}
             onChange={setRemarks}
             error={remarksError}
           />
+          <div className="space-y-1.5">
+            <Label htmlFor="grade-edit-activity">Activity type</Label>
+            <Select value={activity} onValueChange={setActivity}>
+              <SelectTrigger id="grade-edit-activity">
+                <SelectValue placeholder="Whole grade (no activity)" />
+              </SelectTrigger>
+              <SelectContent>
+                {GRADE_ACTIVITY_TYPES.map((type) => (
+                  <SelectItem key={type} value={type}>
+                    {type}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
           {updateGrade.isError && !scoreError ? (
             <ErrorNote message={normalizeApiError(updateGrade.error).message} />

@@ -415,7 +415,7 @@ describe("PH11.8 guidance routes", () => {
     },
     {
       path: "/app/admin/grades",
-      marker: /is the one grade write an administrator holds/i,
+      marker: /Grade records/i,
     },
     {
       path: "/app/admin/attendance",
@@ -495,17 +495,27 @@ describe("PH11.8 guidance routes", () => {
 
   /**
    * The write boundary is stated on the screens where it applies, so a tester
-   * can tell "this role cannot" from "this screen is unfinished".
+   * can tell "this role cannot" from "this screen is unfinished". The users
+   * screen no longer carries the "Not available" card: role changes,
+   * deactivation and deletion have no endpoint, so they are omitted rather
+   * than advertised.
    */
   it.each([
     ["/app/admin/attendance", /Read-only view/i],
-    ["/app/admin/users", /Not available through this API/i],
     ["/app/admin/cms", /Read-only view/i],
   ])("states the unsupported operations at %s", async (path, marker) => {
     authState.user = makeUser("admin")
     renderAt(path as string)
 
     expect(await screen.findByText(marker as RegExp)).toBeInTheDocument()
+  })
+
+  it("shows no unavailable-operations card on the users screen", async () => {
+    authState.user = makeUser("admin")
+    renderAt("/app/admin/users")
+
+    await screen.findByText(/the only account-creation form the API exposes/i)
+    expect(screen.queryByText(/Not available through this API/i)).toBeNull()
   })
 
   it("offers an admin no attendance write control", async () => {

@@ -88,8 +88,9 @@
  * admin content screen is a browse-and-inspect view; no create/update form is
  * built, because the backend would reject it.
  *
- * The proxy returns 503 when Strapi is unreachable, which is a distinct state
- * from "no content" and is rendered as such.
+ * The proxy returns 502 when Strapi is unreachable (service not deployed
+ * or not responding), which is a distinct state from "no content" and is
+ * rendered as such.
  */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
@@ -1114,16 +1115,27 @@ export const RESOURCE_TYPE_LABELS: Record<
   other: "Other",
 }
 
-/** Announcements visible to this caller. `GET /cms/announcements/`. */
+/**
+ * Announcements visible to this caller. `GET /cms/announcements/`.
+ *
+ * `retry: false` overrides the client default of one retry. Each attempt is
+ * a round trip to Strapi, and a dead content service refuses the connection
+ * slowly (seconds), so the default doubles the wait before the reader is
+ * told the content service is unavailable. Refetching is the honest retry
+ * here: the page offers the failure, and a second click is a deliberate
+ * retry rather than an automatic silent one.
+ */
 export function useCmsAnnouncements() {
   return useQuery<CmsAnnouncement[], Error>({
     queryKey: ["admin", "cms-announcements"],
-    queryFn: async () => {
-      const { data } = await apiClient.get<CmsAnnouncement[]>(
-        "/cms/announcements/"
+    queryFn: async ({ signal }) => {
+      const { results } = await fetchAllPages<CmsAnnouncement>(
+        "/cms/announcements/",
+        { signal }
       )
-      return data
+      return results
     },
+    retry: false,
   })
 }
 
@@ -1131,10 +1143,13 @@ export function useCmsAnnouncements() {
 export function useCmsResources() {
   return useQuery<CmsResource[], Error>({
     queryKey: ["admin", "cms-resources"],
-    queryFn: async () => {
-      const { data } = await apiClient.get<CmsResource[]>("/cms/resources/")
-      return data
+    queryFn: async ({ signal }) => {
+      const { results } = await fetchAllPages<CmsResource>("/cms/resources/", {
+        signal,
+      })
+      return results
     },
+    retry: false,
   })
 }
 

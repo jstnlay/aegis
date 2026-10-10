@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { MemoryRouter } from "react-router-dom"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { ParentDashboard } from "./ParentDashboard"
@@ -47,8 +48,12 @@ function renderWithClient(ui: React.ReactElement) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
+  // The dashboard links to the support record, so it renders inside a
+  // router like the real shell does.
   return render(
-    <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter>{ui}</MemoryRouter>
+    </QueryClientProvider>
   )
 }
 
@@ -175,7 +180,7 @@ describe("ParentDashboard", () => {
     expect(screen.getAllByText("Filipino").length).toBeGreaterThan(0)
   })
 
-  it("applies the static letter-grade classes to the rendered badges", async () => {
+  it("renders numeric scores with no letter-grade badges", async () => {
     stubLoadedChild()
     renderWithClient(<ParentDashboard />)
 
@@ -183,18 +188,9 @@ describe("ParentDashboard", () => {
 
     await screen.findByText("Academic Progress")
 
-    const badges = screen.getAllByText("A")
-    expect(badges.length).toBeGreaterThan(0)
-    for (const badge of badges) {
-      expect(badge).toHaveClass("bg-emerald-100")
-      expect(badge).toHaveClass("text-emerald-800")
-      // Must not carry a never-generated runtime-composed class.
-      expect(badge.className).not.toMatch(/bg-[a-z]-\d/)
-    }
-
-    for (const badge of screen.getAllByText("B")) {
-      expect(badge).toHaveClass("bg-sky-100")
-    }
+    // Scores render numerically; the Philippine system uses no letters.
+    expect(screen.queryByText("N/A")).not.toBeInTheDocument()
+    expect(screen.queryByText("A")).not.toBeInTheDocument()
   })
 
   it("shows N/A instead of 0.00% when there is no grade or attendance data", async () => {

@@ -1,6 +1,8 @@
 import { useMemo } from "react"
+import { Link } from "react-router-dom"
 
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   ErrorNote,
@@ -136,39 +138,26 @@ function FacultyDashboard() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Subject Assignments</CardTitle>
+          <CardTitle>Pending Grades</CardTitle>
         </CardHeader>
         <CardContent>
-          {assignmentsQuery.isLoading ? (
-            <PendingRegion label="Subject assignments">
+          {statsQuery.isLoading ? (
+            <PendingRegion label="Pending grades">
               <Skeleton className="h-10 w-full" />
             </PendingRegion>
-          ) : assignmentsQuery.isError ? (
-            <ErrorNote message="Unable to load subject assignments. Please try again." />
-          ) : assignmentsQuery.data && assignmentsQuery.data.length > 0 ? (
-            <ul className="space-y-2">
-              {assignmentsQuery.data.map((assignment, idx) => (
-                <li
-                  key={idx}
-                  className="flex items-center justify-between gap-2 rounded-md border p-3"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate font-medium">
-                      {assignment.subject_name}
-                    </p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {assignment.subject_code} • {assignment.section_name}
-                    </p>
-                  </div>
-                  <Badge variant="secondary" className="shrink-0">
-                    {assignment.section_name}
-                  </Badge>
-                </li>
-              ))}
-            </ul>
+          ) : statsQuery.isError ? (
+            <ErrorNote message="Unable to load pending grades. Please try again." />
+          ) : statsQuery.data &&
+            statsQuery.data.pending_grades +
+              statsQuery.data.pending_submissions >
+              0 ? (
+            <PendingGradesBars
+              drafts={statsQuery.data.pending_grades}
+              submissions={statsQuery.data.pending_submissions}
+            />
           ) : (
             <p className="text-sm text-muted-foreground">
-              No subject assignments found
+              No pending grades — everything is finalized.
             </p>
           )}
         </CardContent>
@@ -176,34 +165,140 @@ function FacultyDashboard() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Sections Overview</CardTitle>
+          <CardTitle>Quick actions</CardTitle>
         </CardHeader>
         <CardContent>
-          {sectionsQuery.isLoading ? (
-            <PendingRegion label="Sections overview">
-              <Skeleton className="h-10 w-full" />
-            </PendingRegion>
-          ) : sectionsQuery.isError ? (
-            <ErrorNote message="Unable to load sections. Please try again." />
-          ) : sectionsQuery.data && sectionsQuery.data.length > 0 ? (
-            <ul className="space-y-2">
-              {sectionsQuery.data.map((section, idx) => (
-                <li
-                  key={idx}
-                  className="flex items-center justify-between gap-2 rounded-md border p-3"
-                >
-                  <p className="min-w-0 truncate font-medium">{section.name}</p>
-                  <p className="shrink-0 text-xs text-muted-foreground">
-                    {section.grade_level_name}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-sm text-muted-foreground">No sections found</p>
-          )}
+          <div className="flex flex-wrap gap-2">
+            <Button asChild variant="outline" size="sm">
+              <Link to="/app/academics">Encode a grade</Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link to="/app/attendance">Take attendance</Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link to="/app/faculty/advisory">Advisory class</Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link to="/app/faculty/import">Imports & exports</Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link to="/app/reports">Reports</Link>
+            </Button>
+          </div>
         </CardContent>
       </Card>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Subject Assignments</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {assignmentsQuery.isLoading ? (
+              <PendingRegion label="Subject assignments">
+                <Skeleton className="h-10 w-full" />
+              </PendingRegion>
+            ) : assignmentsQuery.isError ? (
+              <ErrorNote message="Unable to load subject assignments. Please try again." />
+            ) : assignmentsQuery.data && assignmentsQuery.data.length > 0 ? (
+              <ul className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                {assignmentsQuery.data.map((assignment, idx) => (
+                  <li
+                    key={idx}
+                    className="flex items-center justify-between gap-2 rounded-md border p-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">
+                        {assignment.subject_name}
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {assignment.subject_code} • {assignment.section_name}
+                      </p>
+                    </div>
+                    <Badge variant="secondary" className="shrink-0">
+                      {assignment.section_name}
+                    </Badge>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                No subject assignments found
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Sections Overview</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {sectionsQuery.isLoading ? (
+              <PendingRegion label="Sections overview">
+                <Skeleton className="h-10 w-full" />
+              </PendingRegion>
+            ) : sectionsQuery.isError ? (
+              <ErrorNote message="Unable to load sections. Please try again." />
+            ) : sectionsQuery.data && sectionsQuery.data.length > 0 ? (
+              <ul className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                {sectionsQuery.data.map((section, idx) => (
+                  <li
+                    key={idx}
+                    className="flex items-center justify-between gap-2 rounded-md border p-3"
+                  >
+                    <p className="min-w-0 truncate font-medium">
+                      {section.name}
+                    </p>
+                    <p className="shrink-0 text-xs text-muted-foreground">
+                      {section.grade_level_name}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">No sections found</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
+}
+
+/** Drafts vs submissions bars so pending work reads at a glance. */
+function PendingGradesBars({
+  drafts,
+  submissions,
+}: {
+  drafts: number
+  submissions: number
+}) {
+  const total = drafts + submissions || 1
+  const rows = [
+    { label: "Drafts", count: drafts },
+    { label: "Submissions", count: submissions },
+  ]
+  return (
+    <div
+      className="space-y-1.5"
+      role="img"
+      aria-label={`${drafts} drafts and ${submissions} submissions pending`}
+    >
+      {rows.map((row) => (
+        <div key={row.label} className="flex items-center gap-2 text-xs">
+          <span className="w-24 shrink-0 font-medium">{row.label}</span>
+          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full bg-primary"
+              style={{ width: `${Math.round((row.count / total) * 100)}%` }}
+            />
+          </div>
+          <span className="w-12 shrink-0 text-right tabular-nums text-muted-foreground">
+            {row.count}
+          </span>
+        </div>
+      ))}
     </div>
   )
 }

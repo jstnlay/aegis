@@ -7,10 +7,21 @@ import {
   UnavailableMetric,
 } from "@/components/feedback/Feedback"
 import { Skeleton } from "@/components/ui/skeleton"
+import { ChartState } from "@/components/charts/ChartCard"
+import { GradeLevelPerformanceChart } from "@/components/charts/GradeLevelPerformanceChart"
+import { RiskDistributionChart } from "@/components/charts/RiskDistributionChart"
+import { RoleDistributionChart } from "@/components/charts/RoleDistributionChart"
+import { SubjectTrendChart } from "@/components/charts/SubjectTrendChart"
+import {
+  AcademicTrendChart,
+  AttendanceTrendChart,
+} from "@/components/charts/TrendCharts"
 import { useAuth } from "@/features/auth/AuthContext"
 import {
   useGradeLevelComparison,
+  useGradingPeriodOrder,
   useRiskDistribution,
+  useSchoolWideAttendanceTrend,
   useSchoolWideMetrics,
 } from "@/features/admin/api"
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table"
@@ -40,6 +51,8 @@ function AdminDashboard() {
   const metricsQuery = useSchoolWideMetrics()
   const riskDistQuery = useRiskDistribution()
   const comparisonQuery = useGradeLevelComparison()
+  const attendanceTrendQuery = useSchoolWideAttendanceTrend()
+  const periodOrder = useGradingPeriodOrder()
 
   // `null` means the backend reported no data for that metric; a real 0 is
   // passed through untouched and rendered as "0" / "0.00%".
@@ -190,6 +203,31 @@ function AdminDashboard() {
           />
         </CardContent>
       </Card>
+
+      {/*
+        Analytics folded into this dashboard: every chart below reads the same
+        endpoints as the standalone Analytics page, so the two can never
+        disagree. Kept in a compact two-column grid so the whole picture is
+        visible without deep scrolling.
+      */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <GradeLevelPerformanceChart />
+        <AcademicTrendChart />
+        <SubjectTrendChart periodOrder={periodOrder} />
+        <ChartState
+          isLoading={attendanceTrendQuery.isLoading}
+          error={
+            attendanceTrendQuery.isError ? attendanceTrendQuery.error : null
+          }
+          loadingLabel="Loading attendance trend"
+          isEmpty={false}
+          emptyMessage="No attendance has been recorded yet."
+        >
+          <AttendanceTrendChart days={attendanceTrendQuery.data?.days ?? []} />
+        </ChartState>
+        <RiskDistributionChart />
+        <RoleDistributionChart />
+      </div>
     </div>
   )
 }

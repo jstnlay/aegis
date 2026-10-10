@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react"
+import { Link } from "react-router-dom"
 
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -13,7 +14,6 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/features/auth/AuthContext"
 import { useLinkedStudents } from "@/features/parent/api"
 import { useStudentDashboardData } from "@/features/student/api"
-import { letterGradeBadgeClass } from "@/lib/grade-badge"
 import { formatPercent } from "@/lib/metric-format"
 
 /**
@@ -246,32 +246,36 @@ function ParentDashboard() {
                   ) : (
                     <div className="space-y-2">
                       <p className="text-sm font-medium">Grades by Subject</p>
-                      <ul className="space-y-2">
+                      <ul className="space-y-3">
                         {grades.map((grade, idx) => (
                           <li
                             key={`${grade.subject_code}-${idx}`}
-                            className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border p-3"
+                            className="space-y-1 rounded-md border border-border p-3"
                           >
-                            <div className="min-w-0">
-                              <p className="truncate font-medium">
-                                {grade.subject_name}
-                              </p>
-                              <p className="truncate text-xs text-muted-foreground">
-                                {grade.subject_code}
-                              </p>
-                            </div>
-                            <div className="flex shrink-0 items-center gap-2">
-                              <span className="font-bold text-foreground">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="truncate font-medium">
+                                  {grade.subject_name}
+                                </p>
+                                <p className="truncate text-xs text-muted-foreground">
+                                  {grade.subject_code}
+                                </p>
+                              </div>
+                              <span className="shrink-0 font-bold tabular-nums text-foreground">
                                 {formatPercent(grade.score, 2)}
                               </span>
-                              <Badge
-                                variant="secondary"
-                                className={letterGradeBadgeClass(
-                                  grade.letter_grade
-                                )}
-                              >
-                                {grade.letter_grade?.trim() || "N/A"}
-                              </Badge>
+                            </div>
+                            <div
+                              role="img"
+                              aria-label={`${grade.subject_name} score ${grade.score === null ? "not recorded" : `${grade.score} out of 100`}`}
+                              className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
+                            >
+                              <div
+                                className="h-full rounded-full bg-primary"
+                                style={{
+                                  width: `${Math.min(100, Math.max(0, grade.score ?? 0))}%`,
+                                }}
+                              />
                             </div>
                           </li>
                         ))}
@@ -320,17 +324,30 @@ function ParentDashboard() {
                         <span className="font-bold text-foreground">
                           {formatPercent(grade.score, 2)}
                         </span>
-                        <Badge
-                          variant="secondary"
-                          className={letterGradeBadgeClass(grade.letter_grade)}
-                        >
-                          {grade.letter_grade?.trim() || "N/A"}
-                        </Badge>
                       </div>
                     </li>
                   ))}
                 </ul>
               )}
+            </CardContent>
+          </Card>
+
+          <Card className="mt-4">
+            <CardHeader>
+              <CardTitle>Guidance & Support</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                Counseling sessions, intervention plans and behavioral notes for{" "}
+                {selectedStudent?.student_name ?? "your child"} live on the
+                support record.
+              </p>
+              <Link
+                to="/app/parent/support"
+                className="mt-3 inline-flex items-center rounded-md border border-border px-3 py-1.5 text-sm font-medium hover:bg-accent"
+              >
+                Open support record
+              </Link>
             </CardContent>
           </Card>
         </div>

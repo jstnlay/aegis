@@ -271,9 +271,7 @@ describe("FacultyAdvisoryPage note creation (TC-FAC-07)", () => {
   it("saves a note to the real endpoint and confirms it", async () => {
     await renderLoadedPage()
 
-    fireEvent.keyDown(screen.getByRole("combobox", { name: /student/i }), {
-      key: "ArrowDown",
-    })
+    fireEvent.click(screen.getByRole("button", { name: "Student" }))
     fireEvent.click(
       await screen.findByRole("option", { name: /Ana Reyes \(S-1001\)/ })
     )

@@ -6,11 +6,25 @@ from .views import (
     CmsResourceDetail,
     CmsResourceFileDownload,
     CmsResourceList,
+    PublicCmsAnnouncementList,
+    PublicCmsResourceList,
 )
 
 app_name = "cms"
 
 urlpatterns = [
+    # Public landing-page feeds (anonymous). Declared before the
+    # `<document_id>` patterns so "public" is never captured as an id.
+    path(
+        "announcements/public/",
+        PublicCmsAnnouncementList.as_view(),
+        name="cms-announcement-public-list",
+    ),
+    path(
+        "resources/public/",
+        PublicCmsResourceList.as_view(),
+        name="cms-resource-public-list",
+    ),
     path("announcements/", CmsAnnouncementList.as_view(), name="cms-announcement-list"),
     path(
         "announcements/<str:document_id>/",

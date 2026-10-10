@@ -816,6 +816,105 @@ class CmsProxyEndpointsTest(CmsTestBase):
 
 
 # ---------------------------------------------------------------------------
+# Public (anonymous) landing-page feeds
+# ---------------------------------------------------------------------------
+
+
+@override_settings(STRAPI_WEBHOOK_SECRET=SECRET)
+class PublicCmsEndpointsTest(CmsTestBase):
+    def setUp(self):
+        self.client = APIClient()
+
+    def test_public_announcements_need_no_authentication(self):
+        with mock.patch("apps.cms.views.StrapiClient") as mock_client:
+            mock_client.return_value.list_announcements.return_value = [
+                canonical_announcement(),
+            ]
+            response = self.client.get("/api/v1/cms/announcements/public/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [item["title"] for item in response.data["results"]], ["Sports Fest"]
+        )
+
+    def test_public_announcements_hide_role_targeted_and_expired(self):
+        expired = canonical_announcement(
+            document_id="doc-old",
+            title="Old News",
+            expires_at=timezone.now() - timedelta(days=1),
+        )
+        targeted = canonical_announcement(
+            document_id="doc-faculty",
+            title="Faculty Only",
+            target_roles=["faculty"],
+        )
+        with mock.patch("apps.cms.views.StrapiClient") as mock_client:
+            mock_client.return_value.list_announcements.return_value = [
+                canonical_announcement(),
+                expired,
+                targeted,
+            ]
+            response = self.client.get("/api/v1/cms/announcements/public/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [item["title"] for item in response.data["results"]], ["Sports Fest"]
+        )
+
+    def test_public_resources_only_active_all_audience(self):
+        with mock.patch("apps.cms.views.StrapiClient") as mock_client:
+            mock_client.return_value.list_resources.return_value = [
+                {
+                    "document_id": "res-1",
+                    "title": "Public Handbook",
+                    "description": None,
+                    "resource_type": "document",
+                    "file_or_url": "/api/v1/cms/resources/res-1/file/",
+                    "target_audience": ["all"],
+                    "is_active": True,
+                },
+                {
+                    "document_id": "res-2",
+                    "title": "Faculty Only",
+                    "description": None,
+                    "resource_type": "link",
+                    "file_or_url": "https://example.com",
+                    "target_audience": ["faculty"],
+                    "is_active": True,
+                },
+                {
+                    "document_id": "res-3",
+                    "title": "Retired",
+                    "description": None,
+                    "resource_type": "other",
+                    "file_or_url": None,
+                    "target_audience": ["all"],
+                    "is_active": False,
+                },
+            ]
+            response = self.client.get("/api/v1/cms/resources/public/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [item["title"] for item in response.data["results"]],
+            ["Public Handbook"],
+        )
+
+    def test_public_feeds_return_502_when_strapi_is_down(self):
+        from apps.cms.services.strapi_client import StrapiUnavailableError
+
+        with mock.patch("apps.cms.views.StrapiClient") as mock_client:
+            mock_client.return_value.list_announcements.side_effect = (
+                StrapiUnavailableError("down")
+            )
+            response = self.client.get("/api/v1/cms/announcements/public/")
+        self.assertEqual(response.status_code, status.HTTP_502_BAD_GATEWAY)
+        with mock.patch("apps.cms.views.StrapiClient") as mock_client:
+            mock_client.return_value.list_resources.side_effect = (
+                StrapiUnavailableError("down")
+            )
+            response = self.client.get("/api/v1/cms/resources/public/")
+        self.assertEqual(response.status_code, status.HTTP_502_BAD_GATEWAY)
+
+
+# ---------------------------------------------------------------------------
 # SEC-007 regression tests: authorized Resource file proxy
 # ---------------------------------------------------------------------------
 

@@ -15,6 +15,7 @@ import { ErrorNote } from "@/components/feedback/Feedback"
 import { ChoiceField, Field } from "@/components/ui/form-field"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import {
   Select,
   SelectContent,
@@ -133,8 +134,8 @@ export function FacultyAdvisoryPage() {
       </div>
 
       <RosterCard onManageProfile={setManaging} />
-      <ClassSummaryCard />
       <NotesCard />
+      <ClassSummaryCard />
 
       <ManageProfileDialog
         enrollment={managing}
@@ -150,6 +151,19 @@ function RosterCard({
   onManageProfile: (enrollment: Enrollment) => void
 }) {
   const rosterQuery = useAdvisoryEnrollments()
+  const [search, setSearch] = useState("")
+
+  const rows = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    const all = rosterQuery.data ?? []
+    if (!q) return all
+    return all.filter(
+      (entry) =>
+        entry.student_name.toLowerCase().includes(q) ||
+        entry.student_id.toLowerCase().includes(q) ||
+        entry.section_name.toLowerCase().includes(q)
+    )
+  }, [rosterQuery.data, search])
 
   const columns: readonly DataTableColumn<Enrollment>[] = [
     {
@@ -198,20 +212,36 @@ function RosterCard({
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <DataTable
-          caption="Students in your advisory class"
-          columns={columns}
-          rows={rosterQuery.data ?? []}
-          rowKey={(entry) => entry.id}
-          isLoading={rosterQuery.isLoading}
-          error={
-            rosterQuery.isError
-              ? normalizeApiError(rosterQuery.error).message
-              : null
-          }
-          loadingLabel="Loading your class list"
-          emptyMessage="No students are enrolled in your sections yet."
-        />
+        <div className="mb-3 space-y-1.5">
+          <Label htmlFor="advisory-roster-search">Search students</Label>
+          <Input
+            id="advisory-roster-search"
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Name, ID or section"
+          />
+        </div>
+        <div className="max-h-[28rem] overflow-y-auto">
+          <DataTable
+            caption="Students in your advisory class"
+            columns={columns}
+            rows={rows}
+            rowKey={(entry) => entry.id}
+            isLoading={rosterQuery.isLoading}
+            error={
+              rosterQuery.isError
+                ? normalizeApiError(rosterQuery.error).message
+                : null
+            }
+            loadingLabel="Loading your class list"
+            emptyMessage={
+              search.trim()
+                ? "No students match the current search."
+                : "No students are enrolled in your sections yet."
+            }
+          />
+        </div>
       </CardContent>
     </Card>
   )
@@ -514,24 +544,21 @@ function NotesCard() {
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="space-y-1.5">
               <Label htmlFor="behavioral-note-student">Student</Label>
-              <Select
+              <SearchableSelect
+                id="behavioral-note-student"
+                label="Student"
                 value={student}
-                onValueChange={(value) => {
+                onChange={(value) => {
                   setStudent(value)
                   resetMessage()
                 }}
-              >
-                <SelectTrigger id="behavioral-note-student">
-                  <SelectValue placeholder="Select a student" />
-                </SelectTrigger>
-                <SelectContent>
-                  {roster.map((entry) => (
-                    <SelectItem key={entry.student} value={entry.student}>
-                      {entry.student_name} ({entry.student_id})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                options={roster.map((entry) => ({
+                  value: entry.student,
+                  label: `${entry.student_name} (${entry.student_id})`,
+                }))}
+                placeholder="Select a student"
+                searchPlaceholder="Search students"
+              />
             </div>
 
             <div className="space-y-1.5">

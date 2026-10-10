@@ -134,13 +134,6 @@ export function AdminGradesPage() {
       ),
     },
     {
-      key: "letter",
-      header: "Remark",
-      cell: (grade) => (
-        <span className="text-sm">{grade.letter_grade?.trim() || "—"}</span>
-      ),
-    },
-    {
       key: "status",
       header: "Status",
       cell: (grade) => (
@@ -185,35 +178,11 @@ export function AdminGradesPage() {
           <h2 className="text-2xl font-bold text-foreground">Grades</h2>
         </div>
         <p className="text-sm text-muted-foreground">
-          Every grade record across the school.
-          {formatCount(pendingCount)} submitted{" "}
-          {pendingCount === 1 ? "grade is" : "grades are"} awaiting
+          Every grade record across the school. {formatCount(pendingCount)}{" "}
+          submitted {pendingCount === 1 ? "grade is" : "grades are"} awaiting
           finalization.
         </p>
       </div>
-
-      {/*
-        The write boundary is stated, not implied. An administrator looking for
-        a grade-entry form here would otherwise have no way to tell whether the
-        role lacks it or the screen is incomplete.
-      */}
-      <Card>
-        <CardHeader>
-          <CardTitle>What an administrator can do here</CardTitle>
-          <CardDescription>
-            Finalizing a submitted grade is the one grade write an administrator
-            holds. Encoding a score and importing grades in bulk are faculty
-            actions — the backend rejects them for this role with HTTP 403 — so
-            this screen offers no way to enter or edit a score.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Finalizing notifies the student and their linked parents, so it is a
-            deliberate per-grade action rather than a bulk one.
-          </p>
-        </CardContent>
-      </Card>
 
       <Card>
         <CardHeader>

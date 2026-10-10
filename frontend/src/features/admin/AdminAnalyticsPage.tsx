@@ -7,13 +7,7 @@ import {
   UnavailableMetric,
 } from "@/components/feedback/Feedback"
 import { Card, CardContent } from "@/components/ui/card"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { ChartState } from "@/components/charts/ChartCard"
 import { GradeLevelPerformanceChart } from "@/components/charts/GradeLevelPerformanceChart"
 import { RiskDistributionChart } from "@/components/charts/RiskDistributionChart"
@@ -142,18 +136,18 @@ export function AdminAnalyticsPage() {
         <CardContent className="space-y-4 pt-6">
           <div className="space-y-1.5">
             <Label htmlFor="admin-analytics-section">Section performance</Label>
-            <Select value={sectionId} onValueChange={setSectionId}>
-              <SelectTrigger id="admin-analytics-section">
-                <SelectValue placeholder="Select a section" />
-              </SelectTrigger>
-              <SelectContent>
-                {(sectionsQuery.data ?? []).map((section) => (
-                  <SelectItem key={section.id} value={section.id}>
-                    {section.name} — {section.grade_level_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              id="admin-analytics-section"
+              label="Section performance"
+              value={sectionId}
+              onChange={setSectionId}
+              options={(sectionsQuery.data ?? []).map((section) => ({
+                value: section.id,
+                label: `${section.name} — ${section.grade_level_name}`,
+              }))}
+              placeholder="Select a section"
+              searchPlaceholder="Search sections"
+            />
           </div>
 
           <SectionPerformanceChart

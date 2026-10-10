@@ -134,6 +134,35 @@ def _visible_resources(resource_list, user):
     ]
 
 
+def _public_announcements(announcement_list):
+    """
+    Anonymous landing-page feed.
+
+    Only announcements targeted at everyone (`target_roles=["all"]`) that
+    have not expired. Role-targeted and expired items never leave the
+    server for an unauthenticated viewer.
+    """
+    now = timezone.now()
+    visible = []
+    for item in announcement_list:
+        if "all" not in item["target_roles"]:
+            continue
+        expires_at = item.get("expires_at")
+        if expires_at is not None and expires_at <= now:
+            continue
+        visible.append(item)
+    return visible
+
+
+def _public_resources(resource_list):
+    """Anonymous landing-page feed: active resources with `target_audience=["all"]`."""
+    return [
+        item
+        for item in resource_list
+        if item["is_active"] and "all" in item["target_audience"]
+    ]
+
+
 class CmsAnnouncementList(generics.ListAPIView):
     serializer_class = CmsAnnouncementSerializer
     permission_classes = [IsAuthenticated]
@@ -179,6 +208,55 @@ class CmsResourceList(generics.ListAPIView):
         client = StrapiClient()
         items = client.list_resources()
         return _visible_resources(items, self.request.user)
+
+    def list(self, request, *args, **kwargs):
+        try:
+            return super().list(request, *args, **kwargs)
+        except StrapiUnavailableError:
+            return _cms_unavailable_response()
+
+
+class PublicCmsAnnouncementList(generics.ListAPIView):
+    """
+    GET /api/v1/cms/announcements/public/
+
+    Anonymous feed for the public landing page. No authentication, no user
+    object — only `target_roles=["all"]`, unexpired announcements are
+    returned. Strapi outages still answer 502 with the same honest body.
+    """
+
+    serializer_class = CmsAnnouncementSerializer
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get_queryset(self):
+        client = StrapiClient()
+        return _public_announcements(client.list_announcements())
+
+    def list(self, request, *args, **kwargs):
+        try:
+            return super().list(request, *args, **kwargs)
+        except StrapiUnavailableError:
+            return _cms_unavailable_response()
+
+
+class PublicCmsResourceList(generics.ListAPIView):
+    """
+    GET /api/v1/cms/resources/public/
+
+    Anonymous feed for the public landing page: active resources with
+    `target_audience=["all"]` only. File bytes stay behind the
+    authenticated download proxy; only metadata listed here as public is
+    reachable anonymously.
+    """
+
+    serializer_class = CmsResourceSerializer
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get_queryset(self):
+        client = StrapiClient()
+        return _public_resources(client.list_resources())
 
     def list(self, request, *args, **kwargs):
         try:

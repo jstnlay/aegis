@@ -192,28 +192,42 @@ export function StudentDashboard() {
                 ) : (
                   <div className="space-y-2">
                     <p className="text-sm font-medium">Grades by Subject</p>
-                    <ul className="space-y-2">
+                    <ul className="space-y-3">
                       {displayGrades.map((grade) => (
                         <li
                           key={grade.subject_code}
-                          className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border p-2"
+                          className="space-y-1 rounded-md border border-border p-2"
                         >
-                          <span className="min-w-0 truncate font-medium">
-                            {grade.subject_name}
-                          </span>
-                          <span
-                            className={`shrink-0 font-bold ${
-                              grade.score === null
-                                ? "text-muted-foreground"
-                                : grade.score >= 90
-                                  ? "text-success"
-                                  : grade.score >= 75
-                                    ? "text-warning-foreground"
-                                    : "text-destructive"
-                            }`}
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="min-w-0 truncate font-medium">
+                              {grade.subject_name}
+                            </span>
+                            <span
+                              className={`shrink-0 font-bold tabular-nums ${
+                                grade.score === null
+                                  ? "text-muted-foreground"
+                                  : grade.score >= 90
+                                    ? "text-success"
+                                    : grade.score >= 75
+                                      ? "text-warning-foreground"
+                                      : "text-destructive"
+                              }`}
+                            >
+                              {formatPercent(grade.score, 2)}
+                            </span>
+                          </div>
+                          <div
+                            role="img"
+                            aria-label={`${grade.subject_name} score ${grade.score === null ? "not recorded" : `${grade.score} out of 100`}`}
+                            className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
                           >
-                            {formatPercent(grade.score, 2)}
-                          </span>
+                            <div
+                              className="h-full rounded-full bg-primary"
+                              style={{
+                                width: `${Math.min(100, Math.max(0, grade.score ?? 0))}%`,
+                              }}
+                            />
+                          </div>
                         </li>
                       ))}
                     </ul>

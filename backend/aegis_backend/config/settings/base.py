@@ -51,6 +51,7 @@ LOCAL_APPS = [
     "apps.notifications",
     "apps.chatbot",  # PH9: chatbot service boundary + deterministic layer
     "apps.audit",  # PH10: audit trail domain model
+    "apps.portfolio",  # Student-authored showcase entries (text + link, no file storage)
 ]
 
 # AI Engine: pure computation layer (feature/label/risk/benchmark/recommend).

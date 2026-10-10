@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import {
   Select,
   SelectContent,
@@ -106,8 +107,115 @@ function StudentAttendance() {
 
       <Card>
         <CardHeader>
+          <CardTitle>Summary</CardTitle>
+          <CardDescription>
+            Your attendance rate by section, first — day-by-day records follow
+            below.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {summaryQuery.isLoading ? (
+            <Skeleton className="h-10 w-full" />
+          ) : summaryQuery.isError ? (
+            <ErrorNote
+              message={normalizeApiError(summaryQuery.error).message}
+            />
+          ) : (summaryQuery.data ?? []).length === 0 ? (
+            <EmptyState message="No attendance summary data." />
+          ) : (
+            <div className="space-y-4">
+              {(summaryQuery.data ?? []).map((s, idx) => {
+                const total = s.total_records || 0
+                const rate =
+                  total === 0
+                    ? 0
+                    : Math.round(
+                        ((s.present_count + s.late_count) / total) * 100
+                      )
+                return (
+                  <div key={idx} className="space-y-1">
+                    <div className="flex items-center justify-between gap-2 text-sm">
+                      <span className="min-w-0 truncate font-medium">
+                        {s.section_name}
+                      </span>
+                      <span className="shrink-0 tabular-nums text-muted-foreground">
+                        {rate}% · {s.present_count} present, {s.late_count}{" "}
+                        late, {s.absent_count} absent
+                      </span>
+                    </div>
+                    <div
+                      role="img"
+                      aria-label={`${s.section_name} attendance rate ${rate} percent`}
+                      className="h-2 w-full overflow-hidden rounded-full bg-muted"
+                    >
+                      <div
+                        className="h-full rounded-full bg-primary"
+                        style={{ width: `${rate}%` }}
+                      />
+                    </div>
+                  </div>
+                )
+              })}
+              <Table scrollLabel="Attendance summary">
+                {/*
+                PH11.11. This table had no caption at all, so it had no accessible
+                name — and the record table above it, once it gained one, would
+                have been the only thing on the page that announced what it held.
+                `scope="col"` and `whitespace-nowrap` on the counts follow the same
+                reasoning as the record table: the numbers read better on one line
+                and the headings have to be headers for the cells beneath them.
+              */}
+                <TableCaption className="sr-only">
+                  Attendance totals by section
+                </TableCaption>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead scope="col">Section</TableHead>
+                    <TableHead scope="col" className="text-right">
+                      Present
+                    </TableHead>
+                    <TableHead scope="col" className="text-right">
+                      Late
+                    </TableHead>
+                    <TableHead scope="col" className="text-right">
+                      Absent
+                    </TableHead>
+                    <TableHead scope="col" className="text-right">
+                      Total
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(summaryQuery.data ?? []).map((s, idx) => (
+                    <TableRow key={idx}>
+                      <TableCell>{s.section_name}</TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {s.present_count}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {s.late_count}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {s.absent_count}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {s.total_records}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Records</CardTitle>
-          <CardDescription>Attendance records tied to you.</CardDescription>
+          <CardDescription>
+            Day-by-day attendance records tied to you.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -123,15 +231,6 @@ function StudentAttendance() {
             <EmptyState message="No attendance records found." />
           ) : (
             <Table scrollLabel="Attendance records">
-              {/*
-                PH11.11. The caption was the last child of `<table>`, which is not
-                a valid position — the HTML parser expects it first, so the element
-                was not reliably associated with the table and a screen reader had
-                no accessible name for it. Moved to the front, where the parser
-                puts it. `scope="col"` added to the headings for the same reason
-                `DataTable` carries it: without it the header row reads as three
-                unrelated labels rather than as headers for the cells beneath.
-              */}
               <TableCaption className="sr-only">
                 One record per student and date
               </TableCaption>
@@ -157,91 +256,10 @@ function StudentAttendance() {
           )}
         </CardContent>
       </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Summary</CardTitle>
-          <CardDescription>
-            Bare array (no pagination). Multi-section students appear in
-            multiple rows.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {summaryQuery.isLoading ? (
-            <Skeleton className="h-10 w-full" />
-          ) : summaryQuery.isError ? (
-            <ErrorNote
-              message={normalizeApiError(summaryQuery.error).message}
-            />
-          ) : (summaryQuery.data ?? []).length === 0 ? (
-            <EmptyState message="No attendance summary data." />
-          ) : (
-            <Table scrollLabel="Attendance summary">
-              {/*
-                PH11.11. This table had no caption at all, so it had no accessible
-                name — and the record table above it, once it gained one, would
-                have been the only thing on the page that announced what it held.
-                `scope="col"` and `whitespace-nowrap` on the counts follow the same
-                reasoning as the record table: the numbers read better on one line
-                and the headings have to be headers for the cells beneath them.
-              */}
-              <TableCaption className="sr-only">
-                Attendance totals by section
-              </TableCaption>
-              <TableHeader>
-                <TableRow>
-                  <TableHead scope="col">Section</TableHead>
-                  <TableHead scope="col" className="text-right">
-                    Present
-                  </TableHead>
-                  <TableHead scope="col" className="text-right">
-                    Late
-                  </TableHead>
-                  <TableHead scope="col" className="text-right">
-                    Absent
-                  </TableHead>
-                  <TableHead scope="col" className="text-right">
-                    Total
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {(summaryQuery.data ?? []).map((s, idx) => (
-                  <TableRow key={idx}>
-                    <TableCell>{s.section_name}</TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {s.present_count}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {s.late_count}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {s.absent_count}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {s.total_records}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
     </div>
   )
 }
 
-/**
- * Read-only record row.
- *
- * There is intentionally no per-row action here. `record.recorded_by` is a
- * `FacultyProfile` UUID while `user.id` is a `User` UUID, and `/accounts/me/`
- * does not expose the caller's `FacultyProfile` — so the frontend cannot
- * establish ownership from verified data. Name comparison would be inference,
- * not identity, so it is not used. The backend's self-scoped
- * `PATCH`/`DELETE` guards remain in force; only the control is withheld.
- */
 function AttendanceRecordRow({ record }: { record: AttendanceRecord }) {
   return (
     <TableRow>
@@ -284,6 +302,11 @@ function FacultyAttendance() {
   // Evaluated once per mount, not per render, so a re-render mid-form cannot
   // shift the ceiling under a date the user already picked.
   const [maxDate] = useState(todayIso)
+  const [bulkState, setBulkState] = useState<{
+    running: boolean
+    done: number
+    failed: number
+  } | null>(null)
 
   async function handleCreate(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -301,6 +324,35 @@ function FacultyAttendance() {
       // The error is surfaced from `create.isError` below; a duplicate
       // student/date conflict must never silently overwrite the existing row.
     }
+  }
+
+  /**
+   * Bulk shortcut: mark every enrolled student present for the chosen
+   * section and date. One request per student (the API takes single
+   * records); already-recorded students fail with a conflict and are
+   * counted, never overwritten. Individual corrections still go through
+   * the single-record form above.
+   */
+  async function handleMarkAllPresent() {
+    if (!sectionId || !date || enrollments.length === 0) return
+    setBulkState({ running: true, done: 0, failed: 0 })
+    let done = 0
+    let failed = 0
+    for (const enrollment of enrollments) {
+      try {
+        await create.mutateAsync({
+          student: enrollment.student,
+          section: sectionId,
+          date,
+          status: "present",
+        })
+        done += 1
+      } catch {
+        failed += 1
+      }
+      setBulkState({ running: true, done, failed })
+    }
+    setBulkState({ running: false, done, failed })
   }
 
   return (
@@ -322,64 +374,51 @@ function FacultyAttendance() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="attendance-section">Section</Label>
-                <Select
+                <SearchableSelect
+                  id="attendance-section"
+                  label="Section"
                   value={sectionId}
-                  onValueChange={(value) => {
+                  onChange={(value) => {
                     setSectionId(value)
                     // The previous student may not be enrolled in this section.
                     setStudentId("")
                   }}
+                  options={sections.map((s) => ({
+                    value: s.id,
+                    label: s.name,
+                  }))}
+                  placeholder={
+                    sections.length === 0
+                      ? "No sections assigned"
+                      : "Select a section"
+                  }
+                  searchPlaceholder="Search sections"
                   disabled={sectionsQuery.isLoading || sections.length === 0}
-                >
-                  <SelectTrigger id="attendance-section">
-                    <SelectValue
-                      placeholder={
-                        sections.length === 0
-                          ? "No sections assigned"
-                          : "Select a section"
-                      }
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sections.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="attendance-student">Student</Label>
-                <Select
+                <SearchableSelect
+                  id="attendance-student"
+                  label="Student"
                   value={studentId}
-                  onValueChange={setStudentId}
+                  onChange={setStudentId}
+                  options={enrollments.map((enrollment) => ({
+                    value: enrollment.student,
+                    label: `${enrollment.student_name} — ${enrollment.student_id}`,
+                  }))}
+                  placeholder={
+                    !sectionId
+                      ? "Select a section first"
+                      : enrollmentsQuery.isLoading
+                        ? "Loading enrolled students"
+                        : enrollments.length === 0
+                          ? "No actively enrolled students"
+                          : "Select a student"
+                  }
+                  searchPlaceholder="Search students"
                   disabled={!sectionId || enrollmentsQuery.isLoading}
-                >
-                  <SelectTrigger id="attendance-student">
-                    <SelectValue
-                      placeholder={
-                        !sectionId
-                          ? "Select a section first"
-                          : enrollmentsQuery.isLoading
-                            ? "Loading enrolled students"
-                            : enrollments.length === 0
-                              ? "No actively enrolled students"
-                              : "Select a student"
-                      }
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {enrollments.map((enrollment) => (
-                      <SelectItem
-                        key={enrollment.id}
-                        value={enrollment.student}
-                      >
-                        {enrollment.student_name} — {enrollment.student_id}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                />
               </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -427,6 +466,35 @@ function FacultyAttendance() {
               {create.isPending ? "Recording…" : "Record attendance"}
             </Button>
           </form>
+
+          <div className="mt-4 border-t border-border pt-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={
+                  !sectionId ||
+                  !date ||
+                  enrollments.length === 0 ||
+                  bulkState?.running === true
+                }
+                onClick={() => void handleMarkAllPresent()}
+              >
+                {bulkState?.running
+                  ? `Marking… ${bulkState.done}/${enrollments.length}`
+                  : "Mark all present for this section & date"}
+              </Button>
+            </div>
+            {bulkState && !bulkState.running ? (
+              <p className="mt-2 text-sm text-muted-foreground" role="status">
+                Marked {bulkState.done} present
+                {bulkState.failed > 0
+                  ? `, ${bulkState.failed} already recorded and left untouched`
+                  : ""}
+                . Correct individuals with the form above.
+              </p>
+            ) : null}
+          </div>
         </CardContent>
       </Card>
 

@@ -1,3 +1,4 @@
+import { Bot } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { Outlet, useLocation } from "react-router-dom"
 
@@ -95,37 +96,37 @@ export function AppShell() {
 
         <main id="main-content" className="flex-1 scroll-mt-14" tabIndex={-1}>
           <div className="mx-auto w-full max-w-6xl px-4 py-6 lg:px-6">
-            {/*
-              A sibling of the outlet rather than a route. The assistant is a
-              persistent side tool, so opening it must not navigate away from
-              whatever the user was reading — and the transcript is component
-              state, so it is discarded on navigation, which is the honest
-              behaviour for a chat that does not persist anything.
-            */}
-            <div className="mb-4 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setChatOpen((open) => !open)}
-                aria-expanded={chatOpen}
-                aria-controls="chatbot-panel"
-                className="rounded-md border border-border px-3 py-1.5 text-sm font-medium hover:bg-accent"
-              >
-                {chatOpen ? "Close assistant" : "Ask the assistant"}
-              </button>
-            </div>
-
-            <div id="chatbot-panel">
-              <ChatbotPanel
-                open={chatOpen}
-                onClose={() => setChatOpen(false)}
-              />
-            </div>
-
             <ErrorBoundary resetKeys={[location.pathname]}>
               <Outlet />
             </ErrorBoundary>
           </div>
         </main>
+      </div>
+
+      {/*
+        Floating assistant: a circular robot button pinned to the bottom-right
+        on every dashboard. It opens/closes the same ChatbotPanel without
+        navigating, and the transcript is still discarded on close.
+      */}
+      <div className="fixed right-4 bottom-4 z-50 flex flex-col items-end gap-3">
+        {chatOpen && (
+          <div
+            id="chatbot-panel"
+            className="w-[min(24rem,calc(100vw-2rem))] max-h-[70vh] overflow-y-auto"
+          >
+            <ChatbotPanel open={chatOpen} onClose={() => setChatOpen(false)} />
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={() => setChatOpen((open) => !open)}
+          aria-expanded={chatOpen}
+          aria-controls="chatbot-panel"
+          aria-label={chatOpen ? "Close assistant" : "Open assistant"}
+          className="flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg hover:opacity-90"
+        >
+          <Bot aria-hidden="true" className="size-6" />
+        </button>
       </div>
     </div>
   )

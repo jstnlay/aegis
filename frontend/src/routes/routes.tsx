@@ -12,8 +12,10 @@ import { RiskAlertsPage } from "@/features/guidance/RiskAlertsPage"
 import { StudentProfilePage } from "@/features/guidance/StudentProfilePage"
 import { StudentsPage } from "@/features/guidance/StudentsPage"
 import { NotificationsPage } from "@/features/notifications/NotificationsPage"
+import { ReportsPage } from "@/features/reports/ReportsPage"
 import { AccountSettingsPage } from "@/features/settings/AccountSettingsPage"
 import { ChangePasswordPage } from "@/routes/pages/ChangePasswordPage"
+import { LandingPage } from "@/routes/pages/LandingPage"
 import { LoginPage } from "@/routes/pages/LoginPage"
 import { NotFoundPage } from "@/routes/pages/NotFoundPage"
 import {
@@ -43,13 +45,14 @@ import { AdminGradesPage } from "@/features/admin/AdminGradesPage"
 import { AdminUsersPage } from "@/features/admin/AdminUsersPage"
 
 export const appRoutes: RouteObject[] = [
+  { path: "/", element: <LandingPage /> },
   { path: "/login", element: <LoginPage /> },
   { path: "/change-password", element: <ChangePasswordPage /> },
   {
-    path: "/",
+    // Pathless auth boundary: matches only through its children (`/app…`),
+    // so `/` renders the public landing page and never bounces to /login.
     element: <ProtectedRoute />,
     children: [
-      { index: true, element: <Navigate to="/app" replace /> },
       {
         path: "app",
         element: <AppShell />,
@@ -301,6 +304,12 @@ export const appRoutes: RouteObject[] = [
             // every role over their own rows.
             path: "notifications",
             element: <NotificationsPage />,
+          },
+          {
+            // Reports compiles the controlled exports each role is
+            // authorized for — no separate report model exists.
+            path: "reports",
+            element: <ReportsPage />,
           },
           /* PH11.9: the admin surface. Each route is admin-only and each is
              built from an endpoint verified during this phase. Where the backend

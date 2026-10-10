@@ -50,6 +50,7 @@ import {
 } from "@/features/guidance/api"
 import { downloadCsv } from "@/lib/export"
 import { normalizeApiError } from "@/lib/error"
+import { PortfolioList } from "@/features/portfolio/PortfolioCard"
 import {
   consultationStatusBadgeClass,
   riskLevelBadgeClass,
@@ -298,7 +299,6 @@ function GradesBlock({ studentId }: { studentId: string }) {
           <TableHead>Section</TableHead>
           <TableHead>Period</TableHead>
           <TableHead>Score</TableHead>
-          <TableHead>Letter</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -319,7 +319,6 @@ function GradesBlock({ studentId }: { studentId: string }) {
             <TableCell className="tabular-nums">
               {grade.score === null ? "—" : grade.score}
             </TableCell>
-            <TableCell>{grade.letterGrade ?? "—"}</TableCell>
           </TableRow>
         ))}
       </TableBody>
@@ -697,6 +696,13 @@ export function StudentProfilePage() {
               studentId={studentId ?? ""}
             />
           )}
+        </Section>
+
+        <Section
+          title="Portfolio"
+          description="School activities the student showcases."
+        >
+          <PortfolioList studentId={studentId ?? null} />
         </Section>
       </div>
 

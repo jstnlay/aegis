@@ -803,6 +803,54 @@ function ResultsForAssessment({
   )
 }
 
+/**
+ * Collapsed questions + results for one assessment card.
+ *
+ * Each card previously rendered its full question list and full results table
+ * inline, so the page grew with every assessment and most users scrolled past
+ * walls of detail to reach the next one. The counts stay visible; the detail
+ * opens on demand.
+ */
+function AssessmentDetails({
+  assessment,
+  results,
+  resultsLoading,
+  resultsError,
+}: {
+  assessment: GuidanceAssessment
+  results: GuidanceAssessmentResult[]
+  resultsLoading: boolean
+  resultsError: string | null
+}) {
+  const completed = results.filter((r) => r.status === "completed").length
+  return (
+    <div className="space-y-2">
+      <details className="rounded-md border border-border">
+        <summary className="cursor-pointer px-3 py-2 text-sm font-medium">
+          Questions ({assessment.question_count})
+        </summary>
+        <div className="border-t border-border p-3">
+          <QuestionsBlock assessment={assessment} />
+        </div>
+      </details>
+      <details className="rounded-md border border-border">
+        <summary className="cursor-pointer px-3 py-2 text-sm font-medium">
+          Results ({completed} of {results.length} completed)
+        </summary>
+        <div className="max-h-96 overflow-y-auto border-t border-border p-3">
+          {resultsLoading ? (
+            <Skeleton className="h-16 w-full" />
+          ) : resultsError ? (
+            <ErrorNote message={resultsError} />
+          ) : (
+            <ResultsForAssessment assessment={assessment} results={results} />
+          )}
+        </div>
+      </details>
+    </div>
+  )
+}
+
 export function AssessmentsPage() {
   const assessmentsQuery = useGuidanceAssessments()
   const resultsQuery = useGuidanceAssessmentResults()
@@ -1033,20 +1081,16 @@ export function AssessmentsPage() {
                     )}
                   </div>
 
-                  <QuestionsBlock assessment={assessment} />
-
-                  {resultsQuery.isLoading ? (
-                    <Skeleton className="h-16 w-full" />
-                  ) : resultsQuery.isError ? (
-                    <ErrorNote
-                      message={normalizeApiError(resultsQuery.error).message}
-                    />
-                  ) : (
-                    <ResultsForAssessment
-                      assessment={assessment}
-                      results={resultsByAssessment.get(assessment.id) ?? []}
-                    />
-                  )}
+                  <AssessmentDetails
+                    assessment={assessment}
+                    results={resultsByAssessment.get(assessment.id) ?? []}
+                    resultsLoading={resultsQuery.isLoading}
+                    resultsError={
+                      resultsQuery.isError
+                        ? normalizeApiError(resultsQuery.error).message
+                        : null
+                    }
+                  />
                 </div>
               ))}
             </div>

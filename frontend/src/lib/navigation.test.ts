@@ -68,6 +68,8 @@ describe("role navigation configuration", () => {
       "student/assessments",
       // Student class schedule (TC-STU-04), backed by the `schedule` route
       "schedule",
+      // Reports compiles the controlled exports each role is authorized for
+      "reports",
     ]
 
     for (const role of ROLES) {
@@ -129,6 +131,7 @@ describe("role navigation configuration", () => {
       "attendance",
       "dashboard",
       "notifications",
+      "reports",
       "schedule",
       "student/assessments",
     ])
@@ -179,7 +182,8 @@ describe("role navigation configuration", () => {
     expect(parent).toContain("parent/assessments")
     expect(parent).toContain("parent/support")
     expect(parent).not.toContain("attendance")
-    // Reports stays planned: there is no report contract a parent can use.
+    // Reports is available: the controlled exports answer within a parent's
+    // linked-children scope, so the page compiles only authorized downloads.
     expect(parent).toContain("reports")
     expect(parent).not.toContain("users")
     expect(parent).not.toContain("students")

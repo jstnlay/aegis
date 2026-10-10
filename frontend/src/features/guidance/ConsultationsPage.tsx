@@ -55,6 +55,7 @@ import {
   type ConsultationStatus,
 } from "@/features/guidance/api"
 import { normalizeApiError } from "@/lib/error"
+import { useHideCompleted } from "@/lib/archive"
 import {
   consultationStatusBadgeClass,
   riskLevelBadgeClass,
@@ -721,6 +722,9 @@ export function ConsultationsPage() {
   const [priority, setPriority] = useState<ConsultationPriority | "all">("all")
   const [search, setSearch] = useState("")
   const [sort, setSort] = useState<DataTableSort | null>(null)
+  const { hideCompleted, setHidden } = useHideCompleted(
+    "aegis:archive:consultations"
+  )
 
   /*
    * Success confirmation for a create or an edit.
@@ -740,10 +744,17 @@ export function ConsultationsPage() {
     [consultationsQuery.data]
   )
 
-  const visible = useMemo(
-    () => filterConsultations(consultations, { status, priority, search }),
-    [consultations, status, priority, search]
-  )
+  const visible = useMemo(() => {
+    const filtered = filterConsultations(consultations, {
+      status,
+      priority,
+      search,
+    })
+    // Archive: completed sessions stay on the server; this only hides them.
+    return hideCompleted
+      ? filtered.filter((row) => row.status !== "completed")
+      : filtered
+  }, [consultations, status, priority, search, hideCompleted])
 
   const counts = useMemo(
     () => countConsultationsByStatus(consultations),
@@ -947,6 +958,19 @@ export function ConsultationsPage() {
               {notice}
             </p>
           ) : null}
+
+          <div className="flex items-center gap-2">
+            <input
+              id="consultations-hide-completed"
+              type="checkbox"
+              checked={hideCompleted}
+              onChange={(event) => setHidden(event.target.checked)}
+              className="size-4 accent-primary"
+            />
+            <Label htmlFor="consultations-hide-completed">
+              Hide completed (archive)
+            </Label>
+          </div>
 
           <DataTable
             caption="Consultations"

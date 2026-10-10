@@ -38,9 +38,11 @@ import { normalizeApiError } from "@/lib/error"
  * Authoring happens in Strapi. This screen shows what AEGIS is currently
  * publishing, which is the part an administrator actually needs to verify.
  *
- * Two states are kept distinct. The proxy answers 503 when Strapi is
- * unreachable, which is not the same as "there is no content" — the error path
- * says so rather than rendering an empty list that reads as an empty school.
+ * Two states are kept distinct. The proxy answers 502 when Strapi is
+ * unreachable (the CMS service is not deployed or not responding), which is
+ * not the same as "there is no content" — the error path says the content
+ * service is temporarily unavailable rather than rendering an empty list
+ * that reads as an empty school.
  *
  * Resource files are downloaded through `GET /cms/resources/{id}/file/`
  * (SEC-007), the authorized proxy, never through a direct Strapi URL. PH11.10

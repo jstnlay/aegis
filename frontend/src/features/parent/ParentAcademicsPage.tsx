@@ -32,7 +32,7 @@ import {
   type LinkedStudent,
   type ParentGrade,
 } from "@/features/parent/api"
-import { letterGradeBadgeClass } from "@/lib/grade-badge"
+import { PortfolioList } from "@/features/portfolio/PortfolioCard"
 import { formatCount, formatPercent } from "@/lib/metric-format"
 
 /**
@@ -363,6 +363,19 @@ function AcademicRecord({
 
       <Card>
         <CardHeader>
+          <CardTitle>Portfolio</CardTitle>
+          <CardDescription>
+            School activities {child.student_name} showcases — paperwork, term
+            exams, recitations.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <PortfolioList studentId={child.id} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Attendance record</CardTitle>
           <CardDescription>
             Day-by-day attendance recorded by the class teacher.
@@ -469,18 +482,6 @@ function GradeTable({
             ? "—"
             : formatPercent(Number(grade.score), 2)}
         </span>
-      ),
-    },
-    {
-      key: "letter",
-      header: "Remark",
-      cell: (grade) => (
-        <Badge
-          variant="secondary"
-          className={letterGradeBadgeClass(grade.letter_grade)}
-        >
-          {grade.letter_grade?.trim() || "—"}
-        </Badge>
       ),
     },
     {

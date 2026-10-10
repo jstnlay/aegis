@@ -107,16 +107,15 @@ function record(overrides: Record<string, unknown> = {}) {
 }
 
 /**
- * Radix `Select` opens on a mouse pointerdown or on a trigger key. jsdom has no
- * real pointer sequence, so these tests drive the keyboard path, which the
- * component treats identically, then click the option. This avoids adding a
- * testing dependency while still exercising the real component.
+ * The roster selects are searchable listboxes: a button trigger opens a
+ * popover with a filter input and `role="option"` rows. Clicking the trigger
+ * then the option exercises the real component with no extra dependency.
  */
-async function openSelect(trigger: HTMLElement) {
-  // The trigger renders disabled while its options load; Radix ignores
-  // key events on a disabled trigger, so wait for it to become interactive.
+async function openSearchSelect(trigger: HTMLElement) {
+  // The trigger renders disabled while its options load; a disabled trigger
+  // ignores clicks, so wait for it to become interactive.
   await waitFor(() => expect(trigger).toBeEnabled())
-  fireEvent.keyDown(trigger, { key: "ArrowDown" })
+  fireEvent.click(trigger)
 }
 
 function chooseOption(option: HTMLElement) {
@@ -243,7 +242,9 @@ describe("AttendancePage (faculty)", () => {
 
     renderPage()
 
-    await openSelect(await screen.findByRole("combobox", { name: /Section/i }))
+    await openSearchSelect(
+      await screen.findByRole("button", { name: "Section" })
+    )
     chooseOption(await screen.findByRole("option", { name: "Einstein" }))
 
     await waitFor(() => {
@@ -251,7 +252,7 @@ describe("AttendancePage (faculty)", () => {
       expect(urls).toContain("/academics/enrollments/")
     })
 
-    await openSelect(screen.getByRole("combobox", { name: /Student/i }))
+    await openSearchSelect(screen.getByRole("button", { name: "Student" }))
     expect(
       await screen.findByRole("option", { name: /Ana Cruz — STU-001/ })
     ).toBeInTheDocument()
@@ -280,9 +281,11 @@ describe("AttendancePage (faculty)", () => {
 
     renderPage()
 
-    await openSelect(await screen.findByRole("combobox", { name: /Section/i }))
+    await openSearchSelect(
+      await screen.findByRole("button", { name: "Section" })
+    )
     chooseOption(await screen.findByRole("option", { name: "Einstein" }))
-    await openSelect(screen.getByRole("combobox", { name: /Student/i }))
+    await openSearchSelect(screen.getByRole("button", { name: "Student" }))
 
     expect(
       await screen.findByRole("option", { name: /Ana Cruz — STU-001/ })
@@ -307,9 +310,11 @@ describe("AttendancePage (faculty)", () => {
 
     renderPage()
 
-    await openSelect(await screen.findByRole("combobox", { name: /Section/i }))
+    await openSearchSelect(
+      await screen.findByRole("button", { name: "Section" })
+    )
     chooseOption(await screen.findByRole("option", { name: "Einstein" }))
-    await openSelect(screen.getByRole("combobox", { name: /Student/i }))
+    await openSearchSelect(screen.getByRole("button", { name: "Student" }))
     chooseOption(
       await screen.findByRole("option", { name: /Ana Cruz — STU-001/ })
     )
@@ -374,9 +379,11 @@ describe("AttendancePage (faculty)", () => {
 
     renderPage()
 
-    await openSelect(await screen.findByRole("combobox", { name: /Section/i }))
+    await openSearchSelect(
+      await screen.findByRole("button", { name: "Section" })
+    )
     chooseOption(await screen.findByRole("option", { name: "Einstein" }))
-    await openSelect(screen.getByRole("combobox", { name: /Student/i }))
+    await openSearchSelect(screen.getByRole("button", { name: "Student" }))
     chooseOption(
       await screen.findByRole("option", { name: /Ana Cruz — STU-001/ })
     )

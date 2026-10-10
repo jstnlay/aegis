@@ -164,15 +164,16 @@ describe("role-aware sidebar", () => {
     )
 
     // Assessments is now a real student route (`student/assessments`), for
-    // taking and reviewing objective 2.4. The planned `Reports` entry remains
-    // informative and non-navigable rather than pointing at a fake route.
+    // taking and reviewing objective 2.4. Reports is a real route too: it
+    // compiles the controlled exports the caller is authorized for.
     expect(screen.getByRole("link", { name: "Assessments" })).toHaveAttribute(
       "href",
       "/app/student/assessments"
     )
-    expect(screen.queryByRole("link", { name: "Reports" })).toBeNull()
-    expect(screen.getByText("Reports")).toBeInTheDocument()
-    expect(screen.getAllByText("Planned").length).toBeGreaterThan(0)
+    expect(screen.getByRole("link", { name: "Reports" })).toHaveAttribute(
+      "href",
+      "/app/reports"
+    )
   })
 
   it("shows the parent the three real PH11.9 links, and no Attendance placeholder", async () => {

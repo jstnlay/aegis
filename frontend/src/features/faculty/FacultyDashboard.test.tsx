@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { MemoryRouter } from "react-router-dom"
 import { describe, expect, it, vi } from "vitest"
 import { FacultyDashboard } from "./FacultyDashboard"
 import type { User } from "@/types/auth"
@@ -38,8 +39,12 @@ const queryClient = new QueryClient({
 })
 
 function renderWithClient(ui: React.ReactElement) {
+  // The dashboard renders quick-action links, so it mounts inside a router
+  // like the real shell does.
   return render(
-    <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter>{ui}</MemoryRouter>
+    </QueryClientProvider>
   )
 }
 

@@ -1,8 +1,10 @@
-import { LogOut, Menu } from "lucide-react"
-import { useLocation } from "react-router-dom"
+import { Bell, LogOut, Menu, Settings, User } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
+import { Link, useLocation } from "react-router-dom"
 
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/features/auth/AuthContext"
+import { useUnreadCount } from "@/features/notifications/api"
 import { getPageTitle } from "@/lib/navigation"
 import { ROLE_LABELS, userDisplayName } from "@/lib/roles"
 
@@ -23,6 +25,9 @@ export const PRIMARY_NAV_ID = "primary-navigation"
 
 function UserChip() {
   const { user, logout } = useAuth()
+  const unread = useUnreadCount()
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
   const name = userDisplayName(user)
   const initials = name
     .split(/\s+/)
@@ -31,33 +36,118 @@ function UserChip() {
     .map((part) => part[0]?.toUpperCase() ?? "")
     .join("")
 
+  useEffect(() => {
+    if (!menuOpen) return
+    function onPointerDown(event: PointerEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setMenuOpen(false)
+      }
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setMenuOpen(false)
+    }
+    document.addEventListener("pointerdown", onPointerDown)
+    document.addEventListener("keydown", onKeyDown)
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown)
+      document.removeEventListener("keydown", onKeyDown)
+    }
+  }, [menuOpen])
+
   return (
-    <div className="flex items-center gap-2">
-      <div className="hidden min-w-0 text-right sm:block">
-        <p className="truncate text-sm leading-tight font-medium text-foreground">
-          {name || "Signed in"}
-        </p>
-        <p className="truncate text-xs leading-tight text-muted-foreground">
-          {user ? ROLE_LABELS[user.role] : ""}
-        </p>
-      </div>
-
-      <span
-        aria-hidden="true"
-        className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground"
-      >
-        {initials || "—"}
-      </span>
-
+    <div className="flex items-center gap-1">
       <Button
         variant="ghost"
         size="icon"
-        onClick={() => void logout()}
-        aria-label="Sign out"
-        className="text-muted-foreground"
+        asChild
+        aria-label={
+          unread > 0 ? `Notifications, ${unread} unread` : "Notifications"
+        }
+        className="relative text-muted-foreground"
       >
-        <LogOut aria-hidden="true" />
+        <Link to="/app/notifications">
+          <Bell aria-hidden="true" />
+          {unread > 0 && (
+            <span
+              aria-hidden="true"
+              className="absolute top-1 right-1 size-2 rounded-full bg-destructive"
+            />
+          )}
+        </Link>
       </Button>
+
+      <div ref={menuRef} className="relative">
+        <button
+          type="button"
+          onClick={() => setMenuOpen((open) => !open)}
+          aria-expanded={menuOpen}
+          aria-haspopup="menu"
+          aria-label="Account menu"
+          className="flex items-center gap-2 rounded-md px-1 py-1 hover:bg-accent"
+        >
+          <span className="hidden min-w-0 text-right sm:block">
+            <span className="block truncate text-sm leading-tight font-medium text-foreground">
+              {name || "Signed in"}
+            </span>
+            <span className="block truncate text-xs leading-tight text-muted-foreground">
+              {user ? ROLE_LABELS[user.role] : ""}
+            </span>
+          </span>
+          <span
+            aria-hidden="true"
+            className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground"
+          >
+            {initials || "—"}
+          </span>
+        </button>
+
+        {menuOpen && (
+          <div
+            role="menu"
+            aria-label="Account"
+            className="absolute right-0 z-50 mt-2 w-48 rounded-md border border-border bg-popover py-1 shadow-md"
+          >
+            <div className="px-3 py-2">
+              <p className="truncate text-sm font-medium">
+                {name || "Signed in"}
+              </p>
+              <p className="truncate text-xs text-muted-foreground">
+                {user ? ROLE_LABELS[user.role] : ""}
+              </p>
+            </div>
+            <Link
+              to="/app/notifications"
+              role="menuitem"
+              onClick={() => setMenuOpen(false)}
+              className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent"
+            >
+              <User aria-hidden="true" className="size-4" />
+              Profile
+            </Link>
+            <Link
+              to="/app/account-settings"
+              role="menuitem"
+              onClick={() => setMenuOpen(false)}
+              className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent"
+            >
+              <Settings aria-hidden="true" className="size-4" />
+              Settings
+            </Link>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setMenuOpen(false)
+                void logout()
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-accent"
+            >
+              <LogOut aria-hidden="true" className="size-4" />
+              Sign out
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

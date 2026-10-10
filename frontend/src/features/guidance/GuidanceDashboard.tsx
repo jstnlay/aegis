@@ -162,71 +162,65 @@ function GuidanceDashboard() {
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Risk Alert Cards</CardTitle>
+            <CardTitle>Risk Alerts</CardTitle>
           </CardHeader>
           <CardContent>
-            {/*
-                PH11.11: `isFetching` → `isLoading`, and the failure became an
-                `ErrorNote`. `isFetching` stays true through a background
-                refetch, so a refresh over alerts already on screen replaced the
-                list with a grey bar. The muted failure paragraph was worse still:
-                it was visually identical to the "No risk alerts" line directly
-                below it and announced nothing, so a failed request read as an
-                empty one.
-              */}
             {riskAlertsQuery.isLoading ? (
               <PendingRegion label="Risk alerts">
                 <Skeleton className="h-20 w-full" />
               </PendingRegion>
             ) : riskAlertsQuery.isError ? (
               <ErrorNote message="Unable to load risk alerts. Please try again." />
-            ) : recentAlerts.length > 0 ? (
-              <ul className="space-y-3">
-                {recentAlerts.map((alert) => (
-                  <li
-                    key={alert.id}
-                    className="rounded-md border p-3"
-                    data-risk={alert.risk_level}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="truncate font-medium">
-                          {alert.student_name}
-                        </p>
-                        {/*
+            ) : (riskAlertsQuery.data ?? []).length > 0 ? (
+              <div className="space-y-4">
+                <RiskLevelBars alerts={riskAlertsQuery.data ?? []} />
+                <ul className="space-y-3">
+                  {recentAlerts.map((alert) => (
+                    <li
+                      key={alert.id}
+                      className="rounded-md border p-3"
+                      data-risk={alert.risk_level}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate font-medium">
+                            {alert.student_name}
+                          </p>
+                          {/*
                           `RiskAlertSerializer` exposes no student ID code, so
                           no code is rendered here — the UUID is deliberately not
                           shown as a substitute. The student profile page is the
                           place a human-facing code is available.
                         */}
-                        <p className="truncate text-xs text-muted-foreground">
-                          {alert.status.replace(/_/g, " ")}
-                        </p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {alert.status.replace(/_/g, " ")}
+                          </p>
+                        </div>
+                        <Badge
+                          variant="secondary"
+                          className={`shrink-0 ${riskLevelBadgeClass(alert.risk_level)}`}
+                          data-risk-level={alert.risk_level}
+                        >
+                          {alert.risk_level.toUpperCase()}
+                        </Badge>
                       </div>
-                      <Badge
-                        variant="secondary"
-                        className={`shrink-0 ${riskLevelBadgeClass(alert.risk_level)}`}
-                        data-risk-level={alert.risk_level}
-                      >
-                        {alert.risk_level.toUpperCase()}
-                      </Badge>
-                    </div>
-                    {alert.risk_factors.length > 0 && (
-                      <div className="mt-2 space-y-1">
-                        <p className="text-xs font-medium">Risk Factors:</p>
-                        <p className="text-xs text-muted-foreground">
-                          {alert.risk_factors
-                            .slice(0, 2)
-                            .map(riskFactorLabel)
-                            .filter(Boolean)
-                            .join(", ")}
-                          {alert.risk_factors.length > 2 && " ..."}
-                        </p>
-                      </div>
-                    )}
-                  </li>
-                ))}
-              </ul>
+                      {alert.risk_factors.length > 0 && (
+                        <div className="mt-2 space-y-1">
+                          <p className="text-xs font-medium">Risk Factors:</p>
+                          <p className="text-xs text-muted-foreground">
+                            {alert.risk_factors
+                              .slice(0, 2)
+                              .map(riskFactorLabel)
+                              .filter(Boolean)
+                              .join(", ")}
+                            {alert.risk_factors.length > 2 && " ..."}
+                          </p>
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             ) : (
               <p className="text-sm text-muted-foreground">No risk alerts</p>
             )}
@@ -285,6 +279,40 @@ function GuidanceDashboard() {
           </CardContent>
         </Card>
       </div>
+    </div>
+  )
+}
+
+/** Compact risk-level distribution bars for the dashboard card. */
+function RiskLevelBars({ alerts }: { alerts: readonly RiskAlert[] }) {
+  const total = alerts.length || 1
+  const levels = ["high", "moderate", "low"] as const
+  return (
+    <div
+      className="space-y-1.5"
+      role="img"
+      aria-label={`${alerts.length} risk alerts by level`}
+    >
+      {levels.map((level) => {
+        const count = alerts.filter((a) => a.risk_level === level).length
+        const pct = Math.round((count / total) * 100)
+        return (
+          <div key={level} className="flex items-center gap-2 text-xs">
+            <span className="w-16 shrink-0 font-medium capitalize">
+              {level}
+            </span>
+            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-primary"
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+            <span className="w-12 shrink-0 text-right tabular-nums text-muted-foreground">
+              {count}
+            </span>
+          </div>
+        )
+      })}
     </div>
   )
 }
