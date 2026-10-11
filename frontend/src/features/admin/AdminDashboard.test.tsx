@@ -77,4 +77,24 @@ describe("AdminDashboard", () => {
       screen.getByRole("heading", { name: /Total Students/i })
     ).toBeInTheDocument()
   })
+
+  /**
+   * Round 3 of the manual-QA UX pass: the three-number "Risk Distribution"
+   * card and the donut beneath it drew the same
+   * `/analytics/risk-distribution/` response twice on one screen. The card is
+   * removed rather than restyled — the donut keeps every bucket (including
+   * `insufficient_data`), the scored-student count in its footer, and the
+   * "engine has not produced scores yet" empty state the card's hand-written
+   * zero caveat used to carry.
+   */
+  it("keeps the risk donut as the single risk presentation", () => {
+    renderWithClient(<AdminDashboard />)
+
+    // The chart card, titled by the chart itself, is still on the dashboard.
+    expect(screen.getByText("Risk distribution")).toBeInTheDocument()
+    // The hand-rolled three-number card's labels are gone with it.
+    expect(screen.queryByText("Low Risk")).not.toBeInTheDocument()
+    expect(screen.queryByText("Moderate Risk")).not.toBeInTheDocument()
+    expect(screen.queryByText("High Risk")).not.toBeInTheDocument()
+  })
 })

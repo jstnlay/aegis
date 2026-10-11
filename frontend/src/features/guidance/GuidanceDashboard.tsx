@@ -1,3 +1,10 @@
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts"
+
+import { ChartFrame } from "@/components/charts/ChartCard"
+import {
+  formatCountValue,
+  formatPercentValue,
+} from "@/components/charts/chart-config"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
@@ -173,7 +180,7 @@ function GuidanceDashboard() {
               <ErrorNote message="Unable to load risk alerts. Please try again." />
             ) : (riskAlertsQuery.data ?? []).length > 0 ? (
               <div className="space-y-4">
-                <RiskLevelBars alerts={riskAlertsQuery.data ?? []} />
+                <RiskLevelDonut alerts={riskAlertsQuery.data ?? []} />
                 <ul className="space-y-3">
                   {recentAlerts.map((alert) => (
                     <li
@@ -283,36 +290,114 @@ function GuidanceDashboard() {
   )
 }
 
-/** Compact risk-level distribution bars for the dashboard card. */
-function RiskLevelBars({ alerts }: { alerts: readonly RiskAlert[] }) {
-  const total = alerts.length || 1
-  const levels = ["high", "moderate", "low"] as const
+/**
+ * Risk alerts by level: a donut, with the counts spelled out beside it.
+ *
+ * The card underneath this already lists the alerts themselves, so this exists
+ * to answer a different question — of the alerts on this list, how are they
+ * distributed across severity? The six-pixel rows it replaced could not answer
+ * that: three hairlines of near-equal length read as "roughly the same", which
+ * is precisely the comparison a chart is supposed to make easy.
+ *
+ * The mix is deliberate. The donut carries the proportion, and the list beside
+ * it carries the exact counts and shares, so nothing depends on judging an
+ * arc and no number is hover-only. Colour is never the only signal: every
+ * level is named, counted and shared in text.
+ *
+ * This is *alerts* by level — not students by computed risk level. That is a
+ * different measurement on a different endpoint
+ * (`/analytics/risk-distribution/`, which feeds `RiskDistributionChart` on the
+ * administrator dashboard), so this component charts the alerts it is handed
+ * rather than fetching that one.
+ */
+const RISK_ALERT_SERIES = [
+  { key: "high", label: "High", color: "var(--destructive)" },
+  { key: "moderate", label: "Moderate", color: "var(--chart-4)" },
+  { key: "low", label: "Low", color: "var(--chart-2)" },
+] as const
+
+function RiskLevelDonut({ alerts }: { alerts: readonly RiskAlert[] }) {
+  const total = alerts.length
+  const slices = RISK_ALERT_SERIES.flatMap((series) => {
+    const count = alerts.filter(
+      (alert) => alert.risk_level === series.key
+    ).length
+    // A zero level is dropped rather than drawn as a hairline slice: a segment
+    // with no angle would still read as a category that exists.
+    if (!count) return []
+    return [{ name: series.label, value: count, color: series.color }]
+  })
+
+  if (slices.length === 0) return null
+
   return (
-    <div
-      className="space-y-1.5"
-      role="img"
-      aria-label={`${alerts.length} risk alerts by level`}
-    >
-      {levels.map((level) => {
-        const count = alerts.filter((a) => a.risk_level === level).length
-        const pct = Math.round((count / total) * 100)
-        return (
-          <div key={level} className="flex items-center gap-2 text-xs">
-            <span className="w-16 shrink-0 font-medium capitalize">
-              {level}
-            </span>
-            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-              <div
-                className="h-full rounded-full bg-primary"
-                style={{ width: `${pct}%` }}
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+      <div className="sm:w-44">
+        <ChartFrame
+          height={150}
+          label={`Donut chart of ${total} risk alert${
+            total === 1 ? "" : "s"
+          } by level: ${slices
+            .map((slice) => `${slice.name} ${slice.value}`)
+            .join(", ")}.`}
+        >
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Tooltip
+                content={({ active, payload }) => {
+                  if (!active || !payload?.length) return null
+                  const point = payload[0]!.payload as (typeof slices)[number]
+                  const share = (point.value / total) * 100
+                  return (
+                    <div className="rounded-md border border-border bg-background p-2 text-sm shadow-sm">
+                      <p className="font-medium">{point.name}</p>
+                      <p className="text-muted-foreground">
+                        {formatCountValue(point.value)}{" "}
+                        {point.value === 1 ? "alert" : "alerts"}
+                      </p>
+                      <p className="text-muted-foreground">
+                        {formatPercentValue(share)} of alerts
+                      </p>
+                    </div>
+                  )
+                }}
               />
-            </div>
-            <span className="w-12 shrink-0 text-right tabular-nums text-muted-foreground">
-              {count}
+              <Pie
+                data={slices}
+                dataKey="value"
+                nameKey="name"
+                innerRadius="55%"
+                outerRadius="80%"
+                paddingAngle={1}
+                stroke="var(--background)"
+                isAnimationActive={false}
+              >
+                {slices.map((slice) => (
+                  <Cell key={slice.name} fill={slice.color} />
+                ))}
+              </Pie>
+            </PieChart>
+          </ResponsiveContainer>
+        </ChartFrame>
+      </div>
+
+      <ul className="flex-1 space-y-1.5">
+        {slices.map((slice) => (
+          <li key={slice.name} className="flex items-center gap-2 text-xs">
+            <span
+              aria-hidden="true"
+              className="size-2.5 shrink-0 rounded-full"
+              style={{ backgroundColor: slice.color }}
+            />
+            <span className="min-w-0 flex-1 truncate font-medium">
+              {slice.name}
             </span>
-          </div>
-        )
-      })}
+            <span className="shrink-0 tabular-nums text-muted-foreground">
+              {slice.value} · {Math.round((slice.value / total) * 100)}%
+            </span>
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }

@@ -1,6 +1,21 @@
 import { Calendar } from "lucide-react"
 import { useMemo, useState, type FormEvent } from "react"
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts"
 
+import { ChartFrame } from "@/components/charts/ChartCard"
+import {
+  AXIS_COLOR,
+  formatCountValue,
+  GRID_COLOR,
+} from "@/components/charts/chart-config"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -37,6 +52,7 @@ import {
   useCreateAttendance,
   type AttendanceRecord,
   type AttendanceStatus,
+  type AttendanceSummaryEntry,
 } from "@/features/attendance/api"
 import { useAuth } from "@/features/auth/AuthContext"
 import { useStudentProfileId } from "@/features/student/api"
@@ -124,38 +140,17 @@ function StudentAttendance() {
             <EmptyState message="No attendance summary data." />
           ) : (
             <div className="space-y-4">
-              {(summaryQuery.data ?? []).map((s, idx) => {
-                const total = s.total_records || 0
-                const rate =
-                  total === 0
-                    ? 0
-                    : Math.round(
-                        ((s.present_count + s.late_count) / total) * 100
-                      )
-                return (
-                  <div key={idx} className="space-y-1">
-                    <div className="flex items-center justify-between gap-2 text-sm">
-                      <span className="min-w-0 truncate font-medium">
-                        {s.section_name}
-                      </span>
-                      <span className="shrink-0 tabular-nums text-muted-foreground">
-                        {rate}% · {s.present_count} present, {s.late_count}{" "}
-                        late, {s.absent_count} absent
-                      </span>
-                    </div>
-                    <div
-                      role="img"
-                      aria-label={`${s.section_name} attendance rate ${rate} percent`}
-                      className="h-2 w-full overflow-hidden rounded-full bg-muted"
-                    >
-                      <div
-                        className="h-full rounded-full bg-primary"
-                        style={{ width: `${rate}%` }}
-                      />
-                    </div>
-                  </div>
-                )
-              })}
+              {/*
+                This used to be a row per section: the section name, its rate
+                as text, and a six-pixel bar repeating that same rate as a
+                length. The bar added no information the line above it lacked,
+                and three near-equal hairlines read as "roughly the same" — the
+                one comparison a chart should make easy.
+                Stacking present/late/absent instead shows *why* a section's
+                rate is what it is. The exact counts and the rate itself stay
+                readable in the table below, so nothing here is hover-only.
+              */}
+              <SectionAttendanceChart sections={summaryQuery.data ?? []} />
               <Table scrollLabel="Attendance summary">
                 {/*
                 PH11.11. This table had no caption at all, so it had no accessible
@@ -171,6 +166,9 @@ function StudentAttendance() {
                 <TableHeader>
                   <TableRow>
                     <TableHead scope="col">Section</TableHead>
+                    <TableHead scope="col" className="text-right">
+                      Rate
+                    </TableHead>
                     <TableHead scope="col" className="text-right">
                       Present
                     </TableHead>
@@ -189,6 +187,14 @@ function StudentAttendance() {
                   {(summaryQuery.data ?? []).map((s, idx) => (
                     <TableRow key={idx}>
                       <TableCell>{s.section_name}</TableCell>
+                      {/*
+                        The rate moved here when the per-section bars went.
+                        It is the figure the card is named for, and it had
+                        lived only in a text line above a bar that repeated it.
+                      */}
+                      <TableCell className="text-right tabular-nums">
+                        {attendanceRate(s)}%
+                      </TableCell>
                       <TableCell className="text-right tabular-nums">
                         {s.present_count}
                       </TableCell>
@@ -256,6 +262,143 @@ function StudentAttendance() {
           )}
         </CardContent>
       </Card>
+    </div>
+  )
+}
+
+/**
+ * A section's attendance rate, as a whole-number percentage.
+ *
+ * Late counts toward the rate — the student attended — and the breakdown
+ * beside it keeps the late count separately visible so the two are never
+ * conflated. A section with no records at all reports 0, which is the figure
+ * the previous rows showed for the same case.
+ */
+function attendanceRate(entry: AttendanceSummaryEntry): number {
+  const total = entry.total_records || 0
+  if (total === 0) return 0
+  return Math.round(((entry.present_count + entry.late_count) / total) * 100)
+}
+
+/** The same three series, and the same colours, as the school-wide trend. */
+const ATTENDANCE_SERIES = [
+  { key: "present", label: "Present", color: "var(--chart-2)" },
+  { key: "late", label: "Late", color: "var(--chart-4)" },
+  { key: "absent", label: "Absent", color: "var(--destructive)" },
+] as const
+
+/**
+ * Attendance records per section, stacked by status.
+ *
+ * One chart for all sections rather than a bar each: the card's question is
+ * comparative ("which section is behind, and why"), and stacked counts answer
+ * it where a row of independent filled lengths did not. This mirrors
+ * `AttendanceTrendChart` on the administrator dashboard — same series, same
+ * colours — so the two attendance views read as one system.
+ */
+function SectionAttendanceChart({
+  sections,
+}: {
+  sections: readonly AttendanceSummaryEntry[]
+}) {
+  const points = sections.map((entry) => ({
+    name: entry.section_name,
+    present: entry.present_count,
+    late: entry.late_count,
+    absent: entry.absent_count,
+    rate: attendanceRate(entry),
+  }))
+
+  return (
+    <div className="space-y-2">
+      <ChartFrame
+        height={220}
+        label={`Stacked bar chart of attendance records by section. ${points
+          .map(
+            (point) =>
+              `${point.name}: ${point.present} present, ${point.late} late, ${point.absent} absent, ${point.rate}% rate`
+          )
+          .join(". ")}.`}
+      >
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart
+            data={points}
+            margin={{ top: 8, right: 8, bottom: 8, left: 0 }}
+          >
+            <CartesianGrid
+              vertical={false}
+              stroke={GRID_COLOR}
+              strokeDasharray="3 3"
+            />
+            <XAxis
+              dataKey="name"
+              tick={{ fill: AXIS_COLOR, fontSize: 12 }}
+              tickLine={false}
+              axisLine={{ stroke: GRID_COLOR }}
+              minTickGap={16}
+            />
+            <YAxis
+              tick={{ fill: AXIS_COLOR, fontSize: 12 }}
+              tickLine={false}
+              axisLine={false}
+              width={40}
+              allowDecimals={false}
+            />
+            <Tooltip
+              cursor={{ fill: "var(--muted)", opacity: 0.4 }}
+              content={({ active, payload, label }) => {
+                if (!active || !payload?.length) return null
+                const point = payload[0]!.payload as (typeof points)[number]
+                return (
+                  <div className="rounded-md border border-border bg-background p-2 text-sm shadow-sm">
+                    <p className="font-medium">{label}</p>
+                    <p className="text-muted-foreground">Rate: {point.rate}%</p>
+                    <p className="text-muted-foreground">
+                      Present: {formatCountValue(point.present)}
+                    </p>
+                    <p className="text-muted-foreground">
+                      Late: {formatCountValue(point.late)}
+                    </p>
+                    <p className="text-muted-foreground">
+                      Absent: {formatCountValue(point.absent)}
+                    </p>
+                  </div>
+                )
+              }}
+            />
+            {ATTENDANCE_SERIES.map((series) => (
+              <Bar
+                key={series.key}
+                dataKey={series.key}
+                name={series.label}
+                stackId="attendance"
+                fill={series.color}
+                isAnimationActive={false}
+              />
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
+      </ChartFrame>
+
+      {/*
+        The three colours mean nothing on their own, so the series are named
+        here rather than left to a tooltip a touch user has to discover.
+      */}
+      <ul className="flex flex-wrap gap-x-4 gap-y-1">
+        {ATTENDANCE_SERIES.map((series) => (
+          <li
+            key={series.key}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground"
+          >
+            <span
+              aria-hidden="true"
+              className="size-2.5 rounded-full"
+              style={{ backgroundColor: series.color }}
+            />
+            {series.label}
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }

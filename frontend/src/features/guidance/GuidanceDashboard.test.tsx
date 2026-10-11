@@ -238,3 +238,66 @@ describe("GuidanceDashboard", () => {
     expect(container.textContent).not.toContain("[object Object]")
   })
 })
+
+/**
+ * Round 3 of the manual-QA UX pass: the Risk Alerts card's six-pixel
+ * per-level bars became a donut with the counts spelled out beside it.
+ *
+ * The claim worth pinning is that the numbers are real and reachable twice —
+ * in the plot's accessible label and as text — so nothing depends on judging
+ * an arc or hovering for a tooltip, and the counts are computed from the
+ * alerts actually on screen rather than restated from somewhere else.
+ */
+describe("Risk alerts by level (donut + counts)", () => {
+  function renderAlerts(alerts: (typeof RISK_ALERT)[]) {
+    vi.mocked(useRiskAlerts).mockReturnValue({
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      data: alerts,
+    } as ReturnType<typeof useRiskAlerts>)
+    return renderWithClient()
+  }
+
+  afterEach(() => {
+    vi.mocked(useRiskAlerts).mockReturnValue({
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      data: [RISK_ALERT],
+    } as ReturnType<typeof useRiskAlerts>)
+  })
+
+  it("labels the plot with the count behind the level on screen", () => {
+    renderAlerts([RISK_ALERT])
+
+    expect(
+      screen.getByRole("img", {
+        name: "Donut chart of 1 risk alert by level: High 1.",
+      })
+    ).toBeInTheDocument()
+
+    // The same count is text beside the donut, not a hover-only tooltip.
+    const breakdown = screen.getByText("High").closest("ul")
+    expect(breakdown).not.toBeNull()
+    expect(breakdown).toHaveTextContent("1 · 100%")
+  })
+
+  it("splits a mixed set into named counts and shares", () => {
+    renderAlerts([
+      RISK_ALERT,
+      { ...RISK_ALERT, id: "ra-2", student_name: "Ben Lopez" },
+      { ...RISK_ALERT, id: "ra-3", student_name: "Cara Ng", risk_level: "low" },
+    ])
+
+    expect(
+      screen.getByRole("img", {
+        name: "Donut chart of 3 risk alerts by level: High 2, Low 1.",
+      })
+    ).toBeInTheDocument()
+
+    const breakdown = screen.getByText("High").closest("ul")
+    expect(breakdown).toHaveTextContent("2 · 67%")
+    expect(breakdown).toHaveTextContent("1 · 33%")
+  })
+})

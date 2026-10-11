@@ -1,9 +1,43 @@
 import { render, screen } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { MemoryRouter } from "react-router-dom"
-import { describe, expect, it, vi } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import { FacultyDashboard } from "./FacultyDashboard"
+import { useFacultyDashboardStats } from "@/features/faculty/api"
 import type { User } from "@/types/auth"
+
+/**
+ * The state the stats query is in before its first result, which is what the
+ * real hook reports at first render and what the loading test below asserts.
+ *
+ * `vi.hoisted` because `vi.mock` factories are hoisted above every other
+ * statement: a factory that referenced a plain `const` would run before that
+ * binding was initialised and throw a TDZ error rather than mock anything.
+ */
+const pendingStats = vi.hoisted(() => ({
+  isLoading: true,
+  isFetching: true,
+  isError: false,
+  data: undefined,
+}))
+
+/**
+ * Only the stats hook is stubbed; `useFacultySections` and
+ * `useFacultySubjectAssignments` keep their real implementations, as does the
+ * query layer. Tests that need resolved figures override this with
+ * `mockReturnValue`, and the `afterEach` below puts the pending state back so
+ * the override cannot leak into the next test.
+ */
+vi.mock("@/features/faculty/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/faculty/api")>()),
+  useFacultyDashboardStats: vi.fn(() => pendingStats),
+}))
+
+afterEach(() => {
+  vi.mocked(useFacultyDashboardStats).mockReturnValue(
+    pendingStats as unknown as ReturnType<typeof useFacultyDashboardStats>
+  )
+})
 
 vi.mock("@/features/auth/AuthContext", () => ({
   useAuth: () => ({
@@ -64,5 +98,34 @@ describe("FacultyDashboard", () => {
     expect(pending.length).toBeGreaterThan(0)
     expect(pending[0]).toHaveAttribute("aria-busy", "true")
     expect(pending[0]).toHaveTextContent(/Total Students/i)
+  })
+
+  /**
+   * Round 3 of the manual-QA UX pass: the pending-grades hairline rows became
+   * a real two-column chart. The rows measured both counts as a share of one
+   * combined total, which drew "3 drafts and 12 submissions" as a 20/80 split
+   * of a single quantity; on a chart with its own axis each column carries its
+   * own value.
+   */
+  it("plots pending drafts and submissions as labelled columns", () => {
+    vi.mocked(useFacultyDashboardStats).mockReturnValue({
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      data: { total_students: 30, pending_grades: 3, pending_submissions: 12 },
+    } as unknown as ReturnType<typeof useFacultyDashboardStats>)
+
+    renderWithClient(<FacultyDashboard />)
+
+    // The frame is named with the two real counts, so the chart announces what
+    // it plots rather than a generic placeholder.
+    expect(
+      screen.getByRole("img", {
+        name: "Bar chart of pending grade work: 3 drafts and 12 submissions.",
+      })
+    ).toBeInTheDocument()
+    // And the same counts are plain text on the pending tile: neither number
+    // is reachable only by hovering the plot.
+    expect(screen.getByText("3 drafts + 12 submissions")).toBeInTheDocument()
   })
 })

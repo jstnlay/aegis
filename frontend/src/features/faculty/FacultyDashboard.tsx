@@ -1,6 +1,23 @@
 import { useMemo } from "react"
 import { Link } from "react-router-dom"
 
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts"
+
+import { ChartFrame } from "@/components/charts/ChartCard"
+import {
+  AXIS_COLOR,
+  chartColor,
+  formatCountValue,
+  GRID_COLOR,
+} from "@/components/charts/chart-config"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -151,7 +168,7 @@ function FacultyDashboard() {
             statsQuery.data.pending_grades +
               statsQuery.data.pending_submissions >
               0 ? (
-            <PendingGradesBars
+            <PendingGradesChart
               drafts={statsQuery.data.pending_grades}
               submissions={statsQuery.data.pending_submissions}
             />
@@ -266,40 +283,85 @@ function FacultyDashboard() {
   )
 }
 
-/** Drafts vs submissions bars so pending work reads at a glance. */
-function PendingGradesBars({
+/**
+ * Drafts vs submissions, as two columns with the count printed above each.
+ *
+ * Two categories do not warrant a donut — a two-slice pie is decoration, not a
+ * comparison — so this is the bar treatment with an axis that starts at zero
+ * and counts readable without hovering.
+ *
+ * The six-pixel rows it replaced measured both numbers as a share of one
+ * combined total, which drew "3 drafts and 12 submissions" as a 20/80 split of
+ * a single quantity. They are two separate counts of pending work, and on a
+ * chart with its own axis each column now carries its own value.
+ */
+function PendingGradesChart({
   drafts,
   submissions,
 }: {
   drafts: number
   submissions: number
 }) {
-  const total = drafts + submissions || 1
-  const rows = [
-    { label: "Drafts", count: drafts },
-    { label: "Submissions", count: submissions },
+  const data = [
+    { name: "Drafts", count: drafts },
+    { name: "Submissions", count: submissions },
   ]
+
   return (
-    <div
-      className="space-y-1.5"
-      role="img"
-      aria-label={`${drafts} drafts and ${submissions} submissions pending`}
+    <ChartFrame
+      height={150}
+      label={`Bar chart of pending grade work: ${drafts} drafts and ${submissions} submissions.`}
     >
-      {rows.map((row) => (
-        <div key={row.label} className="flex items-center gap-2 text-xs">
-          <span className="w-24 shrink-0 font-medium">{row.label}</span>
-          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-            <div
-              className="h-full rounded-full bg-primary"
-              style={{ width: `${Math.round((row.count / total) * 100)}%` }}
-            />
-          </div>
-          <span className="w-12 shrink-0 text-right tabular-nums text-muted-foreground">
-            {row.count}
-          </span>
-        </div>
-      ))}
-    </div>
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart
+          data={data}
+          margin={{ top: 20, right: 8, bottom: 8, left: 0 }}
+        >
+          <CartesianGrid
+            vertical={false}
+            stroke={GRID_COLOR}
+            strokeDasharray="3 3"
+          />
+          <XAxis
+            dataKey="name"
+            tick={{ fill: AXIS_COLOR, fontSize: 12 }}
+            tickLine={false}
+            axisLine={{ stroke: GRID_COLOR }}
+            minTickGap={8}
+          />
+          <YAxis
+            tick={{ fill: AXIS_COLOR, fontSize: 12 }}
+            tickLine={false}
+            axisLine={false}
+            width={40}
+            allowDecimals={false}
+          />
+          <Tooltip
+            cursor={{ fill: "var(--muted)", opacity: 0.4 }}
+            content={({ active, payload, label }) => {
+              if (!active || !payload?.length) return null
+              const point = payload[0]!.payload as (typeof data)[number]
+              return (
+                <div className="rounded-md border border-border bg-background p-2 text-sm shadow-sm">
+                  <p className="font-medium">{label}</p>
+                  <p className="text-muted-foreground">
+                    {formatCountValue(point.count)} pending
+                  </p>
+                </div>
+              )
+            }}
+          />
+          <Bar
+            dataKey="count"
+            name="Pending"
+            fill={chartColor(0)}
+            radius={[4, 4, 0, 0]}
+            isAnimationActive={false}
+            label={{ position: "top", fill: AXIS_COLOR, fontSize: 12 }}
+          />
+        </BarChart>
+      </ResponsiveContainer>
+    </ChartFrame>
   )
 }
 

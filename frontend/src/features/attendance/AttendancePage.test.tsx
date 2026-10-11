@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react"
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -149,6 +155,10 @@ beforeEach(() => {
   authState.user = null
   vi.clearAllMocks()
   mockedFetchAllPages.mockResolvedValue({ count: 0, results: [] })
+  // Restated every test rather than left to the mock factory: `clearAllMocks`
+  // clears calls, not implementations, so a URL-routed `get` override from
+  // one test would otherwise keep serving its fixture to the tests after it.
+  vi.mocked(apiClient.get).mockResolvedValue({ data: [] })
 })
 
 describe("AttendancePage (student)", () => {
@@ -201,6 +211,64 @@ describe("AttendancePage (student)", () => {
       const urls = mockedFetchAllPages.mock.calls.map((c) => String(c[0]))
       expect(urls.some((u) => u.startsWith("/attendance/records/"))).toBe(true)
     })
+  })
+
+  /**
+   * Round 3 of the manual-QA UX pass: the per-section six-pixel rate bars
+   * became one stacked present/late/absent chart, and the rate moved into the
+   * summary table as a column.
+   *
+   * The bars repeated, as a length, the rate the line above them already
+   * stated; the stacked counts answer the question the card is actually
+   * asking — which section is behind, and why. What has to survive is that
+   * every number stays readable without colour or hover: the plot's label
+   * carries the counts and the computed rate, the three series are named in
+   * text, and the rate is a table column.
+   */
+  it("charts each section's records and keeps the rate in the summary table", async () => {
+    vi.mocked(apiClient.get).mockImplementation(async (url: string) => {
+      if (String(url).startsWith("/attendance/summary/")) {
+        return {
+          data: [
+            {
+              student: "sp-1",
+              student_name: "Ana Cruz",
+              student_id_code: "STU-001",
+              section_name: "Einstein",
+              present_count: 24,
+              late_count: 1,
+              absent_count: 1,
+              total_records: 26,
+            },
+          ],
+        }
+      }
+      return { data: [] }
+    })
+
+    renderPage()
+
+    const plot = await screen.findByRole("img", {
+      name: /Stacked bar chart of attendance records by section/i,
+    })
+    // 24 present + 1 late out of 26 records — the same rate the table shows.
+    expect(plot.getAttribute("aria-label")).toContain(
+      "Einstein: 24 present, 1 late, 1 absent, 96% rate"
+    )
+
+    // The three series are named in text beside the plot, not left to colour.
+    // The summary table's column headers read the same three words, so the
+    // lookup is scoped to the chart's own block rather than the whole page.
+    const chartBlock = plot.parentElement as HTMLElement
+    expect(
+      within(chartBlock).getAllByText(/^(Present|Late|Absent)$/)
+    ).toHaveLength(3)
+
+    // The rate is a column of the table rather than a hover-only tooltip.
+    expect(
+      screen.getByRole("columnheader", { name: "Rate" })
+    ).toBeInTheDocument()
+    expect(screen.getByText("96%")).toBeInTheDocument()
   })
 })
 

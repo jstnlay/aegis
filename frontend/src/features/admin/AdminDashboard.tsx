@@ -3,10 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   ErrorNote,
   PendingMetric,
-  PendingRegion,
   UnavailableMetric,
 } from "@/components/feedback/Feedback"
-import { Skeleton } from "@/components/ui/skeleton"
 import { ChartState } from "@/components/charts/ChartCard"
 import { GradeLevelPerformanceChart } from "@/components/charts/GradeLevelPerformanceChart"
 import { RiskDistributionChart } from "@/components/charts/RiskDistributionChart"
@@ -20,7 +18,6 @@ import { useAuth } from "@/features/auth/AuthContext"
 import {
   useGradeLevelComparison,
   useGradingPeriodOrder,
-  useRiskDistribution,
   useSchoolWideAttendanceTrend,
   useSchoolWideMetrics,
 } from "@/features/admin/api"
@@ -49,7 +46,6 @@ function AdminDashboard() {
   const { user } = useAuth()
 
   const metricsQuery = useSchoolWideMetrics()
-  const riskDistQuery = useRiskDistribution()
   const comparisonQuery = useGradeLevelComparison()
   const attendanceTrendQuery = useSchoolWideAttendanceTrend()
   const periodOrder = useGradingPeriodOrder()
@@ -59,7 +55,6 @@ function AdminDashboard() {
   const overallGradeAvg = metricsQuery.data?.overall_grade_average ?? null
   const totalStudents = metricsQuery.data?.total_students ?? null
   const gradeLevels = metricsQuery.data?.grade_levels ?? null
-  const risk = riskDistQuery.data ?? null
 
   if (!user) return null
 
@@ -120,73 +115,15 @@ function AdminDashboard() {
         </MetricCard>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Risk Distribution</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {riskDistQuery.isLoading ? (
-            <PendingRegion label="Risk distribution">
-              <Skeleton className="h-8 w-3/4" />
-            </PendingRegion>
-          ) : risk ? (
-            <>
-              <div className="grid gap-4 md:grid-cols-3">
-                <div className="rounded-md p-3 text-center">
-                  <div className="text-lg font-bold text-success">
-                    {formatCount(risk.distribution.low)}
-                  </div>
-                  <p className="text-xs text-success">Low Risk</p>
-                </div>
-                <div className="rounded-md p-3 text-center">
-                  <div className="text-lg font-bold text-warning-foreground">
-                    {formatCount(risk.distribution.moderate)}
-                  </div>
-                  <p className="text-xs text-warning-foreground">
-                    Moderate Risk
-                  </p>
-                </div>
-                <div className="rounded-md p-3 text-center">
-                  <div className="text-lg font-bold text-destructive">
-                    {formatCount(risk.distribution.high)}
-                  </div>
-                  <p className="text-xs text-destructive">High Risk</p>
-                </div>
-              </div>
-              {/*
-                RiskScore has no API surface, so `total_with_scores` is zero
-                unless the risk engine has been run out of band. Showing all
-                three buckets as 0 without saying so would read as "no student
-                is at risk" rather than "the model has not been run".
-              */}
-              {risk.total_with_scores === 0 ? (
-                <p className="mt-3 text-sm text-muted-foreground">
-                  No computed risk scores are available. These counts come from
-                  the risk-scoring engine, which has not been run for this
-                  dataset. Recorded manual alerts are counted separately on the
-                  Guidance risk-alerts page.
-                </p>
-              ) : null}
-            </>
-          ) : (
-            /*
-              PH11.11: the failure is reported as a failure, via `role="alert"`.
-              It was a muted paragraph before, which is the one thing a failed
-              request must not be: an unannounced muted line reads as "there is
-              nothing here" rather than "the request failed", and it is
-              indistinguishable from the genuine no-data case below it.
-            */
-            <ErrorNote
-              message={
-                riskDistQuery.isError
-                  ? "Unable to load the risk distribution. Please try again."
-                  : "No risk distribution data is available."
-              }
-            />
-          )}
-        </CardContent>
-      </Card>
-
+      {/*
+        The three-number "Risk Distribution" card that used to sit here showed
+        the same `/analytics/risk-distribution/` response as the donut rendered
+        below — two presentations of one payload on one screen, above the chart
+        that supersedes it. It is removed rather than restyled; the donut keeps
+        the low/moderate/high/insufficient-data breakdown, the scored-student
+        count in its footer, and the "engine has not produced scores yet" empty
+        state that the card's zero caveat used to carry by hand.
+      */}
       <Card>
         <CardHeader>
           <CardTitle>Average by grade level</CardTitle>
