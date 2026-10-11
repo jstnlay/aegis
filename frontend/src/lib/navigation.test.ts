@@ -125,12 +125,16 @@ describe("role navigation configuration", () => {
     const studentAvailable = getNavItemsForRole("student").filter(
       (i) => i.status === "available"
     )
+    /*
+     * `account-settings` and `notifications` are absent by design: the header
+     * owns both surfaces (the bell and the account menu), so no sidebar tree
+     * carries a second entry for either. The routes still exist and both are
+     * still titled by `getPageTitle`.
+     */
     expect(studentAvailable.map((i) => i.route).sort()).toEqual([
       "academics",
-      "account-settings",
       "attendance",
       "dashboard",
-      "notifications",
       "reports",
       "schedule",
       "student/assessments",
@@ -171,7 +175,8 @@ describe("role navigation configuration", () => {
     expect(guidance).toContain("consultations")
     expect(guidance).toContain("interventions")
     expect(guidance).toContain("students")
-    expect(guidance).toContain("account-settings")
+    // The header owns account settings, so no tree carries a second entry.
+    expect(guidance).not.toContain("account-settings")
     expect(admin).not.toContain("risk-alerts")
 
     const parent = getNavItemsForRole("parent").map((i) => i.route)
@@ -228,7 +233,6 @@ describe("role navigation configuration", () => {
       "interventions",
       "students",
       "assessments",
-      "account-settings",
     ]) {
       expect(guidance, route).toContainEqual(
         expect.objectContaining({ route, status: "available" })
@@ -260,22 +264,25 @@ describe("role navigation configuration", () => {
   })
 
   /**
-   * PH11.9 opened two surfaces to every role.
+   * The manual-QA overhaul moved both surfaces into the header: the bell opens
+   * notifications and the account menu opens account settings. A second entry
+   * for either in the sidebar put the same destination two places apart on all
+   * five roles.
    *
-   * Neither can reach another account: `/notifications/` is
-   * `recipient=request.user`, and `/accounts/me/` plus
-   * `/notifications/preferences/` are both caller-scoped. That is what makes
-   * an all-role link safe here, as opposed to the guidance resources above,
-   * which stay role-scoped because they address *other* students.
+   * The routes themselves are untouched — both remain real, self-scoped
+   * screens (`recipient=request.user`, and `/accounts/me/` plus
+   * `/notifications/preferences/` are caller-scoped), which is what the PH11.9
+   * test that used to live here was protecting. Only the entry points moved,
+   * so this asserts absence from the trees rather than presence.
    */
-  it("gives every role notifications and account settings as real links", () => {
+  it("keeps notifications and account settings out of every navigation tree", () => {
     for (const role of ROLES) {
       const available = getNavItemsForRole(role)
         .filter((i) => i.status === "available")
         .map((i) => i.route)
 
-      expect(available, role).toContain("notifications")
-      expect(available, role).toContain("account-settings")
+      expect(available, role).not.toContain("notifications")
+      expect(available, role).not.toContain("account-settings")
     }
   })
 

@@ -17,6 +17,7 @@ import {
 } from "@/features/student/api"
 import { RecommendationsCard } from "@/features/student/RecommendationsCard"
 import { formatCount, formatPercent } from "@/lib/metric-format"
+import { scoreStatus, scoreStatusLabel } from "@/lib/score-status"
 
 /**
  * One headline figure, with its three states kept distinct.
@@ -192,44 +193,56 @@ export function StudentDashboard() {
                 ) : (
                   <div className="space-y-2">
                     <p className="text-sm font-medium">Grades by Subject</p>
-                    <ul className="space-y-3">
-                      {displayGrades.map((grade) => (
-                        <li
-                          key={grade.subject_code}
-                          className="space-y-1 rounded-md border border-border p-2"
-                        >
-                          <div className="flex flex-wrap items-center justify-between gap-2">
+                    {/*
+                     * Each row is the subject, its score, and whether that
+                     * score passes. This card used to carry a six-pixel bar
+                     * under every row: the number was already printed beside
+                     * it, so the bar repeated the same value as a length and
+                     * read as an unfinished rule rather than a chart. The one
+                     * thing the number does not say on its own — passes or not
+                     * — is now a word, which is also what stops the meaning
+                     * resting on colour alone.
+                     */}
+                    <ul className="space-y-2">
+                      {displayGrades.map((grade) => {
+                        const status = scoreStatus(grade.score)
+                        return (
+                          <li
+                            key={grade.subject_code}
+                            className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border p-3"
+                          >
                             <span className="min-w-0 truncate font-medium">
                               {grade.subject_name}
                             </span>
-                            <span
-                              className={`shrink-0 font-bold tabular-nums ${
-                                grade.score === null
-                                  ? "text-muted-foreground"
-                                  : grade.score >= 90
-                                    ? "text-success"
-                                    : grade.score >= 75
-                                      ? "text-warning-foreground"
-                                      : "text-destructive"
-                              }`}
-                            >
-                              {formatPercent(grade.score, 2)}
+                            <span className="flex shrink-0 items-center gap-2">
+                              <span
+                                className={`font-bold tabular-nums ${
+                                  grade.score === null
+                                    ? "text-muted-foreground"
+                                    : grade.score >= 90
+                                      ? "text-success"
+                                      : grade.score >= 75
+                                        ? "text-warning-foreground"
+                                        : "text-destructive"
+                                }`}
+                              >
+                                {formatPercent(grade.score, 2)}
+                              </span>
+                              <Badge
+                                variant={
+                                  status === "below-passing"
+                                    ? "destructive"
+                                    : status === "passing"
+                                      ? "secondary"
+                                      : "outline"
+                                }
+                              >
+                                {scoreStatusLabel(status)}
+                              </Badge>
                             </span>
-                          </div>
-                          <div
-                            role="img"
-                            aria-label={`${grade.subject_name} score ${grade.score === null ? "not recorded" : `${grade.score} out of 100`}`}
-                            className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
-                          >
-                            <div
-                              className="h-full rounded-full bg-primary"
-                              style={{
-                                width: `${Math.min(100, Math.max(0, grade.score ?? 0))}%`,
-                              }}
-                            />
-                          </div>
-                        </li>
-                      ))}
+                          </li>
+                        )
+                      })}
                     </ul>
                   </div>
                 )}

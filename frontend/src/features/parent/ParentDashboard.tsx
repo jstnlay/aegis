@@ -15,6 +15,7 @@ import { useAuth } from "@/features/auth/AuthContext"
 import { useLinkedStudents } from "@/features/parent/api"
 import { useStudentDashboardData } from "@/features/student/api"
 import { formatPercent } from "@/lib/metric-format"
+import { scoreStatus, scoreStatusLabel } from "@/lib/score-status"
 
 /**
  * One headline figure, with its three states kept distinct.
@@ -246,13 +247,22 @@ function ParentDashboard() {
                   ) : (
                     <div className="space-y-2">
                       <p className="text-sm font-medium">Grades by Subject</p>
-                      <ul className="space-y-3">
-                        {grades.map((grade, idx) => (
-                          <li
-                            key={`${grade.subject_code}-${idx}`}
-                            className="space-y-1 rounded-md border border-border p-3"
-                          >
-                            <div className="flex flex-wrap items-center justify-between gap-2">
+                      {/*
+                       * Subject, score, and whether it passes. The six-pixel
+                       * bar that sat under each row repeated the printed
+                       * number as a length and read as an unfinished rule, so
+                       * it is gone; the passing mark is now stated in words,
+                       * which the number alone never said and which colour
+                       * alone must not be left to say.
+                       */}
+                      <ul className="space-y-2">
+                        {grades.map((grade, idx) => {
+                          const status = scoreStatus(grade.score)
+                          return (
+                            <li
+                              key={`${grade.subject_code}-${idx}`}
+                              className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border p-3"
+                            >
                               <div className="min-w-0">
                                 <p className="truncate font-medium">
                                   {grade.subject_name}
@@ -261,24 +271,35 @@ function ParentDashboard() {
                                   {grade.subject_code}
                                 </p>
                               </div>
-                              <span className="shrink-0 font-bold tabular-nums text-foreground">
-                                {formatPercent(grade.score, 2)}
+                              <span className="flex shrink-0 items-center gap-2">
+                                <span
+                                  className={`font-bold tabular-nums ${
+                                    grade.score === null
+                                      ? "text-muted-foreground"
+                                      : grade.score >= 90
+                                        ? "text-success"
+                                        : grade.score >= 75
+                                          ? "text-warning-foreground"
+                                          : "text-destructive"
+                                  }`}
+                                >
+                                  {formatPercent(grade.score, 2)}
+                                </span>
+                                <Badge
+                                  variant={
+                                    status === "below-passing"
+                                      ? "destructive"
+                                      : status === "passing"
+                                        ? "secondary"
+                                        : "outline"
+                                  }
+                                >
+                                  {scoreStatusLabel(status)}
+                                </Badge>
                               </span>
-                            </div>
-                            <div
-                              role="img"
-                              aria-label={`${grade.subject_name} score ${grade.score === null ? "not recorded" : `${grade.score} out of 100`}`}
-                              className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
-                            >
-                              <div
-                                className="h-full rounded-full bg-primary"
-                                style={{
-                                  width: `${Math.min(100, Math.max(0, grade.score ?? 0))}%`,
-                                }}
-                              />
-                            </div>
-                          </li>
-                        ))}
+                            </li>
+                          )
+                        })}
                       </ul>
                     </div>
                   )}

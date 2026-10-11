@@ -32,6 +32,12 @@ export function AppShell() {
    * used to leave it open, so the reader landed on the next page with the
    * navigation still covering it.
    *
+   * The assistant panel closes for the same reason. It lived above the outlet,
+   * so `chatOpen` survived a route change and the panel followed the reader
+   * from page to page — a floating window that never went away. The transcript
+   * is discarded on close either way (nothing is persisted), so this loses no
+   * conversation, only the window.
+   *
    * Reset during render rather than in an effect: setting state in an effect
    * means one commit where the drawer is still open over the new page, and the
    * `react-hooks` rules reject it. Comparing against the previous path and
@@ -41,6 +47,7 @@ export function AppShell() {
   if (location.pathname !== lastPath) {
     setLastPath(location.pathname)
     setMenuOpen(false)
+    setChatOpen(false)
   }
 
   /*

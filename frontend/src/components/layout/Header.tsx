@@ -1,4 +1,4 @@
-import { Bell, LogOut, Menu, Settings, User } from "lucide-react"
+import { Bell, LogOut, Menu, Settings } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { Link, useLocation } from "react-router-dom"
 
@@ -12,7 +12,13 @@ import { ROLE_LABELS, userDisplayName } from "@/lib/roles"
  * Shared application header (PH11.5).
  *
  * Shows the current page title (from the centralized navigation config),
- * the authenticated user's name and role, and a sign-out action.
+ * the bell, and the account menu (Settings, Sign out).
+ *
+ * The menu deliberately has no "Profile" entry: the app has no self-profile
+ * page — the account surface is `GET/PATCH /accounts/me/`, which the Settings
+ * entry opens. A Profile item would have to point at some other screen, and
+ * it previously pointed at Notifications, which is a destination that does not
+ * match its label.
  */
 
 /**
@@ -115,15 +121,6 @@ function UserChip() {
                 {user ? ROLE_LABELS[user.role] : ""}
               </p>
             </div>
-            <Link
-              to="/app/notifications"
-              role="menuitem"
-              onClick={() => setMenuOpen(false)}
-              className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent"
-            >
-              <User aria-hidden="true" className="size-4" />
-              Profile
-            </Link>
             <Link
               to="/app/account-settings"
               role="menuitem"

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { fireEvent, render, screen } from "@testing-library/react"
+import { fireEvent, render, screen, within } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { MemoryRouter, Navigate, Route, Routes } from "react-router-dom"
 
@@ -235,7 +235,6 @@ describe("role-aware sidebar", () => {
       "Interventions",
       "Students",
       "Assessments",
-      "Account Settings",
     ]) {
       expect(
         await screen.findByRole("link", { name: label }),
@@ -249,6 +248,43 @@ describe("role-aware sidebar", () => {
     expect(screen.queryByRole("link", { name: "Guidance" })).toBeNull()
   })
 
+  /*
+   * The header owns these two surfaces — the bell opens notifications and the
+   * account menu opens account settings — so no sidebar may carry a second
+   * entry for either. Checked across all five roles because the duplication
+   * existed on every one of them.
+   *
+   * Scoped to the sidebar on purpose: the header's bell is itself a link with
+   * the accessible name "Notifications", and it must stay. Asserting on the
+   * whole document would fail on that link rather than on the entry this is
+   * about.
+   */
+  it("keeps the header-owned Notifications and Account Settings out of every sidebar", async () => {
+    for (const role of [
+      "student",
+      "parent",
+      "faculty",
+      "guidance",
+      "admin",
+    ] as const) {
+      const view = await renderAuthenticatedApp(role)
+      // `findByRole`: the shell renders a loading region first, so the sidebar
+      // nav appears a tick after `render` resolves.
+      const sidebar = within(
+        await view.findByRole("navigation", { name: "Main" })
+      )
+
+      for (const label of ["Notifications", "Account Settings"]) {
+        expect(
+          sidebar.queryByRole("link", { name: label }),
+          `${role} / ${label}`
+        ).toBeNull()
+      }
+
+      view.unmount()
+    }
+  })
+
   it("keeps the PH11.8 guidance links out of a student's sidebar", async () => {
     await renderAuthenticatedApp("student")
 
@@ -257,7 +293,6 @@ describe("role-aware sidebar", () => {
       "Consultations",
       "Interventions",
       "Students",
-      "Account Settings",
     ]) {
       expect(screen.queryByRole("link", { name: label }), label).toBeNull()
     }
@@ -364,6 +399,49 @@ describe("active navigation state", () => {
     await renderAuthenticatedApp("student", "/app/dashboard")
     const dashboard = await screen.findByRole("link", { name: "Dashboard" })
     expect(dashboard).toHaveAttribute("aria-current", "page")
+  })
+})
+
+/* =====================================================================
+   Floating assistant
+   ===================================================================== */
+describe("floating assistant", () => {
+  it("opens from the floating button", async () => {
+    await renderAuthenticatedApp("faculty")
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Open assistant" })
+    )
+
+    expect(
+      await screen.findByRole("log", { name: "Assistant conversation" })
+    ).toBeInTheDocument()
+  })
+
+  /*
+   * The panel sits above the outlet, so `chatOpen` used to survive a route
+   * change: the reader opened it once and it followed them from page to page
+   * across every navigation. It now closes with the mobile drawer does, on
+   * the same pathname change. Nothing is lost — the transcript is component
+   * state and the panel never persisted it.
+   */
+  it("closes when the reader navigates to another page", async () => {
+    await renderAuthenticatedApp("faculty")
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Open assistant" })
+    )
+    await screen.findByRole("log", { name: "Assistant conversation" })
+
+    fireEvent.click(screen.getByRole("link", { name: "Academics" }))
+
+    // The route really did change — otherwise this would pass by accident.
+    expect(
+      await screen.findByRole("link", { name: "Academics" })
+    ).toHaveAttribute("aria-current", "page")
+    expect(
+      screen.queryByRole("log", { name: "Assistant conversation" })
+    ).toBeNull()
   })
 })
 

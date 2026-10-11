@@ -488,11 +488,19 @@ const NOTIFICATIONS: NavItem = {
 
 const OVERVIEW_GROUP: NavGroup = { heading: "Overview", items: [DASHBOARD] }
 
-/** Every role gets an Account group now that settings is open to all of them. */
-const ACCOUNT_GROUP: NavGroup = {
-  heading: "Account",
-  items: [ACCOUNT_SETTINGS],
-}
+/*
+ * The `Account` (Account Settings) and `Communication` (Notifications) groups
+ * were removed from every sidebar tree.
+ *
+ * Both surfaces moved into the header in the manual-QA overhaul: the bell owns
+ * notifications and the account menu owns account settings. Keeping a second
+ * entry for each in the left navigation put the same destination two places
+ * apart on every one of the five roles, which is the duplication the reviewer
+ * flagged. The routes themselves are unchanged — the bell still opens
+ * `/app/notifications` and the account menu still opens `/app/account-settings`
+ * — so `ACCOUNT_SETTINGS` and `NOTIFICATIONS` stay declared for the page-title
+ * lookup in `getPageTitle`, which reads items rather than trees.
+ */
 
 const STUDENT_NAVIGATION: readonly NavGroup[] = [
   OVERVIEW_GROUP,
@@ -500,11 +508,6 @@ const STUDENT_NAVIGATION: readonly NavGroup[] = [
     heading: "Learning",
     items: [ACADEMICS, SCHEDULE, ATTENDANCE, STUDENT_ASSESSMENTS, REPORTS],
   },
-  {
-    heading: "Communication",
-    items: [NOTIFICATIONS],
-  },
-  ACCOUNT_GROUP,
 ]
 
 const PARENT_NAVIGATION: readonly NavGroup[] = [
@@ -526,11 +529,6 @@ const PARENT_NAVIGATION: readonly NavGroup[] = [
      */
     items: [PARENT_ACADEMICS, PARENT_ASSESSMENTS, PARENT_SUPPORT, REPORTS],
   },
-  {
-    heading: "Communication",
-    items: [NOTIFICATIONS],
-  },
-  ACCOUNT_GROUP,
 ]
 
 const FACULTY_NAVIGATION: readonly NavGroup[] = [
@@ -546,11 +544,6 @@ const FACULTY_NAVIGATION: readonly NavGroup[] = [
       REPORTS,
     ],
   },
-  {
-    heading: "Communication",
-    items: [NOTIFICATIONS],
-  },
-  ACCOUNT_GROUP,
 ]
 
 const GUIDANCE_NAVIGATION: readonly NavGroup[] = [
@@ -566,11 +559,6 @@ const GUIDANCE_NAVIGATION: readonly NavGroup[] = [
       REPORTS,
     ],
   },
-  {
-    heading: "Communication",
-    items: [NOTIFICATIONS],
-  },
-  ACCOUNT_GROUP,
 ]
 
 const ADMIN_NAVIGATION: readonly NavGroup[] = [
@@ -588,11 +576,6 @@ const ADMIN_NAVIGATION: readonly NavGroup[] = [
     heading: "School Operations",
     items: [ADMIN_USERS, ADMIN_DATA, ADMIN_CMS, ADMIN_AUDIT, REPORTS],
   },
-  {
-    heading: "Communication",
-    items: [NOTIFICATIONS],
-  },
-  ACCOUNT_GROUP,
 ]
 
 const ROLE_NAVIGATION: Record<Role, readonly NavGroup[]> = {
