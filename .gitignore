@@ -50,7 +50,13 @@ cms/node_modules/
 cms/.env
 cms/dist/
 cms/.strapi/
-cms/public/uploads/
+# Runtime uploads stay out of git, but the folder itself must exist in a
+# fresh checkout: @strapi/provider-upload-local checks it at boot
+# (pathExistsSync) and throws "The upload folder (...) doesn't exist" on
+# Render otherwise. Same intent as cms/.gitignore's `!public/uploads/.gitkeep`
+# — a directory-scoped ignore here would make that negation ineffective.
+cms/public/uploads/*
+!cms/public/uploads/.gitkeep
 cms/*.log
 
 # Local OpenCode / Impeccable tooling
