@@ -1,10 +1,4 @@
-import {
-  ClipboardCheck,
-  ClipboardList,
-  Clock,
-  Target,
-  Users,
-} from "lucide-react"
+import { ClipboardList } from "lucide-react"
 import { Link } from "react-router-dom"
 
 import { NewCasesTrendChart } from "@/components/charts/NewCasesTrend"
@@ -214,22 +208,29 @@ export function GuidanceDashboard() {
       {/* ---------------------------------------------------------------- */}
       {/* Welcome banner                                                   */}
       {/* ---------------------------------------------------------------- */}
+      {/*
+        Transparent on purpose: the shell already paints the school banner photo
+        behind every page's title block, and this text sits on it the way the
+        reference shows it — dark ink on the washed-out photo, not a second
+        maroon banner under the first photo. A previous version was a solid
+        `bg-primary` band here, which fought the shell photo for the same strip.
+      */}
       <section
         aria-label="Guidance overview"
-        className="flex flex-col gap-4 rounded-xl bg-primary p-6 text-primary-foreground sm:flex-row sm:items-center sm:justify-between"
+        className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
       >
         <div>
           <h2 className="text-xl font-bold sm:text-2xl">Guidance Center</h2>
-          <p className="mt-1 text-sm text-primary-foreground/85">
+          <p className="mt-1 max-w-prose text-sm text-muted-foreground">
             Welcome back, {greetingName(user)}! Here&apos;s an overview of the
             student support activities today.
           </p>
         </div>
-        <div className="flex items-center gap-3 rounded-lg bg-primary-foreground/10 px-4 py-3">
-          <ClipboardList aria-hidden="true" className="size-6" />
+        <div className="flex items-center gap-3 rounded-lg border border-border bg-card/80 px-4 py-3 shadow-sm backdrop-blur-sm">
+          <ClipboardList aria-hidden="true" className="size-6 text-primary" />
           <div>
             <p className="text-sm font-semibold">{formatToday()}</p>
-            <p className="text-xs text-primary-foreground/80">
+            <p className="text-xs text-muted-foreground">
               {formatCount(openAlerts.length)} open alert
               {openAlerts.length === 1 ? "" : "s"} on file
             </p>
@@ -265,9 +266,9 @@ export function GuidanceDashboard() {
       {/* ---------------------------------------------------------------- */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <MetricCard
+          centered
           title="Active Cases"
           hint="Open risk alerts (not yet resolved)"
-          icon={ClipboardCheck}
           isLoading={statsQuery.isLoading}
           isError={statsQuery.isError}
         >
@@ -275,9 +276,9 @@ export function GuidanceDashboard() {
         </MetricCard>
 
         <MetricCard
+          centered
           title="At-Risk Students"
           hint="Distinct students with an open moderate/high alert"
-          icon={Users}
           isLoading={statsQuery.isLoading}
           isError={statsQuery.isError}
         >
@@ -285,9 +286,9 @@ export function GuidanceDashboard() {
         </MetricCard>
 
         <MetricCard
+          centered
           title="Pending Follow-up"
           hint="Your ongoing and follow-up consultations"
-          icon={Clock}
           isLoading={statsQuery.isLoading}
           isError={statsQuery.isError}
         >
@@ -301,6 +302,7 @@ export function GuidanceDashboard() {
           sentence that never explains it.
         */}
         <MetricCard
+          centered
           title="Assessment Completion"
           hint={
             statsQuery.isError
@@ -309,13 +311,98 @@ export function GuidanceDashboard() {
                 ? "No assessment results yet"
                 : "Completed vs started assessments"
           }
-          icon={Target}
           isLoading={statsQuery.isLoading}
           isError={statsQuery.isError}
         >
           {formatPercent(stats?.assessment_completion_rate, 0)}
         </MetricCard>
       </div>
+
+      {/* ---------------------------------------------------------------- */}
+      {/* Analytics                                                        */}
+      {/* ---------------------------------------------------------------- */}
+      {/*
+        Every chart together, directly under the figures they explain. The bars
+        used to live inside the Risk Alerts card while the donut and the trend
+        sat at the bottom of the page, which scattered the one glance a
+        counselor needs across three places.
+      */}
+      <section aria-labelledby="guidance-analytics" className="space-y-4">
+        <h3
+          id="guidance-analytics"
+          className="text-lg font-semibold tracking-tight"
+        >
+          Analytics
+        </h3>
+        <Card>
+          <CardHeader>
+            <PanelHeader title="Risk Level Distribution" />
+          </CardHeader>
+          <CardContent>
+            {riskAlertsQuery.isLoading ? (
+              <PendingRegion label="Risk level distribution">
+                <Skeleton className="h-32 w-full" />
+              </PendingRegion>
+            ) : riskAlertsQuery.isError ? (
+              <p className="text-sm text-muted-foreground">
+                Risk levels are unavailable.
+              </p>
+            ) : alerts.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No risk alerts</p>
+            ) : (
+              <RiskLevelBars alerts={alerts} />
+            )}
+          </CardContent>
+        </Card>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <PanelHeader title="Case Status Overview" />
+            </CardHeader>
+            <CardContent>
+              {riskAlertsQuery.isLoading ? (
+                <PendingRegion label="Case status overview">
+                  <Skeleton className="h-32 w-full" />
+                </PendingRegion>
+              ) : riskAlertsQuery.isError ? (
+                <p className="text-sm text-muted-foreground">
+                  Case status is unavailable.
+                </p>
+              ) : (
+                <RiskStatusDonut alerts={alerts} />
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between gap-2">
+                <CardTitle>Monthly Trend</CardTitle>
+                <span className="text-xs text-muted-foreground">
+                  Last 6 Months
+                </span>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {riskAlertsQuery.isLoading ? (
+                <PendingRegion label="Monthly trend">
+                  <Skeleton className="h-32 w-full" />
+                </PendingRegion>
+              ) : riskAlertsQuery.isError ? (
+                <p className="text-sm text-muted-foreground">
+                  The trend is unavailable.
+                </p>
+              ) : hasRecentCaseHistory(alerts) ? (
+                <NewCasesTrendChart alerts={alerts} />
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  No new cases recorded in the last six months.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </section>
 
       {/* ---------------------------------------------------------------- */}
       {/* Risk alerts + recent consultations                               */}
@@ -337,52 +424,49 @@ export function GuidanceDashboard() {
             ) : alerts.length === 0 ? (
               <p className="text-sm text-muted-foreground">No risk alerts</p>
             ) : (
-              <>
-                <RiskLevelBars alerts={alerts} />
-                <ul className="space-y-2">
-                  {recentAlerts.map((alert) => (
-                    <li
-                      key={alert.id}
-                      className="rounded-md border border-border p-3"
-                      data-risk={alert.risk_level}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium">
-                            {alert.student_name}
-                          </p>
-                          {/*
+              <ul className="space-y-2">
+                {recentAlerts.map((alert) => (
+                  <li
+                    key={alert.id}
+                    className="rounded-md border border-border p-3"
+                    data-risk={alert.risk_level}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">
+                          {alert.student_name}
+                        </p>
+                        {/*
                           `RiskAlertSerializer` exposes no student ID code, so no
                           code is rendered here — the UUID is deliberately not
                           shown as a substitute. The student profile page is the
                           place a human-facing code is available.
                         */}
-                          <p className="truncate text-xs text-muted-foreground">
-                            {alertStatusLabel(alert.status)}
-                          </p>
-                        </div>
-                        <Badge
-                          variant="secondary"
-                          className={`shrink-0 ${riskLevelBadgeClass(alert.risk_level)}`}
-                          data-risk-level={alert.risk_level}
-                        >
-                          {alert.risk_level.toUpperCase()}
-                        </Badge>
-                      </div>
-                      {alert.risk_factors.length > 0 && (
-                        <p className="mt-1.5 text-xs text-muted-foreground">
-                          {alert.risk_factors
-                            .slice(0, 2)
-                            .map(riskFactorLabel)
-                            .filter(Boolean)
-                            .join(", ")}
-                          {alert.risk_factors.length > 2 && " …"}
+                        <p className="truncate text-xs text-muted-foreground">
+                          {alertStatusLabel(alert.status)}
                         </p>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </>
+                      </div>
+                      <Badge
+                        variant="secondary"
+                        className={`shrink-0 ${riskLevelBadgeClass(alert.risk_level)}`}
+                        data-risk-level={alert.risk_level}
+                      >
+                        {alert.risk_level.toUpperCase()}
+                      </Badge>
+                    </div>
+                    {alert.risk_factors.length > 0 && (
+                      <p className="mt-1.5 text-xs text-muted-foreground">
+                        {alert.risk_factors
+                          .slice(0, 2)
+                          .map(riskFactorLabel)
+                          .filter(Boolean)
+                          .join(", ")}
+                        {alert.risk_factors.length > 2 && " …"}
+                      </p>
+                    )}
+                  </li>
+                ))}
+              </ul>
             )}
           </CardContent>
         </Card>
@@ -525,58 +609,6 @@ export function GuidanceDashboard() {
           )}
         </CardContent>
       </Card>
-
-      {/* ---------------------------------------------------------------- */}
-      {/* Case status + monthly trend                                      */}
-      {/* ---------------------------------------------------------------- */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <PanelHeader title="Case Status Overview" />
-          </CardHeader>
-          <CardContent>
-            {riskAlertsQuery.isLoading ? (
-              <PendingRegion label="Case status overview">
-                <Skeleton className="h-32 w-full" />
-              </PendingRegion>
-            ) : riskAlertsQuery.isError ? (
-              <p className="text-sm text-muted-foreground">
-                Case status is unavailable.
-              </p>
-            ) : (
-              <RiskStatusDonut alerts={alerts} />
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between gap-2">
-              <CardTitle>Monthly Trend</CardTitle>
-              <span className="text-xs text-muted-foreground">
-                Last 6 Months
-              </span>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {riskAlertsQuery.isLoading ? (
-              <PendingRegion label="Monthly trend">
-                <Skeleton className="h-32 w-full" />
-              </PendingRegion>
-            ) : riskAlertsQuery.isError ? (
-              <p className="text-sm text-muted-foreground">
-                The trend is unavailable.
-              </p>
-            ) : hasRecentCaseHistory(alerts) ? (
-              <NewCasesTrendChart alerts={alerts} />
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                No new cases recorded in the last six months.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
     </div>
   )
 }

@@ -29,6 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table"
+import { MetricCard } from "@/components/ui/metric-card"
 import { useDataTablePagination } from "@/components/ui/data-table-pagination"
 import { orderRows, type DataTableSort } from "@/components/ui/data-table-sort"
 import {
@@ -53,6 +54,7 @@ import {
   type RiskLevel,
 } from "@/features/guidance/api"
 import { normalizeApiError } from "@/lib/error"
+import { formatCount } from "@/lib/metric-format"
 import { riskLevelBadgeClass } from "@/lib/status-badge"
 
 /** Rows per page for a list that covers every alert in the school. */
@@ -540,6 +542,61 @@ export function RiskAlertsPage() {
         title="Risk Alerts"
         description="Every risk alert across the school, with the transitions each alert currently allows."
       />
+
+      {/*
+        Status summary, per the reference: one centered tile per status plus
+        the total. Counted over the unfiltered list (`counts`), so narrowing
+        the table never shrinks them — a filtered "Resolved (0)" would be
+        indistinguishable from "nothing was ever resolved". Zeros here are
+        measured (no alerts in that status), not missing, which is why an
+        empty file still draws five zeroes rather than hiding the row.
+      */}
+      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+        <MetricCard
+          centered
+          title="Total Alerts"
+          isLoading={alertsQuery.isLoading}
+          isError={alertsQuery.isError}
+        >
+          {formatCount(counts.all)}
+        </MetricCard>
+        <MetricCard
+          centered
+          title="Active"
+          hint="Currently active"
+          isLoading={alertsQuery.isLoading}
+          isError={alertsQuery.isError}
+        >
+          {formatCount(counts.active)}
+        </MetricCard>
+        <MetricCard
+          centered
+          title="Under monitoring"
+          hint="Being monitored"
+          isLoading={alertsQuery.isLoading}
+          isError={alertsQuery.isError}
+        >
+          {formatCount(counts.under_monitoring)}
+        </MetricCard>
+        <MetricCard
+          centered
+          title="Resolved"
+          hint="Successfully resolved"
+          isLoading={alertsQuery.isLoading}
+          isError={alertsQuery.isError}
+        >
+          {formatCount(counts.resolved)}
+        </MetricCard>
+        <MetricCard
+          centered
+          title="Escalated"
+          hint="Requires immediate attention"
+          isLoading={alertsQuery.isLoading}
+          isError={alertsQuery.isError}
+        >
+          {formatCount(counts.escalated)}
+        </MetricCard>
+      </div>
 
       <Card>
         <CardHeader>

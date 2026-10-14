@@ -101,8 +101,37 @@ export function AppShell() {
           onMenuClick={() => setMenuOpen(true)}
         />
 
-        <main id="main-content" className="flex-1 scroll-mt-20" tabIndex={-1}>
-          <div className="mx-auto w-full max-w-6xl px-4 py-6 lg:px-6">
+        <main
+          id="main-content"
+          className="relative flex-1 scroll-mt-14"
+          tabIndex={-1}
+        >
+          {/*
+            The school banner photo behind every in-shell page's title block,
+            per the reference (dashboard welcome text, `Risk Alerts`,
+            `Consultations`, and the same title area on each module page).
+
+            It lives here rather than on any one page so the treatment is the
+            same everywhere without per-page copies: one strip, full-bleed
+            across the content column, fading to the page background before the
+            content begins. A previous version put this photo in the sticky
+            header instead, where it did not belong and where the clipping it
+            needed cut off the account menu.
+
+            Inline style rather than a `bg-[url(…)]` class: the landing hero
+            already sets its cover photo this way, and the arbitrary-value form
+            of a quoted url is a place Tailwind's parser can quietly drop.
+          */}
+          <div
+            aria-hidden="true"
+            className="absolute inset-x-0 top-0 h-64 bg-cover bg-center"
+            style={{ backgroundImage: "url(/background.png)" }}
+          />
+          <div
+            aria-hidden="true"
+            className="absolute inset-x-0 top-0 h-64 bg-gradient-to-b from-background/40 via-background/55 to-background"
+          />
+          <div className="relative mx-auto w-full max-w-6xl px-4 py-6 lg:px-6">
             <ErrorBoundary resetKeys={[location.pathname]}>
               <Outlet />
             </ErrorBoundary>

@@ -213,6 +213,34 @@ describe("RiskAlertsPage", () => {
     ).toBeInTheDocument()
   })
 
+  it("summarises every status in tiles counted over the unfiltered list", async () => {
+    renderPage()
+    await screen.findByText("Ana Reyes")
+
+    // 4 alerts, one per status. The tiles answer "how many in each state"
+    // before any filter is touched, and filtering the table below must not
+    // shrink them — they read the same unfiltered counts as the filter chips.
+    // Headings, not text: the filter chips repeat these words as buttons.
+    const cardFor = (title: string) =>
+      screen
+        .getByRole("heading", { name: title })
+        .closest('[data-slot="card"]')
+    expect(cardFor("Total Alerts")).toHaveTextContent("4")
+    expect(cardFor("Active")).toHaveTextContent("1")
+    expect(cardFor("Under monitoring")).toHaveTextContent("1")
+    expect(cardFor("Resolved")).toHaveTextContent("1")
+    expect(cardFor("Escalated")).toHaveTextContent("1")
+
+    const group = screen.getByRole("group", { name: /filter by status/i })
+    fireEvent.click(within(group).getByRole("button", { name: /^Active 1$/ }))
+    await waitFor(() => {
+      expect(screen.getByText(/Showing 1 of 4/)).toBeInTheDocument()
+    })
+    // The table narrowed; the summary still describes the whole file.
+    expect(cardFor("Total Alerts")).toHaveTextContent("4")
+    expect(cardFor("Resolved")).toHaveTextContent("1")
+  })
+
   it("filters by status without dropping resolved alerts entirely", async () => {
     renderPage()
     await screen.findByText("Ana Reyes")

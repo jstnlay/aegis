@@ -167,29 +167,7 @@ export function Header({
   const pageTitle = getPageTitle(location.pathname)
 
   return (
-    <header className="sticky top-0 z-30 flex h-20 shrink-0 items-center gap-3 overflow-hidden px-4 lg:px-6">
-      {/*
-        The school's banner across the top of every in-shell page, per the
-        reference. It is a decoration, so it sits behind an aria-hidden layer and
-        is then veiled left-to-right: the photo is a headline, and a page title
-        competing with it for contrast would lose. The left two thirds are
-        opaque enough for the maroon title to hold, and the right third keeps
-        the photo legible.
-
-        Inline style rather than a `bg-[url(…)]` class: the landing hero already
-        sets its cover photo this way, and the arbitrary-value form of a quoted
-        url is a place Tailwind's parser can quietly drop.
-      */}
-      <div
-        aria-hidden="true"
-        className="absolute inset-0 bg-cover bg-center opacity-30"
-        style={{ backgroundImage: "url(/background.png)" }}
-      />
-      <div
-        aria-hidden="true"
-        className="absolute inset-0 bg-gradient-to-r from-background via-background/85 to-background/25"
-      />
-
+    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-background px-4 lg:px-6">
       {/*
         PH11.11: `aria-expanded` and `aria-controls` were added. The control
         opened and closed the drawer but reported no state, so a screen-reader
@@ -201,7 +179,7 @@ export function Header({
         ref={menuButtonRef}
         variant="ghost"
         size="icon"
-        className="relative lg:hidden"
+        className="lg:hidden"
         onClick={onMenuClick}
         aria-label="Open navigation"
         aria-expanded={menuOpen}
@@ -217,17 +195,20 @@ export function Header({
         is what removed the two-`h1` duplication this file previously caused on
         all twenty-nine in-shell pages.
 
-        Uppercased and set in the brand maroon to match the reference's page
-        banner. The transformation is presentational, so assistive technology
-        still reads the heading's original casing.
+        Uppercased and set in the brand maroon to match the reference's header
+        (`DASHBOARD`, `RISK ALERTS`, …). The transformation is presentational,
+        so assistive technology still reads the heading's original casing.
+
+        Deliberately a plain bar: the school banner photo lives behind each
+        page's title block in the content area, not here. A previous version
+        put it in this header with `overflow-hidden`, which clipped the account
+        menu open state — the Sign out item was unreachable.
       */}
-      <h1 className="relative min-w-0 flex-1 truncate text-lg font-semibold tracking-wide text-primary uppercase">
+      <h1 className="min-w-0 flex-1 truncate text-lg font-semibold tracking-wide text-primary uppercase">
         {pageTitle}
       </h1>
 
-      <div className="relative">
-        <UserChip />
-      </div>
+      <UserChip />
     </header>
   )
 }

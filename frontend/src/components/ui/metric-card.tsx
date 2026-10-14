@@ -30,16 +30,22 @@ export function MetricCard({
   title,
   hint,
   icon: Icon,
+  centered = false,
   isLoading,
   isError,
   className,
   children,
 }: {
   title: string
-  /** What the figure covers, under the number. */
-  hint: string
-  /** Decorative tile icon, per the Dashboard reference. */
+  /** What the figure covers, under the number. Omitted when the title says it. */
+  hint?: string
+  /** Decorative tile icon. Not rendered on centered tiles, which have no slot. */
   icon?: LucideIcon
+  /**
+   * Center the tile, per the reference's stat cards. Left-aligned is the
+   * default everywhere else; centered is opt-in so existing tiles do not move.
+   */
+  centered?: boolean
   isLoading: boolean
   isError: boolean
   className?: string
@@ -48,13 +54,18 @@ export function MetricCard({
 }) {
   return (
     <Card className={cn("h-full", className)}>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+      <CardHeader
+        className={cn(
+          "flex flex-row items-center justify-between space-y-0 pb-2",
+          centered && "justify-center text-center"
+        )}
+      >
         <CardTitle className="text-sm font-medium">{title}</CardTitle>
-        {Icon ? (
+        {Icon && !centered ? (
           <Icon aria-hidden="true" className="size-4 text-muted-foreground" />
         ) : null}
       </CardHeader>
-      <CardContent>
+      <CardContent className={cn(centered && "text-center")}>
         <div className="text-2xl font-bold tabular-nums">
           {isLoading ? (
             <PendingMetric label={title} />
@@ -64,7 +75,9 @@ export function MetricCard({
             children
           )}
         </div>
-        <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
+        {hint ? (
+          <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
+        ) : null}
       </CardContent>
     </Card>
   )

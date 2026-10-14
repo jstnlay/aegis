@@ -179,7 +179,11 @@ describe("PH11.11 feed-card states", () => {
   it("still shows the empty state when the request succeeded with no alerts", () => {
     renderWithAlerts({ data: [] } as never)
 
-    expect(screen.getByText(/No risk alerts/i)).toBeInTheDocument()
+    // Twice, not once: the analytics card and the alert list are two views of
+    // the same empty set, and either one going silent would read as a section
+    // that failed to load.
+    const emptyStates = screen.getAllByText(/No risk alerts/i)
+    expect(emptyStates).toHaveLength(2)
     expect(screen.queryByRole("alert")).not.toBeInTheDocument()
   })
 
@@ -220,6 +224,19 @@ describe("GuidanceDashboard", () => {
     // active_cases counts alerts (4), not distinct students — the copy must not
     // claim it counts students.
     expect(screen.getByText(/Open risk alerts/i)).toBeInTheDocument()
+  })
+
+  it("centers the metric tiles like the reference stat cards", () => {
+    renderWithClient()
+
+    // The reference's cards center title, figure and hint. The class lives on
+    // the header and content primitives rather than the card root, so the
+    // assertion follows it there.
+    const tile = screen.getByText(/Active Cases/i).closest('[data-slot="card"]')
+    expect(tile).not.toBeNull()
+    expect(tile?.querySelector('[data-slot="card-content"]')).toHaveClass(
+      "text-center"
+    )
   })
 
   it("does not render a nonexistent student ID code on alert cards", () => {
