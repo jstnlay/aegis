@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils"
  */
 export function SchoolLockup({ className }: { className?: string }) {
   return (
-    <span className={cn("flex items-center", className)}>
+    <span className={cn("flex min-w-0 items-center", className)}>
       <img
         src="/hcci-logo.png"
         alt="His Care Christian Institute seal"

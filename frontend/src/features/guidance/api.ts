@@ -1506,6 +1506,56 @@ export function useCreateAssessmentQuestion() {
   })
 }
 
+/* -------------------------------------------------------------------------- */
+/* FR-027 — AI chatbot-assisted question drafting                             */
+/* -------------------------------------------------------------------------- */
+
+/** One proposed item, shaped like a `CreateAssessmentQuestionPayload` minus
+ * `assessment` and `order` — the two values only the form can know. */
+export interface QuestionDraft {
+  question_text: string
+  options: string[] | null
+  correct_answer: string | null
+}
+
+/** `POST /assessments/question-drafts/` response. */
+export interface QuestionDraftResponse {
+  /** Which item bank the chatbot's classifier selected. */
+  family: "concern" | "academic" | "assessment" | "general"
+  /** The classifier's confidence for that selection; 0 when unconfident. */
+  confidence: number
+  drafts: QuestionDraft[]
+}
+
+/**
+ * `POST /assessments/question-drafts/` (FR-027, TC-GUI-04).
+ *
+ * Deliberately not a query and deliberately does not invalidate anything:
+ * the endpoint persists nothing. A draft is a proposal the counselor edits or
+ * discards; it only becomes a question when it goes back through
+ * `useCreateAssessmentQuestion`, which is where `AssessmentQuestion.clean()`
+ * runs.
+ *
+ * The server refuses `true_false` by name (`QUESTION_TYPE_UNSUPPORTED`) rather
+ * than emitting a generated statement of fact, so the caller must send a type
+ * the generator can draft.
+ */
+export function useGenerateQuestionDrafts() {
+  return useMutation<
+    QuestionDraftResponse,
+    Error,
+    { topic: string; question_type: AssessmentQuestionType; count: number }
+  >({
+    mutationFn: async (payload) => {
+      const { data } = await apiClient.post<QuestionDraftResponse>(
+        "/assessments/question-drafts/",
+        payload
+      )
+      return data
+    },
+  })
+}
+
 export function filterAssessments(
   assessments: GuidanceAssessment[],
   filters: AssessmentFilters

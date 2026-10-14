@@ -98,6 +98,40 @@ export function downloadCsv(filename: string, rows: readonly string[][]): void {
 }
 
 /**
+ * Offer one student's guidance report as a file (FR-032 / TC-GUI-09).
+ *
+ * The report endpoint takes the same `?file_format` the controlled exports
+ * do and returns a download, so this is a GET with `responseType: "blob"`
+ * rather than a query. Deriving the rows here instead would mean a second
+ * rendering of the report in the browser, which is exactly how the file and
+ * the screen come to disagree.
+ */
+export async function downloadGuidanceReport(
+  studentId: string,
+  format: ExportFormat
+): Promise<void> {
+  const response = await apiClient.get(
+    `/guidance/reports/student/${studentId}/`,
+    { params: { file_format: format }, responseType: "blob" }
+  )
+
+  const filename =
+    filenameFromDisposition(response.headers["content-disposition"]) ??
+    `aegis-guidance-report.${format}`
+  const blobUrl = URL.createObjectURL(response.data as Blob)
+  try {
+    const anchor = document.createElement("a")
+    anchor.href = blobUrl
+    anchor.download = filename
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+  } finally {
+    URL.revokeObjectURL(blobUrl)
+  }
+}
+
+/**
  * Pull the filename out of a `Content-Disposition` header.
  *
  * The backend builds it with `build_content_disposition()`, which RFC 5987

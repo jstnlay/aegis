@@ -18,17 +18,24 @@
  * `is_staff` remains meaningful only for the Django admin site.
  *
  * ---------------------------------------------------------------------------
- * §2 Users: list, retrieve and create only
+ * §2 Users: list, retrieve, create, and a narrow admin update
  * ---------------------------------------------------------------------------
- * These three views are the complete user-administration contract. There is
- * **no** update, deactivate, delete, role-reassignment or password-reset route
- * anywhere in the project. The screens in this module therefore expose exactly
- * these three operations and state plainly which are unavailable, rather than
- * rendering controls that could only fail.
+ * `GET /accounts/users/`, `GET /accounts/users/{id}/` and
+ * `POST /accounts/users/create/` are the read/create surface.
  *
- * `UserSerializer` also makes `email`, `role` and `is_active` read-only
- * (SEC-001), so even the create response cannot set an administrator role
- * through this endpoint.
+ * PH11 added `PATCH /accounts/users/{id}/` (TC-ADM-10, FR-036). It is
+ * deliberately narrow: `AdminUserUpdateSerializer` declares exactly `role` and
+ * `is_active`, so profile fields posted to it are ignored rather than applied.
+ * Only `get`/`patch` are routed — `http_method_names` blocks `put`, which would
+ * otherwise reach the read-oriented `UserSerializer`. The server refuses a
+ * change to your own account, and every accepted change is written to the audit
+ * log with a `role`/`is_active` diff.
+ *
+ * There is still **no** delete or password-reset route anywhere in the project,
+ * and `UserSerializer` keeps `email`, `role` and `is_active` read-only for every
+ * *read* response (SEC-001). Self-service (`/accounts/me/`) is unaffected: it
+ * never gained a writable `role`, because SEC-001 governs self-service, not the
+ * administrator surface.
  *
  * ---------------------------------------------------------------------------
  * §3 Attendance is read-only for admin
@@ -178,10 +185,10 @@ export function useAdminUser(userId: string | null) {
 /**
  * Create a user account. `POST /accounts/users/create/`.
  *
- * The only user mutation this project exposes. Note `UserCreateSerializer` does
- * not mark `role` read-only the way `UserSerializer` does, so a role *can* be
- * chosen here — but no update route exists, so this is the only point at which
- * a role can be set.
+ * Note `UserCreateSerializer` does not mark `role` read-only the way
+ * `UserSerializer` does, so a role *can* be chosen at creation. The two routes
+ * are deliberately different: creation is where the account's shape is
+ * decided, `PATCH /accounts/users/{id}/` is where it is revised later.
  */
 export function useCreateUser() {
   const queryClient = useQueryClient()
@@ -190,6 +197,43 @@ export function useCreateUser() {
       const { data } = await apiClient.post<AdminUser>(
         "/accounts/users/create/",
         payload
+      )
+      return data
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin", "users"] })
+    },
+  })
+}
+
+/** The only two fields an administrator may revise on someone else's account. */
+export type UpdateUserPayload = Partial<Pick<AdminUser, "role" | "is_active">>
+
+/**
+ * Change an account's role or active state. `PATCH /accounts/users/{id}/`.
+ *
+ * PH11 (TC-ADM-10, FR-036): this is the update route that did not exist when
+ * the Cycle-2 log was filed — the page footer could only say role management
+ * "requires access to the Django admin site".
+ *
+ * Only `role` and `is_active` are sent; the server's `AdminUserUpdateSerializer`
+ * declares nothing else, so profile fields posted here are ignored rather than
+ * applied. Two outcomes worth surfacing come back as errors: an administrator
+ * cannot change their own role or deactivate their own account (self-lockout
+ * has no self-service recovery), and any role or active-state change is written
+ * to the audit log with the acting administrator and a `role`/`is_active` diff.
+ */
+export function useUpdateUser() {
+  const queryClient = useQueryClient()
+  return useMutation<
+    AdminUser,
+    Error,
+    { userId: string; patch: UpdateUserPayload }
+  >({
+    mutationFn: async ({ userId, patch }) => {
+      const { data } = await apiClient.patch<AdminUser>(
+        `/accounts/users/${userId}/`,
+        patch
       )
       return data
     },
@@ -878,15 +922,38 @@ export const IMPORT_TYPE_LABELS: Record<ImportType, string> = {
 }
 
 /**
- * `guidance_records` is accepted by `ImportType` and an admin may submit it, but
- * `_dispatch_domain_processing` has no guidance importer and falls through to
- * the legacy parse-only path: rows are validated and marked successful without
- * writing any domain record. The UI labels it so an admin is not misled into
- * thinking guidance rows were imported.
+ * Column guide for one import type. `GET /data-import/templates/{type}/`.
+ *
+ * The server owns the schema, so the header row the tester downloads is
+ * built from the very list the importer validates — there is no second copy
+ * of it in the client to drift. The response carries headers only: an
+ * example row would have to contain an invented `student_id` or `score`,
+ * which would either be written as a record that never happened or fail
+ * validation and teach the wrong lesson.
  */
-export const IMPORT_TYPE_PARSES_ONLY: readonly ImportType[] = [
-  "guidance_records",
-]
+export interface ImportTemplate {
+  import_type: ImportType
+  label: string
+  columns: Array<{ name: string; required: boolean; hint: string }>
+  header: string[]
+  /** Server-controlled columns the importer refuses to accept. */
+  forbidden_columns: string[]
+}
+
+/** `GET /data-import/templates/{type}/`. Admin: every type. Faculty: the two they may upload. */
+export function useImportTemplate(importType: ImportType | null) {
+  return useQuery<ImportTemplate, Error>({
+    queryKey: ["admin", "import-template", importType],
+    enabled: Boolean(importType),
+    staleTime: Infinity, // the schema changes only with a deploy
+    queryFn: async () => {
+      const { data } = await apiClient.get<ImportTemplate>(
+        `/data-import/templates/${importType ?? ""}/`
+      )
+      return data
+    },
+  })
+}
 
 export interface ImportJobSummary {
   id: string
@@ -1125,6 +1192,7 @@ export const RESOURCE_TYPE_LABELS: Record<
  * here: the page offers the failure, and a second click is a deliberate
  * retry rather than an automatic silent one.
  */
+/** Announcements visible to this caller. `GET /cms/announcements/`. */
 export function useCmsAnnouncements() {
   return useQuery<CmsAnnouncement[], Error>({
     queryKey: ["admin", "cms-announcements"],
@@ -1139,7 +1207,6 @@ export function useCmsAnnouncements() {
   })
 }
 
-/** Resources visible to this caller. `GET /cms/resources/`. */
 export function useCmsResources() {
   return useQuery<CmsResource[], Error>({
     queryKey: ["admin", "cms-resources"],
@@ -1197,4 +1264,66 @@ export async function downloadCmsResource(documentId: string): Promise<void> {
   } finally {
     URL.revokeObjectURL(blobUrl)
   }
+}
+
+/* -------------------------------------------------------------------------- */
+/* FR-034 / TC-ADM-11: system-wide settings                                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * One system setting as `GET /cms/settings/` returns it.
+ *
+ * `value_type`, `default` and `description` are the registry's, not the admin's
+ * - they exist so the page can say what a control does and what it will fall
+ * back to, without a second request or model code.
+ */
+export interface SystemSetting {
+  key: string
+  value: string
+  description: string | null
+  value_type: "int" | "text"
+  default: number | string | null
+  updated_at: string
+  updated_by_email: string | null
+}
+
+/** `GET /cms/settings/`. Admin only; other roles get a 403, not a filtered list. */
+export function useSystemSettings() {
+  return useQuery<SystemSetting[], Error>({
+    queryKey: ["admin", "system-settings"],
+    queryFn: async ({ signal }) => {
+      const { results } = await fetchAllPages<SystemSetting>("/cms/settings/", {
+        signal,
+      })
+      return results
+    },
+    retry: false,
+  })
+}
+
+/**
+ * `PATCH /cms/settings/<key>/` — updates the setting's `value`.
+ *
+ * The backend accepts only `value`; sending anything else is not an error, it
+ * is silently ignored. A rejected value surfaces as a validation error naming
+ * the field, which is the whole reason the type is in the payload: the page
+ * can say "must be an integer" before the administrator submits, and the
+ * server says it again if they somehow submit anyway.
+ */
+export function useUpdateSystemSetting() {
+  const queryClient = useQueryClient()
+  return useMutation<unknown, Error, { key: string; value: string }>({
+    mutationFn: async ({ key, value }) => {
+      const { data } = await apiClient.patch(
+        `/cms/settings/${encodeURIComponent(key)}/`,
+        { value }
+      )
+      return data
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["admin", "system-settings"],
+      })
+    },
+  })
 }

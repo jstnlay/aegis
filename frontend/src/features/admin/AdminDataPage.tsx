@@ -26,17 +26,18 @@ import {
 import {
   downloadExport,
   IMPORT_TYPE_LABELS,
-  IMPORT_TYPE_PARSES_ONLY,
   IMPORT_JOB_STATUS_LABELS,
   useCreateImportJob,
   useImportJob,
   useImportJobs,
+  useImportTemplate,
   type ExportKind,
   type ImportJobStatus,
   type ImportJobSummary,
   type ImportType,
 } from "@/features/admin/api"
 import { normalizeApiError } from "@/lib/error"
+import { downloadCsv } from "@/lib/export"
 
 /**
  * Imports and exports.
@@ -50,12 +51,12 @@ import { normalizeApiError } from "@/lib/error"
  * route, so neither control exists here. The five `JobStatus` values are the
  * real choices, including `partial` for a job where some rows failed.
  *
- * One import type needs a caveat the UI must not hide: `guidance_records` is an
- * accepted `ImportType` and an admin may submit it, but
- * `_dispatch_domain_processing` has no guidance importer behind it, so the
- * file is parsed, every row comes back `skipped`, and the job fails rather
- * than claiming an import that never happened. The form labels it
- * accordingly.
+ * Every accepted `ImportType` is backed by a domain importer as of PH11,
+ * including `guidance_records`, which writes real `ConsultationRecord` rows.
+ * The schema behind each type comes from
+ * `GET /data-import/templates/{type}/`, so the header the tester downloads
+ * is the header the importer validates — and it ships headers only, because
+ * an example row would have to contain an invented `student_id` or `score`.
  *
  * Exports: three separate GET endpoints returning a **file**, not a job list.
  * They are a download rather than a query, and each requires `?file_format` —
@@ -255,14 +256,6 @@ function ImportsCard() {
               </div>
             </div>
 
-            {IMPORT_TYPE_PARSES_ONLY.includes(importType) ? (
-              <p className="text-xs text-muted-foreground">
-                {IMPORT_TYPE_LABELS[importType]} is not backed by an importer
-                yet. The file is checked and every row reported, but the job
-                fails and no guidance records are written.
-              </p>
-            ) : null}
-
             {createJob.isError ? (
               <ErrorNote message={normalizeApiError(createJob.error).message} />
             ) : null}
@@ -271,6 +264,8 @@ function ImportsCard() {
               {createJob.isPending ? "Processing…" : "Upload and import"}
             </Button>
           </form>
+
+          <TemplateGuide importType={importType} />
         </CardContent>
       </Card>
 
@@ -370,6 +365,100 @@ function ImportJobRecords({ jobId }: { jobId: string }) {
           ))}
         </ul>
       )}
+    </div>
+  )
+}
+
+/**
+ * The column guide for the selected import type.
+ *
+ * Fetched rather than restated in the client, so the header row the tester
+ * downloads is built from the same list the importer validates — the two
+ * cannot drift. The file ships headers only: an example row would have to
+ * contain an invented `student_id` or `score`, which would either be written
+ * as a record that never happened or fail validation and teach the wrong
+ * lesson. The tester adds their own rows beneath the headers.
+ */
+function TemplateGuide({ importType }: { importType: ImportType }) {
+  const templateQuery = useImportTemplate(importType)
+  const template = templateQuery.data
+
+  return (
+    <div className="space-y-2 rounded-md border border-border p-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <p className="text-sm font-medium">Column guide</p>
+          <p className="text-xs text-muted-foreground">
+            {IMPORT_TYPE_LABELS[importType]} — required columns first, in the
+            order the importer reports a missing one.
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={!template}
+          onClick={() => {
+            if (!template) return
+            downloadCsv(`aegis-${importType}-template.csv`, [template.header])
+          }}
+        >
+          Download template (.csv)
+        </Button>
+      </div>
+
+      {templateQuery.isError ? (
+        <p className="text-xs text-muted-foreground">
+          No column guide is available for this import type.
+        </p>
+      ) : templateQuery.isLoading ? (
+        <p
+          role="status"
+          aria-busy="true"
+          className="text-xs text-muted-foreground"
+        >
+          Loading the column guide…
+        </p>
+      ) : template ? (
+        <>
+          <ul className="space-y-1">
+            {template.columns.map((column) => (
+              <li
+                key={column.name}
+                className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5"
+              >
+                <code className="font-mono text-xs">{column.name}</code>
+                <span
+                  className={
+                    column.required
+                      ? "text-xs font-medium text-foreground"
+                      : "text-xs text-muted-foreground"
+                  }
+                >
+                  {column.required ? "required" : "optional"}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  — {column.hint}
+                </span>
+              </li>
+            ))}
+          </ul>
+
+          {template.forbidden_columns.length > 0 ? (
+            <p className="text-xs text-muted-foreground">
+              Server-controlled, rejected if present:{" "}
+              <code className="font-mono">
+                {template.forbidden_columns.join(", ")}
+              </code>
+            </p>
+          ) : null}
+
+          <p className="text-xs text-muted-foreground">
+            The downloaded file contains these headers and no rows — add your
+            own data beneath them.
+          </p>
+        </>
+      ) : null}
     </div>
   )
 }

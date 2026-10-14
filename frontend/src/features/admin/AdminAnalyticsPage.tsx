@@ -1,12 +1,14 @@
-import { LayoutDashboard } from "lucide-react"
+import {
+  ChartNoAxesColumn,
+  GraduationCap,
+  Layers,
+  LayoutDashboard,
+} from "lucide-react"
 import { useState } from "react"
 
-import {
-  ErrorNote,
-  PendingMetric,
-  UnavailableMetric,
-} from "@/components/feedback/Feedback"
+import { ErrorNote } from "@/components/feedback/Feedback"
 import { Card, CardContent } from "@/components/ui/card"
+import { MetricCard } from "@/components/ui/metric-card"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { ChartState } from "@/components/charts/ChartCard"
 import { GradeLevelPerformanceChart } from "@/components/charts/GradeLevelPerformanceChart"
@@ -80,26 +82,35 @@ export function AdminAnalyticsPage() {
 
       <div className="grid gap-4 md:grid-cols-3">
         <MetricCard
-          label="Active students"
+          title="Active students"
+          hint="Enrolled students with an active record"
+          icon={GraduationCap}
           isLoading={schoolWideQuery.isLoading}
           isError={schoolWideQuery.isError}
-          value={formatCount(schoolWideQuery.data?.total_students ?? null)}
-        />
+        >
+          {formatCount(schoolWideQuery.data?.total_students ?? null)}
+        </MetricCard>
         <MetricCard
-          label="Overall grade average"
+          title="Overall grade average"
+          hint="Mean of finalized grades, in points out of 100"
+          icon={ChartNoAxesColumn}
           isLoading={schoolWideQuery.isLoading}
           isError={schoolWideQuery.isError}
-          value={formatPercent(
+        >
+          {formatPercent(
             schoolWideQuery.data?.overall_grade_average ?? null,
             2
           )}
-        />
+        </MetricCard>
         <MetricCard
-          label="Grade levels"
+          title="Grade levels"
+          hint="Distinct levels with records this school year"
+          icon={Layers}
           isLoading={schoolWideQuery.isLoading}
           isError={schoolWideQuery.isError}
-          value={formatCount(schoolWideQuery.data?.grade_levels ?? null)}
-        />
+        >
+          {formatCount(schoolWideQuery.data?.grade_levels ?? null)}
+        </MetricCard>
       </div>
 
       {/*
@@ -163,37 +174,7 @@ export function AdminAnalyticsPage() {
 }
 
 /**
- * One headline figure, with its three states kept distinct.
- *
- * See the note at the call site. `value` is only rendered once the request has
- * resolved, and even then it may legitimately read "N/A" — that is the backend
- * reporting no figure, which is a real answer, unlike a failure.
+ * The shared metric tile. The private copy that lived here is gone since this
+ * batch: its own note describes the three-state split the shared component
+ * enforces in one place, so keeping a sixth variant was drift for no gain.
  */
-function MetricCard({
-  label,
-  value,
-  isLoading,
-  isError,
-}: {
-  label: string
-  value: string
-  isLoading: boolean
-  isError: boolean
-}) {
-  return (
-    <Card>
-      <CardContent className="pt-6">
-        <p className="text-sm font-medium text-muted-foreground">{label}</p>
-        <p className="text-2xl font-bold">
-          {isLoading ? (
-            <PendingMetric label={label} />
-          ) : isError ? (
-            <UnavailableMetric />
-          ) : (
-            value
-          )}
-        </p>
-      </CardContent>
-    </Card>
-  )
-}

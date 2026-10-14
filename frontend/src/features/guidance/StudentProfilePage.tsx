@@ -48,7 +48,7 @@ import {
   type RiskAlert,
   type RiskLevel,
 } from "@/features/guidance/api"
-import { downloadCsv } from "@/lib/export"
+import { downloadGuidanceReport, type ExportFormat } from "@/lib/export"
 import { normalizeApiError } from "@/lib/error"
 import { PortfolioList } from "@/features/portfolio/PortfolioCard"
 import {
@@ -708,7 +708,10 @@ export function StudentProfilePage() {
 
       <Separator />
 
-      <GuidanceReportSection report={reportQuery.data} />
+      <GuidanceReportSection
+        report={reportQuery.data}
+        studentId={studentId ?? null}
+      />
 
       <Separator />
 
@@ -737,70 +740,28 @@ export function StudentProfilePage() {
  */
 function GuidanceReportSection({
   report,
+  studentId,
 }: {
   report: GuidanceReport | undefined
+  studentId: string | null
 }) {
   const [error, setError] = useState<string | null>(null)
+  const [downloading, setDownloading] = useState<ExportFormat | null>(null)
 
-  const download = () => {
-    if (!report) return
+  const download = async (format: ExportFormat) => {
+    if (!studentId) return
     setError(null)
+    setDownloading(format)
     try {
-      const rows: string[][] = [
-        ["student_id", "student_name", "section", "metric", "value"],
-        [
-          report.student_id_code,
-          report.student_name,
-          "",
-          "behavioral_positive",
-          String(report.behavioral_note_counts.positive ?? 0),
-        ],
-        [
-          report.student_id_code,
-          report.student_name,
-          "",
-          "behavioral_warning",
-          String(report.behavioral_note_counts.warning ?? 0),
-        ],
-        [
-          report.student_id_code,
-          report.student_name,
-          "",
-          "behavioral_incident",
-          String(report.behavioral_note_counts.incident ?? 0),
-        ],
-        [
-          report.student_id_code,
-          report.student_name,
-          "",
-          "consultations_all_counselors",
-          String(report.consultation_summary.total),
-        ],
-        [
-          report.student_id_code,
-          report.student_name,
-          "",
-          "interventions_all_counselors",
-          String(report.intervention_summary.total),
-        ],
-        [
-          report.student_id_code,
-          report.student_name,
-          "",
-          "interventions_active",
-          String(report.intervention_summary.active),
-        ],
-        [
-          report.student_id_code,
-          report.student_name,
-          "",
-          "risk_alerts_on_record",
-          String(report.risk_alert_history.length),
-        ],
-      ]
-      downloadCsv(`aegis_guidance_report_${report.student_id_code}.csv`, rows)
+      // The rows come from the server, which renders the same `report_data`
+      // the JSON above is serialized from. Building them here instead would be
+      // a second rendering of the report in the browser - and a shorter one,
+      // since the client-side version predated the sections it now includes.
+      await downloadGuidanceReport(studentId, format)
     } catch (caught) {
       setError(normalizeApiError(caught).message)
+    } finally {
+      setDownloading(null)
     }
   }
 
@@ -809,15 +770,26 @@ function GuidanceReportSection({
       title="Guidance report"
       description="The server's aggregate for this student: behavioral notes, consultations, interventions and risk-alert history in one view."
       actions={
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={!report}
-          onClick={download}
-        >
-          Download report (CSV)
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={!studentId || downloading !== null}
+            onClick={() => void download("csv")}
+          >
+            {downloading === "csv" ? "Preparing…" : "Download (CSV)"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={!studentId || downloading !== null}
+            onClick={() => void download("xlsx")}
+          >
+            {downloading === "xlsx" ? "Preparing…" : "Download (XLSX)"}
+          </Button>
+        </div>
       }
     >
       {error ? <ErrorNote message={error} /> : null}

@@ -1,4 +1,4 @@
-import { ArrowRight } from "lucide-react"
+import { ArrowLeft, ArrowRight } from "lucide-react"
 import { Link } from "react-router-dom"
 
 import { SchoolHeader } from "@/components/brand/SchoolHeader"
@@ -32,11 +32,20 @@ export function SchoolPage() {
         </Button>
       </SchoolHeader>
 
-      <main className="mx-auto w-full max-w-5xl space-y-8 px-4 py-12 md:space-y-10 lg:px-6">
+      <main className="mx-auto w-full max-w-5xl space-y-8 px-4 py-12 md:space-y-12 lg:px-6">
         <Reveal>
-          <h1 className="text-balance text-3xl font-bold tracking-tight text-primary sm:text-4xl">
-            School background
-          </h1>
+          <div className="space-y-3">
+            <Link
+              to="/"
+              className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <ArrowLeft aria-hidden="true" className="size-4" />
+              Back to the landing page
+            </Link>
+            <h1 className="text-balance text-3xl font-bold tracking-tight text-primary sm:text-4xl">
+              School background
+            </h1>
+          </div>
         </Reveal>
 
         <Reveal>
@@ -50,7 +59,7 @@ export function SchoolPage() {
             >
               About the school
             </h2>
-            <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">
+            <p className="max-w-prose text-sm leading-relaxed text-pretty text-muted-foreground">
               {ABOUT_TEXT}
             </p>
           </section>
@@ -59,7 +68,7 @@ export function SchoolPage() {
         <Reveal>
           <section
             aria-labelledby="school-mission-vision"
-            className="space-y-4 rounded-2xl border border-border/70 bg-stone-50 p-6 dark:bg-muted/40"
+            className="space-y-4 rounded-2xl border border-border/70 bg-muted/50 p-6 md:p-8"
           >
             <h2
               id="school-mission-vision"
@@ -68,7 +77,7 @@ export function SchoolPage() {
               Mission &amp; vision
             </h2>
             <div className="grid gap-4 md:grid-cols-2">
-              <Card className="h-full transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
+              <Card className="h-full transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:ring-primary/20">
                 <CardHeader>
                   <CardTitle className="text-base text-primary">
                     Mission
@@ -80,7 +89,7 @@ export function SchoolPage() {
                   </p>
                 </CardContent>
               </Card>
-              <Card className="h-full transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
+              <Card className="h-full transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:ring-primary/20">
                 <CardHeader>
                   <CardTitle className="text-base text-primary">
                     Vision
@@ -95,23 +104,12 @@ export function SchoolPage() {
             </div>
           </section>
         </Reveal>
-
-        <Reveal>
-          <Button
-            asChild
-            variant="outline"
-            size="sm"
-            className="transition-all hover:-translate-y-0.5 hover:shadow-sm"
-          >
-            <Link to="/">Back to the landing page</Link>
-          </Button>
-        </Reveal>
       </main>
 
-      <footer className="border-t border-border">
-        <div className="mx-auto w-full max-w-5xl px-4 py-6 text-xs text-muted-foreground lg:px-6">
+      <footer className="border-t border-border bg-muted/30">
+        <div className="mx-auto w-full max-w-5xl px-4 py-8 text-xs text-muted-foreground lg:px-6">
           <span>
-            His Care Christian Institute � AEGIS school information system
+            His Care Christian Institute · AEGIS school information system
           </span>
         </div>
       </footer>

@@ -427,7 +427,7 @@ describe("PH11.8 guidance routes", () => {
     },
     {
       path: "/app/admin/users",
-      marker: /the only account-creation form the API exposes/i,
+      marker: /assign or withdraw its role and sign-in access/i,
     },
     {
       path: "/app/admin/data",
@@ -496,9 +496,9 @@ describe("PH11.8 guidance routes", () => {
   /**
    * The write boundary is stated on the screens where it applies, so a tester
    * can tell "this role cannot" from "this screen is unfinished". The users
-   * screen no longer carries the "Not available" card: role changes,
-   * deactivation and deletion have no endpoint, so they are omitted rather
-   * than advertised.
+   * screen still carries no "Not available" card: role changes and deactivation
+   * gained an endpoint in PH11 (TC-ADM-10), and the one operation with none —
+   * deletion — is omitted rather than advertised.
    */
   it.each([
     ["/app/admin/attendance", /Read-only view/i],
@@ -514,8 +514,13 @@ describe("PH11.8 guidance routes", () => {
     authState.user = makeUser("admin")
     renderAt("/app/admin/users")
 
-    await screen.findByText(/the only account-creation form the API exposes/i)
+    await screen.findByText(/assign or withdraw its role and sign-in access/i)
     expect(screen.queryByText(/Not available through this API/i)).toBeNull()
+    // The card used to be there because no update route existed. Its absence
+    // now has to be earned by the route actually existing.
+    expect(
+      screen.queryByText(/requires access to the Django admin site/i)
+    ).toBeNull()
   })
 
   it("offers an admin no attendance write control", async () => {

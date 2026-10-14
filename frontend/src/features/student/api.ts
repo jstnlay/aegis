@@ -85,6 +85,22 @@ interface DashboardMetrics {
 }
 
 /**
+ * A grade score from the API, as a number or "no score".
+ *
+ * DRF serialises `Decimal` as a string, so `score` arrives as `"76.69"` even
+ * though the contract types it `number | null`. Passing the string through
+ * unnormalised is how a row ends up reading "N/A / Passing": `formatPercent`
+ * rejects a non-number while `scoreStatus` coerces it into a pass, and the
+ * period average concatenates the strings into `NaN`. A value that does not
+ * parse is not a zero — it is absent.
+ */
+function toScore(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null
+  const parsed = typeof value === "number" ? value : Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+/**
  * Resolves the current student's StudentProfile UUID from their own
  * enrollments. The authenticated user's `id` is the User UUID, which is
  * NOT the StudentProfile UUID used by analytics / attendance routes.
@@ -160,7 +176,8 @@ export function useStudentDashboardData(studentId: string) {
       return results.map((g) => ({
         subject_name: g.subject_name,
         subject_code: g.subject_code,
-        score: g.score,
+        // Normalised at the boundary: the API sends Decimal as a string.
+        score: toScore(g.score),
         letter_grade: g.letter_grade,
         // Normalized to the same key the period buckets are built from. A row
         // with no grading period used to keep `""` here while being grouped as

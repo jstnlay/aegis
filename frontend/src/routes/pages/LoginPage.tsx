@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { Navigate } from "react-router-dom"
-import { GraduationCap, Loader2 } from "lucide-react"
+import { Loader2 } from "lucide-react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -23,6 +23,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { useAuth } from "@/features/auth/AuthContext"
 import { normalizeApiError } from "@/lib/error"
+import { SCHOOL_NAME } from "@/lib/school-content"
 
 const loginSchema = z.object({
   email: z
@@ -35,8 +36,14 @@ const loginSchema = z.object({
 type LoginFormValues = z.infer<typeof loginSchema>
 
 export function LoginPage() {
-  const { status, isAuthenticated, mustChangePassword, sessionExpired, login } =
-    useAuth()
+  const {
+    status,
+    isAuthenticated,
+    mustChangePassword,
+    sessionExpired,
+    sessionEndedBy,
+    login,
+  } = useAuth()
   const [serverError, setServerError] = useState<string | null>(null)
 
   const form = useForm<LoginFormValues>({
@@ -74,8 +81,12 @@ export function LoginPage() {
     <div className="flex min-h-svh items-center justify-center bg-background px-4 py-10">
       <Card className="w-full max-w-md">
         <CardHeader className="gap-2 text-center">
-          <div className="mx-auto flex size-12 items-center justify-center rounded-md bg-primary text-primary-foreground">
-            <GraduationCap className="size-6" aria-hidden="true" />
+          <div className="mx-auto size-14 overflow-hidden rounded-md border border-border">
+            <img
+              src="/hcci-logo.png"
+              alt={SCHOOL_NAME}
+              className="size-full object-cover"
+            />
           </div>
           <h1 className="text-xl font-bold text-foreground">
             Sign in to AEGIS
@@ -106,13 +117,24 @@ export function LoginPage() {
                 the network: the refresh flow already exhausted its one retry
                 before setting this, so "your session has ended, please sign in
                 again" is what the code actually knows.
+
+                PH11 QA cycle 2 (TC-GUI-05) splits the two causes, because one
+                sentence cannot cover both honestly. A rotated refresh token is
+                a credential that aged out; another account signing in on this
+                browser is somebody else's action, and the affected user needs
+                to know their session did not simply lapse — it was replaced,
+                and this tab is no longer acting as the account it used to show.
+                Saying only "your session has ended" would leave them thinking
+                they had been idle too long.
               */}
               {sessionExpired ? (
                 <p
                   role="status"
                   className="rounded-sm border border-border bg-muted/60 px-3 py-2 text-sm text-muted-foreground"
                 >
-                  Your session has ended. Please sign in again to continue.
+                  {sessionEndedBy === "other-account"
+                    ? "A different account signed in on this browser, so this session ended. Sign in again to continue."
+                    : "Your session has ended. Please sign in again to continue."}
                 </p>
               ) : null}
 

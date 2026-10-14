@@ -1,4 +1,3 @@
-import { GraduationCap } from "lucide-react"
 import { NavLink } from "react-router-dom"
 import { useCallback, useEffect, useSyncExternalStore } from "react"
 
@@ -24,14 +23,22 @@ import { cn } from "@/lib/utils"
 function Brand() {
   return (
     <div className="flex items-center gap-2.5 px-4 py-4">
-      <div className="flex size-9 items-center justify-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground">
-        <GraduationCap className="size-5" aria-hidden="true" />
+      {/* A round disc rather than a rounded square: the seal art itself has an
+          alpha channel, so on the brand-maroon rail it reads as the circular
+          badge the reference shows instead of an unstyled white tile. */}
+      <div className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white">
+        <img
+          src="/hcci-logo.png"
+          alt=""
+          aria-hidden="true"
+          className="size-full object-cover"
+        />
       </div>
       <div className="min-w-0">
         <p className="text-lg font-bold leading-tight text-sidebar-foreground">
           AEGIS
         </p>
-        <p className="truncate text-xs leading-tight text-sidebar-foreground/60">
+        <p className="truncate text-xs leading-tight text-sidebar-foreground/75">
           HIS CARE CHRISTIAN INSTITUTE
         </p>
       </div>
@@ -47,10 +54,13 @@ function AvailableNavLink({ item }: { item: NavItem }) {
       end={item.route === "dashboard"}
       className={({ isActive }) =>
         cn(
-          "flex h-9 items-center gap-2.5 rounded-sm px-3 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring",
+          // `rounded-lg` because the active state is a white pill on the brand
+          // rail, and a near-square pill reads as an accident rather than a
+          // choice.
+          "flex h-9 items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-sidebar-ring",
           isActive
             ? "bg-sidebar-primary text-sidebar-primary-foreground"
-            : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            : "text-sidebar-foreground/85 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
         )
       }
     >
@@ -63,14 +73,14 @@ function AvailableNavLink({ item }: { item: NavItem }) {
 function PlannedNavEntry({ item }: { item: NavItem }) {
   const Icon = item.icon
   return (
-    <div className="flex h-9 items-center justify-between rounded-sm px-3 text-sm text-sidebar-foreground/40">
+    <div className="flex h-9 items-center justify-between rounded-lg px-3 text-sm text-sidebar-foreground/70">
       <span className="flex items-center gap-2.5">
         <Icon className="size-4" aria-hidden="true" />
         {item.label}
       </span>
       <Badge
         variant="outline"
-        className="border-sidebar-border text-sidebar-foreground/50"
+        className="border-sidebar-border text-sidebar-foreground/70"
       >
         Planned
       </Badge>
@@ -89,7 +99,7 @@ function NavItemRow({ item }: { item: NavItem }) {
 function NavGroupSection({ group }: { group: NavGroup }) {
   return (
     <li>
-      <p className="px-3 pt-4 pb-1.5 text-xs font-semibold tracking-wider text-sidebar-foreground/50 uppercase">
+      <p className="px-3 pt-4 pb-1.5 text-xs font-semibold tracking-wider text-sidebar-foreground/70 uppercase">
         {group.heading}
       </p>
       <ul className="space-y-0.5">
@@ -220,7 +230,7 @@ export function Sidebar({
         </nav>
 
         <div className="border-t border-sidebar-border p-3">
-          <p className="px-1 text-xs text-sidebar-foreground/50">AEGIS</p>
+          <p className="px-1 text-xs text-sidebar-foreground/70">AEGIS</p>
         </div>
       </aside>
     </>

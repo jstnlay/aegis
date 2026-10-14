@@ -35,30 +35,34 @@ import {
   USER_ROLE_LABELS,
   useAdminUsers,
   useCreateUser,
+  useUpdateUser,
   type AdminUser,
+  type UpdateUserPayload,
   type UserRole,
 } from "@/features/admin/api"
+import { useAuth } from "@/features/auth/AuthContext"
 import { normalizeApiError } from "@/lib/error"
 import { ErrorNote } from "@/components/feedback/Feedback"
 
 /**
  * User administration.
  *
- * The complete user-administration contract is three endpoints: list, retrieve
- * and create. There is no update, deactivate, delete, role-reassignment or
- * password-reset route anywhere in the project, so this screen offers exactly
- * those three and says plainly which operations are unavailable.
+ * The contract is list, retrieve, create and — as of PH11 — update:
+ * `PATCH /accounts/users/{id}/` accepts exactly `role` and `is_active`, which
+ * is what the Cycle-2 log recorded as "Not implemented" under TC-ADM-10. The
+ * edit dialog therefore offers those two controls and nothing else.
  *
- * That statement is load-bearing rather than decorative. `UserSerializer` marks
- * `email`, `role` and `is_active` read-only (SEC-001), and
- * `UserCreateView` is a `CreateAPIView` with no sibling update route — so an
- * administrator physically cannot change a role, deactivate an account or reset
- * a password through this API. Rendering a disabled button for each would
- * suggest a capability the backend does not have; rendering an enabled one would
- * simply fail.
+ * What is deliberately *not* offered still matters as much as what is. The
+ * server rejects a change to your own account (self-lockout has no
+ * self-service recovery), so the dialog disables editing for the signed-in
+ * administrator rather than letting the request fail. There is no delete and
+ * no password-reset route anywhere in the project, so neither is offered —
+ * rendering a disabled button for them would suggest a capability the backend
+ * does not have, and rendering an enabled one would simply fail.
  *
- * Role reassignment and account state are Django admin operations, which is also
- * where `is_staff` remains meaningful.
+ * `email` is the login identity and stays read-only (SEC-001), and profile
+ * fields remain the account owner's own `/accounts/me/` surface: posting them
+ * here is ignored by `AdminUserUpdateSerializer`.
  */
 /** A stable empty-array identity, so the `useMemo` below can depend on it. */
 const EMPTY_USERS: readonly AdminUser[] = []
@@ -129,6 +133,11 @@ export function AdminUsersPage() {
         </span>
       ),
     },
+    {
+      key: "actions",
+      header: <span className="sr-only">Access</span>,
+      cell: (user) => <EditUserDialog user={user} />,
+    },
   ]
 
   return (
@@ -136,8 +145,8 @@ export function AdminUsersPage() {
       <div className="flex flex-col gap-1">
         <h2 className="text-2xl font-bold text-foreground">Users</h2>
         <p className="text-sm text-muted-foreground">
-          Every account in the system, and the only account-creation form the
-          API exposes.
+          Every account in the system — create one, and assign or withdraw its
+          role and sign-in access from its row.
         </p>
       </div>
 
@@ -240,9 +249,9 @@ function NewUserDialog() {
         <DialogHeader>
           <DialogTitle>Create an account</DialogTitle>
           <DialogDescription>
-            `POST /accounts/users/create/`. The role can be chosen here because
-            this is the only point at which it can be set — no update route
-            exists.
+            `POST /accounts/users/create/`. The role is chosen here because this
+            is where the account's shape is decided; revise it later with "Edit
+            access" on the account's row.
           </DialogDescription>
         </DialogHeader>
 
@@ -355,6 +364,124 @@ function NewUserDialog() {
             </Button>
             <Button type="submit" disabled={!canSubmit || create.isPending}>
               {create.isPending ? "Creating…" : "Create account"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/**
+ * Revise an account's role and active state.
+ *
+ * `PATCH /accounts/users/{id}/` takes only those two fields, so the form
+ * offers no name, email or password controls it could not actually change —
+ * profile fields remain their owner's `/accounts/me/` surface.
+ *
+ * The signed-in administrator's own row is not editable. The server refuses
+ * that change outright because self-lockout has no self-service recovery, and
+ * offering a form that can only ever fail would be worse than offering none.
+ */
+function EditUserDialog({ user }: { user: AdminUser }) {
+  const { user: me } = useAuth()
+  const update = useUpdateUser()
+  const [open, setOpen] = useState(false)
+  const [role, setRole] = useState<UserRole>(user.role)
+  const [active, setActive] = useState(user.is_active)
+
+  const displayName =
+    [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email
+
+  if (me?.id === user.id) {
+    return <span className="text-xs text-muted-foreground">Your account</span>
+  }
+
+  const dirty = role !== user.role || active !== user.is_active
+
+  const close = () => {
+    setOpen(false)
+    setRole(user.role)
+    setActive(user.is_active)
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (next) setOpen(true)
+        else close()
+      }}
+    >
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="sm">
+          Edit access
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Access for {displayName}</DialogTitle>
+          <DialogDescription>
+            `PATCH /accounts/users/{user.id}/`. Only the role and the active
+            flag can be changed here — email and profile fields belong to the
+            account's owner. Every change is written to the audit log.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form
+          className="space-y-3"
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (!dirty) return
+            const patch: UpdateUserPayload = {}
+            if (role !== user.role) patch.role = role
+            if (active !== user.is_active) patch.is_active = active
+            update.mutate(
+              { userId: user.id, patch },
+              {
+                onSuccess: () => {
+                  close()
+                },
+              }
+            )
+          }}
+        >
+          <ChoiceField
+            label="Role"
+            id={`edit-user-role-${user.id}`}
+            value={role}
+            onChange={(value) => setRole(value as UserRole)}
+            options={USER_ROLES.map((option) => ({
+              value: option,
+              label: USER_ROLE_LABELS[option],
+            }))}
+            hint="Takes effect on the account's next request; nothing already signed in keeps the old permissions."
+          />
+
+          <ChoiceField
+            label="Account status"
+            id={`edit-user-status-${user.id}`}
+            value={active ? "active" : "inactive"}
+            onChange={(value) => setActive(value === "active")}
+            options={[
+              { value: "active", label: "Active — can sign in" },
+              {
+                value: "inactive",
+                label: "Inactive — blocked from signing in",
+              },
+            ]}
+          />
+
+          {update.isError ? (
+            <ErrorNote message={normalizeApiError(update.error).message} />
+          ) : null}
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={close}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={!dirty || update.isPending}>
+              {update.isPending ? "Saving…" : "Save changes"}
             </Button>
           </DialogFooter>
         </form>

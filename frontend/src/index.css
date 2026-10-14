@@ -68,7 +68,8 @@
   --color-maroon-300: oklch(0.782 0.09 355.7);
   --color-maroon-400: oklch(0.662 0.128 357.6);
   --color-maroon-500: oklch(0.517 0.145 3.6);
-  --color-maroon-600: oklch(0.426 0.145 8.3);
+  /* HCCI brand anchor: the exact #9B1313 hex; an oklch round-trip lands a step off. */
+  --color-maroon-600: #9b1313;
   --color-maroon-700: oklch(0.374 0.126 9.5);
   --color-maroon-800: oklch(0.325 0.108 6.6);
   --color-maroon-900: oklch(0.262 0.084 3.7);
@@ -169,17 +170,19 @@
   --card-foreground: oklch(0.274 0.005 286);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.274 0.005 286);
-  --muted: oklch(0.967 0.003 265);
-  --muted-foreground: oklch(0.552 0.014 285.9);
+  /* #F2F2F2 neutral anchor (WS1); muted-foreground darkened one notch from
+     v1.1 so small text still clears 4.5:1 on the deeper fill. */
+  --muted: #f2f2f2;
+  --muted-foreground: oklch(0.535 0.014 285.9);
 
   /* Interactive */
-  --primary: oklch(0.426 0.145 8.3);
+  --primary: #9b1313;
   --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.967 0.003 265);
+  --secondary: #f2f2f2;
   --secondary-foreground: oklch(0.21 0.034 265);
   --accent: oklch(0.948 0.022 356.3);
   --accent-foreground: oklch(0.374 0.126 9.5);
-  --ring: oklch(0.426 0.145 8.3);
+  --ring: #9b1313;
 
   /* Borders */
   --border: oklch(0.928 0.006 265);
@@ -209,15 +212,26 @@
   --chart-4: oklch(0.828 0.189 84.4);
   --chart-5: oklch(0.769 0.188 70.1);
 
-  /* Sidebar */
-  --sidebar: oklch(0.208 0.04 265.8);
-  --sidebar-foreground: oklch(0.967 0.003 265);
-  --sidebar-primary: oklch(0.426 0.145 8.3);
-  --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.278 0.033 257);
-  --sidebar-accent-foreground: oklch(0.967 0.003 265);
-  --sidebar-border: oklch(0.278 0.033 257);
-  --sidebar-ring: oklch(0.426 0.145 8.3);
+  /*
+   * Sidebar — the HCCI brand maroon itself, not a darker step of it. The
+   * reference dashboard shows the exact `--primary` red down the whole left
+   * rail, with the active item as a white pill carrying maroon text, so the
+   * active state inverts rather than tinting: a lighter red on `#9b1313` would
+   * have been invisible here where the old deep shell could support it.
+   *
+   * Everything translucent — hover, border, ring — is white, because a dark
+   * maroon-on-maroon edge cannot be seen. Those alphas are what is actually
+   * legible against this base, and `--sidebar-ring` stays light so keyboard
+   * focus remains visible on the brand surface.
+   */
+  --sidebar: #9b1313;
+  --sidebar-foreground: oklch(0.99 0.005 0);
+  --sidebar-primary: oklch(1 0 0);
+  --sidebar-primary-foreground: #9b1313;
+  --sidebar-accent: oklch(1 0 0 / 0.14);
+  --sidebar-accent-foreground: oklch(1 0 0);
+  --sidebar-border: oklch(1 0 0 / 0.18);
+  --sidebar-ring: oklch(1 0 0 / 0.75);
 
   --radius: 0.625rem;
 }

@@ -11,7 +11,7 @@ import { SchoolLockup } from "@/components/brand/SchoolLockup"
  */
 export function SchoolHeader({ children }: { children: ReactNode }) {
   return (
-    <header className="border-b border-border bg-background">
+    <header className="sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur-md">
       <div className="mx-auto flex min-h-16 w-full max-w-5xl items-center justify-between gap-3 px-4 py-2 lg:px-6">
         <Link to="/" aria-label="His Care Christian Institute — home">
           <SchoolLockup />

@@ -57,6 +57,7 @@ describe("role navigation configuration", () => {
       "admin/analytics",
       "admin/users",
       "admin/data",
+      "admin/settings",
       "admin/cms",
       "admin/audit",
       // Faculty assessments and bulk upload, each backed by a real route in `appRoutes`
@@ -153,14 +154,15 @@ describe("role navigation configuration", () => {
       "admin/analytics",
       "admin/users",
       "admin/data",
+      "admin/settings",
       "admin/cms",
       "admin/audit",
     ]) {
       expect(admin, route).toContain(route)
     }
-    // PH11.9 removed the admin Settings item: there is no SystemSetting model,
-    // view or route anywhere in the backend, so the entry could only ever point
-    // at a page that cannot exist.
+    // PH11.9's bare `settings` placeholder is gone for good. FR-034 now has a
+    // real `SystemSetting` model, an admin-only view and a real `admin/settings`
+    // route, so the entry points at a page that exists rather than a promise.
     expect(admin).not.toContain("settings")
     // Admin is off the student/faculty academics route, which served a
     // placeholder describing implemented functionality as future work.
@@ -406,6 +408,7 @@ describe("route visibility", () => {
         "admin/analytics",
         "admin/users",
         "admin/data",
+        "admin/settings",
         "admin/cms",
         "admin/audit",
       ]) {

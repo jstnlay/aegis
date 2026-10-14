@@ -707,38 +707,69 @@ describe("StudentProfilePage", () => {
       expect(screen.getByText(/manual · 2026-09-14/)).toBeInTheDocument()
     })
 
-    it("offers the report as a CSV of the same values", async () => {
-      const blobUrls: string[] = []
-      URL.createObjectURL = vi.fn(() => {
-        const url = `blob:aegis-${blobUrls.length}`
-        blobUrls.push(url)
-        return url
-      })
-      URL.revokeObjectURL = vi.fn()
-
+    it("asks the server for the report file rather than rebuilding the rows", async () => {
       renderPage()
       // The download button exists while the report is still loading (disabled),
       // and React replaces the node once the aggregate arrives — so query it
       // after the data is on screen rather than holding a pre-load reference.
       await screen.findByText(/Positive notes/)
-      fireEvent.click(
-        screen.getByRole("button", { name: /download report \(csv\)/i })
+
+      mockedGet.mockResolvedValueOnce({
+        data: new Blob(["section,item\r\nStudent,Stu Dent\r\n"], {
+          type: "text/csv",
+        }),
+        headers: {
+          "content-disposition":
+            'attachment; filename="aegis_guidance_report_stu-gr-001_export.csv"',
+        },
+      } as never)
+
+      fireEvent.click(screen.getByRole("button", { name: /download \(csv\)/i }))
+
+      await waitFor(() =>
+        expect(
+          mockedGet.mock.calls.some(
+            ([url, config]) =>
+              /^\/guidance\/reports\/student\/[^/]+\/$/.test(String(url)) &&
+              // `apiClient.get` serves every query on the page, so this
+              // asserts on the download call rather than on the call count.
+              (config as { params?: { file_format?: string } })?.params
+                ?.file_format === "csv"
+          )
+        ).toBe(true)
       )
 
-      await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalledTimes(1))
+      const downloadCall = mockedGet.mock.calls.find(
+        ([url, config]) =>
+          /^\/guidance\/reports\/student\/[^/]+\/$/.test(String(url)) &&
+          (config as { params?: { file_format?: string } })?.params
+            ?.file_format === "csv"
+      )
+      expect(downloadCall?.[1]).toMatchObject({ responseType: "blob" })
+    })
 
-      const blob = (URL.createObjectURL as ReturnType<typeof vi.fn>).mock
-        .calls[0]?.[0] as Blob
-      expect(blob).toBeInstanceOf(Blob)
-      const text = await blob.text()
-      // Every cell is quoted, so the assertions include the quotes.
-      expect(text).toContain('"metric","value"')
-      expect(text).toContain('"behavioral_positive","2"')
-      expect(text).toContain('"consultations_all_counselors","4"')
-      expect(text).toContain('"risk_alerts_on_record","1"')
-      // A leading formula character must not survive into the file.
-      expect(text).not.toMatch(/[=+@][a-z]/i)
-      expect(URL.revokeObjectURL).toHaveBeenCalled()
+    it("offers XLSX alongside CSV", async () => {
+      renderPage()
+      await screen.findByText(/Positive notes/)
+
+      expect(
+        screen.getByRole("button", { name: /download \(csv\)/i })
+      ).toBeInTheDocument()
+      expect(
+        screen.getByRole("button", { name: /download \(xlsx\)/i })
+      ).toBeInTheDocument()
+    })
+
+    it("surfaces a failed download instead of doing nothing", async () => {
+      renderPage()
+      await screen.findByText(/Positive notes/)
+
+      mockedGet.mockRejectedValueOnce(new Error("nope"))
+      fireEvent.click(screen.getByRole("button", { name: /download \(csv\)/i }))
+
+      // The error must reach the counselor: a download button that silently
+      // fails is indistinguishable from one that worked.
+      await waitFor(() => expect(screen.getByText(/nope/i)).toBeInTheDocument())
     })
   })
 })

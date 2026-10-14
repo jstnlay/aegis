@@ -11,6 +11,7 @@ import {
   restorePersistedTokens,
 } from "@/features/auth/api"
 import { tokenStorage } from "@/lib/auth-storage"
+import { queryClient } from "@/lib/queryClient"
 import type { User } from "@/types/auth"
 
 /* ---------- vi.hoisted: shared between vi.mock factory + test code --- */
@@ -93,6 +94,7 @@ function Probe() {
     user: currentUser,
     mustChangePassword,
     sessionExpired,
+    sessionEndedBy,
   } = useAuth()
   return (
     <div>
@@ -100,6 +102,7 @@ function Probe() {
       <span data-testid="must-change">{String(mustChangePassword)}</span>
       <span data-testid="user-email">{currentUser?.email ?? ""}</span>
       <span data-testid="session-expired">{String(sessionExpired)}</span>
+      <span data-testid="session-ended-by">{sessionEndedBy ?? ""}</span>
     </div>
   )
 }
@@ -581,5 +584,264 @@ describe("session expiration", () => {
     expect(screen.getByTestId("status")).toHaveTextContent("restricted")
     expect(screen.getByTestId("must-change")).toHaveTextContent("true")
     expect(tokenStorage.getAccessToken()).toBe(tokenPair.access)
+  })
+})
+
+/* =====================================================================
+   8. two accounts in one browser (PH11 QA cycle 2, TC-GUI-05)
+   ===================================================================== */
+
+/**
+ * `tokenStorage` holds one bearer pair per origin under a fixed key pair, so a
+ * sign-in on any tab of a browser replaces the session on all of them. That is
+ * what the QA run hit: a counselor's tab kept rendering the counselor's UI and
+ * cached rows while every request it issued carried the *student's* token, and
+ * the create-assessment call came back "You do not have permission to perform
+ * this action." — correctly, because it really was the student's request.
+ *
+ * The backend is not at fault and cannot be: the frozen contract has no
+ * per-tab session. The tab has to notice the swap itself, via the `storage`
+ * event, and give up its own view of the session.
+ */
+describe("two accounts in one browser", () => {
+  /**
+   * Stands in for the SimpleJWT pair the login endpoint really returns, with a
+   * `user_id` claim so the provider can tell the accounts apart. The opaque
+   * `tokenPair` above cannot serve: it names no subject, and a reader that
+   * quietly accepted it would make this whole section untestable.
+   */
+  function tokenFor(accountId: string): string {
+    const encode = (value: object) =>
+      btoa(JSON.stringify(value))
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/, "")
+
+    return `${encode({ alg: "HS256", typ: "JWT" })}.${encode({
+      user_id: accountId,
+      token_type: "access",
+    })}.signature`
+  }
+
+  /** What the *other* tab just did: overwrite the shared pair. */
+  function replaceSessionInAnotherTab(accountId: string) {
+    act(() => {
+      window.dispatchEvent(
+        new StorageEvent("storage", {
+          key: "aegis.access_token",
+          newValue: tokenFor(accountId),
+        })
+      )
+    })
+  }
+
+  it("signs this tab out when another account signs in on the browser", async () => {
+    const counselor = { ...user, id: "u-counselor", role: "guidance" as const }
+    tokenStorage.setTokens(tokenFor(counselor.id), "refresh-counselor")
+    mockedRestore.mockReturnValue(tokenPair)
+    mockedMe.mockResolvedValue(counselor)
+
+    renderAuth()
+
+    await waitFor(() => {
+      expect(screen.getByTestId("status")).toHaveTextContent("authenticated")
+    })
+    expect(screen.getByTestId("user-email")).toHaveTextContent(counselor.email)
+
+    // A student signs in on another tab of the same browser.
+    replaceSessionInAnotherTab("u-student")
+
+    // The tab stops being the counselor rather than continuing to act as the
+    // student, which is the state that produced the 403.
+    expect(screen.getByTestId("status")).toHaveTextContent("unauthenticated")
+    expect(screen.getByTestId("user-email")).toHaveTextContent("")
+    expect(screen.getByTestId("session-expired")).toHaveTextContent("true")
+    /*
+      The shared pair is left alone on purpose: it belongs to the student, who
+      just signed in on their own tab. Clearing it here would sign *them* out.
+    */
+    expect(tokenStorage.getAccessToken()).toBe(tokenFor(counselor.id))
+  })
+
+  it("tells the sign-in page the session was replaced, not merely expired", async () => {
+    tokenStorage.setTokens(tokenFor(user.id), "refresh-counselor")
+    mockedRestore.mockReturnValue(tokenPair)
+    mockedMe.mockResolvedValue(user)
+
+    renderAuth()
+    await waitFor(() => {
+      expect(screen.getByTestId("status")).toHaveTextContent("authenticated")
+    })
+
+    replaceSessionInAnotherTab("u-student")
+
+    // "other-account", not "expiry": the credentials did not age out, somebody
+    // else used the slot, and the affected user must be able to tell.
+    expect(screen.getByTestId("session-ended-by")).toHaveTextContent(
+      "other-account"
+    )
+  })
+
+  it("keeps the session when the token is only rotated", async () => {
+    /*
+     * The other half of the defect: a silent refresh rewrites the pair in
+     * *this* tab, which fires `storage` in every *other* tab. Treating that as
+     * a takeover would sign a user out of their own session every time it
+     * renewed, which would be a far worse regression than the bug being fixed.
+     */
+    tokenStorage.setTokens(tokenFor(user.id), "refresh-1")
+    mockedRestore.mockReturnValue(tokenPair)
+    mockedMe.mockResolvedValue(user)
+
+    renderAuth()
+    await waitFor(() => {
+      expect(screen.getByTestId("status")).toHaveTextContent("authenticated")
+    })
+
+    replaceSessionInAnotherTab(user.id)
+
+    expect(screen.getByTestId("status")).toHaveTextContent("authenticated")
+    expect(screen.getByTestId("session-expired")).toHaveTextContent("false")
+  })
+
+  it("ends the session when another tab signs out and clears the pair", async () => {
+    tokenStorage.setTokens(tokenFor(user.id), "refresh-1")
+    mockedRestore.mockReturnValue(tokenPair)
+    mockedMe.mockResolvedValue(user)
+
+    renderAuth()
+    await waitFor(() => {
+      expect(screen.getByTestId("status")).toHaveTextContent("authenticated")
+    })
+
+    act(() => {
+      window.dispatchEvent(
+        new StorageEvent("storage", {
+          key: "aegis.access_token",
+          newValue: null,
+        })
+      )
+    })
+
+    expect(screen.getByTestId("status")).toHaveTextContent("unauthenticated")
+    expect(screen.getByTestId("session-ended-by")).toHaveTextContent("expiry")
+  })
+
+  it("does nothing when the other tab writes an unrelated key", async () => {
+    tokenStorage.setTokens(tokenFor(user.id), "refresh-1")
+    mockedRestore.mockReturnValue(tokenPair)
+    mockedMe.mockResolvedValue(user)
+
+    renderAuth()
+    await waitFor(() => {
+      expect(screen.getByTestId("status")).toHaveTextContent("authenticated")
+    })
+
+    act(() => {
+      window.dispatchEvent(
+        new StorageEvent("storage", {
+          key: "aegis.show_archived",
+          newValue: "1",
+        })
+      )
+    })
+
+    expect(screen.getByTestId("status")).toHaveTextContent("authenticated")
+  })
+
+  it("does not sign this tab out on a token it cannot read", async () => {
+    tokenStorage.setTokens(tokenFor(user.id), "refresh-1")
+    mockedRestore.mockReturnValue(tokenPair)
+    mockedMe.mockResolvedValue(user)
+
+    renderAuth()
+    await waitFor(() => {
+      expect(screen.getByTestId("status")).toHaveTextContent("authenticated")
+    })
+
+    // An unreadable subject is "unknown", and acting on a guess would sign a
+    // user out of a session that is still theirs.
+    replaceSessionInAnotherTab("")
+
+    expect(screen.getByTestId("status")).toHaveTextContent("authenticated")
+  })
+
+  it("does not sign out a tab that was never signed in", async () => {
+    mockedRestore.mockReturnValue(null)
+
+    renderAuth()
+    await waitFor(() => {
+      expect(screen.getByTestId("status")).toHaveTextContent("unauthenticated")
+    })
+
+    replaceSessionInAnotherTab("u-somebody-else")
+
+    expect(screen.getByTestId("status")).toHaveTextContent("unauthenticated")
+    expect(screen.getByTestId("session-expired")).toHaveTextContent("false")
+  })
+})
+
+/* =====================================================================
+   9. sign-in must not inherit the previous account's cache
+   ===================================================================== */
+
+describe("signing in as a second account", () => {
+  it("starts from an empty query cache", async () => {
+    /*
+     * Every query key is role-scoped but not user-scoped, so the keys collide
+     * between accounts. `logout` and the session-expiry path already cleared
+     * the cache; `login` did not, so the second account was served the first
+     * account's dashboards (and their cached /accounts/me/ profile) for up to
+     * `staleTime`. The cached data is cross-account, not merely stale, which
+     * is the part that makes it a privacy defect and not a freshness one.
+     */
+    const spy = vi.spyOn(queryClient, "clear")
+    spy.mockClear()
+
+    mockedRestore.mockReturnValue(null)
+    mockedLogin.mockResolvedValue({
+      access: "access",
+      refresh: "refresh",
+      must_change_password: false,
+    })
+    mockedMe.mockResolvedValue(user)
+
+    renderAuth()
+    await waitFor(() => {
+      expect(screen.getByTestId("status")).toHaveTextContent("unauthenticated")
+    })
+    expect(spy).not.toHaveBeenCalled()
+
+    await act(async () => {
+      await harnessRef?.login("student@school.edu", "pw")
+    })
+
+    expect(spy).toHaveBeenCalled()
+    await waitFor(() => {
+      expect(screen.getByTestId("status")).toHaveTextContent("authenticated")
+    })
+  })
+
+  it("keeps the cache when the sign-in fails", async () => {
+    /*
+     * The flip side of the guard: a rejected sign-in must not wipe the cache
+     * of an account that is still validly signed in on this tab.
+     */
+    const spy = vi.spyOn(queryClient, "clear")
+    spy.mockClear()
+
+    mockedRestore.mockReturnValue(null)
+    mockedLogin.mockRejectedValue(makeNormalizedError({ message: "No." }))
+
+    renderAuth()
+    await waitFor(() => {
+      expect(screen.getByTestId("status")).toHaveTextContent("unauthenticated")
+    })
+
+    await act(async () => {
+      await harnessRef?.login("student@school.edu", "wrong").catch(() => {})
+    })
+
+    expect(spy).not.toHaveBeenCalled()
   })
 })

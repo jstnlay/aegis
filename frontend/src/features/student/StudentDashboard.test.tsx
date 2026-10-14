@@ -140,6 +140,76 @@ describe("StudentDashboard", () => {
 
     expect(screen.getAllByText("N/A").length).toBeGreaterThanOrEqual(3)
     expect(screen.queryByText("0.00%")).not.toBeInTheDocument()
+
+    // PH11.16 (TC-STU-03): a bare "N/A" is an answer nobody can act on. Both
+    // academic tiles now name the state beneath the figure — once each, since
+    // both are empty for the same reason.
+    expect(screen.getAllByText("No finalized grades yet")).toHaveLength(2)
+    expect(screen.getByText("No attendance records")).toBeInTheDocument()
+    expect(
+      screen.queryByText("Overall academic performance")
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText("Subjects with finalized grades")
+    ).not.toBeInTheDocument()
+  })
+
+  it("names the failure rather than a static hint when the request fails", () => {
+    mockedDashboardData.mockReturnValue({
+      averageGrade: null,
+      totalSubjects: null,
+      attendance: undefined,
+      grades: [],
+      periods: [],
+      selectedPeriod: "",
+      setSelectedPeriod: vi.fn(),
+      loading: false,
+      error: new Error("boom"),
+    } as unknown as ReturnType<typeof useStudentDashboardData>)
+
+    renderWithClient(<StudentDashboard />)
+
+    // A failed request is not "no data": the tiles say so, and the static
+    // "Overall academic performance" wording does not stand in for a reason.
+    expect(screen.getAllByText("Could not load finalized grades")).toHaveLength(
+      2
+    )
+    expect(
+      screen.getByText("Could not load attendance records")
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText("No finalized grades yet")
+    ).not.toBeInTheDocument()
+  })
+
+  it("keeps the static hint when a figure is actually present", () => {
+    mockedDashboardData.mockReturnValue({
+      averageGrade: 91.5,
+      totalSubjects: 8,
+      attendance: {
+        present_days: 40,
+        late_days: 0,
+        absent_days: 2,
+        total_days: 42,
+        attendance_rate: 95.2,
+      },
+      grades: [],
+      periods: [],
+      selectedPeriod: "",
+      setSelectedPeriod: vi.fn(),
+      loading: false,
+      error: null,
+    } as unknown as ReturnType<typeof useStudentDashboardData>)
+
+    renderWithClient(<StudentDashboard />)
+
+    expect(screen.getByText("Overall academic performance")).toBeInTheDocument()
+    expect(
+      screen.getByText("Subjects with finalized grades")
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText("No finalized grades yet")
+    ).not.toBeInTheDocument()
   })
 
   it("keeps a legitimate zero as a real measurement", () => {

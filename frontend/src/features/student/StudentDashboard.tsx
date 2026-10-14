@@ -1,14 +1,14 @@
 import { useMemo } from "react"
 
+import {
+  StudentAcademicTrendChart,
+  StudentAttendanceTrendChart,
+} from "@/components/charts/StudentTrendCharts"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import {
-  ErrorNote,
-  PendingMetric,
-  PendingRegion,
-  UnavailableMetric,
-} from "@/components/feedback/Feedback"
+import { ErrorNote, PendingRegion } from "@/components/feedback/Feedback"
 import { Label } from "@/components/ui/label"
+import { MetricCard } from "@/components/ui/metric-card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/features/auth/AuthContext"
 import {
@@ -26,41 +26,11 @@ import { scoreStatus, scoreStatusLabel } from "@/lib/score-status"
  * built the same way, so the pattern has one definition across the five role
  * dashboards instead of five hand-rolled variants that drift — which is exactly
  * how the student tiles ended up printing "N/A" after a failed request.
+ *
+ * Since this batch the definition is the shared `MetricCard` above rather than
+ * a per-page copy: the sixth copy of the same tile was the drift PH11.11 was
+ * guarding against, made literal.
  */
-function MetricCard({
-  title,
-  hint,
-  isLoading,
-  isError,
-  children,
-}: {
-  title: string
-  hint: string
-  isLoading: boolean
-  isError: boolean
-  /** The formatted figure. Rendered only once the request has resolved. */
-  children: React.ReactNode
-}) {
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">
-          {isLoading ? (
-            <PendingMetric label={title} />
-          ) : isError ? (
-            <UnavailableMetric />
-          ) : (
-            children
-          )}
-        </div>
-        <p className="text-xs text-muted-foreground mt-1">{hint}</p>
-      </CardContent>
-    </Card>
-  )
-}
 
 export function StudentDashboard() {
   const { user } = useAuth()
@@ -113,11 +83,22 @@ export function StudentDashboard() {
         "no data". Both tiles previously fell back to `formatPercent(undefined)` →
         "N/A" on a failed request, which claims the backend reported no grade when
         it reported nothing at all — and the skeletons were silent.
+
+        PH11.16 (TC-STU-03): the two academic tiles also had *static* hints, so
+        an empty record rendered "N/A / Overall academic performance" — correct,
+        but with nothing to say why. A bare "N/A" is an answer nobody can act on;
+        the hint now names the state, the way Attendance Rate already did.
       */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <MetricCard
           title="Average Grade"
-          hint="Overall academic performance"
+          hint={
+            dataError
+              ? "Could not load finalized grades"
+              : averageGrade === null
+                ? "No finalized grades yet"
+                : "Overall academic performance"
+          }
           isLoading={dataLoading}
           isError={dataError}
         >
@@ -127,9 +108,11 @@ export function StudentDashboard() {
         <MetricCard
           title="Attendance Rate"
           hint={
-            attendance
-              ? `${attendance.present_days} present, ${attendance.absent_days} absent`
-              : "No attendance records"
+            dataError
+              ? "Could not load attendance records"
+              : attendance
+                ? `${attendance.present_days} present, ${attendance.absent_days} absent`
+                : "No attendance records"
           }
           isLoading={dataLoading}
           isError={dataError}
@@ -139,7 +122,13 @@ export function StudentDashboard() {
 
         <MetricCard
           title="Total Subjects"
-          hint="Subjects with finalized grades"
+          hint={
+            dataError
+              ? "Could not load finalized grades"
+              : totalSubjects === null
+                ? "No finalized grades yet"
+                : "Subjects with finalized grades"
+          }
           isLoading={dataLoading}
           isError={dataError}
         >
@@ -252,6 +241,26 @@ export function StudentDashboard() {
         </Card>
 
         <RecommendationsCard studentId={profileQuery.data ?? null} />
+
+        <Card className="col-span-1 md:col-span-2 lg:col-span-3">
+          <CardHeader>
+            <CardTitle>Academic Trend</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <StudentAcademicTrendChart studentId={profileQuery.data ?? null} />
+          </CardContent>
+        </Card>
+
+        <Card className="col-span-1 md:col-span-2 lg:col-span-3">
+          <CardHeader>
+            <CardTitle>Attendance Trend</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <StudentAttendanceTrendChart
+              studentId={profileQuery.data ?? null}
+            />
+          </CardContent>
+        </Card>
       </div>
     </div>
   )

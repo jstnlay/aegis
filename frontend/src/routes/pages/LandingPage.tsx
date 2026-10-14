@@ -1,14 +1,24 @@
+import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
-import { ArrowRight, Bell, BookOpen, HelpCircle } from "lucide-react"
+import {
+  ArrowRight,
+  Bell,
+  BookOpen,
+  CalendarCheck,
+  ChevronDown,
+  HeartHandshake,
+  HelpCircle,
+} from "lucide-react"
 
+import { PublicNav } from "@/components/brand/PublicNav"
 import { SchoolHeader } from "@/components/brand/SchoolHeader"
 import { Reveal } from "@/components/layout/Reveal"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Card,
+  CardAction,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
@@ -30,6 +40,32 @@ import {
   SCHOOL_NAME,
   VISION_TEXT,
 } from "@/lib/school-content"
+import { cn } from "@/lib/utils"
+
+/** Hero entrance runs on the first landing visit of a session, not every one. */
+const HERO_SEEN_KEY = "aegis:hero-entrance-seen"
+
+function useHeroEntrance() {
+  const [animate] = useState(() => {
+    if (typeof window === "undefined") return true
+    try {
+      return !window.sessionStorage.getItem(HERO_SEEN_KEY)
+    } catch {
+      return true
+    }
+  })
+
+  useEffect(() => {
+    if (!animate) return
+    try {
+      window.sessionStorage.setItem(HERO_SEEN_KEY, "1")
+    } catch {
+      // Storage blocked (private mode): the entrance just replays.
+    }
+  }, [animate])
+
+  return animate
+}
 
 /**
  * Public landing page - reachable by everyone, no sign-in.
@@ -42,32 +78,12 @@ import {
  * show.
  */
 export function LandingPage() {
+  const animateHero = useHeroEntrance()
+
   return (
     <div className="min-h-svh bg-background">
       <SchoolHeader>
-        <nav
-          aria-label="Primary"
-          className="hidden items-center gap-4 text-sm sm:flex"
-        >
-          <Link
-            to="/"
-            className="text-muted-foreground transition-colors hover:text-foreground"
-          >
-            Home
-          </Link>
-          <a
-            href="#about"
-            className="text-muted-foreground transition-colors hover:text-foreground"
-          >
-            About
-          </a>
-          <a
-            href="#contact"
-            className="text-muted-foreground transition-colors hover:text-foreground"
-          >
-            Contact
-          </a>
-        </nav>
+        <PublicNav />
         <Button
           asChild
           size="sm"
@@ -80,59 +96,55 @@ export function LandingPage() {
       </SchoolHeader>
 
       <main className="mx-auto w-full max-w-5xl space-y-12 px-4 py-12 md:space-y-16 lg:px-6">
-        <Reveal>
-          <section
-            aria-labelledby="landing-hero"
-            className="relative min-h-[18rem] overflow-hidden rounded-2xl border border-border bg-center bg-cover max-md:bg-left"
-            style={{
-              backgroundImage: "url(/cover-photo.png)",
-              backgroundSize: "cover",
-            }}
-          >
-            {/* Solid light veil on the left where the copy sits, opening to the
+        <section
+          aria-labelledby="landing-hero"
+          className="relative min-h-[20rem] overflow-hidden rounded-2xl border border-border bg-center bg-cover shadow-sm max-md:bg-left"
+          style={{ backgroundImage: "url(/cover-photo.png)" }}
+        >
+          {/* Solid light veil on the left where the copy sits, opening to the
                 bare campus photo on the right, per the school's reference. */}
-            <div
-              aria-hidden="true"
-              className="absolute inset-0 bg-gradient-to-r from-background via-background/95 to-background/70 md:to-transparent"
-            />
-            <div className="relative z-10 max-w-xl motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-4 motion-safe:fill-mode-both motion-safe:duration-700 p-6 md:p-10">
-              <h1
-                id="landing-hero"
-                className="text-balance text-3xl font-bold tracking-tight text-primary sm:text-4xl"
-              >
-                {SCHOOL_NAME}
-              </h1>
-              <p className="mt-1 font-medium">{SCHOOL_CAMPUS_LINE}</p>
-              <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
-                {/* Verbatim from the supplied landing-page reference, keeping
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 bg-gradient-to-r from-background via-background/95 to-background/70 md:to-transparent"
+          />
+          <div
+            className={cn(
+              "relative z-10 flex min-h-[20rem] max-w-xl flex-col justify-center p-6 md:p-10",
+              animateHero &&
+                "motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-4 motion-safe:fill-mode-both motion-safe:duration-700"
+            )}
+          >
+            <h1
+              id="landing-hero"
+              className="text-balance text-3xl font-bold tracking-tight text-primary sm:text-4xl"
+            >
+              {SCHOOL_NAME}
+            </h1>
+            <p className="mt-1 font-medium">{SCHOOL_CAMPUS_LINE}</p>
+            <p className="mt-4 max-w-prose text-sm leading-relaxed text-pretty text-muted-foreground">
+              {/* Verbatim from the supplied landing-page reference, keeping
                     its emphasis on the school name and founding year. */}
-                <strong className="text-foreground">
-                  His Care Christian Institute
-                </strong>{" "}
-                was founded in{" "}
-                <strong className="text-foreground">April 2007</strong> by Leila
-                D. Paragoso and Clemente T. Paragoso. From a small preschool, it
-                has grown into a school serving students from Nursery to Grade
-                10 in Batangas.
-              </p>
-              <div className="mt-5 flex flex-wrap items-center gap-3">
-                <Button
-                  asChild
-                  className="transition-all hover:-translate-y-0.5 hover:shadow-md"
-                >
-                  <Link to="/school">
-                    Read more{" "}
-                    <ArrowRight aria-hidden="true" className="size-4" />
-                  </Link>
-                </Button>
-              </div>
-              <p className="mt-4 text-xs text-muted-foreground">
-                The school&apos;s academic, attendance and guidance companion -
-                for students, parents, faculty, counselors and administrators.
-              </p>
+              <strong className="text-foreground">
+                His Care Christian Institute
+              </strong>{" "}
+              was founded in{" "}
+              <strong className="text-foreground">April 2007</strong> by Leila
+              D. Paragoso and Clemente T. Paragoso. From a small preschool, it
+              has grown into a school serving students from Nursery to Grade 10
+              in Batangas.
+            </p>
+            <div className="mt-5 flex flex-wrap items-center gap-3">
+              <Button
+                asChild
+                className="transition-all hover:-translate-y-0.5 hover:shadow-md"
+              >
+                <Link to="/school">
+                  Read more <ArrowRight aria-hidden="true" className="size-4" />
+                </Link>
+              </Button>
             </div>
-          </section>
-        </Reveal>
+          </div>
+        </section>
 
         <Reveal>
           <section
@@ -146,7 +158,7 @@ export function LandingPage() {
             >
               About the school
             </h2>
-            <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">
+            <p className="max-w-prose text-sm leading-relaxed text-pretty text-muted-foreground">
               {ABOUT_EXCERPT}
             </p>
             <Button
@@ -165,7 +177,7 @@ export function LandingPage() {
         <Reveal>
           <section
             aria-labelledby="landing-mission-vision"
-            className="space-y-4 rounded-2xl border border-border/70 bg-stone-50 p-6 dark:bg-muted/40"
+            className="space-y-4 rounded-2xl border border-border/70 bg-muted/50 p-6 md:p-8"
           >
             <h2
               id="landing-mission-vision"
@@ -174,7 +186,7 @@ export function LandingPage() {
               Mission &amp; vision
             </h2>
             <div className="grid gap-4 md:grid-cols-2">
-              <Card className="h-full transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
+              <Card className="h-full transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:ring-primary/20">
                 <CardHeader>
                   <CardTitle className="text-base text-primary">
                     Mission
@@ -186,7 +198,7 @@ export function LandingPage() {
                   </p>
                 </CardContent>
               </Card>
-              <Card className="h-full transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
+              <Card className="h-full transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:ring-primary/20">
                 <CardHeader>
                   <CardTitle className="text-base text-primary">
                     Vision
@@ -219,7 +231,7 @@ export function LandingPage() {
           <section
             id="contact"
             aria-labelledby="landing-contact"
-            className="space-y-4 rounded-2xl border border-border/70 bg-rose-50/70 p-6 dark:bg-muted/40"
+            className="space-y-4 rounded-2xl border border-border/70 bg-primary/5 p-6 scroll-mt-20 md:p-8"
           >
             <h2
               id="landing-contact"
@@ -228,7 +240,7 @@ export function LandingPage() {
               Contact
             </h2>
             <div className="grid gap-4 sm:grid-cols-3">
-              <Card className="h-full transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
+              <Card className="h-full transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:ring-primary/20">
                 <CardHeader>
                   <CardTitle className="text-base text-primary">
                     Address
@@ -240,7 +252,7 @@ export function LandingPage() {
                   </p>
                 </CardContent>
               </Card>
-              <Card className="h-full transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
+              <Card className="h-full transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:ring-primary/20">
                 <CardHeader>
                   <CardTitle className="text-base text-primary">
                     School ID
@@ -252,7 +264,7 @@ export function LandingPage() {
                   </p>
                 </CardContent>
               </Card>
-              <Card className="h-full transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
+              <Card className="h-full transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:ring-primary/20">
                 <CardHeader>
                   <CardTitle className="text-base text-primary">
                     Email Address
@@ -272,16 +284,35 @@ export function LandingPage() {
         </Reveal>
       </main>
 
-      <footer className="border-t border-border">
-        <div className="mx-auto w-full max-w-5xl px-4 py-6 text-xs text-muted-foreground lg:px-6">
+      <footer className="border-t border-border bg-muted/30">
+        <div className="mx-auto w-full max-w-5xl px-4 py-8 text-xs text-muted-foreground lg:px-6">
           <span>
-            His Care Christian Institute � AEGIS school information system
+            His Care Christian Institute · AEGIS school information system
           </span>
         </div>
       </footer>
     </div>
   )
 }
+
+/** The three things AEGIS gives the school, one icon per module. */
+const PORTAL_HIGHLIGHTS = [
+  {
+    icon: BookOpen,
+    title: "Academics",
+    body: "Grades encoded by faculty, finalized by administration, and visible to students and linked parents once finalized.",
+  },
+  {
+    icon: CalendarCheck,
+    title: "Attendance",
+    body: "Daily records taken by faculty, with per-section summaries for students, parents and administrators.",
+  },
+  {
+    icon: HeartHandshake,
+    title: "Guidance",
+    body: "Counseling sessions, intervention plans and wellness assessments handled by the guidance office.",
+  },
+] as const
 
 function PortalHighlights() {
   return (
@@ -293,43 +324,42 @@ function PortalHighlights() {
         What AEGIS offers
       </h2>
       <div className="grid gap-4 md:grid-cols-3">
-        <Card className="h-full transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
-          <CardHeader>
-            <CardTitle className="text-base text-primary">Academics</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              Grades encoded by faculty, finalized by administration, and
-              visible to students and linked parents once finalized.
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="h-full transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
-          <CardHeader>
-            <CardTitle className="text-base text-primary">Attendance</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              Daily records taken by faculty, with per-section summaries for
-              students, parents and administrators.
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="h-full transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
-          <CardHeader>
-            <CardTitle className="text-base text-primary">Guidance</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              Counseling sessions, intervention plans and wellness assessments
-              handled by the guidance office.
-            </p>
-          </CardContent>
-        </Card>
+        {PORTAL_HIGHLIGHTS.map(({ icon: Icon, title, body }) => (
+          <Card
+            key={title}
+            className="h-full transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:ring-primary/20"
+          >
+            <CardHeader>
+              <span className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <Icon aria-hidden="true" className="size-5" />
+              </span>
+              <CardTitle className="mt-1 text-base text-primary">
+                {title}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm leading-relaxed text-pretty text-muted-foreground">
+                {body}
+              </p>
+            </CardContent>
+          </Card>
+        ))}
       </div>
     </section>
   )
 }
+
+/**
+ * Announcement type chip colour, reusing the existing badge variants so the
+ * four types are told apart at a glance: an alert reads as a warning, an
+ * academic notice carries the school maroon.
+ */
+const ANNOUNCEMENT_TYPE_BADGE = {
+  alert: "destructive",
+  academic: "default",
+  event: "secondary",
+  news: "outline",
+} as const
 
 function AnnouncementsSection() {
   const query = usePublicAnnouncements()
@@ -354,7 +384,7 @@ function AnnouncementsSection() {
           <Skeleton className="h-16 w-full" />
         </div>
       ) : query.isError ? (
-        <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
+        <Card>
           <CardContent className="pt-6">
             <p
               className="text-sm leading-relaxed text-muted-foreground"
@@ -373,15 +403,19 @@ function AnnouncementsSection() {
         <ul className="grid gap-4 md:grid-cols-2">
           {items.map((item) => (
             <li key={item.document_id}>
-              <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
+              <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:ring-primary/20">
                 <CardHeader>
                   <CardTitle className="text-base text-primary">
                     {item.title}
                   </CardTitle>
-                  <CardDescription>
-                    {ANNOUNCEMENT_TYPE_LABELS[item.announcement_type] ??
-                      item.announcement_type}
-                  </CardDescription>
+                  <CardAction>
+                    <Badge
+                      variant={ANNOUNCEMENT_TYPE_BADGE[item.announcement_type]}
+                    >
+                      {ANNOUNCEMENT_TYPE_LABELS[item.announcement_type] ??
+                        item.announcement_type}
+                    </Badge>
+                  </CardAction>
                 </CardHeader>
                 <CardContent className="space-y-2">
                   <p className="text-sm leading-relaxed whitespace-pre-line">
@@ -422,7 +456,7 @@ function ResourcesSection() {
           <Skeleton className="h-12 w-full" />
         </div>
       ) : query.isError ? (
-        <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
+        <Card>
           <CardContent className="pt-6">
             <p
               className="text-sm leading-relaxed text-muted-foreground"
@@ -442,7 +476,7 @@ function ResourcesSection() {
           {items.map((item) => (
             <li
               key={item.document_id}
-              className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/80 bg-card p-3 transition-colors duration-200 hover:border-primary/40"
+              className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-card p-3.5 transition-colors duration-200 hover:border-primary/40 hover:bg-muted/40"
             >
               <div className="min-w-0">
                 <p className="truncate font-medium">{item.title}</p>
@@ -499,12 +533,16 @@ function FaqSection() {
         {FAQS.map((faq) => (
           <details
             key={faq.q}
-            className="rounded-md border border-border/80 bg-card px-3 py-2 transition-colors duration-200 hover:border-primary/40"
+            className="group rounded-lg border border-border bg-card transition-colors duration-200 hover:border-primary/40"
           >
-            <summary className="cursor-pointer text-sm font-medium">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium [&::-webkit-details-marker]:hidden">
               {faq.q}
+              <ChevronDown
+                aria-hidden="true"
+                className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180"
+              />
             </summary>
-            <p className="pt-1 text-sm leading-relaxed text-muted-foreground">
+            <p className="px-4 pb-4 text-sm leading-relaxed text-muted-foreground">
               {faq.a}
             </p>
           </details>

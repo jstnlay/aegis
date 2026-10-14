@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { MemoryRouter } from "react-router-dom"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { GuidanceDashboard } from "./GuidanceDashboard"
@@ -117,7 +118,9 @@ function createClient() {
 function renderWithClient() {
   return render(
     <QueryClientProvider client={createClient()}>
-      <GuidanceDashboard />
+      <MemoryRouter>
+        <GuidanceDashboard />
+      </MemoryRouter>
     </QueryClientProvider>
   )
 }
@@ -240,15 +243,24 @@ describe("GuidanceDashboard", () => {
 })
 
 /**
- * Round 3 of the manual-QA UX pass: the Risk Alerts card's six-pixel
- * per-level bars became a donut with the counts spelled out beside it.
+ * The redesigned analytics panels: risk-level bars, the case-status donut with
+ * its centre total, and the monthly trend.
  *
- * The claim worth pinning is that the numbers are real and reachable twice —
- * in the plot's accessible label and as text — so nothing depends on judging
- * an arc or hovering for a tooltip, and the counts are computed from the
- * alerts actually on screen rather than restated from somewhere else.
+ * What these pin down is the honesty of the derivation rather than the
+ * styling: every figure is both drawn and written as text, so nothing depends
+ * on judging a bar length or hovering for a tooltip; a resolved alert is
+ * counted once, under Resolved; and the trend omits itself when the data
+ * cannot support six months.
  */
-describe("Risk alerts by level (donut + counts)", () => {
+describe("Guidance analytics panels", () => {
+  const OLD_ALERT = {
+    ...RISK_ALERT,
+    id: "ra-old",
+    student_name: "Old Case",
+    status: "resolved",
+    created_at: "2020-01-15T00:00:00Z",
+  }
+
   function renderAlerts(alerts: (typeof RISK_ALERT)[]) {
     vi.mocked(useRiskAlerts).mockReturnValue({
       isLoading: false,
@@ -268,36 +280,62 @@ describe("Risk alerts by level (donut + counts)", () => {
     } as ReturnType<typeof useRiskAlerts>)
   })
 
-  it("labels the plot with the count behind the level on screen", () => {
+  it("writes the count at the end of each risk-level bar as text", () => {
     renderAlerts([RISK_ALERT])
 
-    expect(
-      screen.getByRole("img", {
-        name: "Donut chart of 1 risk alert by level: High 1.",
-      })
-    ).toBeInTheDocument()
-
-    // The same count is text beside the donut, not a hover-only tooltip.
-    const breakdown = screen.getByText("High").closest("ul")
-    expect(breakdown).not.toBeNull()
-    expect(breakdown).toHaveTextContent("1 · 100%")
+    // The plot's accessible name is the one place every figure is guaranteed
+    // to appear: jsdom has no layout engine, so Recharts renders the SVG at
+    // zero width and no tick labels exist to assert against. Asserting only on
+    // the name keeps the test honest about that rather than passing by
+    // accident on a DOM detail.
+    const plot = screen.getByRole("img", {
+      name: /Risk level distribution: High Risk 1, Moderate Risk 0, Low Risk 0/,
+    })
+    expect(plot).toBeInTheDocument()
   })
 
-  it("splits a mixed set into named counts and shares", () => {
+  it("counts a resolved alert once, under Resolved", () => {
+    // One open high alert and one resolved high alert: the live risk is 1, so
+    // the donut must not report two.
     renderAlerts([
       RISK_ALERT,
-      { ...RISK_ALERT, id: "ra-2", student_name: "Ben Lopez" },
-      { ...RISK_ALERT, id: "ra-3", student_name: "Cara Ng", risk_level: "low" },
+      { ...RISK_ALERT, id: "ra-resolved", status: "resolved" },
     ])
 
-    expect(
-      screen.getByRole("img", {
-        name: "Donut chart of 3 risk alerts by level: High 2, Low 1.",
-      })
-    ).toBeInTheDocument()
+    const total = screen.getByRole("img", { name: /Donut chart of 2 total/ })
+    expect(total).toBeInTheDocument()
+    expect(total).toHaveAccessibleName(/High Risk: 1, 50%/)
+    expect(total).toHaveAccessibleName(/Resolved: 1, 50%/)
+  })
 
-    const breakdown = screen.getByText("High").closest("ul")
-    expect(breakdown).toHaveTextContent("2 · 67%")
-    expect(breakdown).toHaveTextContent("1 · 33%")
+  it("omits the monthly trend when no case falls inside six months", () => {
+    // Every alert is years old: six empty bars would read as "zero new cases
+    // every month", a claim the data cannot support.
+    renderAlerts([OLD_ALERT as never])
+
+    expect(
+      screen.queryByRole("img", { name: /Bar chart of new cases per month/ })
+    ).not.toBeInTheDocument()
+    expect(screen.getByText(/No new cases recorded/i)).toBeInTheDocument()
+  })
+
+  it("draws the trend from alerts with a parsed creation date", () => {
+    // Two alerts this month, one with an unparseable date. Fixture `RISK_ALERT`
+    // itself is from 2025 and correctly falls outside the window, so the count
+    // must be 2, not 3 — an unparseable date is skipped, never folded into a
+    // month it does not belong to.
+    const thisMonth = new Date().toISOString()
+    renderAlerts([
+      { ...RISK_ALERT, id: "ra-2", created_at: thisMonth },
+      { ...RISK_ALERT, id: "ra-3", created_at: thisMonth },
+      { ...RISK_ALERT, id: "ra-bad", created_at: "not-a-date" },
+    ])
+
+    const plot = screen.getByRole("img", {
+      name: /Bar chart of new cases per month/,
+    })
+    expect(plot).toBeInTheDocument()
+    // The current month is the last key in the window.
+    expect(plot).toHaveAccessibleName(/[A-Z][a-z]{2} 2\.$/)
   })
 })

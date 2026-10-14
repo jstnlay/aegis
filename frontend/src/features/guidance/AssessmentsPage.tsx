@@ -50,6 +50,7 @@ import {
   useCreateAssessment,
   useCreateAssessmentQuestion,
   useDeployAssessment,
+  useGenerateQuestionDrafts,
   useGuidanceAssessments,
   useGuidanceAssessmentResults,
   useGuidanceStudents,
@@ -328,7 +329,10 @@ function AddQuestionForm({
   questions: AssessmentQuestion[]
 }) {
   const create = useCreateAssessmentQuestion()
+  // FR-027. A draft is a proposal, not a create — see `useGenerateQuestionDrafts`.
+  const generate = useGenerateQuestionDrafts()
 
+  const [draftTopic, setDraftTopic] = useState("")
   const [questionText, setQuestionText] = useState("")
   const [questionType, setQuestionType] =
     useState<AssessmentQuestionType>("multiple_choice")
@@ -413,6 +417,38 @@ function AddQuestionForm({
     }
   }
 
+  /**
+   * Fill the form from one AI draft.
+   *
+   * The generator works from the question type already chosen above, so the
+   * scale it returns matches the field it is about to fill. `true_false` is
+   * refused by the server with a named reason rather than half-supported — a
+   * generated true/false item would assert a fact the system cannot verify —
+   * and that reason is surfaced rather than hidden behind a disabled button.
+   *
+   * The draft overwrites whatever is in the fields, and it is still only a
+   * proposal: nothing reaches the assessment until "Add question" is pressed
+   * and `AssessmentQuestion.clean()` has run on it.
+   */
+  async function handleGenerate() {
+    const topic = draftTopic.trim()
+    if (topic.length < 3) return
+    try {
+      const result = await generate.mutateAsync({
+        topic,
+        question_type: questionType,
+        count: 1,
+      })
+      const draft = result.drafts[0]
+      if (!draft) return
+      setQuestionText(draft.question_text)
+      setOptionsText(draft.options ? draft.options.join("\n") : "")
+      setCorrectAnswer(draft.correct_answer ?? "")
+    } catch {
+      // Surfaced from `generate.isError` below.
+    }
+  }
+
   return (
     <form
       onSubmit={handleSubmit}
@@ -446,6 +482,50 @@ function AddQuestionForm({
           onChange={(event) => setQuestionText(event.target.value)}
           className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring"
         />
+      </div>
+
+      {/*
+        FR-027 (TC-GUI-04). The chatbot drafts the item from a topic the
+        counselor supplies; it proposes, and the counselor owns the question.
+
+        Two limits are stated rather than papered over. The draft uses the
+        question type selected below, so changing the type changes what the
+        same topic produces. And it stays a proposal: the form is filled, and
+        nothing is saved until "Add question" has passed the item through
+        `AssessmentQuestion.clean()`.
+      */}
+      <div className="space-y-1.5 rounded-md border border-dashed border-border p-3">
+        <Label htmlFor={`draft-topic-${assessment.id}`}>
+          AI draft (FR-027)
+        </Label>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Input
+            id={`draft-topic-${assessment.id}`}
+            value={draftTopic}
+            placeholder="e.g. coping with exam stress"
+            onChange={(event) => setDraftTopic(event.target.value)}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={generate.isPending || draftTopic.trim().length < 3}
+            onClick={() => {
+              void handleGenerate()
+            }}
+          >
+            {generate.isPending ? "Drafting…" : "Generate draft"}
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Fills the fields below with one self-report item for the selected
+          question type. The chatbot classifies the topic to choose which items
+          it drafts first, and falls back to general wellbeing items when it has
+          no confident read. Nothing is saved until you press Add question.
+        </p>
+        {generate.isError ? (
+          <ErrorNote message={normalizeApiError(generate.error).message} />
+        ) : null}
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">

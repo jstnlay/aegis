@@ -8,6 +8,7 @@ import {
   FileText,
   LayoutDashboard,
   MessageSquare,
+  Settings,
   Shield,
   Upload,
   UserCog,
@@ -205,6 +206,22 @@ const ADMIN_USERS: NavItem = {
   status: "available",
 }
 
+/**
+ * FR-034 / TC-ADM-11: the system-wide settings surface.
+ *
+ * `GET /cms/settings/` is admin-only end to end — other roles get a 403 rather
+ * than a filtered list, because the keys themselves describe what the system
+ * can be made to do. The rows are seeded by a data migration, so this page
+ * always shows what the code reads.
+ */
+const ADMIN_SETTINGS: NavItem = {
+  route: "admin/settings",
+  label: "System Settings",
+  icon: Settings,
+  allowedRoles: ["admin"],
+  status: "available",
+}
+
 /** Import jobs and the controlled CSV/XLSX exports. */
 const ADMIN_DATA: NavItem = {
   route: "admin/data",
@@ -390,13 +407,11 @@ const FACULTY_ADVISORY: NavItem = {
  *
  * `users` became the real `admin/users` route (see `ADMIN_USERS`).
  *
- * `settings` is gone because there is no SystemSetting model, view or route
- * anywhere in the backend — the only mention is a comment in
- * `apps/attendance/views.py` saying the absence threshold "will be replaced by
- * SystemSetting lookup when CMS module is built (Phase 7)", and that never
- * happened. A planned entry for a route that cannot exist is the same
- * placeholder failure PH11.8 removed for `/app/guidance`. `Account Settings`
- * remains, and that is the real self-scoped `GET/PATCH /accounts/me/` surface.
+ * `settings` is back as the real `admin/settings` route (see `ADMIN_SETTINGS`):
+ * FR-034 now has a `SystemSetting` model, an admin-only view, and a caller
+ * reading it — the attendance threshold that "will be replaced by SystemSetting
+ * lookup (Phase 7)" actually was. `Account Settings` remains, and that is the
+ * real self-scoped `GET/PATCH /accounts/me/` surface.
  */
 
 /**
@@ -574,7 +589,14 @@ const ADMIN_NAVIGATION: readonly NavGroup[] = [
   },
   {
     heading: "School Operations",
-    items: [ADMIN_USERS, ADMIN_DATA, ADMIN_CMS, ADMIN_AUDIT, REPORTS],
+    items: [
+      ADMIN_USERS,
+      ADMIN_DATA,
+      ADMIN_SETTINGS,
+      ADMIN_CMS,
+      ADMIN_AUDIT,
+      REPORTS,
+    ],
   },
 ]
 

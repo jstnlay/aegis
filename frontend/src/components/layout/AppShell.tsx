@@ -101,7 +101,7 @@ export function AppShell() {
           onMenuClick={() => setMenuOpen(true)}
         />
 
-        <main id="main-content" className="flex-1 scroll-mt-14" tabIndex={-1}>
+        <main id="main-content" className="flex-1 scroll-mt-20" tabIndex={-1}>
           <div className="mx-auto w-full max-w-6xl px-4 py-6 lg:px-6">
             <ErrorBoundary resetKeys={[location.pathname]}>
               <Outlet />

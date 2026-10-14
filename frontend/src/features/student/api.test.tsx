@@ -208,4 +208,63 @@ describe("useStudentDashboardData grading periods", () => {
     expect(result.current.periods[0]?.period_name).toBe("Unassigned")
     expect(result.current.averageGrade).toBe(88)
   })
+
+  /**
+   * Regression from the browser check: DRF serialises `Decimal` as a string,
+   * so `score` arrives as `"76.69"` while the contract types it
+   * `number | null`. Passed through unnormalised, a row reads "N/A / Passing"
+   * — `formatPercent` rejects the string while `scoreStatus` coerces it into a
+   * pass — and the period average concatenates the strings into `NaN`.
+   */
+  it("normalises string scores to numbers at the boundary", async () => {
+    vi.spyOn(apiClient, "get").mockImplementation((async (url: string) => {
+      if (url.startsWith("/attendance/summary")) return { data: [] }
+      if (url.includes("/metrics/")) {
+        return { data: { status: "ok", data: { has_data: false } } }
+      }
+      throw new Error(`Unexpected request: ${url}`)
+    }) as unknown as typeof apiClient.get)
+
+    mockedFetchAllPages.mockImplementation(async (url: string) => {
+      if (url.includes("/academics/grades/")) {
+        return {
+          count: 2,
+          results: [
+            {
+              subject_name: "Mathematics",
+              subject_code: "MATH",
+              score: "76.69",
+              letter_grade: "C",
+              grading_period_name: "Term 1",
+            },
+            {
+              subject_name: "English",
+              subject_code: "ENG",
+              score: null,
+              letter_grade: null,
+              grading_period_name: "Term 1",
+            },
+          ],
+        }
+      }
+      if (url.includes("/academics/grading-periods/")) {
+        return { count: 0, results: [] }
+      }
+      return { count: 0, results: [] }
+    })
+
+    const { result } = renderHook(
+      () => useStudentDashboardData("profile-uuid"),
+      { wrapper: createWrapper() }
+    )
+
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    expect(result.current.error).toBeFalsy()
+    expect(result.current.grades).toHaveLength(2)
+    expect(result.current.grades[0]?.score).toBe(76.69)
+    expect(result.current.grades[1]?.score).toBeNull()
+    // A real average, not string concatenation divided into NaN.
+    expect(result.current.averageGrade).toBeCloseTo(76.69, 2)
+  })
 })

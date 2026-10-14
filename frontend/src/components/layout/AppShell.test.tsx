@@ -13,6 +13,10 @@ import { AcademicsLandingPage } from "@/routes/pages/AcademicsLandingPage"
 import { RoleLandingPage } from "@/routes/pages/RoleLandingPage"
 import { ROLES, type Role, type User } from "@/types/auth"
 
+// The token source of truth, read as text: the shell's own tests cannot assert
+// computed custom properties because the stylesheet is not applied in jsdom.
+import sidebarSource from "./Sidebar?raw"
+
 const ROLE_LABEL: Record<Role, string> = {
   student: "Student",
   parent: "Parent",
@@ -379,6 +383,57 @@ describe("role-aware sidebar", () => {
       screen.getByRole("link", { name: "Student Support" })
     ).toHaveAttribute("href", "/app/parent/support")
     expect(screen.queryByText("Attendance")).toBeNull()
+  })
+
+  it("shows the HCCI seal beside the school name in the brand lockup", async () => {
+    const { container } = await renderAuthenticatedApp("student")
+    await screen.findByRole("navigation", { name: "Main" })
+
+    const logo = container.querySelector('img[src="/hcci-logo.png"]')
+    expect(logo).not.toBeNull()
+    // Decorative: the visible school name beside the seal is its accessible text.
+    expect(logo).toHaveAttribute("alt", "")
+    expect(
+      screen.getAllByText("HIS CARE CHRISTIAN INSTITUTE").length
+    ).toBeGreaterThan(0)
+  })
+})
+
+/* =====================================================================
+   Brand maroon shell
+   ===================================================================== */
+
+/**
+ * The Sidebar's colour contract, read from the component source.
+ *
+ * The stylesheet itself cannot be asserted here: `?raw` on a `.css` file is
+ * swallowed by Vite's CSS plugin (it resolves to an empty string), so the
+ * token values are checked in the browser pass instead. What this pins is the
+ * half that lives in the component and is one edit away from breaking the
+ * design: the active item must *invert* — a light fill with the brand text —
+ * because tinting it puts a lighter red on that same brand red, and the current
+ * section simply disappears from the rail.
+ */
+describe("brand maroon shell", () => {
+  it("puts the rail on the brand sidebar token", () => {
+    expect(sidebarSource).toContain("bg-sidebar")
+  })
+
+  it("inverts the active item so it stays visible on the brand rail", () => {
+    // The pair is what makes the wire invert: a light fill plus the brand
+    // foreground. Dropping the foreground class would leave maroon text on a
+    // maroon pill.
+    expect(sidebarSource).toContain(
+      "bg-sidebar-primary text-sidebar-primary-foreground"
+    )
+  })
+
+  it("keeps the focus ring on the light token so keyboard focus shows on maroon", () => {
+    expect(sidebarSource).toContain("focus-visible:ring-sidebar-ring")
+  })
+
+  it("sets the seal on a round disc rather than a rounded square", () => {
+    expect(sidebarSource).toContain("rounded-full bg-white")
   })
 })
 

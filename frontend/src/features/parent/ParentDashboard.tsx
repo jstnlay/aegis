@@ -1,15 +1,15 @@
 import { useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 
+import {
+  StudentAcademicTrendChart,
+  StudentAttendanceTrendChart,
+} from "@/components/charts/StudentTrendCharts"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import {
-  ErrorNote,
-  PendingMetric,
-  PendingRegion,
-  UnavailableMetric,
-} from "@/components/feedback/Feedback"
+import { ErrorNote, PendingRegion } from "@/components/feedback/Feedback"
 import { Label } from "@/components/ui/label"
+import { MetricCard } from "@/components/ui/metric-card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/features/auth/AuthContext"
 import { useLinkedStudents } from "@/features/parent/api"
@@ -26,41 +26,9 @@ import { scoreStatus, scoreStatusLabel } from "@/lib/score-status"
  * skeletons, a muted failure line sitting beside the empty line, and `N/A` after a
  * failed request. Two views of one record must not look like two different
  * features.
+ * The tile itself is now the shared `MetricCard`, for the same reason the
+ * student page stopped keeping a private copy: one definition, no drift.
  */
-function MetricCard({
-  title,
-  hint,
-  isLoading,
-  isError,
-  children,
-}: {
-  title: string
-  hint: string
-  isLoading: boolean
-  isError: boolean
-  /** The formatted figure. Rendered only once the request has resolved. */
-  children: React.ReactNode
-}) {
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">
-          {isLoading ? (
-            <PendingMetric label={title} />
-          ) : isError ? (
-            <UnavailableMetric />
-          ) : (
-            children
-          )}
-        </div>
-        <p className="text-xs text-muted-foreground mt-1">{hint}</p>
-      </CardContent>
-    </Card>
-  )
-}
 
 function ParentDashboard() {
   const { user } = useAuth()
@@ -173,10 +141,22 @@ function ParentDashboard() {
             </p>
           </div>
 
+          {/*
+            PH11.16 (TC-PAR-08): the hint is state-aware for the same reason the
+            Attendance Rate one already was. "N/A" plus a static sentence tells a
+            parent the average is unavailable but never that the child simply has
+            no finalized grades yet.
+          */}
           <div className="grid gap-4 md:grid-cols-2">
             <MetricCard
               title="Average Grade"
-              hint="Overall academic performance"
+              hint={
+                dataError
+                  ? "Could not load finalized grades"
+                  : averageGrade === null
+                    ? "No finalized grades yet"
+                    : "Overall academic performance"
+              }
               isLoading={dataLoading}
               isError={Boolean(dataError)}
             >
@@ -186,9 +166,11 @@ function ParentDashboard() {
             <MetricCard
               title="Attendance Rate"
               hint={
-                attendance
-                  ? `${attendance.present_days} present, ${attendance.absent_days} absent`
-                  : "No attendance records"
+                dataError
+                  ? "Could not load attendance records"
+                  : attendance
+                    ? `${attendance.present_days} present, ${attendance.absent_days} absent`
+                    : "No attendance records"
               }
               isLoading={dataLoading}
               isError={Boolean(dataError)}
@@ -371,6 +353,34 @@ function ParentDashboard() {
               </Link>
             </CardContent>
           </Card>
+
+          {/*
+            The same two charts the student dashboard draws, over the same
+            hooks. A parent's view of a child's record must not look like a
+            different feature, and the student-scoped analytics endpoint
+            already authorises a linked parent for exactly this student.
+          */}
+          {selectedChildId ? (
+            <>
+              <Card className="mt-4">
+                <CardHeader>
+                  <CardTitle>Academic Trend</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <StudentAcademicTrendChart studentId={selectedChildId} />
+                </CardContent>
+              </Card>
+
+              <Card className="mt-4">
+                <CardHeader>
+                  <CardTitle>Attendance Trend</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <StudentAttendanceTrendChart studentId={selectedChildId} />
+                </CardContent>
+              </Card>
+            </>
+          ) : null}
         </div>
       )}
     </div>

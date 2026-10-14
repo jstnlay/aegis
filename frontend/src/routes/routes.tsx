@@ -18,6 +18,7 @@ import { ChangePasswordPage } from "@/routes/pages/ChangePasswordPage"
 import { LandingPage } from "@/routes/pages/LandingPage"
 import { LoginPage } from "@/routes/pages/LoginPage"
 import { NotFoundPage } from "@/routes/pages/NotFoundPage"
+import { SchoolPage } from "@/routes/pages/SchoolPage"
 import {
   RoleDashboardRedirect,
   RoleLandingPage,
@@ -43,10 +44,13 @@ import { AdminCmsPage } from "@/features/admin/AdminCmsPage"
 import { AdminDataPage } from "@/features/admin/AdminDataPage"
 import { AdminGradesPage } from "@/features/admin/AdminGradesPage"
 import { AdminUsersPage } from "@/features/admin/AdminUsersPage"
+import { AdminSettingsPage } from "@/features/admin/AdminSettingsPage"
 
 export const appRoutes: RouteObject[] = [
   { path: "/", element: <LandingPage /> },
   { path: "/login", element: <LoginPage /> },
+  // Public "Read more" destination from the landing page (school background).
+  { path: "/school", element: <SchoolPage /> },
   { path: "/change-password", element: <ChangePasswordPage /> },
   {
     // Pathless auth boundary: matches only through its children (`/app…`),
@@ -370,6 +374,14 @@ export const appRoutes: RouteObject[] = [
             element: (
               <RequireRole allowedRoles={["admin"]}>
                 <AdminCmsPage />
+              </RequireRole>
+            ),
+          },
+          {
+            path: "admin/settings",
+            element: (
+              <RequireRole allowedRoles={["admin"]}>
+                <AdminSettingsPage />
               </RequireRole>
             ),
           },

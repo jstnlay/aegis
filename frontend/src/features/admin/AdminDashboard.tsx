@@ -1,10 +1,9 @@
+import { ChartNoAxesColumn, Layers, Users } from "lucide-react"
+
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import {
-  ErrorNote,
-  PendingMetric,
-  UnavailableMetric,
-} from "@/components/feedback/Feedback"
+import { ErrorNote } from "@/components/feedback/Feedback"
+import { MetricCard } from "@/components/ui/metric-card"
 import { ChartState } from "@/components/charts/ChartCard"
 import { GradeLevelPerformanceChart } from "@/components/charts/GradeLevelPerformanceChart"
 import { RiskDistributionChart } from "@/components/charts/RiskDistributionChart"
@@ -90,6 +89,7 @@ function AdminDashboard() {
         <MetricCard
           title="Overall Grade Average"
           hint="School-wide academic performance"
+          icon={ChartNoAxesColumn}
           isLoading={metricsQuery.isLoading}
           isError={metricsQuery.isError}
         >
@@ -99,6 +99,7 @@ function AdminDashboard() {
         <MetricCard
           title="Total Students"
           hint="Active student enrollments"
+          icon={Users}
           isLoading={metricsQuery.isLoading}
           isError={metricsQuery.isError}
         >
@@ -108,6 +109,7 @@ function AdminDashboard() {
         <MetricCard
           title="Grade Levels"
           hint="Active grade levels"
+          icon={Layers}
           isLoading={metricsQuery.isLoading}
           isError={metricsQuery.isError}
         >
@@ -170,54 +172,11 @@ function AdminDashboard() {
 }
 
 /**
- * One headline figure, with its three states kept distinct.
- *
- * PH11.11. The three tiles on this screen were hand-rolled and each had already
- * drifted: all three keyed the placeholder off `isFetching`, which stays true
- * during a *refetch*, so a background refresh replaced three real figures with
- * grey bars and then restored them — and neither state was announced. They also
- * had no failure state at all, so a failed request rendered `formatPercent(null)`
- * → "N/A", which claims the backend reported no figure rather than that nobody
- * knows.
- *
- * `isLoading` is `isPending && isFetching` in react-query v5, so it is true only
- * before the first result — a refetch over figures already on screen leaves them
- * alone, which is what a reader wants while reading them.
+ * The shared metric tile. The hand-rolled copy that lived here is gone since
+ * this batch: PH11.11 introduced it on this screen to stop three tiles drifting,
+ * and having introduced one definition, a sixth private copy in the same
+ * codebase was the drift it was written to prevent. See `MetricCard`.
  */
-function MetricCard({
-  title,
-  hint,
-  isLoading,
-  isError,
-  children,
-}: {
-  title: string
-  hint: string
-  isLoading: boolean
-  isError: boolean
-  /** The formatted figure. Rendered only once the request has resolved. */
-  children: React.ReactNode
-}) {
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">
-          {isLoading ? (
-            <PendingMetric label={title} />
-          ) : isError ? (
-            <UnavailableMetric />
-          ) : (
-            children
-          )}
-        </div>
-        <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
-      </CardContent>
-    </Card>
-  )
-}
 
 function GradeLevelTable({
   rows,

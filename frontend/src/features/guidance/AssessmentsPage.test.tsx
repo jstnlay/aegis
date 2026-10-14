@@ -674,6 +674,106 @@ describe("assessment authoring", () => {
     })
   })
 
+  it("fills the form from an AI draft and writes nothing until Add question", async () => {
+    // FR-027 (TC-GUI-04). The draft endpoint persists nothing, so the only
+    // write on this path is still the one through the questions endpoint.
+    mockedPost.mockImplementation(async (url: string) => {
+      if (url === "/assessments/question-drafts/") {
+        return {
+          data: {
+            family: "concern",
+            confidence: 0.42,
+            drafts: [
+              {
+                question_text:
+                  "I can talk to someone I trust about exam stress.",
+                options: ["Never", "Rarely", "Sometimes", "Often", "Always"],
+                correct_answer: null,
+              },
+            ],
+          },
+        } as never
+      }
+      return { data: {} } as never
+    })
+
+    renderPage()
+    await screen.findByText("Behavior Review")
+
+    const draft = screen
+      .getByText("Behavior Review")
+      .closest("[data-assessment-id]") as HTMLElement
+    const form = within(draft).getByRole("form", { name: "Add question" })
+
+    fireEvent.change(within(form).getByLabelText(/AI draft/i), {
+      target: { value: "exam stress" },
+    })
+    fireEvent.click(
+      within(form).getByRole("button", { name: /generate draft/i })
+    )
+
+    await waitFor(() => {
+      expect(mockedPost).toHaveBeenCalledWith("/assessments/question-drafts/", {
+        topic: "exam stress",
+        question_type: "multiple_choice",
+        count: 1,
+      })
+    })
+
+    // The draft lands in the form fields; it never becomes a question on its
+    // own, and the answer key stays empty because a self-report frequency item
+    // has no correct answer to invent.
+    expect(
+      await within(form).findByDisplayValue(
+        "I can talk to someone I trust about exam stress."
+      )
+    ).toBeInTheDocument()
+    expect(within(form).getByLabelText(/^options$/i)).toHaveValue(
+      "Never\nRarely\nSometimes\nOften\nAlways"
+    )
+    expect(within(form).getByLabelText(/correct answer/i)).toHaveValue("")
+    expect(mockedPost).not.toHaveBeenCalledWith(
+      "/assessments/assessment-questions/",
+      expect.anything()
+    )
+  })
+
+  it("surfaces the server's reason when the type cannot be drafted", async () => {
+    // `true_false` is refused by name rather than half-supported: a generated
+    // true/false item would assert a fact the system cannot verify. The button
+    // stays enabled so the reason reaches the counselor instead of being a
+    // control that silently does nothing.
+    mockedPost.mockRejectedValue(
+      new Error(
+        "AI drafting supports multiple_choice, likert and essay. A generated true/false item would assert a fact the system cannot verify, so it is not generated."
+      )
+    )
+
+    renderPage()
+    await screen.findByText("Behavior Review")
+
+    const draft = screen
+      .getByText("Behavior Review")
+      .closest("[data-assessment-id]") as HTMLElement
+    const form = within(draft).getByRole("form", { name: "Add question" })
+
+    await openSelect(
+      within(form).getByRole("combobox", { name: /question type/i })
+    )
+    fireEvent.click(await screen.findByRole("option", { name: "True / False" }))
+
+    fireEvent.change(within(form).getByLabelText(/AI draft/i), {
+      target: { value: "exam stress" },
+    })
+    fireEvent.click(
+      within(form).getByRole("button", { name: /generate draft/i })
+    )
+
+    expect(
+      await within(form).findByText(/A generated true\/false item/i)
+    ).toBeInTheDocument()
+  })
+
   it("blocks an option-bearing question with a single option", async () => {
     // `AssessmentQuestion.clean()` requires at least 2 options for
     // multiple_choice and likert, and the model cannot report that as a field
@@ -1012,15 +1112,24 @@ describe("assessment authoring", () => {
     ).toBeInTheDocument()
   })
 
-  it("never calls an AI question-generation endpoint", async () => {
+  /**
+   * FR-027 puts AI assistance on the *question* form, not on the assessment
+   * dialog: the title, type and targets of an assessment are the counselor's
+   * to state, and the generator drafts items, not documents. The assertions
+   * are scoped to the dialog because the question form behind it now does
+   * carry the drafting control — which is exactly where it belongs.
+   */
+  it("offers no AI drafting from the new-assessment dialog", async () => {
     renderPage()
     await screen.findByText("Wellness Check-In")
 
     fireEvent.click(screen.getByRole("button", { name: /new assessment/i }))
-    await screen.findByRole("dialog")
+    const dialog = await screen.findByRole("dialog")
 
-    expect(screen.queryByText(/generat/i)).toBeNull()
-    expect(screen.queryByText(/\bAI\b/i)).toBeNull()
+    expect(within(dialog).queryByText(/generat/i)).toBeNull()
+    expect(within(dialog).queryByText(/\bAI\b/i)).toBeNull()
+    // Opening the dialog alone must not make the drafting request either.
+    expect(mockedPost).not.toHaveBeenCalled()
   })
 })
 

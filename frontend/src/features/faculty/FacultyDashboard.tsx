@@ -1,4 +1,5 @@
 import { useMemo } from "react"
+import { ClipboardList, LayoutGrid, Users } from "lucide-react"
 import { Link } from "react-router-dom"
 
 import {
@@ -21,12 +22,8 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import {
-  ErrorNote,
-  PendingMetric,
-  PendingRegion,
-  UnavailableMetric,
-} from "@/components/feedback/Feedback"
+import { ErrorNote, PendingRegion } from "@/components/feedback/Feedback"
+import { MetricCard } from "@/components/ui/metric-card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/features/auth/AuthContext"
 import {
@@ -37,46 +34,11 @@ import {
 import { formatCount } from "@/lib/metric-format"
 
 /**
- * One headline figure, with its three states kept distinct.
- *
- * PH11.11. Built to the same shape as the student, guidance and admin tiles so
- * the pattern has one definition across the role dashboards. See the note on the
- * guidance copy for what the previous hand-rolled version got wrong.
+ * The shared metric tile. The private copy that lived here is gone since this
+ * batch, for the reason its own doc comment gives: one definition, so five
+ * dashboards cannot drift into six treatments of the same figure. See
+ * `MetricCard`.
  */
-function MetricCard({
-  title,
-  hint,
-  isLoading,
-  isError,
-  children,
-}: {
-  title: string
-  hint: string
-  isLoading: boolean
-  isError: boolean
-  /** The formatted figure. Rendered only once the request has resolved. */
-  children: React.ReactNode
-}) {
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">
-          {isLoading ? (
-            <PendingMetric label={title} />
-          ) : isError ? (
-            <UnavailableMetric />
-          ) : (
-            children
-          )}
-        </div>
-        <p className="text-xs text-muted-foreground mt-1">{hint}</p>
-      </CardContent>
-    </Card>
-  )
-}
 
 function FacultyDashboard() {
   const { user } = useAuth()
@@ -124,6 +86,7 @@ function FacultyDashboard() {
         <MetricCard
           title="Total Students"
           hint="Active enrollments across all sections"
+          icon={Users}
           isLoading={statsQuery.isLoading}
           isError={statsQuery.isError}
         >
@@ -137,6 +100,7 @@ function FacultyDashboard() {
               ? `${statsQuery.data.pending_grades} drafts + ${statsQuery.data.pending_submissions} submissions`
               : "No data"
           }
+          icon={ClipboardList}
           isLoading={statsQuery.isLoading}
           isError={statsQuery.isError}
         >
@@ -146,6 +110,7 @@ function FacultyDashboard() {
         <MetricCard
           title="Sections"
           hint="Assigned teaching sections"
+          icon={LayoutGrid}
           isLoading={sectionsQuery.isLoading}
           isError={sectionsQuery.isError}
         >
@@ -356,6 +321,9 @@ function PendingGradesChart({
             name="Pending"
             fill={chartColor(0)}
             radius={[4, 4, 0, 0]}
+            // Two bars in a full-width frame would each sprawl across half the
+            // card; capped, they read as two columns instead of two walls.
+            maxBarSize={120}
             isAnimationActive={false}
             label={{ position: "top", fill: AXIS_COLOR, fontSize: 12 }}
           />

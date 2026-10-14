@@ -42,6 +42,7 @@ export type NotificationType =
   | "INTERVENTION_UPDATE"
   | "ANNOUNCEMENT_PUBLISHED"
   | "CONSULTATION_SCHEDULED"
+  | "MAINTENANCE_NOTICE"
 
 export const NOTIFICATION_TYPES: readonly NotificationType[] = [
   "GRADE_POSTED",
@@ -54,6 +55,7 @@ export const NOTIFICATION_TYPES: readonly NotificationType[] = [
   "INTERVENTION_UPDATE",
   "ANNOUNCEMENT_PUBLISHED",
   "CONSULTATION_SCHEDULED",
+  "MAINTENANCE_NOTICE",
 ]
 
 export const NOTIFICATION_TYPE_LABELS: Record<NotificationType, string> = {
@@ -67,6 +69,7 @@ export const NOTIFICATION_TYPE_LABELS: Record<NotificationType, string> = {
   INTERVENTION_UPDATE: "Intervention update",
   ANNOUNCEMENT_PUBLISHED: "Announcement published",
   CONSULTATION_SCHEDULED: "Consultation scheduled",
+  MAINTENANCE_NOTICE: "Scheduled maintenance",
 }
 
 /** `NotificationSerializer` — read-only on every field. */
