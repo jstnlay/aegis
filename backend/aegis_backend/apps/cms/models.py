@@ -239,3 +239,39 @@ class StudentInteraction(TimestampedModel):
             f"{self.student} — {self.get_interaction_type_display()} "
             f"→ {self.learning_item}"
         )
+
+
+class SystemSetting(TimestampedModel):
+    """
+    A system-wide setting an administrator can change at runtime (FR-034, TC-ADM-11).
+
+    `key` is the stable identifier code reads (`attendance.absence_threshold`),
+    not a user-facing label - the label is `description`, written once when the
+    setting is seeded and never editable, so a mislabelled control stays
+    mislabelled only if the code that names it is wrong.
+
+    `value` is stored as text. Coercion to int/bool/float happens at the read
+    site through `apps.cms.settings_registry`, which is the only thing that
+    knows a setting's type - the table does not.
+    """
+
+    key = models.CharField(max_length=100, unique=True, db_index=True)
+    value = models.TextField(blank=True)
+    description = models.TextField(null=True, blank=True)
+    # SET_NULL, not CASCADE: removing an administrator must not wipe the
+    # configuration they once saved.
+    updated_by = models.ForeignKey(
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+
+    class Meta:
+        verbose_name = "system setting"
+        verbose_name_plural = "system settings"
+        ordering = ["key"]
+
+    def __str__(self):
+        return f"{self.key} = {self.value}"

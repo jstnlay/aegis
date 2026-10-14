@@ -51,6 +51,14 @@ MODEL_ALLOWLISTS: dict[tuple[str, ...]] = {
     "assessments.AssessmentResult": (
         "status",
     ),
+    # PH11 — administrator account administration (TC-ADM-10). Only the two
+    # fields that make up role-based access may be diffed; profile fields
+    # are never written through that route, and identity fields (email,
+    # username, password) are never allowlisted.
+    "accounts.User": (
+        "role",
+        "is_active",
+    ),
 }
 
 

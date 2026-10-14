@@ -769,6 +769,113 @@ class InterventionViewSet(viewsets.ModelViewSet):
 # ---------------------------------------------------------------------------
 
 
+def guidance_report_rows(report_data: dict) -> list[dict]:
+    """
+    Flatten a compiled guidance report into rows for the CSV/XLSX renderer
+    (FR-032 / TC-GUI-09).
+
+    Takes the report dict rather than the models on purpose: this is the same
+    structure the JSON branch serializes, so the file and the screen cannot
+    disagree. Rendering the document twice, once from the dict and once from
+    fresh queries, is exactly how the two quietly come to differ.
+
+    Every section is represented even when it is empty, and says so. A report
+    with no consultations section looks identical to one from a system that
+    does not track consultations, and those mean very different things to a
+    counselor reading it.
+    """
+    counts = report_data["behavioral_note_counts"]
+    consultations = report_data["consultation_summary"]
+    interventions = report_data["intervention_summary"]
+    name = report_data["student_name"]
+
+    rows = [
+        {
+            "section": "Student",
+            "item": name,
+            "detail": f"Student ID {report_data['student_id_code']}",
+            "date": "",
+        },
+    ]
+
+    rows.append(
+        {
+            "section": "Behavioral notes",
+            "item": "Summary",
+            "detail": (
+                f"{counts['positive']} positive, {counts['warning']} warning, "
+                f"{counts['incident']} incident"
+            ),
+            "date": "",
+        }
+    )
+
+    rows.append(
+        {
+            "section": "Consultations",
+            "item": "Total consultations",
+            "detail": consultations["total"],
+            "date": "",
+        }
+    )
+    for status_key, count in sorted(consultations["by_status"].items()):
+        rows.append(
+            {
+                "section": "Consultations",
+                "item": f"By status: {status_key}",
+                "detail": count,
+                "date": "",
+            }
+        )
+    for priority, count in sorted(consultations["by_priority"].items()):
+        rows.append(
+            {
+                "section": "Consultations",
+                "item": f"By priority: {priority}",
+                "detail": count,
+                "date": "",
+            }
+        )
+
+    for label, key in (
+        ("Total", "total"),
+        ("Active", "active"),
+        ("Completed", "completed"),
+        ("Cancelled", "cancelled"),
+    ):
+        rows.append(
+            {
+                "section": "Interventions",
+                "item": label,
+                "detail": interventions[key],
+                "date": "",
+            }
+        )
+
+    history = report_data["risk_alert_history"]
+    if history:
+        for alert in history:
+            rows.append(
+                {
+                    "section": "Risk alerts",
+                    "item": alert["risk_level"],
+                    "detail": f"{alert['status']} · {alert['source']}",
+                    "date": alert["generated_at"],
+                }
+            )
+    else:
+        rows.append(
+            {
+                "section": "Risk alerts",
+                "item": "History",
+                "detail": "No risk alerts recorded",
+                "date": "",
+            }
+        )
+
+    return rows
+
+
 class GuidanceReportView(APIView):
     """
     GET /guidance/reports/student/{student_id}/
@@ -860,5 +967,98 @@ class GuidanceReportView(APIView):
             "risk_alert_history": risk_alert_history,
         }
 
+        # FR-032 / TC-GUI-09: the same report, as a file. No `file_format`
+        # means JSON, so the endpoint's original contract is untouched.
+        file_format = (request.query_params.get("file_format") or "").lower()
+        if file_format:
+            return self._render_file(
+                request, student, report_data, file_format
+            )
+
         serializer = GuidanceReportSerializer(report_data)
         return Response(serializer.data)
+
+    def _render_file(self, request, student, report_data, file_format):
+        """
+        Render the compiled report as CSV or XLSX (TC-GUI-09).
+
+        Delegates the bytes to `data_import.exports`, which already owns the
+        CSV/XLSX renderers, the empty-scope rule and the audit hook. The only
+        thing this adds is the flattening below, and it flattens `report_data`
+        - the very dict the JSON branch returns - so the file and the screen
+        are two renderings of one structure and cannot drift apart.
+        """
+        from django.http import HttpResponse
+
+        from apps.audit.import_export_hooks import audit_successful_export
+        from apps.data_import.constants import (
+            ExportErrorCode,
+            ExportFormat,
+            ExportType,
+        )
+        from apps.data_import.views import EXPORT_DOMAIN_MODELS
+        from apps.data_import.exports import (
+            build_content_disposition,
+            build_export_payload,
+            safe_export_filename,
+        )
+
+        if file_format not in ExportFormat.ALL:
+            return Response(
+                {
+                    "success": False,
+                    "error": {
+                        "code": ExportErrorCode.UNSUPPORTED_FORMAT,
+                        "message": "Unsupported file format. Use 'csv' or 'xlsx'.",
+                    },
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        rows = guidance_report_rows(report_data)
+        if not rows:
+            # Mirrors TC-FAC-19: an authorised-but-empty scope answers with a
+            # message, not a header-only file.
+            return Response(
+                {
+                    "success": False,
+                    "error": {
+                        "code": ExportErrorCode.EXPORT_EMPTY,
+                        "message": "No data is available for this report.",
+                    },
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            payload = build_export_payload(
+                ExportType.GUIDANCE_REPORT, rows, file_format
+            )
+        except Exception:
+            return Response(
+                {
+                    "success": False,
+                    "error": {
+                        "code": ExportErrorCode.INTERNAL_EXPORT_ERROR,
+                        "message": "The report could not be generated.",
+                    },
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        # The student ID comes from the database, never from the request, and
+        # `safe_export_filename` sanitises it the same way it sanitises every
+        # other server-generated name.
+        filename = safe_export_filename(
+            f"guidance_report_{student.student_id}", file_format
+        )
+        content_type = (
+            "text/csv; charset=utf-8"
+            if file_format == ExportFormat.CSV
+            else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        response = HttpResponse(payload, content_type=content_type)
+        response["Content-Disposition"] = build_content_disposition(filename)
+
+        audit_successful_export(EXPORT_DOMAIN_MODELS[ExportType.GUIDANCE_REPORT])
+        return response

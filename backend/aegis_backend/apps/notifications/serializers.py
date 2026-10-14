@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Notification, NotificationPreference
+from .models import MaintenanceWindow, Notification, NotificationPreference
 
 
 class NotificationSerializer(serializers.ModelSerializer):
@@ -52,3 +52,37 @@ class NotificationPreferenceSerializer(serializers.ModelSerializer):
                 {"quiet_hours_end": "quiet_hours_start and quiet_hours_end must differ."}
             )
         return attrs
+
+
+class MaintenanceWindowSerializer(serializers.ModelSerializer):
+    """
+    A scheduled maintenance window (NFR-012, TC-SYS-08).
+
+    `lead_hours` is derived rather than stored. NFR-012 is a claim about
+    elapsed time, and the number the requirement is measured in belongs on the
+    response rather than reconstructed by whoever reads it.
+    """
+
+    lead_hours = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MaintenanceWindow
+        fields = [
+            "id",
+            "starts_at",
+            "ends_at",
+            "message",
+            "lead_hours",
+            "notified_at",
+            "created_at",
+        ]
+        read_only_fields = ["id", "lead_hours", "notified_at", "created_at"]
+
+    def get_lead_hours(self, obj):
+        from django.utils import timezone as tz
+
+        if obj.notified_at:
+            issued = obj.notified_at
+        else:
+            issued = tz.now()
+        return int((obj.starts_at - issued).total_seconds() // 3600)

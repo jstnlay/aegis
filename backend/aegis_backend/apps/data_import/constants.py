@@ -197,6 +197,15 @@ class ImportErrorCode:
     FORBIDDEN_COLUMN = "FORBIDDEN_COLUMN"
     PASSWORD_FIELD_FORBIDDEN = "PASSWORD_FIELD_FORBIDDEN"
     PROVISIONING_FAILED = "PROVISIONING_FAILED"
+    # PH11 guidance-records import row error codes
+    INVALID_SESSION_TYPE = "INVALID_SESSION_TYPE"
+    INVALID_SESSION_TIME = "INVALID_SESSION_TIME"
+    INVALID_SESSION_DATE = "INVALID_SESSION_DATE"
+    INVALID_CONCERN_CATEGORY = "INVALID_CONCERN_CATEGORY"
+    INVALID_PRIORITY_LEVEL = "INVALID_PRIORITY_LEVEL"
+    INVALID_SESSION_STATUS = "INVALID_SESSION_STATUS"
+    INVALID_CONCERN_LIST = "INVALID_CONCERN_LIST"
+    NO_COUNSELOR = "NO_COUNSELOR"
 
 
 # ---------------------------------------------------------------------------
@@ -246,12 +255,18 @@ class ExportType:
     # deliberately outside `ALL`: that set is the administrator authority
     # list, and "advisory class" has no meaning outside a faculty profile.
     ADVISORY = "advisory"
+    # FR-032 / TC-GUI-09: an individual student guidance report. Like
+    # ADVISORY this is one subject rather than a table of many, and it is
+    # outside `ALL` for the same reason - `ALL` is the administrator authority
+    # list, and this export is scoped to a guidance counselor's own student.
+    GUIDANCE_REPORT = "guidance_report"
 
     CHOICES = (
         (GRADES, "Grades"),
         (ATTENDANCE, "Attendance"),
         (STUDENTS, "Students"),
         (ADVISORY, "Advisory class summary"),
+        (GUIDANCE_REPORT, "Student guidance report"),
     )
 
     ALL = frozenset((GRADES, ATTENDANCE, STUDENTS))

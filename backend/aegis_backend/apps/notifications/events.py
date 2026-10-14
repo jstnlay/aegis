@@ -62,3 +62,66 @@ def dispatch_event(
             link=link,
             deduplication_key=deduplication_key,
         )
+
+
+def schedule_maintenance_window(*, starts_at, ends_at, message="", sender=None):
+    """
+    Create a maintenance window and issue its NFR-012 advance notice.
+
+    The window and its notice are written in one transaction, so the class
+    docstring's invariant is not a hope: if the dispatch fails, there is no
+    window either. A half-scheduled window whose notice never went out is
+    exactly the state NFR-012 forbids, and leaving it behind to be noticed
+    later would be leaving it behind.
+
+    The notice states its own lead time in hours. That is not decoration -
+    NFR-012 is a claim about elapsed time, and putting the measured number in
+    the artifact is what makes the claim checkable from the recipient's side
+    rather than only from a test's.
+    """
+    from django.contrib.auth import get_user_model
+    from django.core.exceptions import ValidationError
+    from django.db import transaction
+    from django.utils import timezone
+
+    from .models import MaintenanceWindow, NotificationType
+
+    with transaction.atomic():
+        window = MaintenanceWindow(
+            starts_at=starts_at,
+            ends_at=ends_at,
+            message=message,
+            created_by=sender,
+        )
+        # Raises for a window inside the 24-hour rule, or one that ends before
+        # it starts. Validating here rather than in the view keeps the rule
+        # true for every caller, the API and the Django admin alike.
+        window.full_clean()
+        window.save()
+
+        lead_hours = int(
+            (window.starts_at - timezone.now()).total_seconds() // 3600
+        )
+
+        body = (
+            f"Maintenance runs from {window.starts_at:%B %d, %Y at %H:%M} to "
+            f"{window.ends_at:%B %d, %Y at %H:%M}. This notice was issued "
+            f"{lead_hours} hours in advance."
+        )
+        if message:
+            body = f"{body}\n\n{message}"
+
+        dispatch_event(
+            NotificationType.MAINTENANCE_NOTICE,
+            recipients=get_user_model().objects.filter(is_active=True),
+            sender=sender,
+            title="Scheduled maintenance",
+            message=body,
+            link="/app/notifications",
+            deduplication_key=f"maintenance:{window.id}",
+        )
+
+        window.notified_at = timezone.now()
+        window.save(update_fields=["notified_at"])
+
+    return window

@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import CmsWebhookEvent
+from .models import CmsWebhookEvent, SystemSetting
 
 
 @admin.register(CmsWebhookEvent)
@@ -27,3 +27,14 @@ class CmsWebhookEventAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return request.user.is_superuser
+
+
+@admin.register(SystemSetting)
+class SystemSettingAdmin(admin.ModelAdmin):
+    list_display = ("key", "value", "updated_by", "updated_at")
+    search_fields = ("key",)
+    readonly_fields = ("key", "description", "updated_at", "created_at")
+    ordering = ("key",)
+
+    # `key` and `description` are read-only because the code reads the former
+    # and the latter is its label - see SystemSettingSerializer.

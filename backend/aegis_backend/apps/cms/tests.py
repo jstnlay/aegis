@@ -1251,3 +1251,352 @@ class WebhookRateLimitTest(CmsTestBase):
 
         response = self._post_publish(document_id="doc-ip-b", ip="198.51.100.9")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+"""
+TC-ADM-11 / FR-034: system-wide settings.
+
+The properties worth pinning, in order of how much they would hurt to get
+wrong:
+
+1. Only an admin may read or write a setting.
+2. Only `value` is writable - `key` and `description` are the code's.
+3. A value the administrator cannot have meant is refused at the serializer,
+   and cannot cost an attendance record its write.
+4. The rows are seeded by migration, so a fresh deployment has them, and
+   nothing needs a write on a read.
+"""
+
+from django.contrib.auth import get_user_model
+from django.test import TestCase
+from rest_framework import status
+from rest_framework.test import APIClient
+
+from apps.cms.models import SystemSetting
+from apps.cms.settings_registry import (
+    SETTING_DEFINITIONS,
+    SettingTypeError,
+    coerce,
+    default_for,
+    get_int_setting,
+    get_setting,
+)
+
+User = get_user_model()
+
+SETTINGS_URL = "/api/v1/cms/settings/"
+ABSENCE_URL = "/api/v1/cms/settings/attendance.absence_threshold/"
+
+
+class SystemSettingTestBase(TestCase):
+    """Shared setUp. Mirrors what the seed migration leaves behind."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.admin_user = User.objects.create_user(
+            email="settings_admin@test.com",
+            password="pass12345",
+            first_name="Set",
+            last_name="Tings",
+            role="admin",
+        )
+        self.faculty_user = User.objects.create_user(
+            email="settings_faculty@test.com",
+            password="pass12345",
+            first_name="Fac",
+            last_name="Ultty",
+            role="faculty",
+        )
+        self.student_user = User.objects.create_user(
+            email="settings_student@test.com",
+            password="pass12345",
+            first_name="Stu",
+            last_name="Dent",
+            role="student",
+        )
+        for key, definition in SETTING_DEFINITIONS.items():
+            SystemSetting.objects.get_or_create(
+                key=key,
+                value=str(definition["default"]),
+                description=definition["description"],
+            )
+
+
+class SystemSettingAuthTest(SystemSettingTestBase):
+    """FR-034: settings are an administrator surface."""
+
+    def test_anonymous_is_rejected(self):
+        response = self.client.get(SETTINGS_URL)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_non_admin_is_refused_on_read(self):
+        for user in (self.faculty_user, self.student_user):
+            self.client.force_authenticate(user=user)
+            response = self.client.get(SETTINGS_URL)
+            self.assertEqual(
+                response.status_code,
+                status.HTTP_403_FORBIDDEN,
+                f"{user.role} must not read system settings",
+            )
+
+    def test_non_admin_is_refused_on_write(self):
+        self.client.force_authenticate(user=self.faculty_user)
+        response = self.client.patch(
+            ABSENCE_URL, {"value": "99"}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_admin_can_read_and_write(self):
+        self.client.force_authenticate(user=self.admin_user)
+
+        listing = self.client.get(SETTINGS_URL)
+        self.assertEqual(listing.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            sorted(row["key"] for row in listing.data["results"]),
+            sorted(SETTING_DEFINITIONS),
+        )
+
+        detail = self.client.patch(ABSENCE_URL, {"value": "5"}, format="json")
+        self.assertEqual(detail.status_code, status.HTTP_200_OK)
+        self.assertEqual(detail.data["value"], "5")
+        self.assertEqual(
+            SystemSetting.objects.get(
+                key="attendance.absence_threshold"
+            ).value,
+            "5",
+        )
+        # Who saved it comes from the request, never from the payload.
+        self.assertEqual(detail.data["updated_by_email"], self.admin_user.email)
+
+
+class SystemSettingFieldLockTest(SystemSettingTestBase):
+    """`key` and `description` belong to the code, not the administrator."""
+
+    def test_key_is_not_writable(self):
+        self.client.force_authenticate(user=self.admin_user)
+        response = self.client.patch(
+            ABSENCE_URL,
+            {"key": "attendance.absence_threshold_alt", "value": "4"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["key"], "attendance.absence_threshold")
+        self.assertFalse(
+            SystemSetting.objects.filter(
+                key="attendance.absence_threshold_alt"
+            ).exists()
+        )
+
+    def test_description_is_not_writable(self):
+        self.client.force_authenticate(user=self.admin_user)
+        before = SystemSetting.objects.get(
+            key="attendance.absence_threshold"
+        ).description
+
+        response = self.client.patch(
+            ABSENCE_URL, {"description": "Relabelled.", "value": "4"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["description"], before)
+
+    def test_updated_by_is_not_writable_from_the_payload(self):
+        self.client.force_authenticate(user=self.admin_user)
+        response = self.client.patch(
+            ABSENCE_URL,
+            {"value": "4", "updated_by": str(self.faculty_user.id)},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertNotIn(
+            "updated_by",
+            response.data,
+            "the payload must not be able to name the author of a change",
+        )
+
+    def test_the_listing_uses_the_paginated_envelope(self):
+        """
+        `useSystemSettings` reads the list through `fetchAllPages`, which
+        spreads `data.results`. A bare array (pagination disabled) throws
+        there, so the page can never load - pin the envelope, not just the
+        rows.
+        """
+        self.client.force_authenticate(user=self.admin_user)
+        response = self.client.get(SETTINGS_URL)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("results", response.data)
+        self.assertEqual(
+            sorted(row["key"] for row in response.data["results"]),
+            sorted(SETTING_DEFINITIONS),
+        )
+
+    def test_the_listing_describes_each_setting_without_model_code(self):
+        self.client.force_authenticate(user=self.admin_user)
+        response = self.client.get(SETTINGS_URL)
+
+        by_key = {row["key"]: row for row in response.data["results"]}
+        row = by_key["attendance.absence_threshold"]
+        self.assertEqual(row["value_type"], "int")
+        self.assertEqual(row["default"], 3)
+        self.assertTrue(row["description"])
+
+
+class SystemSettingValueValidationTest(SystemSettingTestBase):
+    """A bad value is refused at the form, not caught at the call site."""
+
+    def test_non_integer_is_rejected_for_an_int_setting(self):
+        self.client.force_authenticate(user=self.admin_user)
+        response = self.client.patch(
+            ABSENCE_URL, {"value": "abc"}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        # The project's envelope keeps field errors in `error.details`.
+        self.assertIn("value", response.data["error"]["details"])
+
+    def test_a_rejected_value_never_reaches_the_row(self):
+        self.client.force_authenticate(user=self.admin_user)
+        self.client.patch(ABSENCE_URL, {"value": "not-a-number"},
+                          format="json")
+        self.assertEqual(
+            SystemSetting.objects.get(
+                key="attendance.absence_threshold"
+            ).value,
+            "3",
+        )
+
+    def test_a_negative_integer_is_rejected(self):
+        """A negative threshold alerts on every absence - not a threshold."""
+        self.client.force_authenticate(user=self.admin_user)
+        response = self.client.patch(
+            ABSENCE_URL, {"value": "-1"}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("value", response.data["error"]["details"])
+
+    def test_zero_stays_legal(self):
+        """Zero is coherent - "notify on every absence" - so it is allowed."""
+        self.client.force_authenticate(user=self.admin_user)
+        response = self.client.patch(
+            ABSENCE_URL, {"value": "0"}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["value"], "0")
+
+    def test_an_unregistered_key_raises_rather_than_guessing(self):
+        with self.assertRaises(SettingTypeError):
+            get_setting("not.a.setting")
+
+    def test_an_orphan_row_is_not_silently_readable_as_text(self):
+        """A row without a registry entry is a bug, not a valid value."""
+        SystemSetting.objects.create(key="orphan", value="1")
+        with self.assertRaises(SettingTypeError):
+            coerce("orphan", "1")
+
+
+class SystemSettingReadBehaviourTest(SystemSettingTestBase):
+    """The runtime reader never raises and always has a defensible answer."""
+
+    def test_missing_row_reads_as_the_registered_default(self):
+        SystemSetting.objects.filter(
+            key="attendance.absence_threshold"
+        ).delete()
+        self.assertEqual(get_int_setting("attendance.absence_threshold"), 3)
+
+    def test_stored_value_overrides_the_default(self):
+        SystemSetting.objects.filter(
+            key="attendance.absence_threshold"
+        ).update(value="8")
+        self.assertEqual(get_int_setting("attendance.absence_threshold"), 8)
+
+    def test_unparseable_value_falls_back_rather_than_raising(self):
+        """A typo in the settings page must not lose an attendance write."""
+        SystemSetting.objects.filter(
+            key="attendance.absence_threshold"
+        ).update(value="twelve")
+        self.assertEqual(get_int_setting("attendance.absence_threshold"), 3)
+
+    def test_default_for_is_the_registry(self):
+        self.assertEqual(default_for("attendance.absence_threshold"), 3)
+        with self.assertRaises(KeyError):
+            default_for("no.such.key")
+
+
+class SystemSettingSeedTest(TestCase):
+    """The rows exist from the migration onward; no endpoint writes on a read."""
+
+    def test_every_registered_setting_is_seeded_with_its_default(self):
+        for key, definition in SETTING_DEFINITIONS.items():
+            row = SystemSetting.objects.get(key=key)
+            self.assertEqual(int(row.value), definition["default"])
+            self.assertTrue(row.description)
+
+    def _seed(self):
+        """The migration's forward function, with the real app registry."""
+        import importlib
+
+        from django.apps import apps as django_apps
+
+        return lambda: importlib.import_module(
+            "apps.cms.migrations.0004_seed_system_settings"
+        ).seed_system_settings(django_apps, None)
+
+    def test_the_seed_is_idempotent(self):
+        seed = self._seed()
+
+        before = SystemSetting.objects.count()
+        seed()
+        seed()
+
+        self.assertEqual(SystemSetting.objects.count(), before)
+
+    def test_the_reverse_only_removes_seeded_rows(self):
+        import importlib
+
+        from django.apps import apps as django_apps
+
+        module = importlib.import_module(
+            "apps.cms.migrations.0004_seed_system_settings"
+        )
+
+        # A row an administrator has actually saved is not a seed.
+        saved = SystemSetting.objects.create(
+            key="saved.by.an.admin", value="keep me"
+        )
+        saved.updated_by = User.objects.create_user(
+            email="seed_saver@test.com",
+            password="pass12345",
+            first_name="Seed",
+            last_name="Saver",
+            role="admin",
+        )
+        saved.save()
+
+        module.remove_system_settings(django_apps, None)
+
+        self.assertTrue(SystemSetting.objects.filter(pk=saved.pk).exists())
+
+        self.assertTrue(SystemSetting.objects.filter(pk=saved.pk).exists())
+
+    def test_listing_does_not_insert_rows(self):
+        client = APIClient()
+        client.force_authenticate(
+            user=User.objects.create_user(
+                email="no_write_admin@test.com",
+                password="pass12345",
+                first_name="No",
+                last_name="Write",
+                role="admin",
+            )
+        )
+        SystemSetting.objects.all().delete()
+
+        client.get(SETTINGS_URL)
+
+        # A GET that inserts is a side effect waiting to surprise someone; the
+        # seed belongs to the migration.
+        self.assertEqual(SystemSetting.objects.count(), 0)

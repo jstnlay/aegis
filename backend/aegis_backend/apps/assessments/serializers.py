@@ -8,7 +8,25 @@ Role-based field access:
 
 from rest_framework import serializers
 
+from apps.chatbot.question_generator import MAX_DRAFTS
+
 from .models import Assessment, AssessmentQuestion, AssessmentResult
+
+
+class QuestionDraftSerializer(serializers.Serializer):
+    """
+    `POST /assessments/question-drafts/` body (FR-027).
+
+    `true_false` is accepted by `ChoiceField` and then refused by the generator
+    with a named error code, because "unsupported type" and "invalid type" are
+    different answers to give a counselor and only one of them explains itself.
+    """
+
+    topic = serializers.CharField(max_length=200, min_length=3)
+    question_type = serializers.ChoiceField(
+        choices=AssessmentQuestion.QuestionType.choices
+    )
+    count = serializers.IntegerField(min_value=1, max_value=MAX_DRAFTS, default=1)
 
 
 class AssessmentQuestionSerializer(serializers.ModelSerializer):

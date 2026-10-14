@@ -438,19 +438,37 @@ class ImportJobCreateApiTest(DataImportApiBase):
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_import_type_without_an_importer_never_reports_success(self):
-        # TC-ADM-05: guidance_records has no domain importer. Parsing the
-        # file must not be presented as a completed import — the rows were
-        # never stored, so they are skipped, the job fails, and no
-        # successful-import audit event is written.
+        # The honesty guarantee, driven directly at the dispatch seam. Every
+        # approved import type has a domain importer as of PH11 (including
+        # guidance_records), so the view layer can no longer produce this
+        # state; the branch is kept for the next type that ships without one.
+        # If that happens, parsing the file must not be presented as a
+        # completed import — the rows were never stored, so they are skipped,
+        # the job fails, and no successful-import audit event is written.
         from apps.audit.models import AuditLog
 
-        self._auth(self.admin_user)
-        resp = self._upload(
-            "student_id,notes\nS1,some consultation notes\n",
-            import_type="guidance_records",
+        from apps.data_import.views import ImportJobViewSet
+
+        job = ImportJob.objects.create(
+            uploaded_by=self.admin_user,
+            file="imports/no-importer.csv",
+            file_type=FileType.CSV,
+            import_type="future_type",
+            status=JobStatus.PROCESSING,
         )
-        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
-        job = ImportJob.objects.get(pk=resp.data["id"])
+        record = ImportRecord.objects.create(
+            job=job,
+            row_number=1,
+            data={"student_id": "S1"},
+            status=RecordStatus.ERROR,
+        )
+
+        ImportJobViewSet()._dispatch_domain_processing(
+            job, [record], ["student_id"]
+        )
+
+        job.refresh_from_db()
+        record.refresh_from_db()
         self.assertEqual(job.status, JobStatus.FAILED)
         self.assertEqual(job.total_rows, 1)
         self.assertEqual(job.processed_rows, 0)
@@ -458,10 +476,7 @@ class ImportJobCreateApiTest(DataImportApiBase):
         self.assertEqual(
             job.error_log[0]["code"], ImportErrorCode.UNSUPPORTED_IMPORT_TYPE
         )
-        self.assertEqual(
-            set(job.records.values_list("status", flat=True)),
-            {RecordStatus.SKIPPED},
-        )
+        self.assertEqual(record.status, RecordStatus.SKIPPED)
         self.assertFalse(
             AuditLog.objects.filter(
                 action="import", object_id=str(job.id)
@@ -3084,3 +3099,451 @@ class StudentSecurityTest(StudentImportApiTest):
         for forbidden in ("/opt/", "sqlite3", "juan@test.com", "Traceback"):
             self.assertNotIn(forbidden, record.error_message)
         self.assertFalse(User.objects.filter(email="sec1@test.com").exists())
+
+
+# ---------------------------------------------------------------------------
+# PH11 — TC-ADM-05 (FR-037): the guidance-records import now writes real
+# records instead of parsing the file and reporting that nothing was stored.
+# ---------------------------------------------------------------------------
+
+
+class GuidanceRecordsImportTest(DataImportApiBase):
+    """TC-ADM-05 — a valid guidance file is stored in the Guidance DB."""
+
+    HEAD = [
+        "student_id",
+        "session_date",
+        "session_time",
+        "session_type",
+        "concern_categories",
+        "session_notes",
+        "priority_level",
+    ]
+
+    def setUp(self):
+        from apps.accounts.models import GuidanceProfile
+
+        super().setUp()
+        self.counselor_user = User.objects.create_user(
+            email="counselor_gd@test.com",
+            password="pass12345",
+            first_name="Guide",
+            last_name="Ance",
+            role="guidance",
+        )
+        self.counselor = GuidanceProfile.objects.create(
+            user=self.counselor_user
+        )
+        student_user = User.objects.create_user(
+            email="stu_gd@test.com",
+            password="pass12345",
+            first_name="Stu",
+            last_name="Guide",
+            role="student",
+        )
+        self.student = StudentProfile.objects.create(
+            user=student_user,
+            student_id="GDU-001",
+            enrollment_date="2026-01-01",
+        )
+
+    # -- helpers ----------------------------------------------------------
+
+    def _row(self, **overrides):
+        values = {
+            "student_id": "GDU-001",
+            "session_date": "2026-09-01",
+            "session_time": "09:30",
+            "session_type": "individual_counseling",
+            "concern_categories": "academic|emotional",
+            "session_notes": "Discussed workload and study habits.",
+            "priority_level": "medium",
+        }
+        values.update(overrides)
+        return values
+
+    def _csv_body(self, rows=None, headers=None):
+        headers = headers or self.HEAD
+        rows = [self._row()] if rows is None else rows
+        return _rows_csv(
+            headers, [[row.get(col, "") for col in headers] for row in rows]
+        )
+
+    def _upload_rows(self, rows, headers=None, user=None):
+        self._auth(user or self.admin_user)
+        resp = self._upload(
+            self._csv_body(rows, headers), import_type="guidance_records"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        return ImportJob.objects.get(pk=resp.data["id"])
+
+    def _assign_counselor(self):
+        from django.utils import timezone
+
+        from apps.guidance.models import RiskAlert
+
+        return RiskAlert.objects.create(
+            student=self.student,
+            risk_level="moderate",
+            assigned_counselor=self.counselor,
+            generated_at=timezone.now(),
+        )
+
+    def _job_from(self, resp):
+        return ImportJob.objects.get(pk=resp.data["id"])
+
+    # -- success path -----------------------------------------------------
+
+    def test_valid_guidance_file_is_stored(self):
+        from apps.guidance.models import ConsultationRecord
+
+        self._assign_counselor()
+        job = self._upload_rows([self._row()])
+
+        self.assertEqual(job.status, JobStatus.COMPLETED)
+        self.assertEqual(job.total_rows, 1)
+        self.assertEqual(job.processed_rows, 1)
+        self.assertEqual(job.error_rows, 0)
+
+        record = ConsultationRecord.objects.get()
+        self.assertEqual(record.student, self.student)
+        self.assertEqual(record.counselor, self.counselor)
+        self.assertEqual(record.session_date.isoformat(), "2026-09-01")
+        self.assertEqual(record.session_time.isoformat()[:5], "09:30")
+        self.assertEqual(record.session_type, "individual_counseling")
+        self.assertEqual(
+            record.concern_categories, ["academic", "emotional"]
+        )
+        self.assertEqual(record.priority_level, "medium")
+        self.assertEqual(record.status, "ongoing")
+        self.assertIsNone(record.next_session_date)
+        self.assertIsNone(record.recommendations)
+
+        stored = job.records.get()
+        self.assertEqual(stored.status, RecordStatus.SUCCESS)
+        self.assertEqual(stored.mapped_to_model, "ConsultationRecord")
+        self.assertEqual(str(stored.mapped_to_id), str(record.pk))
+
+    def test_optional_columns_are_written_when_present(self):
+        from apps.guidance.models import ConsultationRecord
+
+        self._assign_counselor()
+        job = self._upload_rows(
+            [
+                self._row(
+                    recommendations="Refer to the reading program.",
+                    next_session_date="2026-09-15",
+                    status="follow_up",
+                )
+            ],
+            headers=self.HEAD
+            + ["recommendations", "next_session_date", "status"],
+        )
+        self.assertEqual(job.status, JobStatus.COMPLETED)
+
+        record = ConsultationRecord.objects.get()
+        self.assertEqual(
+            record.recommendations, "Refer to the reading program."
+        )
+        self.assertEqual(record.next_session_date.isoformat(), "2026-09-15")
+        self.assertEqual(record.status, "follow_up")
+
+    def test_counselor_falls_back_to_an_existing_intervention(self):
+        from apps.guidance.models import Intervention, RiskAlert
+
+        alert = RiskAlert.objects.filter(student=self.student)
+        self.assertFalse(alert.exists())
+        Intervention.objects.create(
+            student=self.student,
+            assigned_counselor=self.counselor,
+            plan_start_date="2026-08-01",
+        )
+        job = self._upload_rows([self._row()])
+        self.assertEqual(job.status, JobStatus.COMPLETED)
+
+        from apps.guidance.models import ConsultationRecord
+
+        self.assertEqual(
+            ConsultationRecord.objects.get().counselor, self.counselor
+        )
+
+    # -- attribution ------------------------------------------------------
+
+    def test_row_is_rejected_when_no_counselor_can_be_attributed(self):
+        from apps.guidance.models import ConsultationRecord
+
+        job = self._upload_rows([self._row()])
+
+        # No fabricated counselor: nothing may be stored, and the job must
+        # not report a completed import.
+        self.assertEqual(ConsultationRecord.objects.count(), 0)
+        self.assertEqual(job.processed_rows, 0)
+        self.assertIn(
+            job.status, (JobStatus.FAILED, JobStatus.PARTIAL)
+        )
+        record = job.records.get()
+        self.assertEqual(record.status, RecordStatus.ERROR)
+        self.assertEqual(
+            record.error_message,
+            "No guidance counselor can be attributed to this record. Assign "
+            "the student's counselor before importing.",
+        )
+
+    # -- row validation ---------------------------------------------------
+
+    def test_unknown_student_rejected(self):
+        job = self._upload_rows([self._row(student_id="NOPE")])
+        record = job.records.get()
+        self.assertEqual(record.status, RecordStatus.ERROR)
+        self.assertIn("No student found with student_id", record.error_message)
+
+    def test_future_session_date_rejected(self):
+        job = self._upload_rows([self._row(session_date="2099-01-01")])
+        record = job.records.get()
+        self.assertEqual(record.status, RecordStatus.ERROR)
+        self.assertEqual(
+            record.error_message, "session_date cannot be in the future."
+        )
+
+    def test_malformed_date_rejected(self):
+        job = self._upload_rows([self._row(session_date="next tuesday")])
+        record = job.records.get()
+        self.assertEqual(record.status, RecordStatus.ERROR)
+        self.assertEqual(
+            record.error_message, "Dates must use the YYYY-MM-DD format."
+        )
+
+    def test_malformed_time_rejected(self):
+        job = self._upload_rows([self._row(session_time="half past nine")])
+        record = job.records.get()
+        self.assertEqual(record.status, RecordStatus.ERROR)
+        self.assertIn("24-hour HH:MM", record.error_message)
+
+    def test_unknown_session_type_rejected(self):
+        job = self._upload_rows([self._row(session_type="chat")])
+        record = job.records.get()
+        self.assertEqual(record.status, RecordStatus.ERROR)
+        self.assertIn("session_type must be one of", record.error_message)
+
+    def test_unknown_priority_rejected(self):
+        job = self._upload_rows([self._row(priority_level="urgent")])
+        record = job.records.get()
+        self.assertEqual(record.status, RecordStatus.ERROR)
+        self.assertIn("priority_level must be one of", record.error_message)
+
+    def test_unknown_concern_category_rejected(self):
+        job = self._upload_rows(
+            [self._row(concern_categories="academic|weather")]
+        )
+        record = job.records.get()
+        self.assertEqual(record.status, RecordStatus.ERROR)
+        self.assertIn("Invalid concern category", record.error_message)
+
+    def test_empty_concern_list_rejected(self):
+        job = self._upload_rows([self._row(concern_categories="|;")])
+        record = job.records.get()
+        self.assertEqual(record.status, RecordStatus.ERROR)
+        self.assertIn(
+            "at least one valid category", record.error_message
+        )
+
+    def test_empty_session_notes_rejected(self):
+        job = self._upload_rows([self._row(session_notes="   ")])
+        record = job.records.get()
+        self.assertEqual(record.status, RecordStatus.ERROR)
+        self.assertIn("session_notes is required", record.error_message)
+
+    def test_duplicate_row_within_the_file_rejected(self):
+        from apps.guidance.models import ConsultationRecord
+
+        self._assign_counselor()
+        job = self._upload_rows([self._row(), self._row()])
+
+        self.assertEqual(ConsultationRecord.objects.count(), 1)
+        self.assertEqual(job.processed_rows, 1)
+        self.assertEqual(job.error_rows, 1)
+        self.assertEqual(job.status, JobStatus.PARTIAL)
+        failed = job.records.get(status=RecordStatus.ERROR)
+        self.assertIn("duplicates another row", failed.error_message)
+
+    def test_existing_record_rejected(self):
+        from apps.guidance.models import ConsultationRecord
+
+        self._assign_counselor()
+        self._upload_rows([self._row()])
+        job = self._upload_rows([self._row()])
+
+        self.assertEqual(ConsultationRecord.objects.count(), 1)
+        record = job.records.get()
+        self.assertEqual(record.status, RecordStatus.ERROR)
+        self.assertIn(
+            "already exists for this student", record.error_message
+        )
+
+    # -- header validation ------------------------------------------------
+
+    def test_missing_required_column_fails_every_row(self):
+        headers = [h for h in self.HEAD if h != "priority_level"]
+        self._assign_counselor()
+        job = self._upload_rows([self._row()], headers=headers)
+
+        self.assertEqual(job.status, JobStatus.FAILED)
+        self.assertEqual(job.processed_rows, 0)
+        self.assertEqual(
+            job.records.get().error_message,
+            "Missing required column(s): priority_level",
+        )
+
+    def test_client_supplied_counselor_column_rejected(self):
+        # Attribution is server-controlled, exactly like attendance's
+        # recorded_by: a client-supplied counselor would be forgery.
+        headers = self.HEAD + ["counselor"]
+        job = self._upload_rows(
+            [self._row(counselor=str(self.counselor.pk))], headers=headers
+        )
+
+        self.assertEqual(job.status, JobStatus.FAILED)
+        self.assertEqual(job.processed_rows, 0)
+        self.assertIn(
+            "Unknown column", job.records.get().error_message
+        )
+        self.assertIn(
+            "counselor", job.records.get().error_message
+        )
+
+    def test_recorded_by_column_rejected(self):
+        job = self._upload_rows(
+            [self._row(recorded_by="someone")],
+            headers=self.HEAD + ["recorded_by"],
+        )
+        self.assertEqual(job.status, JobStatus.FAILED)
+        self.assertEqual(job.processed_rows, 0)
+
+    # -- authority --------------------------------------------------------
+
+    def test_faculty_cannot_import_guidance_records(self):
+        self._auth(self.faculty_user)
+        resp = self._upload(
+            self._csv_body(),
+            import_type="guidance_records",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_guidance_role_cannot_import_guidance_records(self):
+        # The role matrix (FR-012 / FR-013) is unchanged by PH11: only an
+        # admin may submit this import type.
+        self._auth(self.counselor_user)
+        resp = self._upload(
+            self._csv_body(),
+            import_type="guidance_records",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_student_cannot_import_guidance_records(self):
+        self._auth(self.student_user)
+        resp = self._upload(
+            self._csv_body(),
+            import_type="guidance_records",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+# ---------------------------------------------------------------------------
+# PH11 — import templates: the header a tester downloads is the header the
+# importer validates, so there is no second copy of the schema to drift.
+# ---------------------------------------------------------------------------
+
+
+class ImportTemplateApiTest(DataImportApiBase):
+    """GET /api/v1/data-import/templates/{import_type}/."""
+
+    def _schema(self):
+        from apps.data_import.importers.base import (
+            ATTENDANCE_ALLOWED_COLUMNS,
+            ATTENDANCE_REQUIRED_COLUMNS,
+            GUIDANCE_ALLOWED_COLUMNS,
+            GUIDANCE_REQUIRED_COLUMNS,
+            GRADE_ALLOWED_COLUMNS,
+            GRADE_REQUIRED_COLUMNS,
+            STUDENT_ALLOWED_COLUMNS,
+            STUDENT_REQUIRED_COLUMNS,
+        )
+
+        return {
+            "grades": (GRADE_REQUIRED_COLUMNS, GRADE_ALLOWED_COLUMNS),
+            "attendance": (
+                ATTENDANCE_REQUIRED_COLUMNS,
+                ATTENDANCE_ALLOWED_COLUMNS,
+            ),
+            "students": (STUDENT_REQUIRED_COLUMNS, STUDENT_ALLOWED_COLUMNS),
+            "guidance_records": (
+                GUIDANCE_REQUIRED_COLUMNS,
+                GUIDANCE_ALLOWED_COLUMNS,
+            ),
+        }
+
+    def _get(self, import_type, user=None):
+        self._auth(user or self.admin_user)
+        return self.client.get(f"/api/v1/data-import/templates/{import_type}/")
+
+    def test_admin_gets_a_template_for_every_approved_type(self):
+        from apps.data_import.constants import ImportType
+
+        for import_type, label in ImportType.CHOICES:
+            resp = self._get(import_type)
+            self.assertEqual(resp.status_code, status.HTTP_200_OK)
+            self.assertEqual(resp.data["import_type"], import_type)
+            self.assertEqual(resp.data["label"], label)
+            names = [c["name"] for c in resp.data["columns"]]
+            # The downloadable header matches the documented columns.
+            self.assertEqual(resp.data["header"], names)
+            self.assertTrue(all(isinstance(c["required"], bool) for c in resp.data["columns"]))
+            self.assertTrue(all(c["hint"] for c in resp.data["columns"]))
+
+    def test_template_header_matches_the_importer_schema(self):
+        for import_type, (required, allowed) in self._schema().items():
+            resp = self._get(import_type)
+            header = resp.data["header"]
+            marked_required = {
+                c["name"] for c in resp.data["columns"] if c["required"]
+            }
+            self.assertEqual(set(header), set(allowed))
+            self.assertEqual(marked_required, set(required))
+            # Required columns come first so the template reads in the
+            # order the importer reports a missing column.
+            self.assertEqual(
+                header[: len(required)],
+                [c["name"] for c in resp.data["columns"] if c["required"]],
+            )
+
+    def test_template_advertises_server_controlled_columns(self):
+        resp = self._get("guidance_records")
+        self.assertEqual(
+            resp.data["forbidden_columns"], ["counselor", "recorded_by"]
+        )
+        resp = self._get("attendance")
+        self.assertEqual(resp.data["forbidden_columns"], ["recorded_by"])
+
+    def test_faculty_may_only_view_templates_they_can_upload(self):
+        for import_type in ("grades", "attendance"):
+            resp = self._get(import_type, user=self.faculty_user)
+            self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        for import_type in ("students", "guidance_records"):
+            resp = self._get(import_type, user=self.faculty_user)
+            self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_student_cannot_view_templates(self):
+        resp = self._get("grades", user=self.student_user)
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_parent_cannot_view_templates(self):
+        resp = self._get("grades", user=self.parent_user)
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_unknown_import_type_is_not_found(self):
+        resp = self._get("bogus")
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_template_requires_authentication(self):
+        resp = self.client.get("/api/v1/data-import/templates/grades/")
+        self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)

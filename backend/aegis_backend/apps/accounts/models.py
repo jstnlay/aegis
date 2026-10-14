@@ -2,6 +2,7 @@ import uuid
 
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.db.models import Q
 
 from .managers import UserManager
 from core.models import UUIDModel, TimestampedModel
@@ -155,3 +156,81 @@ class AdminProfile(TimestampedModel):
 
     def __str__(self):
         return f"{self.user.get_full_name()} ({self.get_admin_level_display()})"
+
+
+class ConsentRecordManager(models.Manager):
+    def active(self):
+        """Consents currently in force. A revoked consent stays on record."""
+        return self.filter(revoked_at__isnull=True)
+
+
+class ConsentRecord(TimestampedModel):
+    """
+    A family's permission for administrators to view a student's identifiable
+    records (NFR-010, TC-ADM-17).
+
+    NFR-010 reads *"Admins shall view student data in aggregated/anonymized
+    form unless consent is given."* This is the "unless": one row saying the
+    family of `student` permits identifiable viewing by administrators. Its
+    absence is the default, and the default is anonymous - the grades endpoint
+    withholds `student_name`/`student_id` for every student with no active row
+    here.
+
+    Two ways to grant, and the difference is provenance, not power:
+
+    * a linked parent grants in-app (`granted_by` is that parent, `note` is
+      empty), or
+    * an administrator records a signed paper form received offline
+      (`granted_by` is the administrator, `note` names the form on file).
+
+    Revocation never deletes. `revoked_at`/`revoked_by` close the row so the
+    history answers "who permitted what, when" after the fact - which is the
+    only reason a consent table is worth having over a boolean on the profile.
+
+    `created_at` is the grant time; no separate `granted_at` column, because
+    two timestamps that can never differ are one timestamp with an alias.
+    """
+
+    student = models.ForeignKey(
+        StudentProfile, on_delete=models.CASCADE, related_name="consent_records"
+    )
+    # PROTECT, not CASCADE: deleting a user must not silently erase the history
+    # of what they permitted.
+    granted_by = models.ForeignKey(
+        "accounts.User", on_delete=models.PROTECT, related_name="granted_consents"
+    )
+    note = models.TextField(
+        blank=True,
+        help_text="Provenance, e.g. the signed form on file. Required when an administrator records offline consent.",
+    )
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    revoked_by = models.ForeignKey(
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="revoked_consents",
+    )
+
+    objects = ConsentRecordManager()
+
+    class Meta:
+        verbose_name = "consent record"
+        verbose_name_plural = "consent records"
+        constraints = [
+            # Exactly one live consent per student. History rows (revoked) may
+            # accumulate freely.
+            models.UniqueConstraint(
+                fields=["student"],
+                condition=Q(revoked_at__isnull=True),
+                name="one_active_consent_per_student",
+            ),
+        ]
+
+    def __str__(self):
+        state = "active" if self.revoked_at is None else "revoked"
+        return f"Consent for {self.student} ({state})"
+
+    @property
+    def is_active(self):
+        return self.revoked_at is None

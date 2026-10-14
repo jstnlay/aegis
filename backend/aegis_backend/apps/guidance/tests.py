@@ -1692,3 +1692,173 @@ class RiskAlertWriteRestrictedTest(GuidanceTestBase):
         response = self.client.post(f"{self.url}acknowledge/")
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class GuidanceReportExportTest(GuidanceTestBase):
+    """
+    FR-032 / TC-GUI-09: the guidance report as a downloadable file.
+
+    The report endpoint predates this pass and returned JSON only. The
+    properties worth pinning here are therefore the ones a second rendering
+    can break: that the file agrees with the screen, that it is scoped the
+    same way, and that an empty section says so rather than disappearing.
+    """
+
+    def setUp(self):
+        super().setUp()
+        ConsultationRecord.objects.create(
+            student=self.student_profile,
+            counselor=self.guidance_profile,
+            session_date=self.today,
+            session_time=time(10, 0),
+            session_type="individual_counseling",
+            concern_categories=["academic"],
+            session_notes="Initial.",
+            priority_level="medium",
+        )
+        self.url = (
+            f"/api/v1/guidance/reports/student/{self.student_profile.id}/"
+        )
+
+    def _as_guidance(self):
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {self._get_token(self.guidance_user)}"
+        )
+
+    def test_csv_export_downloads_with_the_students_id_in_the_filename(self):
+        self._as_guidance()
+
+        response = self.client.get(self.url, {"file_format": "csv"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("text/csv", response["Content-Type"])
+        # The sanitizer lowercases and flattens `.` to `_`, so the school ID
+        # arrives as `stu-gr-001`. Asserting the raw form would be asserting
+        # that the filename guard is not doing its job.
+        self.assertIn("stu-gr-001", response["Content-Disposition"])
+        disposition = response["Content-Disposition"]
+        self.assertTrue(disposition.startswith("attachment;"))
+        self.assertIn('.csv"', disposition)
+        # Also carries the RFC 5987 form, so it must not be asserted to *end*
+        # with the quoted name.
+        self.assertIn("filename*=UTF-8''", disposition)
+
+    def test_xlsx_export_downloads(self):
+        self._as_guidance()
+
+        response = self.client.get(self.url, {"file_format": "xlsx"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("spreadsheetml", response["Content-Type"])
+        # The XLSX signature: a ZIP container.
+        self.assertEqual(response.content[:2], b"PK")
+
+    def test_the_file_carries_the_same_student_as_the_json(self):
+        """
+        The whole reason the rows are derived from `report_data` rather than
+        re-queried: the file and the screen cannot disagree.
+        """
+        self._as_guidance()
+
+        json_report = self.client.get(self.url).data
+        csv_body = self.client.get(
+            self.url, {"file_format": "csv"}
+        ).content.decode("utf-8-sig")
+
+        self.assertIn(json_report["student_name"], csv_body)
+        self.assertIn(json_report["student_id_code"], csv_body)
+
+    def test_the_file_carries_the_same_counts_as_the_json(self):
+        self._as_guidance()
+
+        json_report = self.client.get(self.url).data
+        csv_body = self.client.get(
+            self.url, {"file_format": "csv"}
+        ).content.decode("utf-8-sig")
+
+        self.assertEqual(json_report["consultation_summary"]["total"], 1)
+        self.assertIn("Total consultations", csv_body)
+        self.assertIn("1 positive, 1 warning, 0 incident", csv_body)
+
+    def test_an_absent_risk_history_says_so_instead_of_vanishing(self):
+        """
+        A report with no risk-alerts section looks identical to one from a
+        system that does not track them. Those mean very different things.
+
+        The shared fixture creates one alert, so the test clears it rather
+        than asserting on a state the fixture never produced.
+        """
+        RiskAlert.objects.filter(student=self.student_profile).delete()
+        self._as_guidance()
+
+        csv_body = self.client.get(
+            self.url, {"file_format": "csv"}
+        ).content.decode("utf-8-sig")
+
+        self.assertIn("No risk alerts recorded", csv_body)
+
+    def test_an_unsupported_format_is_refused(self):
+        self._as_guidance()
+
+        response = self.client.get(self.url, {"file_format": "pdf"})
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            response.data["error"]["code"], "UNSUPPORTED_FORMAT"
+        )
+
+    def test_json_stays_the_default(self):
+        """No `file_format` must not change the original contract."""
+        self._as_guidance()
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["student_id_code"], "STU-GR-001")
+        self.assertIn("behavioral_note_counts", response.data)
+
+    def test_non_guidance_roles_are_refused_the_file_too(self):
+        """Scope is the endpoint's, not a property of the representation."""
+        for user in (
+            self.student_user,
+            self.parent_user,
+            self.faculty_user,
+            self.admin_user,
+        ):
+            self.client.credentials(
+                HTTP_AUTHORIZATION=f"Bearer {self._get_token(user)}"
+            )
+            response = self.client.get(
+                self.url, {"file_format": "csv"}
+            )
+            self.assertEqual(
+                response.status_code,
+                status.HTTP_403_FORBIDDEN,
+                f"{user.role} must not export a guidance report",
+            )
+
+    def test_the_file_is_a_download(self):
+        self._as_guidance()
+
+        disposition = self.client.get(
+            self.url, {"file_format": "csv"}
+        )["Content-Disposition"]
+
+        self.assertTrue(disposition.startswith("attachment;"))
+
+    def test_every_report_section_is_represented(self):
+        """Even the empty ones - see `guidance_report_rows`."""
+        self._as_guidance()
+
+        csv_body = self.client.get(
+            self.url, {"file_format": "csv"}
+        ).content.decode("utf-8-sig")
+
+        for section in (
+            "Student",
+            "Behavioral notes",
+            "Consultations",
+            "Interventions",
+            "Risk alerts",
+        ):
+            self.assertIn(section, csv_body, f"missing section: {section}")

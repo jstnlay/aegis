@@ -603,6 +603,45 @@ class RiskScorerTest(AIEngineTestBase):
         )
         self.assertAlmostEqual(result["risk_score"], round(min(100, max(0, expected)), 2))
 
+    def test_identical_input_produces_identical_classification(self):
+        """TC-SYS-05 (NFR-007): same input in, same at-risk class out.
+
+        Two independent runs over the same labelled data must agree — the
+        estimator is seeded (`random_state=DT_RANDOM_STATE`) and the feature
+        vector is a pure function of the student's record, so no step in the
+        path is stochastic. The assertion covers the classification, the
+        score and the full probability vector, because a matching
+        `risk_level` with drifting probabilities would still be a silent
+        inconsistency.
+        """
+        from ai_engine.feature_engine import compute_student_features
+        from ai_engine.risk_scorer import predict_single, train
+
+        datasets = self.build_training_set()
+
+        # The feature vector itself is reproducible from the same record.
+        first_features = compute_student_features(
+            self.student_profile, [self.gp_q1, self.gp_q2], self.academic_year
+        )
+        second_features = compute_student_features(
+            self.student_profile, [self.gp_q1, self.gp_q2], self.academic_year
+        )
+        self.assertEqual(first_features, second_features)
+
+        first_model, first_meta = train(list(datasets))
+        second_model, second_meta = train(list(datasets))
+        self.assertIsNotNone(first_model)
+        self.assertIsNotNone(second_model)
+
+        for row in datasets:
+            first = predict_single(first_model, row, first_meta["model_version"])
+            second = predict_single(second_model, row, second_meta["model_version"])
+            self.assertEqual(first["risk_level"], second["risk_level"])
+            self.assertEqual(first["risk_score"], second["risk_score"])
+            self.assertEqual(
+                first["class_probabilities"], second["class_probabilities"]
+            )
+
 
 # ---------------------------------------------------------------------------
 # LearningItem tests

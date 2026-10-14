@@ -40,6 +40,14 @@ from .services.strapi_client import (
 )
 from .services.webhook import process_announcement_webhook
 from core.throttling import WebhookRateThrottle
+from core.permissions import IsAdminUser
+
+from .models import SystemSetting
+from .serializers import (
+    CmsAnnouncementSerializer,
+    CmsResourceSerializer,
+    SystemSettingSerializer,
+)
 
 logger = logging.getLogger("apps.cms")
 
@@ -381,3 +389,43 @@ __all__ = [
     "CmsResourceFileDownload",
     "StrapiError",
 ]
+
+
+class SystemSettingList(generics.ListAPIView):
+    """
+    Every system-wide setting, with its current value (FR-034, TC-ADM-11).
+
+    Admin-only. Non-admin callers are not shown the settings at all rather
+    than shown them without the values, because the keys themselves are a
+    map of what the system can be made to do.
+    """
+
+    serializer_class = SystemSettingSerializer
+    permission_classes = [IsAdminUser]
+
+    def get_queryset(self):
+        # The rows are seeded by the data migration, so a fresh deployment
+        # presents them without this endpoint having to write anything - a
+        # GET that inserts rows is a side effect waiting to surprise someone.
+        return SystemSetting.objects.all()
+
+
+class SystemSettingDetail(generics.RetrieveUpdateAPIView):
+    """
+    Read or update one system setting by key.
+
+    Admin-only for both. `put` is deliberately allowed alongside `patch`:
+    the only writable field is `value`, so a full replace and a partial one are
+    the same operation, and refusing `put` would be refusing nothing.
+
+    `updated_by` is taken from the request, never from the payload, so the
+    audit trail records who actually saved.
+    """
+
+    serializer_class = SystemSettingSerializer
+    permission_classes = [IsAdminUser]
+    queryset = SystemSetting.objects.all()
+    lookup_field = "key"
+
+    def perform_update(self, serializer):
+        serializer.save(updated_by=self.request.user)

@@ -311,7 +311,9 @@ def get_student_grade_summary(user, student_profile) -> dict[str, Any] | None:
 
     return {
         "student_name": student_profile.user.get_full_name(),
-        "average": round(float(avg), 2) if avg else None,
+        # `is not None`: a student whose finalized grades average 0 has an
+        # average. Truthiness reported it as "no grades to average".
+        "average": round(float(avg), 2) if avg is not None else None,
         "grade_count": grades.count(),
     }
 

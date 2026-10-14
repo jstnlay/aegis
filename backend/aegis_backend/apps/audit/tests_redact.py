@@ -465,16 +465,57 @@ class NoChangeTest(PH10_2TestBase):
 # ---------------------------------------------------------------------------
 
 class UnknownModelTest(PH10_2TestBase):
+    """
+    A model absent from ``MODEL_ALLOWLISTS`` serializes to nothing.
+
+    ``accounts.User`` used to be the example here. PH11 gave it a narrow
+    ``(role, is_active)`` entry so an administrator's account-management write
+    can be diffed (TC-ADM-10), so the unallowlisted example is now
+    ``accounts.FacultyProfile``. The property under test is unchanged — and the
+    new User entry is pinned to exactly those two fields in
+    ``AccountsUserAllowlistTest`` below.
+    """
 
     def test_unallowlisted_model_returns_empty(self):
-        data = safe_serialize_fields("accounts.User", self.faculty_user)
+        data = safe_serialize_fields(
+            "accounts.FacultyProfile", self.faculty_profile,
+        )
         self.assertEqual(data, {})
 
     def test_unallowlisted_model_changes_returns_none(self):
         changes = compute_changes(
-            "accounts.User", self.faculty_user, self.faculty_user,
+            "accounts.FacultyProfile", self.faculty_profile, self.faculty_profile,
         )
         self.assertIsNone(changes)
+
+
+class AccountsUserAllowlistTest(PH10_2TestBase):
+    """PH11: ``accounts.User`` is allowlisted, but only for role-based access."""
+
+    def test_exactly_role_and_is_active(self):
+        self.assertEqual(
+            get_allowed_fields("accounts.User"), ("role", "is_active"),
+        )
+        self.assertEqual(
+            set(safe_serialize_fields("accounts.User", self.faculty_user)),
+            {"role", "is_active"},
+        )
+
+    def test_identity_and_credential_fields_are_never_serialized(self):
+        self.faculty_user.email = "changed@example.com"
+        self.faculty_user.username = "changed"
+        self.faculty_user.first_name = "Changed"
+        self.faculty_user.last_name = "Name"
+        self.faculty_user.set_password("newpassword123")
+        self.faculty_user.is_superuser = True
+
+        data = safe_serialize_fields("accounts.User", self.faculty_user)
+
+        for forbidden in (
+            "password", "email", "username", "first_name", "last_name",
+            "is_superuser",
+        ):
+            self.assertNotIn(forbidden, data)
 
 
 # ---------------------------------------------------------------------------

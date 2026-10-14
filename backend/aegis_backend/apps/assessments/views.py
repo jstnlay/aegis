@@ -11,8 +11,13 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.views import APIView
 
 from apps.audit.access import record_object_access
+from apps.chatbot.question_generator import (
+    QuestionGenerationError,
+    generate_question_drafts,
+)
 
 from .models import Assessment, AssessmentQuestion, AssessmentResult
 from .serializers import (
@@ -21,6 +26,7 @@ from .serializers import (
     AssessmentQuestionSerializer,
     AssessmentResultSerializer,
     AssessmentResultListSerializer,
+    QuestionDraftSerializer,
 )
 from .permissions import (
     IsAssessmentCreator,
@@ -283,6 +289,53 @@ class AssessmentQuestionViewSet(viewsets.ModelViewSet):
                 "detail": "Cannot delete questions from published assessments."
             })
         instance.delete()
+
+
+# ---------------------------------------------------------------------------
+# FR-027 — AI chatbot-assisted question drafting
+# ---------------------------------------------------------------------------
+
+class QuestionDraftView(APIView):
+    """
+    Draft candidate assessment questions for a counselor. FR-027.
+
+    `POST /assessments/question-drafts/`
+
+    The chatbot's intent classifier is run over the counselor's topic to pick
+    which bank of self-report stems is drafted first (see
+    `apps.chatbot.question_generator`). Nothing is written to the database:
+    the drafts are proposals the counselor edits or discards in the form, and
+    the questions they actually add still go through
+    `POST /assessments/assessment-questions/` and `AssessmentQuestion.clean()`.
+
+    Guidance-only, because FR-027/028/029 sit in the Guidance Module and the
+    only assessments a guidance counselor creates are wellness/behavioral ones
+    (`Assessment.clean()` ties `creator_role` to `assessment_type`).
+
+    Two refusal paths are deliberate and are returned as named error codes
+    rather than as a generic 400, because they are the answers a counselor most
+    needs to understand: `true_false` is not generated (a generated true/false
+    item would assert a fact the system cannot verify), and a topic or count
+    outside the accepted range says what the range is.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if request.user.role != "guidance":
+            raise PermissionDenied(
+                {"detail": "AI question drafting is available to guidance counselors."}
+            )
+
+        serializer = QuestionDraftSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            result = generate_question_drafts(**serializer.validated_data)
+        except QuestionGenerationError as exc:
+            raise serializers.ValidationError({exc.code: exc.detail})
+
+        return Response(result, status=status.HTTP_200_OK)
 
 
 # ---------------------------------------------------------------------------

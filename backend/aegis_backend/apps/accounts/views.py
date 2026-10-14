@@ -1,4 +1,5 @@
-from rest_framework import generics, permissions
+from django.utils import timezone
+from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
@@ -9,13 +10,15 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView as _BaseTokenRefreshView,
 )
 
-from apps.audit.hooks import audit_successful_logout
+from apps.audit.hooks import audit_account_access_change, audit_successful_logout
 from core.permissions import IsAdminUser
 from core.throttling import LoginRateThrottle, TokenRefreshRateThrottle
 
-from .models import FacultyProfile, User
+from .models import ConsentRecord, FacultyProfile, User
 from .serializers import (
     AegisTokenObtainPairSerializer,
+    AdminUserUpdateSerializer,
+    ConsentRecordSerializer,
     FacultyProfileListSerializer,
     LogoutSerializer,
     PasswordChangeSerializer,
@@ -122,10 +125,59 @@ class FacultyProfileListView(generics.ListAPIView):
         )
 
 
-class UserDetailView(generics.RetrieveAPIView):
+class UserDetailView(generics.RetrieveUpdateAPIView):
+    """
+    GET/PATCH /api/v1/accounts/users/{id}/ — administrator only.
+
+    PH11 (TC-ADM-10, FR-036, NFR-011): role-based access is assignable
+    from the API instead of only through the Django admin site, which is
+    what the Cycle-2 log recorded as "Not implemented".
+
+    The one guard the write needs is self-lockout: an administrator cannot
+    change their own role or deactivate their own account. Locking yourself
+    out through this API has no self-service recovery, so the change is
+    refused rather than accepted and regretted. There is deliberately no
+    "last administrator" guard — an authenticated administrator is always
+    an active one, so acting on any *other* account can never leave AEGIS
+    without an administrator.
+
+    Every change writes one audit event carrying the acting administrator,
+    the target account and a ``role``/``is_active`` diff. Nothing else about
+    an account is writable here: only GET and PATCH are routed (PUT would
+    otherwise reach the read-oriented ``UserSerializer``), and profile fields
+    stay with the account's own ``/accounts/me/`` serializer (SEC-001).
+    """
+
     queryset = User.objects.all()
-    serializer_class = UserSerializer
     permission_classes = [IsAdminUser]
+    http_method_names = ["get", "patch", "head", "options"]
+
+    def get_serializer_class(self):
+        if self.request.method == "PATCH":
+            return AdminUserUpdateSerializer
+        return UserSerializer
+
+    def patch(self, request, *args, **kwargs):
+        target = self.get_object()
+
+        if target.pk == request.user.pk:
+            return Response(
+                {"detail": "You cannot change your own role or account status."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        write_serializer = self.get_serializer(
+            target, data=request.data, partial=True
+        )
+        write_serializer.is_valid(raise_exception=True)
+
+        before = User.objects.get(pk=target.pk)
+        updated = write_serializer.save()
+
+        if (updated.role, updated.is_active) != (before.role, before.is_active):
+            audit_account_access_change(before, updated)
+
+        return Response(UserSerializer(updated).data)
 
 
 class UserCreateView(generics.CreateAPIView):
@@ -170,3 +222,81 @@ class PasswordChangeView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response({"detail": "Password changed."})
+
+
+class ConsentListView(generics.ListCreateAPIView):
+    """
+    Family consent records (NFR-010, TC-ADM-17).
+
+    Admins list everything - oversight is the reason the table exists. Parents
+    list only their own linked children's rows; every other role has no
+    business here. Creation is the grant: a linked parent granting for their
+    own child, or an administrator recording a signed paper form (which must
+    name the form - see the serializer).
+    """
+
+    serializer_class = ConsentRecordSerializer
+    pagination_class = None
+
+    def get_permissions(self):
+        # Both actions share the same gate; the queryset below does the
+        # scoping. `getattr` because this runs before `IsAuthenticated`, and
+        # an anonymous user has no `role` to read.
+        if getattr(self.request.user, "role", None) not in ("admin", "parent"):
+            self.permission_denied(self.request)
+        return [permissions.IsAuthenticated()]
+
+    def get_queryset(self):
+        qs = ConsentRecord.objects.select_related(
+            "student__user", "granted_by"
+        ).order_by("-created_at")
+        if self.request.user.role == "admin":
+            return qs
+        return qs.filter(
+            student__parent_links__parent__user=self.request.user
+        )
+
+    def perform_create(self, serializer):
+        serializer.save()
+
+
+class ConsentRevokeView(generics.UpdateAPIView):
+    """
+    Withdraw a consent (NFR-010, TC-ADM-17).
+
+    PATCH with an empty body. Revocation closes the row - it never deletes -
+    so the history keeps answering "who permitted what, when". Only an
+    administrator or a linked parent of the student may revoke; revoking an
+    already-revoked row is a 400, not a silent no-op, because the caller asked
+    for something that is already true and should know it.
+    """
+
+    serializer_class = ConsentRecordSerializer
+    http_method_names = ["patch", "head", "options"]
+    queryset = ConsentRecord.objects.all()
+
+    def get_permissions(self):
+        if getattr(self.request.user, "role", None) not in ("admin", "parent"):
+            self.permission_denied(self.request)
+        return [permissions.IsAuthenticated()]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        if self.request.user.role == "admin":
+            return qs
+        return qs.filter(
+            student__parent_links__parent__user=self.request.user
+        )
+
+    def perform_update(self, serializer):
+        record = serializer.instance
+        if record.revoked_at is not None:
+            from rest_framework.exceptions import ValidationError
+
+            raise ValidationError(
+                "This consent was already revoked "
+                f"at {record.revoked_at.isoformat()}."
+            )
+        serializer.save(
+            revoked_at=timezone.now(), revoked_by=self.request.user
+        )

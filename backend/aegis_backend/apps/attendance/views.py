@@ -11,6 +11,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from apps.cms.settings_registry import get_int_setting
 from core.permissions import (
     IsAdminUser,
     IsAdminOrReadOnly,
@@ -28,7 +29,10 @@ from .serializers import (
 # ---------------------------------------------------------------------------
 
 # School policy: number of absences that triggers a parent notification.
-# Will be replaced by SystemSetting lookup when CMS module is built (Phase 7).
+# FR-034 / TC-ADM-11: the value lives in SystemSetting so an administrator can
+# change it without a deploy. The fallback here is the pre-FR-034 behaviour, and
+# it is only used if the registry read fails - the setting's own registered
+# default is the one that wins on a fresh deployment.
 ABSENCE_THRESHOLD = 3
 
 
@@ -264,7 +268,13 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
                 status=AttendanceRecord.Status.ABSENT,
             ).count()
 
-            if absence_count >= ABSENCE_THRESHOLD:
+            # Read at the moment of the write, not at import time: an
+            # administrator changing the threshold must take effect on the very
+            # next absence recorded, with no restart.
+            absence_threshold = get_int_setting(
+                "attendance.absence_threshold", default=ABSENCE_THRESHOLD
+            )
+            if absence_count >= absence_threshold:
                 from apps.notifications.events import dispatch_event
                 from apps.accounts.models import ParentStudentLink
 

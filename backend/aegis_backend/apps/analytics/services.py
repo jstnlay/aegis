@@ -311,7 +311,11 @@ def section_performance(section, academic_year_id=None) -> dict[str, Any]:
         "section_name": section.name,
         "grade_level": section.grade_level.name,
         "total_students": total_students,
-        "grade_average": round(float(stats["avg"]), 2) if stats["avg"] else None,
+        # `is not None`: a section averaging exactly 0 has a real average, and
+        # truthiness would report it as "no data".
+        "grade_average": (
+            round(float(stats["avg"]), 2) if stats["avg"] is not None else None
+        ),
         "total_grades": stats["count"],
     }
 
@@ -331,7 +335,9 @@ def grade_level_comparison() -> dict[str, Any]:
         results.append({
             "grade_level_id": str(gl.id),
             "grade_level_name": gl.name,
-            "average": round(float(avg), 2) if avg else None,
+            # `is not None`: a grade level whose finalized grades average 0
+            # still has an average. `if avg` reported it as missing.
+            "average": round(float(avg), 2) if avg is not None else None,
             "grade_count": grades.count(),
         })
     return {"grade_levels": results}
@@ -379,7 +385,13 @@ def school_wide_aggregates() -> dict[str, Any]:
 
     return {
         "total_students": total_students,
-        "overall_grade_average": round(float(avg_grade), 2) if avg_grade else None,
+        # `is not None`, not truthiness: a school whose finalized grades all
+        # average 0 has a real 0.00% average, and `if avg_grade` would have
+        # reported it as "no data" — the same lie `formatPercent` exists to
+        # prevent, committed one layer down where the frontend cannot catch it.
+        "overall_grade_average": (
+            round(float(avg_grade), 2) if avg_grade is not None else None
+        ),
         "grade_levels": GradeLevel.objects.count(),
     }
 

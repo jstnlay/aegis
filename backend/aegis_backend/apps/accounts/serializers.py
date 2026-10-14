@@ -1,11 +1,12 @@
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import IntegrityError
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from apps.audit.hooks import audit_successful_login
 
-from .models import FacultyProfile, User
+from .models import ConsentRecord, FacultyProfile, ParentStudentLink, User
 
 
 class AegisTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -49,6 +50,26 @@ class UserSerializer(serializers.ModelSerializer):
         )
 
 
+class AdminUserUpdateSerializer(serializers.ModelSerializer):
+    """
+    Administrator write for PATCH /api/v1/accounts/users/{id}/ (PH11).
+
+    Deliberately narrow: exactly the two fields that constitute role-based
+    access — which role the account holds (FR-036) and whether it can still
+    sign in. Everything else about an account still goes through its own
+    owner's ``/accounts/me/`` serializer, so this route cannot be used to
+    edit someone's name, contact details, or identity.
+
+    SEC-001 is untouched: it governs *self*-service writes, and
+    ``/accounts/me/`` keeps ``role`` and ``is_active`` read-only there. This
+    is a separate, administrator-gated surface.
+    """
+
+    class Meta:
+        model = User
+        fields = ("role", "is_active")
+
+
 class UserProfileSerializer(serializers.ModelSerializer):
     """
     Self-service serializer for GET/PATCH /api/v1/accounts/me/.
@@ -59,8 +80,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
     Server-controlled (read-only): the login identity (email is the
     USERNAME_FIELD, username defaults server-side) and account state
     (role, is_active). Role/status changes are administrator operations
-    performed via the Django admin site and the admin user-creation
-    endpoint, never through self-service (SEC-001 remediation).
+    performed through ``PATCH /api/v1/accounts/users/{id}/`` (PH11) or the
+    Django admin site, never through self-service (SEC-001 remediation).
     """
 
     class Meta:
@@ -172,3 +193,118 @@ class PasswordChangeSerializer(serializers.Serializer):
             user.must_change_password = False
         user.save()
         return user
+
+
+class ConsentRecordSerializer(serializers.ModelSerializer):
+    """
+    A family consent record (NFR-010, TC-ADM-17).
+
+    `student` is writable on create and read-only after: a consent is about
+    one student, and moving it to another would rewrite history. `granted_by`
+    is never in the payload - it is the request's user, so the record always
+    names who actually clicked. Revocation is a separate endpoint, not a field
+    edit, for the same reason: closing a consent is an event, not a correction.
+    """
+
+    student_name = serializers.CharField(
+        source="student.user.full_name", read_only=True
+    )
+    granted_by_email = serializers.EmailField(
+        source="granted_by.email", read_only=True
+    )
+    is_active = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = ConsentRecord
+        fields = (
+            "id",
+            "student",
+            "student_name",
+            "granted_by_email",
+            "note",
+            "is_active",
+            "revoked_at",
+            "created_at",
+        )
+        read_only_fields = (
+            "id",
+            "student_name",
+            "granted_by_email",
+            "is_active",
+            "revoked_at",
+            "created_at",
+        )
+
+    def validate_student(self, student):
+        request = self.context["request"]
+        user = request.user
+        if user.role == "admin":
+            return student
+        # A parent may only consent for a linked child. Anything else is a 400
+        # here rather than a silent empty scope, because consenting for a
+        # stranger's child is a mistake the caller should hear about.
+        linked = ParentStudentLink.objects.filter(
+            parent__user=user, student=student
+        ).exists()
+        if not linked:
+            raise serializers.ValidationError(
+                "Consent can only be granted for your own linked child."
+            )
+        return student
+
+    def validate(self, attrs):
+        request = self.context["request"]
+        # An administrator recording a paper form must say which form. Without
+        # provenance the row is an admin permitting themselves, which is the
+        # one thing this table must never be able to mean. Create-only: the
+        # revoke endpoint PATCHes with an empty body, and must not trip this.
+        if (
+            self.instance is None
+            and request.user.role == "admin"
+            and not (attrs.get("note") or "").strip()
+        ):
+            raise serializers.ValidationError(
+                {
+                    "note": (
+                        "Recording offline consent requires naming the signed "
+                        "form on file."
+                    )
+                }
+            )
+        student = attrs.get("student") or getattr(self.instance, "student", None)
+        if (
+            self.instance is None
+            and student is not None
+            and ConsentRecord.objects.active().filter(student=student).exists()
+        ):
+            raise serializers.ValidationError(
+                {
+                    "student": (
+                        "An active consent already exists for this student. "
+                        "Revoke it before recording a new one."
+                    )
+                }
+            )
+        return attrs
+
+    def create(self, validated_data):
+        from django.db import transaction
+
+        request = self.context["request"]
+        # The `validate` check above is the user-facing path; this savepoint
+        # keeps the database constraint as the backstop without poisoning the
+        # outer transaction on the (raced) duplicate.
+        try:
+            with transaction.atomic():
+                return ConsentRecord.objects.create(
+                    granted_by=request.user, **validated_data
+                )
+        except IntegrityError:
+            raise serializers.ValidationError(
+                {
+                    "student": (
+                        "An active consent already exists for this student. "
+                        "Revoke it before recording a new one."
+                    )
+                }
+            )

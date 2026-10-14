@@ -9,6 +9,7 @@ from .models import (
     FacultyProfile,
     GuidanceProfile,
     AdminProfile,
+    ConsentRecord,
 )
 
 
@@ -71,3 +72,13 @@ class GuidanceProfileAdmin(admin.ModelAdmin):
 class AdminProfileAdmin(admin.ModelAdmin):
     list_display = ("user", "admin_level")
     search_fields = ("user__email",)
+
+
+@admin.register(ConsentRecord)
+class ConsentRecordAdmin(admin.ModelAdmin):
+    """NFR-010 consent history. Revocation closes rows; nothing is deleted."""
+
+    list_display = ("student", "granted_by", "created_at", "revoked_at")
+    list_filter = ("revoked_at",)
+    search_fields = ("student__user__email", "student__student_id")
+    readonly_fields = ("created_at", "updated_at", "revoked_at", "revoked_by")

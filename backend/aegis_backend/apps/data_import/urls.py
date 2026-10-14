@@ -2,7 +2,8 @@
 Data-import URL routes.
 
 Registers the jobs router (GET/POST /api/v1/data-import/jobs/,
-GET /api/v1/data-import/jobs/{id}/) via a DefaultRouter, and the
+GET /api/v1/data-import/jobs/{id}/) via a DefaultRouter, the PH11 import-
+template guide at /api/v1/data-import/templates/{import_type}/, and the
 PH8.8 controlled-export endpoints under /api/v1/data-import/exports/.
 """
 
@@ -14,6 +15,7 @@ from .views import (
     AttendanceExportView,
     GradesExportView,
     ImportJobViewSet,
+    ImportTemplateView,
     StudentsExportView,
 )
 
@@ -24,6 +26,11 @@ app_name = "data-import"
 
 urlpatterns = [
     *router.urls,
+    path(
+        "templates/<str:import_type>/",
+        ImportTemplateView.as_view(),
+        name="import-template",
+    ),
     path(
         "exports/grades/",
         GradesExportView.as_view(),

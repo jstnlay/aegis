@@ -1650,3 +1650,543 @@ class FacultyProfileListTest(TestCase):
         response = self.client.get(self.URL)
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+# ---------------------------------------------------------------------------
+# PH11 — TC-ADM-10 (FR-036, NFR-011): role-based access is assignable from
+# the API, not only through the Django admin site.
+# ---------------------------------------------------------------------------
+
+
+class AdminAccountUpdateTest(TestCase):
+    """PATCH /api/v1/accounts/users/{id}/ — administrator account management."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = User.objects.create_user(
+            email="admupd_admin@example.com",
+            password="AdminUpdate_2026!",
+            first_name="Ad",
+            last_name="Min",
+            role="admin",
+        )
+        self.other_admin = User.objects.create_user(
+            email="admupd_other@example.com",
+            password="OtherUpdate_2026!",
+            first_name="Oth",
+            last_name="Adm",
+            role="admin",
+        )
+        self.target = User.objects.create_user(
+            email="admupd_target@example.com",
+            password="TargetUpdate_2026!",
+            first_name="Tar",
+            last_name="Get",
+            role="student",
+        )
+
+    def _url(self, user=None):
+        return f"/api/v1/accounts/users/{(user or self.target).id}/"
+
+    def _as(self, user):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {_token_for(user)}")
+
+    # -- the reported gap -------------------------------------------------
+
+    def test_admin_can_assign_a_role(self):
+        self._as(self.admin)
+        response = self.client.patch(
+            self._url(), {"role": "faculty"}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["role"], "faculty")
+        self.target.refresh_from_db()
+        self.assertEqual(self.target.role, "faculty")
+
+    def test_assigned_role_takes_effect_for_the_target_account(self):
+        """The granted access is usable, not merely stored."""
+        self._as(self.target)
+        self.assertEqual(
+            self.client.get("/api/v1/accounts/users/").status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+        self._as(self.admin)
+        self.assertEqual(
+            self.client.patch(
+                self._url(), {"role": "admin"}, format="json"
+            ).status_code,
+            status.HTTP_200_OK,
+        )
+
+        self._as(self.target)
+        self.assertEqual(
+            self.client.get("/api/v1/accounts/users/").status_code,
+            status.HTTP_200_OK,
+        )
+
+    def test_admin_can_deactivate_and_reactivate_an_account(self):
+        self._as(self.admin)
+        response = self.client.patch(
+            self._url(), {"is_active": False}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.target.refresh_from_db()
+        self.assertFalse(self.target.is_active)
+
+        # A deactivated account can no longer use its token.
+        self._as(self.target)
+        self.assertEqual(
+            self.client.get("/api/v1/accounts/users/").status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+
+        self._as(self.admin)
+        self.assertEqual(
+            self.client.patch(
+                self._url(), {"is_active": True}, format="json"
+            ).status_code,
+            status.HTTP_200_OK,
+        )
+        self.target.refresh_from_db()
+        self.assertTrue(self.target.is_active)
+
+    def test_role_and_active_state_can_change_together(self):
+        self._as(self.admin)
+        response = self.client.patch(
+            self._url(),
+            {"role": "guidance", "is_active": False},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.target.refresh_from_db()
+        self.assertEqual(self.target.role, "guidance")
+        self.assertFalse(self.target.is_active)
+
+    # -- audit ------------------------------------------------------------
+
+    def test_change_is_recorded_in_the_audit_log(self):
+        from apps.audit.models import AuditLog
+
+        self._as(self.admin)
+        self.assertEqual(
+            self.client.patch(
+                self._url(), {"role": "guidance"}, format="json"
+            ).status_code,
+            status.HTTP_200_OK,
+        )
+
+        log = AuditLog.objects.get(action="update", model_name="accounts.User")
+        self.assertEqual(log.user, self.admin)
+        self.assertEqual(log.object_id, self.target.id)
+        self.assertEqual(log.object_repr, f"User:{self.target.id}")
+        self.assertEqual(
+            log.changes,
+            {"old": {"role": "student"}, "new": {"role": "guidance"}},
+        )
+
+    def test_identity_and_credentials_never_reach_the_audit_diff(self):
+        from apps.audit.models import AuditLog
+        from apps.audit.redact import get_allowed_fields
+
+        self.assertEqual(get_allowed_fields("accounts.User"), ("role", "is_active"))
+
+        self._as(self.admin)
+        self.client.patch(self._url(), {"role": "faculty"}, format="json")
+
+        changes = AuditLog.objects.get(action="update").changes
+        flattened = set(changes["old"]) | set(changes["new"])
+        self.assertEqual(flattened, {"role"})
+        for forbidden in ("password", "email", "username", "first_name", "last_name"):
+            self.assertNotIn(forbidden, flattened)
+
+    # -- guards -----------------------------------------------------------
+
+    def test_non_admin_cannot_change_a_role(self):
+        for role in ("student", "faculty", "guidance", "parent"):
+            other = User.objects.create_user(
+                email=f"admupd_{role}@example.com",
+                password="Passw0rd_2026!",
+                first_name="No",
+                last_name="Admin",
+                role=role,
+            )
+            self._as(other)
+            response = self.client.patch(
+                self._url(), {"role": "admin"}, format="json"
+            )
+            self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+            self.target.refresh_from_db()
+            self.assertEqual(self.target.role, "student")
+
+    def test_admin_cannot_change_their_own_role(self):
+        self._as(self.admin)
+        response = self.client.patch(
+            self._url(self.admin), {"role": "student"}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.admin.refresh_from_db()
+        self.assertEqual(self.admin.role, "admin")
+
+    def test_admin_cannot_deactivate_their_own_account(self):
+        self._as(self.admin)
+        response = self.client.patch(
+            self._url(self.admin), {"is_active": False}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.admin.refresh_from_db()
+        self.assertTrue(self.admin.is_active)
+
+    def test_acting_on_another_administrator_keeps_an_active_admin(self):
+        # Deliberately no "last administrator" guard: an authenticated
+        # administrator is always an active one, so acting on any other
+        # account can never leave AEGIS without an administrator.
+        self._as(self.admin)
+        response = self.client.patch(
+            self._url(self.other_admin), {"is_active": False}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.other_admin.refresh_from_db()
+        self.assertFalse(self.other_admin.is_active)
+        self.assertTrue(
+            User.objects.filter(role="admin", is_active=True).exists()
+        )
+
+    def test_unknown_role_is_rejected(self):
+        self._as(self.admin)
+        response = self.client.patch(
+            self._url(), {"role": "superuser"}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.target.refresh_from_db()
+        self.assertEqual(self.target.role, "student")
+
+    def test_profile_fields_are_not_writable_here(self):
+        self._as(self.admin)
+        response = self.client.patch(
+            self._url(), {"first_name": "Renamed"}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.target.refresh_from_db()
+        self.assertEqual(self.target.first_name, "Tar")
+
+    def test_put_and_delete_are_not_offered(self):
+        self._as(self.admin)
+        self.assertEqual(
+            self.client.put(
+                self._url(), {"role": "faculty"}, format="json"
+            ).status_code,
+            status.HTTP_405_METHOD_NOT_ALLOWED,
+        )
+        self.assertEqual(
+            self.client.delete(self._url()).status_code,
+            status.HTTP_405_METHOD_NOT_ALLOWED,
+        )
+
+    def test_unauthenticated_request_is_rejected(self):
+        response = self.client.patch(self._url(), {"role": "faculty"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_missing_user_is_not_found(self):
+        from uuid import uuid4
+
+        self._as(self.admin)
+        response = self.client.patch(
+            f"/api/v1/accounts/users/{uuid4()}/", {"role": "faculty"}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+"""
+NFR-010 / TC-ADM-17: family consent records.
+
+NFR-010 reads "Admins shall view student data in aggregated/anonymized form
+unless consent is given." These tests pin the "unless": who may grant, what a
+grant requires, and that revocation closes the row rather than deleting it.
+"""
+
+from django.contrib.auth import get_user_model
+from django.test import TestCase
+from django.utils import timezone
+from rest_framework import status
+from rest_framework.test import APIClient
+
+from apps.accounts.models import (
+    ConsentRecord,
+    ParentProfile,
+    ParentStudentLink,
+    StudentProfile,
+)
+
+User = get_user_model()
+
+URL = "/api/v1/accounts/consents/"
+
+
+class ConsentTestBase(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = User.objects.create_user(
+            email="consent_admin@test.com", password="pass12345",
+            first_name="Ad", last_name="Min", role="admin",
+        )
+        self.parent_user = User.objects.create_user(
+            email="consent_parent@test.com", password="pass12345",
+            first_name="Par", last_name="Ent", role="parent",
+        )
+        self.other_parent_user = User.objects.create_user(
+            email="consent_other@test.com", password="pass12345",
+            first_name="Oth", last_name="Er", role="parent",
+        )
+        self.student_user = User.objects.create_user(
+            email="consent_student@test.com", password="pass12345",
+            first_name="Stu", last_name="Dent", role="student",
+        )
+        self.faculty_user = User.objects.create_user(
+            email="consent_faculty@test.com", password="pass12345",
+            first_name="Fac", last_name="Ulty", role="faculty",
+        )
+        self.student = StudentProfile.objects.create(
+            user=self.student_user, student_id="STU-CONS-1",
+            enrollment_date="2025-06-01",
+        )
+        self.parent = ParentProfile.objects.create(
+            user=self.parent_user, relationship_to_student="mother",
+        )
+        self.other_parent = ParentProfile.objects.create(
+            user=self.other_parent_user, relationship_to_student="father",
+        )
+        ParentStudentLink.objects.create(
+            parent=self.parent, student=self.student, is_primary=True,
+        )
+        # `other_parent` is deliberately NOT linked to the student.
+
+
+class ConsentPermissionTest(ConsentTestBase):
+    def test_anonymous_is_rejected(self):
+        self.assertEqual(
+            self.client.get(URL).status_code, status.HTTP_401_UNAUTHORIZED
+        )
+        self.assertEqual(
+            self.client.post(URL, {}, format="json").status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+
+    def test_faculty_and_students_are_refused(self):
+        for user in (self.faculty_user, self.student_user):
+            self.client.force_authenticate(user=user)
+            self.assertEqual(
+                self.client.get(URL).status_code,
+                status.HTTP_403_FORBIDDEN,
+                f"{user.role} must not list consents",
+            )
+            response = self.client.post(
+                URL, {"student": str(self.student.pk)}, format="json"
+            )
+            self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+            self.assertEqual(ConsentRecord.objects.count(), 0)
+
+    def test_parent_lists_only_their_own_childrens_rows(self):
+        ConsentRecord.objects.create(
+            student=self.student, granted_by=self.parent_user
+        )
+        other_student_user = User.objects.create_user(
+            email="consent_student2@test.com", password="pass12345",
+            first_name="Stu2", last_name="Dent2", role="student",
+        )
+        other_student = StudentProfile.objects.create(
+            user=other_student_user, student_id="STU-CONS-2",
+            enrollment_date="2025-06-01",
+        )
+        ConsentRecord.objects.create(
+            student=other_student, granted_by=self.admin,
+            note="Form SY2026-001 on file.",
+        )
+
+        self.client.force_authenticate(user=self.parent_user)
+        response = self.client.get(URL)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(str(response.data[0]["student"]), str(self.student.pk))
+
+
+class ConsentGrantTest(ConsentTestBase):
+    def test_parent_grants_for_their_own_child(self):
+        self.client.force_authenticate(user=self.parent_user)
+
+        response = self.client.post(
+            URL, {"student": str(self.student.pk)}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        record = ConsentRecord.objects.get(student=self.student)
+        self.assertEqual(record.granted_by, self.parent_user)
+        self.assertTrue(record.is_active)
+
+    def test_parent_cannot_grant_for_an_unlinked_child(self):
+        """Consent for a stranger's child is refused, not silently scoped."""
+        self.client.force_authenticate(user=self.other_parent_user)
+
+        response = self.client.post(
+            URL, {"student": str(self.student.pk)}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("student", response.data["error"]["details"])
+        self.assertEqual(ConsentRecord.objects.count(), 0)
+
+    def test_admin_must_name_the_form_on_file(self):
+        """Without provenance the row would be an admin permitting themselves."""
+        self.client.force_authenticate(user=self.admin)
+
+        response = self.client.post(
+            URL, {"student": str(self.student.pk)}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("note", response.data["error"]["details"])
+        self.assertEqual(ConsentRecord.objects.count(), 0)
+
+    def test_admin_records_offline_consent_with_provenance(self):
+        self.client.force_authenticate(user=self.admin)
+
+        response = self.client.post(
+            URL,
+            {
+                "student": str(self.student.pk),
+                "note": "Signed form SY2026-034 on file.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        record = ConsentRecord.objects.get(student=self.student)
+        self.assertEqual(record.granted_by, self.admin)
+        self.assertEqual(record.note, "Signed form SY2026-034 on file.")
+
+    def test_granted_by_comes_from_the_request_never_the_payload(self):
+        self.client.force_authenticate(user=self.parent_user)
+
+        response = self.client.post(
+            URL,
+            {
+                "student": str(self.student.pk),
+                "granted_by": str(self.admin.pk),
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertNotIn("granted_by", response.data)
+        self.assertEqual(
+            ConsentRecord.objects.get(student=self.student).granted_by,
+            self.parent_user,
+        )
+
+    def test_a_second_active_consent_is_refused(self):
+        ConsentRecord.objects.create(
+            student=self.student, granted_by=self.parent_user
+        )
+        self.client.force_authenticate(user=self.admin)
+
+        response = self.client.post(
+            URL,
+            {
+                "student": str(self.student.pk),
+                "note": "Second form on file.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            ConsentRecord.objects.filter(student=self.student).count(), 1
+        )
+
+
+class ConsentRevokeTest(ConsentTestBase):
+    def setUp(self):
+        super().setUp()
+        self.record = ConsentRecord.objects.create(
+            student=self.student, granted_by=self.parent_user
+        )
+        self.url = f"{URL}{self.record.pk}/revoke/"
+
+    def test_parent_revokes(self):
+        self.client.force_authenticate(user=self.parent_user)
+
+        response = self.client.patch(self.url, {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.record.refresh_from_db()
+        self.assertFalse(self.record.is_active)
+        self.assertEqual(self.record.revoked_by, self.parent_user)
+        self.assertIsNotNone(self.record.revoked_at)
+
+    def test_revocation_closes_the_row_it_does_not_delete_it(self):
+        self.client.force_authenticate(user=self.parent_user)
+        self.client.patch(self.url, {}, format="json")
+
+        self.assertTrue(
+            ConsentRecord.objects.filter(pk=self.record.pk).exists()
+        )
+
+    def test_revoking_twice_is_refused_not_silent(self):
+        self.client.force_authenticate(user=self.parent_user)
+        self.client.patch(self.url, {}, format="json")
+
+        response = self.client.patch(self.url, {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_unlinked_parent_cannot_revoke(self):
+        self.client.force_authenticate(user=self.other_parent_user)
+
+        response = self.client.patch(self.url, {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.record.refresh_from_db()
+        self.assertTrue(self.record.is_active)
+
+    def test_admin_can_revoke(self):
+        self.client.force_authenticate(user=self.admin)
+
+        response = self.client.patch(self.url, {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.record.refresh_from_db()
+        self.assertEqual(self.record.revoked_by, self.admin)
+
+    def test_a_new_consent_may_follow_a_revoked_one(self):
+        """History accumulates; only one row is ever live."""
+        self.client.force_authenticate(user=self.parent_user)
+        self.client.patch(self.url, {}, format="json")
+
+        response = self.client.post(
+            URL, {"student": str(self.student.pk)}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(
+            ConsentRecord.objects.filter(student=self.student).count(), 2
+        )
+        self.assertEqual(
+            ConsentRecord.objects.active()
+            .filter(student=self.student)
+            .count(),
+            1,
+        )
+
+    def test_delete_is_not_offered(self):
+        self.client.force_authenticate(user=self.admin)
+
+        response = self.client.delete(self.url)
+
+        self.assertEqual(
+            response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED
+        )

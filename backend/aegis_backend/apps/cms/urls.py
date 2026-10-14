@@ -8,6 +8,8 @@ from .views import (
     CmsResourceList,
     PublicCmsAnnouncementList,
     PublicCmsResourceList,
+    SystemSettingDetail,
+    SystemSettingList,
 )
 
 app_name = "cms"
@@ -42,5 +44,13 @@ urlpatterns = [
         "resources/<str:document_id>/file/",
         CmsResourceFileDownload.as_view(),
         name="cms-resource-file",
+    ),
+    # FR-034 / TC-ADM-11: runtime system-wide settings, addressed by key so a
+    # caller can never be routed to a different setting by a reordered list.
+    path("settings/", SystemSettingList.as_view(), name="system-setting-list"),
+    path(
+        "settings/<str:key>/",
+        SystemSettingDetail.as_view(),
+        name="system-setting-detail",
     ),
 ]

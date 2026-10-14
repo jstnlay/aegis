@@ -10,6 +10,7 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -1349,3 +1350,158 @@ class FacultyGradeUpdateTest(AcademicsTestBase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.grade1.refresh_from_db()
         self.assertEqual(self.grade1.score, Decimal("95.00"))
+"""
+NFR-010 / TC-ADM-17: administrators see identifiable grades only with consent.
+
+NFR-010 reads "Admins shall view student data in aggregated/anonymized form
+unless consent is given." The grades screen showed `student_name` / `student_id`
+/ score per student unconditionally. These tests pin the new default: without
+an active `ConsentRecord`, the admin list and detail withhold the student's
+identity - and with one, they read exactly as before.
+"""
+
+from decimal import Decimal
+
+from django.test import TestCase
+from rest_framework import status
+from rest_framework.test import APIClient
+
+from apps.academics.models import (
+    AcademicYear,
+    Grade,
+    GradeLevel,
+    GradingPeriod,
+    Section,
+    Subject,
+    SubjectAssignment,
+)
+from apps.academics.tests import AcademicsTestBase
+from apps.accounts.models import ConsentRecord
+
+
+class AdminGradesAnonymizationTest(AcademicsTestBase):
+    def setUp(self):
+        super().setUp()
+        # The shared fixture already holds this grade (as a draft); the
+        # anonymization tests submit it so the finalize test has a row the
+        # action will accept.
+        self.grade = self.grade1
+        self.grade.status = Grade.StatusChoices.SUBMITTED
+        self.grade.save()
+        self.list_url = "/api/v1/academics/grades/"
+        self.detail_url = f"/api/v1/academics/grades/{self.grade.pk}/"
+        self.client = APIClient()
+
+    def test_admin_list_withholds_identity_without_consent(self):
+        self.client.force_authenticate(user=self.admin_user)
+
+        response = self.client.get(self.list_url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        row = next(
+            r for r in response.data["results"] if r["id"] == str(self.grade.pk)
+        )
+        self.assertEqual(row["student_name"], "Name withheld — no family consent")
+        self.assertEqual(row["student_id"], "ID withheld — no family consent")
+        self.assertIsNone(row["student"])
+        self.assertFalse(row["family_consent_on_file"])
+
+    def test_admin_detail_withholds_identity_without_consent(self):
+        self.client.force_authenticate(user=self.admin_user)
+
+        response = self.client.get(self.detail_url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.data["student_name"], "Name withheld — no family consent"
+        )
+
+    def test_admin_sees_everything_with_an_active_consent(self):
+        ConsentRecord.objects.create(
+            student=self.student_profile, granted_by=self.parent_user
+        )
+        self.client.force_authenticate(user=self.admin_user)
+
+        response = self.client.get(self.list_url)
+
+        row = next(
+            r for r in response.data["results"] if r["id"] == str(self.grade.pk)
+        )
+        self.assertEqual(row["student_name"], "Stu dent")
+        self.assertEqual(row["student_id"], "STU-001")
+        self.assertTrue(row["family_consent_on_file"])
+
+    def test_revocation_restores_withholding(self):
+        record = ConsentRecord.objects.create(
+            student=self.student_profile, granted_by=self.parent_user
+        )
+        record.revoked_at = timezone.now()
+        record.save()
+        self.client.force_authenticate(user=self.admin_user)
+
+        response = self.client.get(self.detail_url)
+
+        self.assertEqual(
+            response.data["student_name"], "Name withheld — no family consent"
+        )
+
+    def test_consent_is_per_student_not_blanket(self):
+        """Consent for one child must not disclose another."""
+        ConsentRecord.objects.create(
+            student=self.student2_profile, granted_by=self.admin_user,
+            note="Form SY2026-001 on file.",
+        )
+        self.client.force_authenticate(user=self.admin_user)
+
+        response = self.client.get(self.list_url)
+
+        row = next(
+            r for r in response.data["results"] if r["id"] == str(self.grade.pk)
+        )
+        self.assertFalse(row["family_consent_on_file"])
+        self.assertIn("withheld", row["student_name"].lower())
+
+    def test_non_grade_fields_are_unaffected(self):
+        """Anonymized means identity, not the oversight itself."""
+        self.client.force_authenticate(user=self.admin_user)
+
+        response = self.client.get(self.detail_url)
+
+        self.assertEqual(response.data["status"], "submitted")
+        self.assertEqual(response.data["score"], "85.50")
+        self.assertTrue(response.data["subject_name"])
+
+    def test_faculty_still_see_their_own_students(self):
+        """NFR-010 names the administrator; no other role's scope changes."""
+        self.client.force_authenticate(user=self.faculty_user)
+
+        response = self.client.get(self.list_url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        row = next(
+            r for r in response.data["results"] if r["id"] == str(self.grade.pk)
+        )
+        self.assertEqual(row["student_name"], "Stu dent")
+        self.assertNotIn("family_consent_on_file", row)
+
+    def test_guidance_scope_is_untouched(self):
+        self.client.force_authenticate(user=self.guidance_user)
+
+        response = self.client.get(self.detail_url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["student_name"], "Stu dent")
+
+    def test_admin_can_still_finalize_a_withheld_row(self):
+        """
+        Oversight survives anonymization: finalizing acts on the grade id,
+        which is never withheld. An admin who cannot act without seeing a
+        name would have an incentive to bypass the boundary.
+        """
+        self.client.force_authenticate(user=self.admin_user)
+
+        response = self.client.post(f"{self.detail_url}finalize/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.grade.refresh_from_db()
+        self.assertEqual(self.grade.status, Grade.StatusChoices.FINALIZED)

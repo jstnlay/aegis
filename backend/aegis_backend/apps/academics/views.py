@@ -470,6 +470,33 @@ class GradeViewSet(viewsets.ModelViewSet):
 
     serializer_class = GradeSerializer
 
+    def get_serializer_context(self):
+        """
+        NFR-010 (TC-ADM-17): administrators read identity only with consent.
+
+        The context carries the decision, not the data: `anonymize_students`
+        is set only for the admin role, and `consented_student_ids` is the
+        single query that resolves which students have an active
+        `ConsentRecord`. The serializer withholds `student`/`student_name`/
+        `student_id` for everyone else. One extra query per request against a
+        table with at most one live row per student - cheaper than a per-row
+        lookup, and computed once however many grades the page holds.
+        """
+        context = super().get_serializer_context()
+        if getattr(self.request.user, "role", None) == "admin" and self.action in (
+            "list",
+            "retrieve",
+        ):
+            from apps.accounts.models import ConsentRecord
+
+            context["anonymize_students"] = True
+            context["consented_student_ids"] = set(
+                ConsentRecord.objects.active().values_list(
+                    "student_id", flat=True
+                )
+            )
+        return context
+
     def get_permissions(self):
         if self.action in ("encode", "batch_import"):
             return [IsFacultyUser()]

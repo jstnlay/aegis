@@ -548,8 +548,19 @@ class RawChangesNeverSupportedTest(PH10_4TestBase):
 # ---------------------------------------------------------------------------
 
 class UnknownModelTest(PH10_4TestBase):
+    """
+    A model absent from ``MODEL_ALLOWLISTS`` produces no field diff.
+
+    ``accounts.User`` used to be the example here. PH11 gave it a narrow
+    ``(role, is_active)`` entry so an administrator's account-management write
+    can be diffed (TC-ADM-10), so the unallowlisted examples below are models
+    that still have no entry. The properties under test are unchanged; the new
+    User entry is pinned in ``tests_redact.AccountsUserAllowlistTest``.
+    """
 
     def test_unknown_model_safe_record(self):
+        # An ACCESS event on a now-allowlisted model still carries no changes:
+        # PH10.2 zeroes ACCESS regardless of the allowlist.
         log = record_audit(
             action=AuditLog.Action.ACCESS,
             instance=self.faculty_user,
@@ -559,18 +570,27 @@ class UnknownModelTest(PH10_4TestBase):
         self.assertIsNone(log.changes)
 
     def test_unallowlisted_model_update_has_none_changes(self):
-        self.faculty_user.first_name = "Renamed"
+        # A real, non-trivial change to a field that is not allowlisted: the
+        # model has no entry at all, so the diff must be empty.
+        from apps.accounts.models import FacultyProfile
+
+        original = FacultyProfile.objects.get(pk=self.faculty_profile.pk)
+        self.faculty_profile.employee_id = "E-RENAMED"
         record_audit(
             action="update",
-            old_instance=self.student_user,
-            new_instance=self.faculty_user,
+            old_instance=original,
+            new_instance=self.faculty_profile,
         )
         log = AuditLog.objects.get()
         self.assertIsNone(log.changes)
 
     def test_unknown_model_no_size_leak(self):
+        # `accounts.User` is allowlisted for (role, is_active) only. Identity
+        # and credential fields are still never serialized.
+        self.faculty_user.email = "changed@example.com"
+        self.faculty_user.set_password("newpassword123")
         data = safe_serialize_fields("accounts.User", self.faculty_user)
-        self.assertEqual(data, {})
+        self.assertEqual(set(data), {"role", "is_active"})
         self.assertTrue(len(self.faculty_user.password) > 0)
 
 

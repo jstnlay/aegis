@@ -64,6 +64,10 @@ EXPORT_DOMAIN_MODELS = {
     ExportType.ATTENDANCE: "attendance.AttendanceRecord",
     ExportType.STUDENTS: "accounts.StudentProfile",
     ExportType.ADVISORY: "accounts.StudentProfile",
+    # FR-032 / TC-GUI-09: the report is an aggregate read of one student, so
+    # the audit event targets that student rather than a report model that
+    # does not exist.
+    ExportType.GUIDANCE_REPORT: "accounts.StudentProfile",
 }
 
 
@@ -239,13 +243,15 @@ class ImportJobViewSet(viewsets.ModelViewSet):
         """
         Route parsed rows to the matching domain importer.
 
-        grades / attendance / students write real records via their
-        importers.  guidance_records has no domain importer yet; for that
-        type alone the file is parsed but nothing is stored, and the job
-        says so instead of reporting a completed import.
+        grades / attendance / students / guidance_records all write real
+        records via their importers.  Should a future import type ever be
+        added without an importer, the file is parsed but nothing is
+        stored, and the job says so instead of reporting a completed
+        import.
         """
         from .importers.attendance import AttendanceImporter
         from .importers.grades import GradeImporter
+        from .importers.guidance import GuidanceRecordsImporter
         from .importers.students import StudentImporter
 
         if job.import_type == ImportType.GRADES:
@@ -257,12 +263,15 @@ class ImportJobViewSet(viewsets.ModelViewSet):
         if job.import_type == ImportType.STUDENTS:
             StudentImporter(job, records, job.uploaded_by).process(headers)
             return
+        if job.import_type == ImportType.GUIDANCE_RECORDS:
+            GuidanceRecordsImporter(job, records, job.uploaded_by).process(headers)
+            return
 
         # No domain importer for this type.  The rows parsed cleanly, but
         # nothing is written, so nothing may be reported as SUCCESS: that
-        # would let an admin conclude guidance records reached the
-        # database.  Rows are SKIPPED and the job fails with an explicit
-        # reason, which also keeps it out of the successful-import audit.
+        # would let an admin conclude the records reached the database.
+        # Rows are SKIPPED and the job fails with an explicit reason, which
+        # also keeps it out of the successful-import audit.
         skip_message = (
             "Parsed but not stored: this import type has no domain importer "
             "yet, so no records were written."
@@ -285,6 +294,70 @@ class ImportJobViewSet(viewsets.ModelViewSet):
         ]
         job.status = JobStatus.FAILED
         job.save()
+
+
+# ---------------------------------------------------------------------------
+# Import templates (PH11)
+# ---------------------------------------------------------------------------
+#
+# GET /api/v1/data-import/templates/{import_type}/
+#
+# Returns the column guide for one import type.  The client renders it and
+# generates the downloadable CSV header from it, so the file a tester
+# downloads carries exactly the header row the importer validates.  A
+# template ships headers only: an example row would have to contain an
+# invented student_id or score, which would either be written as a record
+# that never happened or fail validation and teach the wrong lesson.
+#
+# Authority mirrors job creation (admin: every type, faculty: the two they
+# may upload), so the template never advertises a file the caller cannot
+# submit.
+
+
+class ImportTemplateView(APIView):
+    """Column guide for a single import type."""
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [DataImportRateThrottle]
+
+    def get(self, request, import_type, *args, **kwargs):
+        from .importers.base import (
+            TEMPLATE_FORBIDDEN_COLUMNS,
+            template_columns,
+            template_header,
+        )
+
+        if import_type not in dict(ImportType.CHOICES):
+            return Response(
+                {"detail": "This import type is not supported."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if not self._may_use(request.user, import_type):
+            return Response(
+                {"detail": "You do not have permission to view this template."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        return Response(
+            {
+                "import_type": import_type,
+                "label": dict(ImportType.CHOICES)[import_type],
+                "columns": template_columns(import_type),
+                "header": template_header(import_type),
+                "forbidden_columns": list(TEMPLATE_FORBIDDEN_COLUMNS[import_type]),
+            }
+        )
+
+    @staticmethod
+    def _may_use(user, import_type):
+        from .constants import ALL_ADMIN_IMPORT_TYPES, ALL_FACULTY_IMPORT_TYPES
+
+        if user.role == "admin":
+            return import_type in ALL_ADMIN_IMPORT_TYPES
+        if user.role == "faculty":
+            return import_type in ALL_FACULTY_IMPORT_TYPES
+        return False
 
 
 # ---------------------------------------------------------------------------

@@ -1577,3 +1577,249 @@ class SEC008ResultImmutabilityTests(AssessmentsTestBase):
         result.save()
         result.refresh_from_db()
         self.assertIsNotNone(result.completed_at)
+
+
+# ---------------------------------------------------------------------------
+# FR-027 — AI chatbot-assisted question drafting
+# ---------------------------------------------------------------------------
+
+
+class QuestionDraftAPITests(AssessmentsTestBase):
+    """`POST /assessments/question-drafts/` (FR-027, TC-GUI-04)."""
+
+    URL = "/api/v1/assessments/question-drafts/"
+
+    def _post(self, **overrides):
+        payload = {
+            "topic": "coping with exam stress",
+            "question_type": "multiple_choice",
+            "count": 3,
+        }
+        payload.update(overrides)
+        return self.client.post(self.URL, payload, format="json")
+
+    def test_guidance_receives_the_requested_number_of_drafts(self):
+        self.client.force_authenticate(user=self.guidance_user)
+        response = self._post()
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        drafts = response.data["drafts"]
+        self.assertEqual(len(drafts), 3)
+        for draft in drafts:
+            self.assertIn("coping with exam stress", draft["question_text"])
+            # `correct_answer` is always None: these are self-report items, and
+            # `AssessmentQuestion.clean()` only enforces an answer key when one
+            # is given.
+            self.assertIsNone(draft["correct_answer"])
+
+    def test_likert_drafts_carry_the_agreement_scale(self):
+        self.client.force_authenticate(user=self.guidance_user)
+        response = self._post(question_type="likert", count=1)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        draft = response.data["drafts"][0]
+        self.assertEqual(
+            draft["options"],
+            ["Strongly disagree", "Disagree", "Neutral", "Agree", "Strongly agree"],
+        )
+
+    def test_multiple_choice_drafts_carry_the_frequency_scale(self):
+        self.client.force_authenticate(user=self.guidance_user)
+        response = self._post(question_type="multiple_choice", count=2)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        for draft in response.data["drafts"]:
+            self.assertEqual(
+                draft["options"],
+                ["Never", "Rarely", "Sometimes", "Often", "Always"],
+            )
+            # `AssessmentQuestion.clean()` requires a multiple_choice answer to
+            # name one of the options, so a generated answer key would have to
+            # be invented. Self-report frequency items have none.
+            self.assertIsNone(draft["correct_answer"])
+
+    def test_essay_drafts_have_no_options(self):
+        self.client.force_authenticate(user=self.guidance_user)
+        response = self._post(question_type="essay", count=2)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        for draft in response.data["drafts"]:
+            self.assertIsNone(draft["options"])
+
+    def test_true_false_is_refused_by_name(self):
+        """
+        A generated true/false item would assert a fact the system cannot
+        verify, so the type is refused rather than half-supported. The code is
+        named because "unsupported" and "invalid" are different answers.
+        """
+        self.client.force_authenticate(user=self.guidance_user)
+        response = self._post(question_type="true_false")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn(
+            "QUESTION_TYPE_UNSUPPORTED", response.data["error"]["details"]
+        )
+
+    def test_count_outside_the_accepted_range_is_rejected(self):
+        self.client.force_authenticate(user=self.guidance_user)
+
+        for count in (0, 21):
+            response = self._post(count=count)
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+            # The project's exception envelope keeps the field errors in
+            # `error.details`, so the field name is asserted where it lives.
+            self.assertIn("count", response.data["error"]["details"])
+
+    def test_topic_must_be_long_enough_to_mean_anything(self):
+        self.client.force_authenticate(user=self.guidance_user)
+        response = self._post(topic="x")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("topic", response.data["error"]["details"])
+
+    def test_a_large_request_never_repeats_a_stem(self):
+        """
+        Rotating past the primary bank is why `MAX_DRAFTS` is not capped at the
+        size of one bank: a counselor asking for many items should get many
+        items, not the same six twice.
+        """
+        self.client.force_authenticate(user=self.guidance_user)
+        response = self._post(count=15)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        texts = [draft["question_text"] for draft in response.data["drafts"]]
+        self.assertEqual(len(texts), 15)
+        self.assertEqual(len(set(texts)), 15)
+
+    def test_every_generatable_type_can_fill_a_maximum_request(self):
+        """
+        Every shape holds at least MAX_DRAFTS stems, so a count the serializer
+        accepts (1..20) can always be satisfied. The essay banks once held 16
+        - counts 17-20 passed validation then failed at generation, which is
+        the worst order to discover a limit in.
+        """
+        self.client.force_authenticate(user=self.guidance_user)
+        for question_type in ("multiple_choice", "likert", "essay"):
+            response = self._post(question_type=question_type, count=20)
+
+            self.assertEqual(
+                response.status_code,
+                status.HTTP_200_OK,
+                f"{question_type} must satisfy a 20-draft request",
+            )
+            self.assertEqual(len(response.data["drafts"]), 20)
+
+    def test_the_same_request_is_deterministic(self):
+        """Two identical requests return identical drafts (NFR-007, TC-SYS-05)."""
+        self.client.force_authenticate(user=self.guidance_user)
+
+        first = self._post(count=6)
+        second = self._post(count=6)
+
+        self.assertEqual(first.data, second.data)
+
+    def test_only_guidance_may_draft(self):
+        """
+        FR-027/028/029 sit in the Guidance Module. A faculty academic assessment
+        is a different document, and `Assessment.clean()` already refuses a
+        wellness assessment whose creator is not a guidance user — so letting
+        anyone else generate would only produce drafts they could never add.
+        """
+        for user in (
+            self.faculty_user,
+            self.student_user,
+            self.parent_user,
+            self.admin_user,
+        ):
+            self.client.force_authenticate(user=user)
+            response = self._post()
+            self.assertEqual(
+                response.status_code,
+                status.HTTP_403_FORBIDDEN,
+                f"{user.role} must not be able to draft questions",
+            )
+
+    def test_anonymous_is_rejected(self):
+        self.assertEqual(self._post().status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_drafting_writes_nothing(self):
+        """The endpoint proposes; it does not create. Nothing may be persisted."""
+        self.client.force_authenticate(user=self.guidance_user)
+        before = (Assessment.objects.count(), AssessmentQuestion.objects.count())
+
+        self.assertEqual(self._post(count=5).status_code, status.HTTP_200_OK)
+
+        after = (Assessment.objects.count(), AssessmentQuestion.objects.count())
+        self.assertEqual(before, after)
+
+    @patch("apps.chatbot.classifier.predict")
+    def test_a_confident_guidance_intent_selects_the_concern_bank(
+        self, mock_predict
+    ):
+        """
+        The chatbot's own classifier chooses the bank. `EXPRESS_CONCERN` maps to
+        the concern bank, whose items are help-seeking and coping.
+        """
+        from apps.chatbot.taxonomy import ChatIntent
+
+        mock_predict.return_value = (ChatIntent.EXPRESS_CONCERN, 0.91)
+        self.client.force_authenticate(user=self.guidance_user)
+        response = self._post(question_type="likert", count=1)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["family"], "concern")
+        self.assertEqual(
+            response.data["drafts"][0]["question_text"],
+            "I can talk to someone I trust about coping with exam stress.",
+        )
+
+    @patch("apps.chatbot.classifier.predict")
+    def test_an_unconfident_prediction_falls_back_to_the_general_bank(
+        self, mock_predict
+    ):
+        """
+        Below the classifier's confidence floor the model has said nothing, so
+        the general bank is used — and the confidence is passed through so the
+        caller can see how little weight the selection carried.
+        """
+        mock_predict.return_value = (None, 0.0)
+        self.client.force_authenticate(user=self.guidance_user)
+        response = self._post(question_type="likert", count=1)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["family"], "general")
+        self.assertEqual(
+            response.data["drafts"][0]["question_text"],
+            "I can say how I am feeling about coping with exam stress.",
+        )
+
+    def test_a_draft_can_be_added_as_a_real_question(self):
+        """
+        The drafts are shaped to be handed straight to the question form, so one
+        has to survive `AssessmentQuestion.clean()` — otherwise "AI-generated
+        questions included" would end at the proposal.
+        """
+        assessment = Assessment.objects.create(
+            title="Wellness check-in",
+            assessment_type=Assessment.AssessmentType.WELLNESS,
+            creator_role=Assessment.CreatorRole.GUIDANCE,
+            created_by=self.guidance_user,
+        )
+        self.client.force_authenticate(user=self.guidance_user)
+        draft = self._post(question_type="likert", count=1).data["drafts"][0]
+
+        response = self.client.post(
+            "/api/v1/assessments/assessment-questions/",
+            {
+                "assessment": str(assessment.id),
+                "question_text": draft["question_text"],
+                "question_type": "likert",
+                "order": 1,
+                "options": draft["options"],
+                "correct_answer": draft["correct_answer"],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIsNone(response.data["correct_answer"])

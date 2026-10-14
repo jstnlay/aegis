@@ -758,3 +758,190 @@ class FacultySummaryCountTest(AttendanceTestBase):
         # but only the records belonging to their visible sections.
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["total_records"], 3)
+"""
+TC-ADM-11 / FR-034: the attendance threshold is configured at runtime.
+
+The point of the feature is that changing the setting changes the very next
+alert, with no restart. These tests pin exactly that, plus the direction that
+matters most operationally - raising the threshold must stop alerts that used
+to fire, and a mistyped setting must not cost an attendance record its write.
+"""
+
+from datetime import timedelta
+
+from django.contrib.auth import get_user_model
+from django.test import TestCase
+from django.utils import timezone
+from rest_framework import status
+from rest_framework.test import APIClient
+
+from apps.attendance.models import AttendanceRecord
+from apps.attendance.tests import AttendanceTestBase
+from apps.notifications.models import Notification, NotificationType
+
+User = get_user_model()
+
+SETTINGS_URL = "/api/v1/cms/settings/"
+ABSENCE_URL = "/api/v1/cms/settings/attendance.absence_threshold/"
+ATTENDANCE_URL = "/api/v1/attendance/records/"
+
+
+def absent_count() -> int:
+    return AttendanceRecord.objects.filter(
+        status=AttendanceRecord.Status.ABSENT
+    ).count()
+
+
+def attendance_alert_count() -> int:
+    return Notification.objects.filter(
+        notification_type=NotificationType.ATTENDANCE_THRESHOLD,
+    ).count()
+
+
+class AttendanceThresholdTestBase(AttendanceTestBase):
+    def setUp(self):
+        super().setUp()
+        # Reset the setting to its registered default so a previously-run test
+        # cannot leak a saved value into this one.
+        from apps.cms.models import SystemSetting
+
+        SystemSetting.objects.filter(
+            key="attendance.absence_threshold"
+        ).update(value="3")
+
+    @staticmethod
+    def _client_for(user) -> APIClient:
+        client = APIClient()
+        client.force_authenticate(user=user)
+        return client
+
+    def _record_absence(self, client, days_ago=20):
+        """Record one absence for student_profile through the real endpoint."""
+        return client.post(
+            ATTENDANCE_URL,
+            {
+                "student": str(self.student_profile.id),
+                "section": str(self.section_a.id),
+                "date": (timezone.localdate() - timedelta(days=days_ago)).isoformat(),
+                "status": "absent",
+            },
+            format="json",
+        )
+
+
+class AttendanceThresholdChangeTest(AttendanceThresholdTestBase):
+    """An administrator's change takes effect on the next recorded absence."""
+
+    def test_the_registered_default_alerts_on_the_third_absence(self):
+        # The shared fixture already made one absence.
+        self.assertEqual(absent_count(), 1)
+        faculty = self._client_for(self.faculty_user)
+
+        self.assertEqual(
+            self._record_absence(faculty, days_ago=21).status_code,
+            status.HTTP_201_CREATED,
+        )
+        self.assertEqual(absent_count(), 2)
+        self.assertEqual(attendance_alert_count(), 0, "two absences is not three")
+
+        response = self._record_absence(faculty, days_ago=22)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        self.assertEqual(attendance_alert_count(), 1, "the third absence alerts")
+        self.assertTrue(
+            Notification.objects.filter(
+                recipient=self.parent_user,
+                notification_type=NotificationType.ATTENDANCE_THRESHOLD,
+            ).exists(),
+            "the alert goes to the parent of the absent student",
+        )
+
+    def test_raising_the_threshold_stops_an_alert_that_used_to_fire(self):
+        admin = self._client_for(self.admin_user)
+        self.assertEqual(
+            admin.patch(ABSENCE_URL, {"value": "10"}, format="json").status_code,
+            status.HTTP_200_OK,
+        )
+
+        faculty = self._client_for(self.faculty_user)
+        for days_ago in (21, 22, 23):
+            self.assertEqual(
+                self._record_absence(faculty, days_ago=days_ago).status_code,
+                status.HTTP_201_CREATED,
+            )
+
+        self.assertEqual(attendance_alert_count(), 0, "4 < 10, so no alert")
+
+    def test_lowering_the_threshold_alerts_earlier(self):
+        admin = self._client_for(self.admin_user)
+        self.assertEqual(
+            admin.patch(ABSENCE_URL, {"value": "2"}, format="json").status_code,
+            status.HTTP_200_OK,
+        )
+
+        faculty = self._client_for(self.faculty_user)
+        self.assertEqual(
+            self._record_absence(faculty, days_ago=21).status_code,
+            status.HTTP_201_CREATED,
+        )
+
+        self.assertEqual(
+            attendance_alert_count(),
+            1,
+            "the second absence reaches a threshold of 2",
+        )
+
+    def test_the_change_applies_to_an_already_open_client(self):
+        """
+        Read at the moment of the write, not cached at import time: the same
+        client that saw the old value sees the new one without a reconnect.
+        """
+        faculty = self._client_for(self.faculty_user)
+        for days_ago in (21, 22):
+            self._record_absence(faculty, days_ago=days_ago)
+        self.assertEqual(attendance_alert_count(), 1)
+
+        admin = self._client_for(self.admin_user)
+        admin.patch(ABSENCE_URL, {"value": "99"}, format="json")
+
+        self._record_absence(faculty, days_ago=23)
+        self._record_absence(faculty, days_ago=24)
+
+        self.assertEqual(
+            attendance_alert_count(),
+            1,
+            "a threshold of 99 adds no further alert",
+        )
+
+    def test_a_mistyped_setting_falls_back_to_the_registered_default(self):
+        """
+        The serializer refuses a non-integer, but if one ever reached the row,
+        writing an absence must still succeed - and must still use the default
+        of 3. A fallback to 0 would alert on the very first absence, which is
+        the opposite of what a mistyped value should cause.
+        """
+        from apps.cms.models import SystemSetting
+
+        SystemSetting.objects.filter(
+            key="attendance.absence_threshold"
+        ).update(value="not-a-number")
+
+        faculty = self._client_for(self.faculty_user)
+        self.assertEqual(
+            self._record_absence(faculty, days_ago=21).status_code,
+            status.HTTP_201_CREATED,
+        )
+        self.assertEqual(
+            attendance_alert_count(),
+            0,
+            "two absences is still below the default of three",
+        )
+
+        response = self._record_absence(faculty, days_ago=22)
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(
+            attendance_alert_count(),
+            1,
+            "the fallback is the registered default of 3, not 0",
+        )

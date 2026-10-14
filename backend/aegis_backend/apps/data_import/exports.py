@@ -89,11 +89,17 @@ ADVISORY_EXPORT_COLUMNS = [
     "grade_average",
 ]
 
+# FR-032 / TC-GUI-09: the guidance report file. One row per reported fact,
+# grouped by section, so the export reads as the same document the JSON
+# endpoint describes rather than as a table dump of one model.
+GUIDANCE_REPORT_COLUMNS = ["section", "item", "detail", "date"]
+
 _COLUMN_MAP = {
     ExportType.GRADES: GRADE_EXPORT_COLUMNS,
     ExportType.ATTENDANCE: ATTENDANCE_EXPORT_COLUMNS,
     ExportType.STUDENTS: STUDENT_EXPORT_COLUMNS,
     ExportType.ADVISORY: ADVISORY_EXPORT_COLUMNS,
+    ExportType.GUIDANCE_REPORT: GUIDANCE_REPORT_COLUMNS,
 }
 
 

@@ -15,7 +15,7 @@ outcome.  All outward error messages are hand-picked and never contain
 SQL, tracebacks, filesystem paths, or internal object reprs.
 """
 
-from ..constants import ImportErrorCode, JobStatus, RecordStatus
+from ..constants import ImportErrorCode, ImportType, JobStatus, RecordStatus
 
 
 class RowError(Exception):
@@ -93,6 +93,129 @@ STUDENT_FORBIDDEN_PASSWORD_COLUMNS = frozenset(
 STUDENT_FORBIDDEN_COLUMNS = frozenset({"role"})
 
 STUDENT_ALLOWED_COLUMNS = frozenset(STUDENT_REQUIRED_COLUMNS + STUDENT_OPTIONAL_COLUMNS)
+
+# ---------------------------------------------------------------------------
+# PH11 — Guidance-records import schema.
+#
+# The file carries counseling session records only.  Attribution is
+# server-controlled exactly like attendance's ``recorded_by``: a client-
+# supplied counselor column would let an upload forge who ran a session.
+# ``session_notes`` is required because an empty consultation record has no
+# content to import.
+# ---------------------------------------------------------------------------
+
+#: Required columns for guidance-records imports.
+GUIDANCE_REQUIRED_COLUMNS = (
+    "student_id",
+    "session_date",
+    "session_time",
+    "session_type",
+    "concern_categories",
+    "session_notes",
+    "priority_level",
+)
+
+#: Optional columns for guidance-records imports.
+GUIDANCE_OPTIONAL_COLUMNS = (
+    "recommendations",
+    "next_session_date",
+    "status",
+)
+
+#: Attribution is server-controlled (same rule as attendance's recorded_by).
+GUIDANCE_FORBIDDEN_COLUMNS = ("counselor", "recorded_by")
+
+GUIDANCE_ALLOWED_COLUMNS = frozenset(
+    GUIDANCE_REQUIRED_COLUMNS + GUIDANCE_OPTIONAL_COLUMNS
+)
+
+
+# ---------------------------------------------------------------------------
+# Import templates (PH11)
+#
+# Served by GET /data-import/templates/{import_type}/.  The UI renders this
+# table and generates the downloadable CSV header from it, so the file a
+# tester downloads is validated against exactly the schema the importer
+# enforces — there is no second copy of the header row to drift.
+#
+# A template ships headers only.  It deliberately contains no example row:
+# an invented student_id or score would either be written to the database as
+# a record that never happened, or fail validation and teach the tester the
+# wrong thing.  The tester supplies real values.
+# ---------------------------------------------------------------------------
+
+#: column name -> (required?, hint shown to the tester).
+_TEMPLATES: dict[str, dict[str, tuple[bool, str]]] = {
+    ImportType.GRADES: {
+        "student_id": (True, "Student's school code, as shown in the Students export."),
+        "subject_assignment": (True, "Subject assignment UUID."),
+        "grading_period": (True, "Grading period UUID."),
+        "score": (True, "Numeric score from 0 to 100."),
+        "letter_grade": (False, "Optional letter grade."),
+        "remarks": (False, "Optional remarks."),
+    },
+    ImportType.ATTENDANCE: {
+        "student_id": (True, "Student's school code, as shown in the Students export."),
+        "section": (True, "Section UUID."),
+        "date": (True, "Attendance date, YYYY-MM-DD. Cannot be in the future."),
+        "status": (True, "One of: present, late, absent."),
+    },
+    ImportType.STUDENTS: {
+        "student_id": (True, "Unique student school code."),
+        "first_name": (True, "Student's first name."),
+        "last_name": (True, "Student's last name."),
+        "email": (True, "Unique email address. Duplicates are rejected."),
+        "grade_level": (True, "Grade level, e.g. 7."),
+        "section": (True, "Section UUID."),
+        "academic_year": (False, "Academic year label, e.g. 2026-2027."),
+        "date_of_birth": (False, "YYYY-MM-DD."),
+        "guardian_contact": (False, "Guardian contact number."),
+        "enrollment_date": (False, "YYYY-MM-DD."),
+    },
+    ImportType.GUIDANCE_RECORDS: {
+        "student_id": (True, "Student's school code, as shown in the Students export."),
+        "session_date": (True, "Session date, YYYY-MM-DD. Cannot be in the future."),
+        "session_time": (True, "Session time, 24-hour HH:MM."),
+        "session_type": (
+            True,
+            "One of: individual_counseling, group, parent_conference, follow_up.",
+        ),
+        "concern_categories": (
+            True,
+            "Pipe-separated categories: academic|behavioral|emotional|family|bullying|other.",
+        ),
+        "session_notes": (True, "Session notes. Cannot be empty."),
+        "priority_level": (True, "One of: high, medium, low."),
+        "recommendations": (False, "Optional recommendations."),
+        "next_session_date": (False, "Optional next session date, YYYY-MM-DD."),
+        "status": (False, "One of: ongoing, completed, follow_up. Defaults to ongoing."),
+    },
+}
+
+#: Server-controlled columns that are never accepted in an uploaded file.
+TEMPLATE_FORBIDDEN_COLUMNS: dict[str, tuple[str, ...]] = {
+    ImportType.GRADES: (),
+    ImportType.ATTENDANCE: ATTENDANCE_FORBIDDEN_COLUMNS,
+    ImportType.STUDENTS: tuple(
+        sorted(STUDENT_FORBIDDEN_COLUMNS | STUDENT_FORBIDDEN_PASSWORD_COLUMNS)
+    ),
+    ImportType.GUIDANCE_RECORDS: GUIDANCE_FORBIDDEN_COLUMNS,
+}
+
+
+def template_columns(import_type):
+    """Return the ordered ``[{"name", "required", "hint"}, ...]`` template."""
+    return [
+        {"name": name, "required": required, "hint": hint}
+        for name, (required, hint) in _TEMPLATES[import_type].items()
+    ]
+
+
+def template_header(import_type):
+    """Return the exact header row the downloadable CSV starts with."""
+    return [name for name, (required, _) in _TEMPLATES[import_type].items() if required] + [
+        name for name, (required, _) in _TEMPLATES[import_type].items() if not required
+    ]
 
 
 def validate_headers(headers, *, required, allowed=None, forbidden=()):

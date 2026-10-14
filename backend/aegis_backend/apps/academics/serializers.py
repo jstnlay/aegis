@@ -268,6 +268,37 @@ class GradeSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Score must be between 0 and 100.")
         return value
 
+    def to_representation(self, instance):
+        """
+        Withhold the student's identity from administrators without family
+        consent (NFR-010, TC-ADM-17).
+
+        The view sets `anonymize_students` only for the admin role, and
+        `consented_student_ids` to the students with an active `ConsentRecord`.
+        Every other role reads through this untouched - a faculty member's own
+        subjects, a student's own rows and a parent's linked children are each
+        that role's own scope, not the administrator's oversight, and NFR-010
+        names only the administrator.
+        """
+        data = super().to_representation(instance)
+        if not self.context.get("anonymize_students"):
+            return data
+        consented = self.context.get("consented_student_ids") or set()
+        if instance.student_id in consented:
+            data["family_consent_on_file"] = True
+            return data
+        # `student` (the profile UUID) is withheld with the name and the
+        # school ID. Left in place it would be a stable pseudonym, resolvable
+        # to a name in one call to the profile endpoint - which would make
+        # this redaction a label rather than a boundary. Nothing on the admin
+        # screen reads it (finalize acts on the grade id), so withholding it
+        # costs that screen nothing.
+        data["student"] = None
+        data["student_name"] = "Name withheld — no family consent"
+        data["student_id"] = "ID withheld — no family consent"
+        data["family_consent_on_file"] = False
+        return data
+
     def validate(self, data):
         score = data.get("score", getattr(self.instance, "score", None))
         status_val = data.get("status", getattr(self.instance, "status", None))
