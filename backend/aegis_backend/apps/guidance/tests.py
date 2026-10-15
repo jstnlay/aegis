@@ -416,13 +416,17 @@ class BehavioralNoteCreateTest(GuidanceTestBase):
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        # Check notifications dispatched to guidance users
+        # Check notifications dispatched to guidance users and the parent
+        # linked to this student (TC-PAR-06: the parent audience is the
+        # one FR-026 is about, so a warning that only reaches the office
+        # is a warning the family never hears about).
         notifs = Notification.objects.filter(
             notification_type="BEHAVIORAL_WARNING"
         )
-        self.assertEqual(notifs.count(), 2)  # both guidance users
+        self.assertEqual(notifs.count(), 3)  # 2 guidance users + 1 linked parent
         self.assertIn(self.guidance_user.id, notifs.values_list("recipient", flat=True))
         self.assertIn(self.guidance2_user.id, notifs.values_list("recipient", flat=True))
+        self.assertIn(self.parent_user.id, notifs.values_list("recipient", flat=True))
 
     def test_faculty_creates_incident_note_dispatches_notification(self):
         response = self.client.post(
@@ -439,7 +443,7 @@ class BehavioralNoteCreateTest(GuidanceTestBase):
         notifs = Notification.objects.filter(
             notification_type="BEHAVIORAL_INCIDENT"
         )
-        self.assertEqual(notifs.count(), 2)  # both guidance users
+        self.assertEqual(notifs.count(), 3)  # 2 guidance users + 1 linked parent
 
     def test_positive_note_no_notification(self):
         response = self.client.post(

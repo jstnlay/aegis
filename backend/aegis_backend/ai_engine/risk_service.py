@@ -249,6 +249,8 @@ def integrate_risk_result(
                     f"Model version: {model_version}."
                 ),
                 link="/guidance/risk-alerts",
+                # `dedup_key` is a one-element tuple, so this is the string,
+                # not its first character.
                 deduplication_key=dedup_key[0],
             )
             notified = True

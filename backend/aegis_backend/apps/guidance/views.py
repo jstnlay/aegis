@@ -279,7 +279,11 @@ class BehavioralNoteViewSet(viewsets.ModelViewSet):
                 if note.note_type == "warning"
                 else "BEHAVIORAL_INCIDENT"
             )
-            recipients = _get_all_guidance_users()
+            # Guidance staff own the follow-up; the linked parents are the
+            # audience FR-026/TC-PAR-06 is about. Without them the parent
+            # support page shows the note but nobody is ever told it exists.
+            recipients = set(_get_all_guidance_users())
+            recipients.update(_get_linked_parent_users(student))
 
             dispatch_event(
                 event_type,
