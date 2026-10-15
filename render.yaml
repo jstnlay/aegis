@@ -9,6 +9,11 @@
 #     Frontend (Cloudflare Pages / Vercel later)
 #         -> Render Django (this service)
 #             -> Supabase PostgreSQL (external, region ap-southeast-1)
+#             -> Render Strapi (aegis-cms)   -> Supabase PostgreSQL (aegis_cms_db)
+#
+#     Strapi is the CMS: content is authored in its admin panel and AEGIS
+#     reads it server-side through /api/v1/cms/. No browser talks to Strapi
+#     directly, which is why the CORS allowlist stays empty.
 #
 # rootDir is backend/aegis_backend because manage.py lives there and because
 # the start command imports `config.wsgi` as a top-level module.
@@ -42,7 +47,7 @@
 
 services:
   - type: web
-    name: aegis-backend
+    name: aegis
     runtime: python
     plan: free
     region: singapore
@@ -96,7 +101,106 @@ services:
       - key: CORS_ALLOWED_ORIGINS
         value: http://localhost:5173,http://localhost:3000
 
+      # Strapi CMS (Phase 7). Declared so the required variable set is
+      # discoverable, but never given a value in this repository. The
+      # deployed Django service must know where Strapi lives, which token
+      # talks to it, and which secret verifies Strapi's webhook.
+      - key: STRAPI_BASE_URL
+        sync: false
+      - key: STRAPI_API_TOKEN
+        sync: false
+      - key: STRAPI_WEBHOOK_SECRET
+        sync: false
+
       - key: JWT_ACCESS_LIFETIME_MINUTES
         value: "30"
       - key: JWT_REFRESH_LIFETIME_DAYS
         value: "7"
+
+  # Strapi 5 CMS service (Phase 7). Content authoring happens in the Strapi
+  # admin panel; AEGIS only ever reads it (see cms/config/middlewares.ts):
+  # the flow is Browser -> Django -> Strapi, so no browser origin needs CORS
+  # and STRAPI_CORS_ORIGINS stays empty (fail-closed in production).
+  #
+  # rootDir is cms: package.json and strapi.config files live there.
+  #
+  # Build order matters: install, build the admin panel, start. `strapi start`
+  # reads PORT from the environment, which Render sets per deploy, so no PORT
+  # variable is declared here. HOST must be 0.0.0.0 or the process binds
+  # localhost inside the container and Render's health check never passes
+  # (see cms/config/server.ts, where localhost is only a local-dev default).
+  #
+  # No persistent disk on the free plan: uploaded media (Resource files) is
+  # lost on every redeploy. Uploaded documents are a known ceiling here; a
+  # `disk` block or an external upload provider is the upgrade.
+  - type: web
+    name: aegis-cms
+    runtime: node
+    plan: free
+    region: singapore
+    branch: master
+    rootDir: cms
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # 0.0.0.0 is required on Render; localhost is the local-dev default.
+      - key: HOST
+        value: 0.0.0.0
+
+      # Strapi 5 refuses to boot unless every one of these is set
+      # (cms/config/admin.ts uses env(...) with no fallback). Use distinct
+      # generated values: APP_KEYS is comma-separated.
+      - key: APP_KEYS
+        sync: false
+      - key: API_TOKEN_SALT
+        sync: false
+      - key: ADMIN_JWT_SECRET
+        sync: false
+      - key: TRANSFER_TOKEN_SALT
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+
+      # Supabase PostgreSQL (Singapore), same host as the Django database.
+      # The dedicated role/database are created by
+      # backend/scripts/provision_cms_database.py. The connection points at
+      # the pooler host, so DATABASE_PORT stays 5432 (the direct host port
+      # 6543 is pooler-only and is not what this project uses).
+      - key: DATABASE_CLIENT
+        value: postgres
+      - key: DATABASE_HOST
+        value: aws-0-ap-southeast-1.pooler.supabase.com
+      - key: DATABASE_PORT
+        value: "5432"
+      - key: DATABASE_NAME
+        value: aegis_cms_db
+      - key: DATABASE_USERNAME
+        value: aegis_cms
+      - key: DATABASE_PASSWORD
+        sync: false
+      # Supabase requires TLS. The certificate chain is Supabase's own for
+      # direct connections; if the pooled connection is refused for trust
+      # reasons, set DATABASE_SSL_REJECT_UNAUTHORIZED=false (a documented
+      # corner cut, not a default).
+      - key: DATABASE_SSL
+        value: "true"
+
+      # Outbound webhook to the Django backend. Both services must carry the
+      # same shared secret (server.ts adds it to every outbound header;
+      # Django verifies it in constant time).
+      - key: AEGIS_WEBHOOK_SECRET
+        sync: false
+      - key: AEGIS_WEBHOOK_URL
+        sync: false
+
+      # Read-only token the Django backend presents to Strapi. Created by the
+      # cms/src/index.ts bootstrap ("AEGIS Backend", custom scope, unlimited).
+      - key: STRAPI_API_TOKEN
+        sync: false
+
+        

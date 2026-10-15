@@ -4,6 +4,12 @@ import path from 'node:path';
 const AEGIS_WEBHOOK_NAME = 'AEGIS Django';
 const AEGIS_API_TOKEN_NAME = 'AEGIS Backend';
 /**
+ * Operator-provided token from the service environment. On Render the
+ * runtime filesystem is ephemeral, so a token written into cms/.env does
+ * not survive a redeploy; the durable copy must live in the env vars.
+ */
+const ENV_API_TOKEN = process.env.STRAPI_API_TOKEN || '';
+/**
  * Minimal read scope the Django backend needs for server-to-server CMS
  * access. These actions are intentionally NOT granted to the Strapi
  * public role: anonymous clients must go through Django's /api/v1/cms/
@@ -81,6 +87,11 @@ async function ensureApiToken(strapi: any) {
     .findOne({ where: { name: AEGIS_API_TOKEN_NAME } });
   if (existing) {
     strapi.log.info('[aegis] API token "AEGIS Backend" already exists.');
+    if (!ENV_API_TOKEN) {
+      strapi.log.warn(
+        '[aegis] Set the STRAPI_API_TOKEN service env var to this token: on Render, cms/.env does not survive a redeploy, so Django loses access on the next deploy.'
+      );
+    }
     if (existing.type !== 'custom') {
       await strapi.service('admin::api-token').update(existing.id, {
         type: 'custom',
@@ -101,6 +112,15 @@ async function ensureApiToken(strapi: any) {
   });
   if (token?.accessKey) {
     upsertEnvFile('STRAPI_API_TOKEN', token.accessKey);
+    // shortcut: the raw key is logged once, at creation, because Render's
+    // runtime filesystem is ephemeral and cms/.env is lost on the next
+    // redeploy — without this line the operator cannot copy the token into
+    // the service env vars. Upgrade: delete both lines once
+    // STRAPI_API_TOKEN is confirmed set in the Render env vars.
+    strapi.log.warn(`[aegis] STRAPI_API_TOKEN=${token.accessKey}`);
+    strapi.log.warn(
+      '[aegis] Copy this token into the STRAPI_API_TOKEN env var of the Strapi and Django Render services.'
+    );
     strapi.log.info('[aegis] Created API token "AEGIS Backend" and stored it in cms/.env.');
   } else {
     strapi.log.warn(
@@ -113,6 +133,11 @@ async function ensureWebhook(strapi: any) {
   const url =
     process.env.AEGIS_WEBHOOK_URL || 'http://localhost:8000/webhooks/strapi/announcements/';
   const secret = process.env.AEGIS_WEBHOOK_SECRET || '';
+  if (!secret) {
+    strapi.log.warn(
+      '[aegis] AEGIS_WEBHOOK_SECRET is not set: the Django webhook receiver rejects every event with a 500.'
+    );
+  }
   const existing = await strapi.db
     .query('strapi::webhook')
     .findMany({ where: { name: AEGIS_WEBHOOK_NAME } });
