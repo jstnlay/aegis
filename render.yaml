@@ -131,8 +131,10 @@ services:
   # (see cms/config/server.ts, where localhost is only a local-dev default).
   #
   # No persistent disk on the free plan: uploaded media (Resource files) is
-  # lost on every redeploy. Uploaded documents are a known ceiling here; a
-  # `disk` block or an external upload provider is the upgrade.
+  # lost on every redeploy unless the optional Supabase Storage provider is
+  # configured (SUPABASE_S3_* below); the AEGIS flow works either way. A
+  # Strapi instance sleeping on the free tier can also take ~50s to answer
+  # the first request after being idle.
   - type: web
     name: aegis-cms
     runtime: node
@@ -189,7 +191,6 @@ services:
       # corner cut, not a default).
       - key: DATABASE_SSL
         value: "true"
-
       # Outbound webhook to the Django backend. Both services must carry the
       # same shared secret (server.ts adds it to every outbound header;
       # Django verifies it in constant time).
@@ -203,4 +204,25 @@ services:
       - key: STRAPI_API_TOKEN
         sync: false
 
-        
+      # Supabase Storage (S3-compatible) for uploads. Optional by design:
+      # cms/config/plugins.ts only switches the upload provider to aws-s3
+      # when ENDPOINT, BUCKET, ACCESS_KEY and SECRET_KEY are all set,
+      # otherwise it silently keeps the local filesystem provider. Setting
+      # these on a deployment that already holds local files is therefore
+      # additive: existing local media keeps its /uploads URLs, and only new
+      # uploads are written to the bucket. When unset, new uploads still
+      # behave as before (ephemeral disk).
+      #
+      # Endpoint: https://<supabase-project-ref>.supabase.co/storage/v1/s3
+      # Bucket must already exist (public) before uploads are attempted.
+      - key: SUPABASE_S3_ENDPOINT
+        sync: false
+      - key: SUPABASE_S3_BUCKET
+        sync: false
+      - key: SUPABASE_S3_REGION
+        sync: false
+      - key: SUPABASE_S3_ACCESS_KEY
+        sync: false
+      - key: SUPABASE_S3_SECRET_KEY
+        sync: false
+
