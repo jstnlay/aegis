@@ -130,8 +130,10 @@ async function ensureApiToken(strapi: any) {
 }
 
 async function ensureWebhook(strapi: any) {
-  const url =
-    process.env.AEGIS_WEBHOOK_URL || 'http://localhost:8000/webhooks/strapi/announcements/';
+  // The deploy environment is the source of truth for the URL when set;
+  // the localhost value is only a local-dev default for first creation.
+  const configuredUrl = process.env.AEGIS_WEBHOOK_URL || '';
+  const url = configuredUrl || 'http://localhost:8000/webhooks/strapi/announcements/';
   const secret = process.env.AEGIS_WEBHOOK_SECRET || '';
   if (!secret) {
     strapi.log.warn(
@@ -142,7 +144,25 @@ async function ensureWebhook(strapi: any) {
     .query('strapi::webhook')
     .findMany({ where: { name: AEGIS_WEBHOOK_NAME } });
   if (existing.length > 0) {
-    strapi.log.info('[aegis] Webhook "AEGIS Django" already exists.');
+    // A webhook created by hand, or by an earlier deploy, would otherwise
+    // keep a stale URL (or stay disabled) forever: this function used to
+    // return here without comparing anything.
+    const current = existing[0];
+    if (
+      configuredUrl &&
+      (current.url !== configuredUrl ||
+        current.enabled !== true ||
+        !Array.isArray(current.events) ||
+        !current.events.includes('entry.publish'))
+    ) {
+      await strapi.db.query('strapi::webhook').update({
+        where: { id: current.id },
+        data: { url: configuredUrl, events: ['entry.publish'], enabled: true },
+      });
+      strapi.log.info(`[aegis] Updated webhook "${AEGIS_WEBHOOK_NAME}" -> ${configuredUrl}`);
+    } else {
+      strapi.log.info('[aegis] Webhook "AEGIS Django" already exists.');
+    }
     return;
   }
   await strapi.db.query('strapi::webhook').create({

@@ -3,42 +3,34 @@
 Filed during the Cycle-2 CMS retest. Both issues need the Render dashboard
 and are not fixable from the repository.
 
-## 1. AEGIS CMS screens return 502 (announcements and resources)
+## 1. AEGIS CMS screens returned 502 (announcements and resources) — FIXED 2026-10-17
 
-Evidence, measured from outside the deployment:
+Cause: `STRAPI_BASE_URL` was unset on the `aegis` service, so
+`StrapiClient` fell back to `http://localhost:1337`
+(`backend/aegis_backend/config/settings/base.py:252`) and every CMS read
+raised `StrapiUnavailableError` -> 502.
+
+Fix applied in the Render dashboard: `STRAPI_BASE_URL`,
+`STRAPI_API_TOKEN`, `STRAPI_WEBHOOK_SECRET` set on `aegis`, redeployed.
+
+Verified 2026-10-17 from outside the deployment:
 
     curl https://aegis-0pav.onrender.com/api/v1/cms/announcements/public/
-    -> {"detail":"Content service is temporarily unavailable."}
-    HTTP 502, 0.26s
+    -> 200 in 0.69s, {"count":2,"results":[{"document_id":"kjihhwtb..."}...]}
 
-    curl -g https://aegis-cms.onrender.com/api/announcements?pagination[pageSize]=1
-    -> 403   (0.25s, anonymous blocked by design)
-    curl https://aegis-cms.onrender.com/admin
-    -> 200   (Strapi itself is up and answering)
+The Strapi admin (`https://aegis-cms.onrender.com/admin`) answers 200.
+The webhook receiver is armed: a POST without the secret header returns
+`401 Invalid webhook authentication.` (an unset secret would return 503).
 
-Diagnosis: Strapi is healthy. The Django service is refusing in a quarter
-second, which is the signature of an unreachable base URL rather than a
-slow upstream — `STRAPI_BASE_URL` is still unset on the `aegis` service, so
-`StrapiClient` falls back to `http://localhost:1337`
-(`backend/aegis_backend/config/settings/base.py:252`) and every CMS read
-raises `StrapiUnavailableError` -> 502. `apps/cms/views.py` returns 502 only
-for that class of error; a wrong token would surface as a different code.
-
-Fix, in order:
-
-1. Render -> `aegis` -> Environment -> confirm all three exist with values:
-   `STRAPI_BASE_URL=https://aegis-cms.onrender.com`,
-   `STRAPI_API_TOKEN` (the AEGIS Backend token),
-   `STRAPI_WEBHOOK_SECRET`.
-2. Manual Deploy (or Save Changes, which redeploys). Env var edits do not
-   apply to a running process.
-3. Verify: the curl above returns 200 with `{"results": ...}`. Admin Content
-   screen, landing page feed, and the webhook all depend on this one change.
-
-## 2. "Internal server error" when uploading a file in Strapi
+## 2. "Internal server error" / 502 when uploading a file in Strapi
 
 State: content types, admin panel and the read API all work. Only media
-writes fail.
+writes fail, and they now surface as 502 — Render's proxy got no response
+at all, i.e. the Strapi process crashed or restarted mid-upload. An S3
+misconfiguration answers 500, not 502, so the ranked causes below should be
+read with that in mind; the first `aegis-cms` log lines after a failed
+upload decide between them (`Killed` / out of memory vs `NoSuchBucket` /
+`AccessDenied` / `SignatureDoesNotMatch` vs `EACCES` / `ENOENT`).
 
 Ranked causes, in the order worth checking:
 
@@ -68,3 +60,31 @@ the code or the image.
 Known ceiling while this is open: free-plan Render has no persistent disk,
 so even a working local upload is lost on the next redeploy. TC-ADM-14/15
 cannot pass reliably until Supabase Storage works.
+
+## 3. Strapi webhook pointed at a dead hostname — FIXED in code 2026-10-17
+
+State: the `AEGIS Django` webhook stored in Strapi targeted
+`https://aegis-backend.onrender.com/webhooks/strapi/announcements/`. That
+hostname resolves to Render's edge but no service answers on it (150s
+timeout on the root path, twice); the live Django service answers on
+`https://aegis-0pav.onrender.com` (200 on the public feed). The admin
+webhook form also refused the correct URL with "url must be a valid URL",
+so the UI was a dead end.
+
+Root cause: `cms/src/index.ts` `ensureWebhook()` created the webhook only
+when one with the same name did not exist, and returned without comparing
+anything when it did. A webhook created by hand (or by an earlier deploy)
+therefore kept its stale URL forever. The deploy environment
+(`AEGIS_WEBHOOK_URL` on `aegis-cms`) never reached it.
+
+Fix: `ensureWebhook()` now treats `AEGIS_WEBHOOK_URL` as the source of
+truth on every boot — if the existing webhook's URL differs, or it is
+disabled, or `entry.publish` is missing from its events, it is updated in
+place. When `AEGIS_WEBHOOK_URL` is unset the existing row is left alone
+(only the localhost default is used for first creation). The secret header
+itself is global, from `cms/config/server.ts` `webhooks.defaultHeaders`
+(`AEGIS_WEBHOOK_SECRET`), so only the two env vars on `aegis-cms` matter.
+
+Verify after the next `aegis-cms` deploy: the boot log contains
+`[aegis] Updated webhook "AEGIS Django" -> https://aegis-0pav.onrender.com/webhooks/strapi/announcements/`,
+and a publish in the admin produces a 200 on the Django receiver.
