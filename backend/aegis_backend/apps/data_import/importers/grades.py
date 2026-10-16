@@ -250,14 +250,14 @@ class GradeImporter:
         grade.status = Grade.StatusChoices.DRAFT
 
         with transaction.atomic():
-            # full_clean runs SEC-013: grading period academic-year match +
-            # active enrollment integrity.  A ValidationError becomes a safe
-            # row-level error (we never surface internal tracebacks).
+            # save() runs full_clean(), which covers SEC-013: grading period
+            # academic-year match + active enrollment integrity.  A
+            # ValidationError becomes a safe row-level error (we never
+            # surface internal tracebacks).
             try:
-                grade.full_clean()
+                grade.save()
             except ValidationError as exc:
                 raise self._map_full_clean_error(exc)
-            grade.save()
 
         record.status = RecordStatus.SUCCESS
         record.mapped_to_model = "Grade"

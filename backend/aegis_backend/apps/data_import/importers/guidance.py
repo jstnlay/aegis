@@ -246,13 +246,12 @@ class GuidanceRecordsImporter:
             record_obj.priority_level = priority_raw
             record_obj.status = status_raw
             try:
-                record_obj.full_clean()
+                record_obj.save()
             except ValidationError as exc:
                 raise RowError(
                     ImportErrorCode.ROW_NOT_PROCESSED,
                     self._safe_validation_message(exc),
                 )
-            record_obj.save()
 
         record.status = RecordStatus.SUCCESS
         record.mapped_to_model = "ConsultationRecord"

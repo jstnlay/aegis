@@ -205,15 +205,15 @@ class AttendanceImporter:
             record_obj.section = section
             record_obj.status = status_raw
             record_obj.recorded_by = recorded_by
-            # full_clean() rejects future dates (domain rule).
+            # save() runs full_clean(), which rejects future dates (domain
+            # rule).
             try:
-                record_obj.full_clean()
+                record_obj.save()
             except ValidationError:
                 raise RowError(
                     ImportErrorCode.INVALID_ATTENDANCE_DATE,
                     "Attendance date cannot be in the future.",
                 )
-            record_obj.save()
 
         record.status = RecordStatus.SUCCESS
         record.mapped_to_model = "AttendanceRecord"
