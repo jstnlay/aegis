@@ -73,6 +73,7 @@ const STATUS_VARIANT: Record<
 export function FacultyImportPage() {
   const [file, setFile] = useState<File | null>(null)
   const [importType, setImportType] = useState<FacultyImportType>("grades")
+  const [sheet, setSheet] = useState("")
 
   return (
     <div className="space-y-6">
@@ -92,8 +93,10 @@ export function FacultyImportPage() {
       <UploadCard
         file={file}
         importType={importType}
+        sheet={sheet}
         onFileChange={setFile}
         onImportTypeChange={setImportType}
+        onSheetChange={setSheet}
       />
       <HistoryCard />
       <ExportsCard />
@@ -104,13 +107,17 @@ export function FacultyImportPage() {
 function UploadCard({
   file,
   importType,
+  sheet,
   onFileChange,
   onImportTypeChange,
+  onSheetChange,
 }: {
   file: File | null
   importType: FacultyImportType
+  sheet: string
   onFileChange: (file: File | null) => void
   onImportTypeChange: (value: FacultyImportType) => void
+  onSheetChange: (value: string) => void
 }) {
   const createJob = useFacultyImportJob()
 
@@ -130,10 +137,10 @@ function UploadCard({
           onSubmit={(event) => {
             event.preventDefault()
             if (!file) return
-            createJob.mutate({ file, importType })
+            createJob.mutate({ file, importType, sheet })
           }}
         >
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-3">
             <div className="space-y-1.5">
               <Label htmlFor="faculty-import-type">Import type</Label>
               <Select
@@ -165,6 +172,21 @@ function UploadCard({
                   onFileChange(event.target.files?.[0] ?? null)
                 }
               />
+            </div>
+
+            {/* XLSX only. Name the sheet when the workbook carries more than
+                one — the server never guesses which sheet holds the data. */}
+            <div className="space-y-1.5">
+              <Label htmlFor="faculty-import-sheet">Sheet (XLSX only)</Label>
+              <Input
+                id="faculty-import-sheet"
+                placeholder="e.g. Attendance"
+                value={sheet}
+                onChange={(event) => onSheetChange(event.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Optional. Leave blank when the workbook has one sheet.
+              </p>
             </div>
           </div>
 

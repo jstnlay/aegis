@@ -232,16 +232,31 @@ def _normalize_headers(raw_header_row):
 # ---------------------------------------------------------------------------
 
 
-def _select_worksheet(wb):
-    """
-    Select the single worksheet to import from an openpyxl workbook.
+def _visible_sheet_names(visible_sheets):
+    """Comma-separated preview of visible worksheet titles (first five)."""
+    names = [ws.title for ws in visible_sheets]
+    preview = ", ".join(names[:5])
+    if len(names) > 5:
+        preview += f", and {len(names) - 5} more"
+    return preview
 
-    Strategy (v1): exactly one visible worksheet is required.  Workbooks
-    with multiple visible worksheets are rejected as ambiguous — one import
-    file represents one dataset, so sheets are never merged or guessed at.
-    Hidden worksheets (``sheet_state`` ``hidden``/``veryHidden``) are
-    skipped entirely: they do not count toward the limit and are never
-    processed.
+
+def _select_worksheet(wb, sheet=None):
+    """
+    Select the worksheet to import from an openpyxl workbook.
+
+    ``sheet`` names the worksheet to import: either its title (trimmed,
+    case-sensitive as Excel is) or its 1-based position among the visible
+    worksheets.  Naming one is how a workbook that also carries a
+    README/instructions sheet is imported.  Sheets are never merged or
+    guessed at — one import file is still one dataset.
+
+    Without ``sheet``, exactly one visible worksheet is required.  Workbooks
+    with several visible worksheets are rejected as ambiguous.
+
+    Hidden worksheets (``sheet_state`` ``hidden``/``veryHidden``) are skipped
+    entirely: they are never selected, never counted toward the limit, and
+    never processed.
     """
     visible_sheets = [ws for ws in wb.worksheets if ws.sheet_state == "visible"]
 
@@ -251,15 +266,40 @@ def _select_worksheet(wb):
             "The workbook contains no visible worksheets.",
         )
 
+    if sheet is not None:
+        return _resolve_named_worksheet(visible_sheets, sheet)
+
     if len(visible_sheets) > XLSX_MAX_WORKSHEETS:
-        sheet_names = [ws.title for ws in visible_sheets]
         raise XlsxValidationError(
             ImportErrorCode.MULTIPLE_WORKSHEETS,
             f"The workbook contains {len(visible_sheets)} visible worksheets "
-            f"({', '.join(sheet_names[:5])}). Only a single worksheet is allowed.",
+            f"({_visible_sheet_names(visible_sheets)}). Only a single worksheet "
+            "is allowed unless one is named with the 'sheet' field.",
         )
 
     return visible_sheets[0]
+
+
+def _resolve_named_worksheet(visible_sheets, sheet):
+    """Resolve a caller-supplied worksheet title or 1-based visible position."""
+    wanted = str(sheet).strip()
+    for ws in visible_sheets:
+        if ws.title.strip() == wanted:
+            return ws
+
+    if wanted.isdigit():
+        position = int(wanted)
+        if 1 <= position <= len(visible_sheets):
+            return visible_sheets[position - 1]
+
+    # The requested value is not echoed back: it is client input, and the
+    # visible titles already tell the caller what may be named.  A blank
+    # value is treated as "not named" by the caller, not as a lookup.
+    raise XlsxValidationError(
+        ImportErrorCode.WORKSHEET_NOT_FOUND,
+        "No visible worksheet matches the requested 'sheet' value "
+        f"({_visible_sheet_names(visible_sheets)} are available).",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -303,13 +343,14 @@ def _extract_rows(ws, headers):
 # ---------------------------------------------------------------------------
 
 
-def validate_raw_xlsx(uploaded_file, filename, size=None):
+def validate_raw_xlsx(uploaded_file, filename, size=None, sheet=None):
     """
     High-level XLSX validation + parse for an uploaded file.
 
     ``uploaded_file`` is file-like with ``read()``/``seek()``; ``filename``
     is the client-supplied name; ``size`` optionally overrides the byte
-    size (falls back to seeking to end).
+    size (falls back to seeking to end); ``sheet`` optionally names the
+    worksheet to import (title or 1-based visible position).
 
     Returns a ``_XlsxResult``.  Raises ``XlsxValidationError`` on any
     whole-file problem.
@@ -346,16 +387,18 @@ def validate_raw_xlsx(uploaded_file, filename, size=None):
     # parse_xlsx_bytes opens the workbook with openpyxl; any structural
     # problem (renamed ZIP, corrupt archive, malformed OOXML) surfaces as
     # an INVALID_WORKBOOK whole-file error.
-    return parse_xlsx_bytes(content)
+    return parse_xlsx_bytes(content, sheet=sheet)
 
 
-def parse_xlsx_bytes(content):
+def parse_xlsx_bytes(content, sheet=None):
     """
     Parse raw XLSX bytes into headers + sanitized row dicts.
 
     Opens the workbook in read-only, data_only mode (no formula evaluation,
-    no macro execution).  Selects a single visible worksheet, validates and
-    normalizes headers, then extracts and sanitizes data rows.
+    no macro execution).  Selects the worksheet named by ``sheet`` (title or
+    1-based visible position), or the only visible one when ``sheet`` is
+    ``None``, validates and normalizes headers, then extracts and sanitizes
+    data rows.
 
     No code is executed: openpyxl only reads stored XML cell data, and
     ``data_only=True`` reads cached formula results without evaluating them.
@@ -370,7 +413,7 @@ def parse_xlsx_bytes(content):
         )
 
     try:
-        ws = _select_worksheet(wb)
+        ws = _select_worksheet(wb, sheet=sheet)
 
         # Read the header row (row 1).  In read-only mode, rows that have
         # no cell values at all are not yielded, so an empty worksheet

@@ -106,21 +106,26 @@ export function useFacultyImportJobs() {
  * The pipeline runs synchronously server-side, so this resolves only once the
  * job is terminal. It posts to the batch-import alias rather than
  * `/data-import/jobs/` so the server pins the import type.
+ *
+ * `sheet` optionally names the XLSX worksheet to import (its title, or its
+ * 1-based position among the visible sheets), so a workbook that also carries
+ * a README or a second dataset can still be uploaded.
  */
 export function useFacultyImportJob() {
   const queryClient = useQueryClient()
   return useMutation<
     FacultyImportJob,
     Error,
-    { file: File; importType: FacultyImportType }
+    { file: File; importType: FacultyImportType; sheet?: string }
   >({
-    mutationFn: async ({ file, importType }) => {
+    mutationFn: async ({ file, importType, sheet }) => {
       const target = FACULTY_IMPORT_TYPES.find((t) => t.type === importType)
       if (!target) {
         throw new Error(`Unsupported import type: ${importType}`)
       }
       const body = new FormData()
       body.append("file", file)
+      if (sheet?.trim()) body.append("sheet", sheet.trim())
       const { data } = await apiClient.post<FacultyImportJob>(
         target.path,
         body,

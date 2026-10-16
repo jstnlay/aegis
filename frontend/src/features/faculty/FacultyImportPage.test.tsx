@@ -33,6 +33,7 @@ vi.mock("@/lib/pagination", () => ({
 }))
 
 const mockedGet = vi.mocked(apiClient.get)
+const mockedPost = vi.mocked(apiClient.post)
 const mockedFetchAllPages = vi.mocked(fetchAllPages)
 
 function renderPage() {
@@ -201,5 +202,51 @@ describe("FacultyImportPage exports", () => {
       })
     )
     expect(URL.createObjectURL).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("FacultyImportPage upload", () => {
+  it("posts the named worksheet with the file", async () => {
+    mockedPost.mockResolvedValue({
+      data: { id: "job-1", status: "completed" },
+    })
+    renderPage()
+
+    const file = new File(["PK"], "attendance.xlsx", {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    })
+    fireEvent.change(screen.getByLabelText(/^file$/i), {
+      target: { files: [file] },
+    })
+    fireEvent.change(screen.getByLabelText(/sheet/i), {
+      target: { value: "Valid Attendance" },
+    })
+    fireEvent.click(screen.getByRole("button", { name: /upload and import/i }))
+
+    await waitFor(() => expect(mockedPost).toHaveBeenCalledTimes(1))
+    const call = mockedPost.mock.calls[0]!
+    expect(call[0]).toBe("/academics/grades/batch-import/")
+    const body = call[1] as FormData
+    expect(body.get("sheet")).toBe("Valid Attendance")
+    expect(body.get("file")).toBe(file)
+  })
+
+  it("omits a blank worksheet so single-sheet workbooks stay unchanged", async () => {
+    mockedPost.mockResolvedValue({
+      data: { id: "job-2", status: "completed" },
+    })
+    renderPage()
+
+    fireEvent.change(screen.getByLabelText(/^file$/i), {
+      target: { files: [new File(["PK"], "grades.xlsx")] },
+    })
+    fireEvent.change(screen.getByLabelText(/sheet/i), {
+      target: { value: "   " },
+    })
+    fireEvent.click(screen.getByRole("button", { name: /upload and import/i }))
+
+    await waitFor(() => expect(mockedPost).toHaveBeenCalledTimes(1))
+    const body = mockedPost.mock.calls[0]![1] as FormData
+    expect(body.get("sheet")).toBeNull()
   })
 })

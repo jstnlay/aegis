@@ -1015,18 +1015,23 @@ export function useImportJob(jobId: string | null) {
  * The server detects the real type from the file's magic bytes, not the
  * extension, and the pipeline runs synchronously — so this resolves only once
  * the job has reached a terminal state. There is no separate "run" call.
+ *
+ * `sheet` optionally names the XLSX worksheet to import (its title, or its
+ * 1-based position among the visible sheets). Without it a workbook must hold
+ * exactly one visible worksheet.
  */
 export function useCreateImportJob() {
   const queryClient = useQueryClient()
   return useMutation<
     ImportJobDetail,
     Error,
-    { file: File; importType: ImportType }
+    { file: File; importType: ImportType; sheet?: string }
   >({
-    mutationFn: async ({ file, importType }) => {
+    mutationFn: async ({ file, importType, sheet }) => {
       const body = new FormData()
       body.append("file", file)
       body.append("import_type", importType)
+      if (sheet?.trim()) body.append("sheet", sheet.trim())
       const { data } = await apiClient.post<ImportJobDetail>(
         "/data-import/jobs/",
         body,

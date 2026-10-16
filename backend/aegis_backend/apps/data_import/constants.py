@@ -137,6 +137,9 @@ MAX_IMPORT_ROWS = 5000
 CSV_MAX_COLUMNS = 60
 
 # XLSX-specific safe defaults.
+#: Visible worksheets allowed when the request does NOT name one. A request
+#: may name a worksheet instead (``sheet`` form field), which picks it
+#: explicitly; sheets are still never merged or guessed at.
 XLSX_MAX_WORKSHEETS = 1
 XLSX_MAX_COLUMNS = 256
 
@@ -169,6 +172,7 @@ class ImportErrorCode:
     # XLSX-specific error codes
     INVALID_WORKBOOK = "INVALID_WORKBOOK"
     MULTIPLE_WORKSHEETS = "MULTIPLE_WORKSHEETS"
+    WORKSHEET_NOT_FOUND = "WORKSHEET_NOT_FOUND"
     EMPTY_WORKSHEET = "EMPTY_WORKSHEET"
     # Domain-level (PH8.5 grade / PH8.6 attendance) row error codes
     INVALID_STUDENT = "INVALID_STUDENT"

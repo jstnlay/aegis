@@ -1,7 +1,16 @@
 # Flag — XLSX import rejects workbooks with more than one worksheet
 
-Reported 2026-10-16 during the Cycle-2 import retest. Not fixed; filed for
-later.
+**Status: FIXED** (2026-10-16). The import request now accepts an optional
+`sheet` field — a worksheet title, or its 1-based position among the visible
+worksheets — and `_select_worksheet` resolves it. Without the field the old
+rule stands: one visible worksheet only, and the rejection message now names
+the visible worksheets. New error code `WORKSHEET_NOT_FOUND` for a name that
+matches nothing. The frontend import forms (admin and faculty) carry the
+optional Sheet input. Test files for the manual retest live in
+`docs/test-data/`.
+
+Reported 2026-10-16 during the Cycle-2 import retest. The design notes below
+are kept as the record of why the fix looks the way it does.
 
 Observed error, verbatim:
 

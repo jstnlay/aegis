@@ -121,6 +121,7 @@ function ImportsCard() {
   const createJob = useCreateImportJob()
   const [file, setFile] = useState<File | null>(null)
   const [importType, setImportType] = useState<ImportType>("grades")
+  const [sheet, setSheet] = useState("")
   const [expanded, setExpanded] = useState<string | null>(null)
 
   /*
@@ -220,10 +221,10 @@ function ImportsCard() {
             onSubmit={(event) => {
               event.preventDefault()
               if (!file) return
-              createJob.mutate({ file, importType })
+              createJob.mutate({ file, importType, sheet })
             }}
           >
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-3">
               <div className="space-y-1.5">
                 <Label htmlFor="import-type">Import type</Label>
                 <Select
@@ -253,6 +254,22 @@ function ImportsCard() {
                   accept=".csv,.xlsx"
                   onChange={(event) => setFile(event.target.files?.[0] ?? null)}
                 />
+              </div>
+
+              {/* XLSX only. A workbook with a README or a second sheet needs
+                  this: without a name, the server requires exactly one
+                  visible worksheet and rejects the rest. */}
+              <div className="space-y-1.5">
+                <Label htmlFor="import-sheet">Sheet (XLSX only)</Label>
+                <Input
+                  id="import-sheet"
+                  placeholder="e.g. Attendance"
+                  value={sheet}
+                  onChange={(event) => setSheet(event.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Optional. Leave blank when the workbook has one sheet.
+                </p>
               </div>
             </div>
 

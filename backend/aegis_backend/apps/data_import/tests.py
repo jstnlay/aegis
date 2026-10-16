@@ -1003,6 +1003,75 @@ class XlsxParseTest(SimpleTestCase):
         with self.assertRaises(XlsxValidationError) as ctx:
             parse_xlsx_bytes(build_workbook_bytes(sheets))
         self.assertEqual(ctx.exception.code, ImportErrorCode.MULTIPLE_WORKSHEETS)
+        # The message names the visible worksheets so the caller knows what
+        # to pass back in the `sheet` field.
+        self.assertIn("A", ctx.exception.message)
+        self.assertIn("B", ctx.exception.message)
+
+    def test_worksheet_selected_by_title(self):
+        sheets = [
+            {"title": "README", "rows": [["notes"], ["read me"]]},
+            {"title": "Data", "rows": [["a", "b"], [1, 2]]},
+        ]
+        result = parse_xlsx_bytes(build_workbook_bytes(sheets), sheet="Data")
+        self.assertEqual(result.headers, ["a", "b"])
+        self.assertEqual(result.rows[0], {"a": "1", "b": "2"})
+
+    def test_worksheet_selected_by_position(self):
+        sheets = [
+            {"title": "README", "rows": [["notes"], ["read me"]]},
+            {"title": "Data", "rows": [["a", "b"], [1, 2]]},
+        ]
+        result = parse_xlsx_bytes(build_workbook_bytes(sheets), sheet="2")
+        self.assertEqual(result.headers, ["a", "b"])
+
+    def test_worksheet_title_trimmed(self):
+        sheets = [
+            {"title": "README", "rows": [["notes"], ["read me"]]},
+            {"title": "Data", "rows": [["a"], [1]]},
+        ]
+        result = parse_xlsx_bytes(build_workbook_bytes(sheets), sheet="  Data  ")
+        self.assertEqual(result.headers, ["a"])
+
+    def test_unknown_worksheet_rejected(self):
+        sheets = [
+            {"title": "A", "rows": [["x"], [1]]},
+            {"title": "B", "rows": [["y"], [2]]},
+        ]
+        with self.assertRaises(XlsxValidationError) as ctx:
+            parse_xlsx_bytes(build_workbook_bytes(sheets), sheet="Missing")
+        self.assertEqual(ctx.exception.code, ImportErrorCode.WORKSHEET_NOT_FOUND)
+        self.assertIn("A", ctx.exception.message)
+        self.assertIn("B", ctx.exception.message)
+
+    def test_out_of_range_position_rejected(self):
+        sheets = [
+            {"title": "A", "rows": [["x"], [1]]},
+            {"title": "B", "rows": [["y"], [2]]},
+        ]
+        with self.assertRaises(XlsxValidationError) as ctx:
+            parse_xlsx_bytes(build_workbook_bytes(sheets), sheet="3")
+        self.assertEqual(ctx.exception.code, ImportErrorCode.WORKSHEET_NOT_FOUND)
+
+    def test_hidden_worksheet_cannot_be_selected(self):
+        sheets = [
+            {"title": "Visible", "rows": [["a"], [1]]},
+            {"title": "Hidden", "rows": [["secret"], [9]], "state": "hidden"},
+        ]
+        with self.assertRaises(XlsxValidationError) as ctx:
+            parse_xlsx_bytes(build_workbook_bytes(sheets), sheet="Hidden")
+        self.assertEqual(ctx.exception.code, ImportErrorCode.WORKSHEET_NOT_FOUND)
+
+    def test_named_worksheet_ignores_other_sheets(self):
+        # Selecting one sheet never validates or imports the others: the
+        # malformed sheet below is not read at all.
+        sheets = [
+            {"title": "Good", "rows": [["a", "b"], [1, 2]]},
+            {"title": "Broken", "rows": [["x", "x"], [1, 2]]},
+        ]
+        result = parse_xlsx_bytes(build_workbook_bytes(sheets), sheet="Good")
+        self.assertEqual(result.headers, ["a", "b"])
+        self.assertEqual(len(result.rows), 1)
 
     def test_hidden_worksheet_skipped(self):
         sheets = [
@@ -1169,10 +1238,13 @@ class XlsxFileValidationTest(SimpleTestCase):
 
 
 class XlsxImportApiBase(DataImportApiBase):
-    def _upload_xlsx(self, sheets, import_type="grades", name="grades.xlsx"):
+    def _upload_xlsx(self, sheets, import_type="grades", name="grades.xlsx", sheet=None):
+        payload = {"file": make_xlsx(sheets, name=name), "import_type": import_type}
+        if sheet is not None:
+            payload["sheet"] = sheet
         return self.client.post(
             "/api/v1/data-import/jobs/",
-            {"file": make_xlsx(sheets, name=name), "import_type": import_type},
+            payload,
             format="multipart",
         )
 
@@ -1318,6 +1390,61 @@ class XlsxUploadApiTest(XlsxImportApiBase):
         ]
         resp = self._upload_xlsx(sheets)
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        job = ImportJob.objects.get(pk=resp.data["id"])
+        self.assertEqual(job.status, JobStatus.FAILED)
+        self.assertEqual(job.error_log[0]["code"], ImportErrorCode.MULTIPLE_WORKSHEETS)
+
+    def test_named_sheet_imported(self):
+        self._auth(self.admin_user)
+        resp = self._upload_xlsx(
+            [
+                {"title": "README", "rows": [["note"], ["read me"]]},
+                {"title": "Data", "rows": [["x"], [1]]},
+            ],
+            sheet="Data",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        job = ImportJob.objects.get(pk=resp.data["id"])
+        self.assertEqual(job.error_log, [])
+        record = ImportRecord.objects.get(job=job, row_number=1)
+        self.assertEqual(record.data, {"x": "1"})
+
+    def test_worksheet_position_imported(self):
+        self._auth(self.admin_user)
+        resp = self._upload_xlsx(
+            [
+                {"title": "README", "rows": [["note"], ["read me"]]},
+                {"title": "Data", "rows": [["x"], [1]]},
+            ],
+            sheet="2",
+        )
+        job = ImportJob.objects.get(pk=resp.data["id"])
+        self.assertEqual(job.error_log, [])
+        self.assertTrue(ImportRecord.objects.filter(job=job).exists())
+
+    def test_unknown_sheet_rejected_on_upload(self):
+        self._auth(self.admin_user)
+        resp = self._upload_xlsx(
+            [
+                {"title": "A", "rows": [["x"], [1]]},
+                {"title": "B", "rows": [["y"], [2]]},
+            ],
+            sheet="Missing",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        job = ImportJob.objects.get(pk=resp.data["id"])
+        self.assertEqual(job.status, JobStatus.FAILED)
+        self.assertEqual(job.error_log[0]["code"], ImportErrorCode.WORKSHEET_NOT_FOUND)
+
+    def test_blank_sheet_field_behaves_as_unnamed(self):
+        self._auth(self.admin_user)
+        resp = self._upload_xlsx(
+            [
+                {"title": "A", "rows": [["x"], [1]]},
+                {"title": "B", "rows": [["y"], [2]]},
+            ],
+            sheet="",
+        )
         job = ImportJob.objects.get(pk=resp.data["id"])
         self.assertEqual(job.status, JobStatus.FAILED)
         self.assertEqual(job.error_log[0]["code"], ImportErrorCode.MULTIPLE_WORKSHEETS)

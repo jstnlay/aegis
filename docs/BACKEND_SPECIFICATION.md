@@ -1049,7 +1049,10 @@ Faculty or Admin initiates import:
   Content-Type: multipart/form-data
   file: <csv/xlsx>
   import_type: "grades" | "attendance" | "students"
+  sheet: <worksheet name or 1-based position>   # optional, xlsx only
 
+  - XLSX: naming a worksheet selects it; without it the workbook must hold
+    exactly one visible worksheet. Sheets are never merged or guessed at.
   - Faculty can import: grades (for own subjects), attendance (for advisory)
   - Admin can import: grades, attendance, students, guidance_records
   [CONFIRMED per FR-012, FR-013; Admin scope per FR-037]

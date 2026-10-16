@@ -153,6 +153,9 @@ class ImportJobViewSet(viewsets.ModelViewSet):
 
         uploaded_file = serializer.validated_data["file"]
         import_type = serializer.validated_data["import_type"]
+        # Optional worksheet selection for XLSX uploads; blank means "not
+        # named" rather than a worksheet titled "".
+        sheet = serializer.validated_data.get("sheet") or None
 
         # Detect actual file type from content bytes, not the extension.
         file_type = _detect_file_type(uploaded_file)
@@ -166,7 +169,7 @@ class ImportJobViewSet(viewsets.ModelViewSet):
         )
 
         try:
-            self._run_job(job, uploaded_file, file_type)
+            self._run_job(job, uploaded_file, file_type, sheet=sheet)
         except Exception:
             # Never leak internal state to the client.
             job.status = JobStatus.FAILED
@@ -189,7 +192,7 @@ class ImportJobViewSet(viewsets.ModelViewSet):
         out = ImportJobSerializer(job, context={"request": request})
         return Response(out.data, status=status.HTTP_201_CREATED)
 
-    def _run_job(self, job, uploaded_file, file_type):
+    def _run_job(self, job, uploaded_file, file_type, sheet=None):
         """Synchronous pipeline for a pending job (CSV or XLSX)."""
         from .csv_pipeline import safe_filename
 
@@ -199,7 +202,7 @@ class ImportJobViewSet(viewsets.ModelViewSet):
 
         try:
             if file_type == FileType.XLSX:
-                result = validate_raw_xlsx(uploaded_file, filename)
+                result = validate_raw_xlsx(uploaded_file, filename, sheet=sheet)
             else:
                 result = validate_raw_csv(uploaded_file, filename)
         except (CsvValidationError, XlsxValidationError) as exc:

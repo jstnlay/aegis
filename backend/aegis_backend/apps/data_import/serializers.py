@@ -79,6 +79,12 @@ class ImportJobCreateSerializer(serializers.Serializer):
     import_type = serializers.ChoiceField(
         choices=[(t, t) for t in ("grades", "attendance", "students", "guidance_records")]
     )
+    #: Optional XLSX worksheet to import: its title, or its 1-based position
+    #: among the visible worksheets. Without it a workbook must have exactly
+    #: one visible worksheet.
+    sheet = serializers.CharField(
+        required=False, allow_blank=True, max_length=64
+    )
 
     def validate(self, attrs):
         user = self.context["request"].user
