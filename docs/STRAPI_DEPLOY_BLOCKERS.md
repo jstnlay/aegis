@@ -22,44 +22,42 @@ The Strapi admin (`https://aegis-cms.onrender.com/admin`) answers 200.
 The webhook receiver is armed: a POST without the secret header returns
 `401 Invalid webhook authentication.` (an unset secret would return 503).
 
-## 2. "Internal server error" / 502 when uploading a file in Strapi
+## 2. Media uploads returned 500 / 520 — FIXED 2026-10-17 (local provider)
 
 State: content types, admin panel and the read API all work. Only media
-writes fail, and they now surface as 502 — Render's proxy got no response
-at all, i.e. the Strapi process crashed or restarted mid-upload. An S3
-misconfiguration answers 500, not 502, so the ranked causes below should be
-read with that in mind; the first `aegis-cms` log lines after a failed
-upload decide between them (`Killed` / out of memory vs `NoSuchBucket` /
-`AccessDenied` / `SignatureDoesNotMatch` vs `EACCES` / `ENOENT`).
+writes failed. The failure changed shape as causes were peeled off: "Internal
+server error" -> 520 on a 183 KB PNG -> after the image-processing toggles
+were switched off, a plain 500 for both images and PDFs.
 
-Ranked causes, in the order worth checking:
+Two independent causes, both fixed 2026-10-17:
 
-1. **Supabase Storage misconfiguration.** The `aegis-cms` deploy now carries
-   `cms/config/plugins.ts`, which switches the upload provider to `aws-s3`
-   when `SUPABASE_S3_ENDPOINT`, `SUPABASE_S3_BUCKET`, `SUPABASE_S3_ACCESS_KEY`
-   and `SUPABASE_S3_SECRET_KEY` are all set. Partial configuration falls
-   back to the local provider, so a 500 means the four are set and one of
-   them is wrong. The usual offenders: bucket does not exist, bucket is not
-   public, keys are project API keys instead of Storage S3 access keys
-   (Supabase -> Storage -> S3 access keys), or region is not what the
-   endpoint signs with. Check the first error line in Render ->
-   `aegis-cms` -> Logs: `NoSuchBucket`, `AccessDenied` or `SignatureDoesNotMatch`
-   name the variable that is wrong.
-2. **Local provider cannot write.** `cms/public/uploads/.gitkeep` is
-   committed, so the directory exists in a fresh checkout; a write failure
-   here appears as `EACCES`/`ENOENT` in the same log.
-3. **Deploy predates the S3 change.** `git log origin/master -- cms/config/plugins.ts`
-   shows the commit that landed. If `aegis-cms` last deployed before it, the
-   provider is still local and cause 2 is the answer.
+1. **Image processing on the 512 MB free instance.** Strapi resizes every
+   image into four breakpoints, then runs stats and size optimization. A
+   183 KB PNG with a large raster killed the process mid-request — the
+   proxy reports that as 520, which is why an image failed differently from
+   a PDF. Fixed in the admin, no deploy: Admin -> Settings -> Media Library
+   -> turn OFF "Responsive friendly upload" and "Size optimization" (and
+   "Auto orientation" / "AI metadata" if shown). Those are database-stored
+   plugin settings, so they survive redeploys; turning them back on
+   reintroduces the crash on large images.
+2. **The Supabase Storage provider.** All four `SUPABASE_S3_*` variables
+   were set, and at least one value was wrong — with a complete but bad
+   configuration every upload is rejected by S3 and surfaces as 500, for
+   images and PDFs alike. Removing the four variables switched
+   `cms/config/plugins.ts` back to the local filesystem provider and
+   uploads succeeded. The classic wrong value is a project API key
+   (`anon`/`service_role`) instead of a Storage -> S3 access key.
 
-Fast isolation, given Render has no free shell: temporarily delete the four
-`SUPABASE_S3_*` vars, redeploy, retry the upload. Local success proves the
-provider switch is the variable at fault; local failure moves the cause to
-the code or the image.
-
-Known ceiling while this is open: free-plan Render has no persistent disk,
-so even a working local upload is lost on the next redeploy. TC-ADM-14/15
-cannot pass reliably until Supabase Storage works.
+Known ceiling while S3 stays unset: the local provider writes to Render's
+ephemeral disk, so uploaded files are lost on every redeploy, and any push
+to master redeploys `aegis-cms` and wipes them — do media retests before
+pushing. The `announcement-test` entry still points at
+`/uploads/BACKGROUND_01a2c51ffe.png`, which 404s; re-upload that image and
+save the announcement again. TC-ADM-14/15 need real durability: re-add the
+four variables with values from Supabase (bucket exists and is Public,
+access keys from Storage -> S3 access keys, endpoint
+`https://<project-ref>.supabase.co/storage/v1/s3`, region `ap-southeast-1`),
+then re-upload.
 
 ## 3. Strapi webhook pointed at a dead hostname — FIXED in code 2026-10-17
 
