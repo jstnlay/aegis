@@ -599,7 +599,7 @@ class SecurityTest(ImportExportAuditBase):
         self._auth(self.admin_user)
         csv_text = (
             "student_id,subject_assignment,grading_period,score\n"
-            f"{dom['student_id']},{dom['subject_assignment']},{dom['grading_period']},97\n"
+            f"{dom['student_id']},{dom['subject_assignment']},{dom['grading_period']},88.25\n"
         )
         self._post(csv_text)
         # Export grades.
@@ -617,7 +617,10 @@ class SecurityTest(ImportExportAuditBase):
     def test_row_data_never_stored(self):
         logs = self._run_and_return_logs()
         text = self._all_log_text(logs)
-        self.assertNotIn("97", text)
+        # A distinctive value, not a two-digit one: "97" also occurs inside a
+        # random UUID, which would fail this test about once in ten runs for a
+        # reason that has nothing to do with the row data.
+        self.assertNotIn("88.25", text)
         dom_col = None
         for log in logs:
             self.assertNotIn("grading_period", _serialize_log(log))

@@ -225,7 +225,7 @@ status.
 | CMS built with native Django models | **\[PROPOSED\]** | The SAD references Strapi. Strapi is a separate Node.js service. For a single small school, native Django models are simpler. **Requires confirmation — see §L-OQ8.** |
 | Chatbot fully deferred | **\[CONFIRMED\]** | Botpress/Rasa/Gemini are NOT installed or implemented. API hooks are left for future integration. |
 | No Nginx during development | **\[PROPOSED\]** | Django's dev server is sufficient for development. Nginx is for production deployment only. |
-| Synchronous processing for v1 | **\[CONFIRMED\]** | No Celery or Redis. Data imports and risk computation run synchronously. Confirmed for v1. |
+| Synchronous processing for v1 | **\[CONFIRMED\]** | No Celery or Redis. Risk computation runs synchronously. A small data import finishes inside the request; a file above 200 rows is finished by a bounded worker pool in the same process and polled — no queue service is added (see §G.8). |
 
 ---
 
@@ -1057,16 +1057,33 @@ Faculty or Admin initiates import:
   - Admin can import: grades, attendance, students, guidance_records
   [CONFIRMED per FR-012, FR-013; Admin scope per FR-037]
 
+  File keys are the school's own, not database UUIDs (FR-037):
+  - attendance row: student_id, section (name or UUID), date, status
+  - grade row: student_id, grading_period (name e.g. "Term 2", or UUID),
+    score, and EITHER subject_assignment (UUID) OR section + subject_code
+  - a value is resolved within the current academic year; a value that
+    matches no record, or more than one, fails the row (never guessed)
+  - re-uploading an existing record updates it in place: attendance by
+    (student, date), grades by (student, subject_assignment, grading_period)
+    returning to draft, guidance by (student, session_date, session_time).
+    A `finalized` grade is locked and rejected (FINALIZED_GRADE_LOCKED)
+
 System:
   1. Creates ImportJob (status=pending)
   2. Parses and validates each row against expected schema
   3. Captures validation errors per row (ImportRecord)
-  4. Processes all rows synchronously
+  4. Processes the rows: at or below IMPORT_SYNC_ROW_LIMIT (200) inside the
+     request, so the response already carries the finished job; above it in a
+     bounded worker pool in the same process, and the response returns the job
+     as pending/processing for the client to poll
   5. Status → completed | failed | partial
-  6. Returns results with per-row error details
+  6. Returns the job with per-row error details (immediately for a small file,
+     on the next poll for a large one)
   7. Valid records written to Grade/Attendance/Student models
   8. AuditLog entry created
-[Processing is synchronous for v1 — see §L-OQ9]
+[No Celery or Redis for v1: a large file is finished by a worker thread, not a
+request — see §L-OQ9. Maximum 20,000 rows and 10 MB per file; re-uploading is
+safe because importers update an existing record in place.]
 ```
 
 ---
@@ -1226,7 +1243,10 @@ grading_period: <uuid>
         {"row": 28, "error": "Invalid score: 150 (max 100)"}
     ]
 }
-[Processing is synchronous for v1 — response returned after completion]
+[201 Created with the job. Small files (up to 200 rows) are already
+finished, so `status` is terminal. A larger file returns
+"status": "pending"|"processing" and is finished by a worker afterwards;
+poll GET /api/v1/data-import/jobs/{id}/ until the status is terminal.]
 ```
 
 **Record a behavioral incident:**
@@ -1458,7 +1478,7 @@ confirmed before implementation.
 | ASM-01 | A single PostgreSQL database with Django app-namespaced tables is acceptable (rather than 5 separate databases as shown in the SAD). | §C.2 |
 | ASM-02 | The `User` model uses a single table with a `role` discriminator field, not separate tables per role. | §D.2 |
 | ASM-03 | The `Assessment` model is shared between academic and wellness types, differentiated by `creator_role` and `assessment_type` fields. | §D.3 |
-| ASM-04 | Data imports are processed synchronously for v1 (no background task queue). | §C.2, §G.8 |
+| ASM-04 | Data imports add no background task queue for v1 (no Celery/Redis). Files above 200 rows are finished by a bounded in-process worker pool and polled; small files still finish inside the request. | §C.2, §G.8 |
 | ASM-05 | Attendance absence threshold for parent notification is configurable via `SystemSetting`. | §G.3 |
 | ASM-06 | The `language_preference` field on User is a simple char field; full i18n is out of scope for v1. | §L-OQ6 |
 | ASM-07 | JWT is the authentication mechanism. The documents mention JWT in the SAD description. | §J.2 |

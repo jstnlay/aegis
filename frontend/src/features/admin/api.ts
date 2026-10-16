@@ -105,6 +105,10 @@ import { useCallback, useMemo } from "react"
 
 import { apiClient } from "@/lib/api"
 import { filenameFromDisposition } from "@/lib/export"
+import {
+  IMPORT_JOB_POLL_INTERVAL_MS,
+  isImportJobLive,
+} from "@/lib/importJobs"
 import { fetchAllPages } from "@/lib/pagination"
 
 /* ========================================================================== */
@@ -992,6 +996,12 @@ export function useImportJobs() {
         await fetchAllPages<ImportJobSummary>("/data-import/jobs/")
       return results
     },
+    // A file too large for the request finishes in a worker, so the list
+    // refreshes itself while any job is still running.
+    refetchInterval: (query) =>
+      (query.state.data ?? []).some((job) => isImportJobLive(job.status))
+        ? IMPORT_JOB_POLL_INTERVAL_MS
+        : false,
   })
 }
 
@@ -1006,6 +1016,10 @@ export function useImportJob(jobId: string | null) {
       )
       return data
     },
+    refetchInterval: (query) =>
+      query.state.data && isImportJobLive(query.state.data.status)
+        ? IMPORT_JOB_POLL_INTERVAL_MS
+        : false,
   })
 }
 
@@ -1013,8 +1027,10 @@ export function useImportJob(jobId: string | null) {
  * Upload a CSV or XLSX to import.
  *
  * The server detects the real type from the file's magic bytes, not the
- * extension, and the pipeline runs synchronously — so this resolves only once
- * the job has reached a terminal state. There is no separate "run" call.
+ * extension. A file small enough to finish inside the request resolves with a
+ * terminal job; a larger one resolves with `pending`/`processing` and is
+ * finished by a worker afterwards, which is why the job queries poll. There is
+ * no separate "run" call either way.
  *
  * `sheet` optionally names the XLSX worksheet to import (its title, or its
  * 1-based position among the visible sheets). Without it a workbook must hold

@@ -55,8 +55,9 @@ import {
  * - The list below is only this faculty's own uploads:
  *   `ImportJobViewSet.get_queryset` filters by `uploaded_by` for faculty.
  *
- * The pipeline runs synchronously, so a successful upload returns a terminal job
- * and the per-row outcome is real. Nothing here invents counts.
+ * The pipeline finishes small files in the request, and hands larger ones to a
+ * worker; either way the per-row outcome shown here is real, and the list polls
+ * itself while a job is still running. Nothing here invents counts.
  */
 
 const STATUS_VARIANT: Record<
@@ -127,8 +128,9 @@ function UploadCard({
         <CardTitle>Upload a file</CardTitle>
         <CardDescription>
           CSV or XLSX. The server detects the real type from the file&apos;s
-          contents rather than its extension, and processes the upload
-          synchronously — the response already carries the finished job.
+          contents rather than its extension. A small file finishes before you
+          get the response; a large one keeps running in the background and
+          the history below refreshes itself until it is done.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">

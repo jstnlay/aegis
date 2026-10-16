@@ -132,7 +132,7 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase
+from django.test import TestCase, TransactionTestCase
 from rest_framework import status
 from rest_framework.test import APIClient
 from unittest import mock
@@ -447,7 +447,7 @@ class ImportJobCreateApiTest(DataImportApiBase):
         # the job fails, and no successful-import audit event is written.
         from apps.audit.models import AuditLog
 
-        from apps.data_import.views import ImportJobViewSet
+        from apps.data_import.runner import dispatch_domain_processing
 
         job = ImportJob.objects.create(
             uploaded_by=self.admin_user,
@@ -463,9 +463,7 @@ class ImportJobCreateApiTest(DataImportApiBase):
             status=RecordStatus.ERROR,
         )
 
-        ImportJobViewSet()._dispatch_domain_processing(
-            job, [record], ["student_id"]
-        )
+        dispatch_domain_processing(job, [record], ["student_id"])
 
         job.refresh_from_db()
         record.refresh_from_db()
@@ -807,6 +805,7 @@ class ImportThrottlingTest(DataImportApiBase):
 
 import datetime as dt
 import io
+import time
 import zipfile
 
 from openpyxl import Workbook
@@ -1869,9 +1868,9 @@ class GradeImportDomainTest(GradeImportApiTest):
         self.assertEqual(second.status, RecordStatus.ERROR)
         self.assertIn("duplicates another row", second.error_message)
 
-    def test_duplicate_existing_grade_rejected(self):
-        SubjectAssignment.objects.get(pk=self.dom["subject_assignment"])
-        GradingPeriod.objects.get(pk=self.dom["grading_period"])
+    def test_existing_grade_is_updated_in_place(self):
+        # A re-upload applies the corrected score (schools re-upload a
+        # corrected sheet); it is not a duplicate error.
         existing = Grade.objects.create(
             student=self.dom["student_profile"],
             subject_assignment=SubjectAssignment.objects.get(pk=self.dom["subject_assignment"]),
@@ -1886,13 +1885,89 @@ class GradeImportDomainTest(GradeImportApiTest):
             user=self.admin_user,
         )
         job = ImportJob.objects.get(pk=resp.data["id"])
+        self.assertEqual(job.status, JobStatus.COMPLETED)
+        rec = job.records.get()
+        self.assertEqual(rec.status, RecordStatus.SUCCESS)
+        self.assertEqual(Grade.objects.count(), 1)
+        existing.refresh_from_db()
+        self.assertEqual(existing.score, __import__("decimal").Decimal("88"))
+        self.assertEqual(existing.status, Grade.StatusChoices.DRAFT)
+
+    def test_finalized_grade_is_locked(self):
+        # A finalized grade is a signed academic record: the importer
+        # refuses to overwrite it.
+        finalized = Grade.objects.create(
+            student=self.dom["student_profile"],
+            subject_assignment=SubjectAssignment.objects.get(pk=self.dom["subject_assignment"]),
+            grading_period=GradingPeriod.objects.get(pk=self.dom["grading_period"]),
+            score=__import__("decimal").Decimal("70"),
+            encoded_by=self.dom["faculty_profile"],
+            status=Grade.StatusChoices.FINALIZED,
+        )
+        resp = self._grade_upload(
+            self.HEAD,
+            [[self.dom["student_id"], self.dom["subject_assignment"], self.dom["grading_period"], 88]],
+            user=self.admin_user,
+        )
+        job = ImportJob.objects.get(pk=resp.data["id"])
         self.assertEqual(job.status, JobStatus.FAILED)
         rec = job.records.get()
         self.assertEqual(rec.status, RecordStatus.ERROR)
-        self.assertIn("already exists", rec.error_message)
-        self.assertEqual(Grade.objects.count(), 1)
-        existing.refresh_from_db()
-        self.assertEqual(existing.score, __import__("decimal").Decimal("70"))
+        self.assertIn("finalized", rec.error_message)
+        finalized.refresh_from_db()
+        self.assertEqual(finalized.score, __import__("decimal").Decimal("70"))
+
+    def test_school_keys_resolve_the_subject_assignment(self):
+        # section name + subject_code instead of the assignment UUID.
+        section = self.dom["section_obj"]
+        assignment = SubjectAssignment.objects.get(pk=self.dom["subject_assignment"])
+        period_name = GradingPeriod.objects.get(pk=self.dom["grading_period"]).name
+        resp = self._grade_upload(
+            ["student_id", "section", "subject_code", "grading_period", "score"],
+            [[
+                self.dom["student_id"],
+                f"{section.grade_level.name} - {section.name}",
+                assignment.subject.code,
+                period_name,
+                91,
+            ]],
+            user=self.admin_user,
+        )
+        job = ImportJob.objects.get(pk=resp.data["id"])
+        self.assertEqual(job.status, JobStatus.COMPLETED, job.records.get().error_message)
+        grade = Grade.objects.get()
+        self.assertEqual(grade.subject_assignment_id, assignment.pk)
+        self.assertEqual(grade.score, __import__("decimal").Decimal("91"))
+
+    def test_missing_subject_key_columns_rejected(self):
+        # Neither subject_assignment nor section + subject_code -> header error.
+        resp = self._grade_upload(
+            ["student_id", "grading_period", "score"],
+            [[self.dom["student_id"], self.dom["grading_period"], 90]],
+        )
+        job = ImportJob.objects.get(pk=resp.data["id"])
+        self.assertEqual(job.status, JobStatus.FAILED)
+        self.assertIn("subject_assignment", job.records.get().error_message)
+        self.assertEqual(Grade.objects.count(), 0)
+
+    def test_ambiguous_section_name_rejected(self):
+        # Two sections share the bare name; the bare name is ambiguous, the
+        # full "Grade N - Name" form still resolves.
+        section = self.dom["section_obj"]
+        other_level = GradeLevel.objects.create(name="Grade 8gi", level_number=8)
+        Section.objects.create(
+            name=section.name, grade_level=other_level, academic_year=self.dom["ay"],
+        )
+        assignment = SubjectAssignment.objects.get(pk=self.dom["subject_assignment"])
+        self.client.force_authenticate(user=self.admin_user)
+        self._grade_upload(
+            ["student_id", "section", "subject_code", "grading_period", "score"],
+            [[self.dom["student_id"], section.name, assignment.subject.code, "Q1gi", 90]],
+        )
+        rec = ImportRecord.objects.get()
+        self.assertEqual(rec.status, RecordStatus.ERROR)
+        self.assertIn("matches more than one section", rec.error_message)
+        self.assertEqual(Grade.objects.count(), 0)
 
     def test_student_and_parent_denied(self):
         for user in (self.student_user, self.parent_user):
@@ -2246,8 +2321,10 @@ class AttendanceImportDomainTest(AttendanceImportApiTest):
         second = job.records.get(row_number=2)
         self.assertEqual(second.status, RecordStatus.ERROR)
 
-    def test_duplicate_existing_attendance_rejected(self):
-        AttendanceRecord.objects.create(
+    def test_existing_attendance_is_updated_in_place(self):
+        # A re-upload of the same student and date applies the corrected
+        # status instead of rejecting the row.
+        existing = AttendanceRecord.objects.create(
             student=self.dom["student_profile"],
             section=self.dom["section_obj"],
             date=__import__("datetime").date(2026, 2, 15),
@@ -2260,13 +2337,30 @@ class AttendanceImportDomainTest(AttendanceImportApiTest):
             user=self.admin_user,
         )
         job = ImportJob.objects.get(pk=resp.data["id"])
-        self.assertEqual(job.status, JobStatus.FAILED)
+        self.assertEqual(job.status, JobStatus.COMPLETED)
         rec = job.records.get()
-        self.assertEqual(rec.status, RecordStatus.ERROR)
-        self.assertIn("already exists", rec.error_message)
+        self.assertEqual(rec.status, RecordStatus.SUCCESS)
         self.assertEqual(AttendanceRecord.objects.count(), 1)
-        existing = AttendanceRecord.objects.get()
-        self.assertEqual(existing.status, AttendanceRecord.Status.PRESENT)
+        existing.refresh_from_db()
+        self.assertEqual(existing.status, AttendanceRecord.Status.ABSENT)
+
+    def test_section_name_resolves_the_section(self):
+        # A school writes the section name, not its UUID.
+        section = self.dom["section_obj"]
+        resp = self._att_upload(
+            self.HEAD,
+            [[
+                self.dom["student_id"],
+                f"{section.grade_level.name} - {section.name}",
+                self.VALID_DATE,
+                "present",
+            ]],
+            user=self.admin_user,
+        )
+        job = ImportJob.objects.get(pk=resp.data["id"])
+        self.assertEqual(job.status, JobStatus.COMPLETED, job.records.get().error_message)
+        rec = AttendanceRecord.objects.get()
+        self.assertEqual(rec.section_id, section.pk)
 
     def test_recorded_by_cannot_be_forged(self):
         # Even if a client passes recorded_by, it is ignored; the server
@@ -3493,18 +3587,18 @@ class GuidanceRecordsImportTest(DataImportApiBase):
         failed = job.records.get(status=RecordStatus.ERROR)
         self.assertIn("duplicates another row", failed.error_message)
 
-    def test_existing_record_rejected(self):
+    def test_existing_record_is_updated_in_place(self):
         from apps.guidance.models import ConsultationRecord
 
         self._assign_counselor()
         self._upload_rows([self._row()])
-        job = self._upload_rows([self._row()])
+        job = self._upload_rows([self._row(session_notes="Corrected notes.")])
 
         self.assertEqual(ConsultationRecord.objects.count(), 1)
         record = job.records.get()
-        self.assertEqual(record.status, RecordStatus.ERROR)
-        self.assertIn(
-            "already exists for this student", record.error_message
+        self.assertEqual(record.status, RecordStatus.SUCCESS)
+        self.assertEqual(
+            ConsultationRecord.objects.get().session_notes, "Corrected notes."
         )
 
     # -- header validation ------------------------------------------------
@@ -3579,6 +3673,91 @@ class GuidanceRecordsImportTest(DataImportApiBase):
 # PH11 — import templates: the header a tester downloads is the header the
 # importer validates, so there is no second copy of the schema to drift.
 # ---------------------------------------------------------------------------
+
+
+class BackgroundImportTest(TransactionTestCase):
+    """
+    A file above ``IMPORT_SYNC_ROW_LIMIT`` is queued, not processed inline.
+
+    ``TransactionTestCase`` on purpose: the worker thread opens its own
+    connection, so the job row has to be really committed for it to be seen —
+    which is exactly what happens in production.
+    """
+
+    def setUp(self):
+        self.admin_user = User.objects.create_user(
+            email="admin_bg@test.com", password="pass12345",
+            first_name="Ad", last_name="Min", role="admin",
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.admin_user)
+
+    def test_large_upload_is_queued_then_finishes(self):
+        from apps.data_import import views as views_module
+
+        dom = _build_grade_domain("bg")
+        csv_text = _rows_csv(
+            ["student_id", "subject_assignment", "grading_period", "score"],
+            [[dom["student_id"], dom["subject_assignment"], dom["grading_period"], 90]],
+        )
+        with mock.patch.object(views_module, "IMPORT_SYNC_ROW_LIMIT", 0):
+            resp = self.client.post(
+                "/api/v1/data-import/jobs/",
+                {"file": make_csv(csv_text, name="bg.csv"), "import_type": "grades"},
+                format="multipart",
+            )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        job_id = resp.json()["id"]
+        self.assertEqual(resp.json()["status"], JobStatus.PROCESSING)
+
+        deadline = time.monotonic() + 30
+        job = ImportJob.objects.get(pk=job_id)
+        while job.status in (JobStatus.PENDING, JobStatus.PROCESSING):
+            if time.monotonic() > deadline:
+                self.fail(f"job {job_id} never finished (status={job.status})")
+            time.sleep(0.25)
+            job.refresh_from_db()
+
+        self.assertEqual(job.status, JobStatus.COMPLETED, job.error_log)
+        self.assertEqual(job.processed_rows, 1)
+        self.assertEqual(Grade.objects.count(), 1)
+
+
+class BackgroundWorkerTest(TestCase):
+    """The worker body itself: success and unexpected failure."""
+
+    def setUp(self):
+        self.admin_user = User.objects.create_user(
+            email="admin_bw@test.com", password="pass12345",
+            first_name="Ad", last_name="Min", role="admin",
+        )
+
+    def test_unexpected_failure_marks_the_job_failed(self):
+        from apps.data_import.runner import process_job
+
+        job = ImportJob.objects.create(
+            uploaded_by=self.admin_user,
+            file="imports/boom.csv",
+            file_type=FileType.CSV,
+            import_type=ImportType.GRADES,
+            status=JobStatus.PROCESSING,
+        )
+        with mock.patch(
+            "apps.data_import.runner.dispatch_domain_processing",
+            side_effect=RuntimeError("boom"),
+        ):
+            process_job(job.pk, ["student_id"])
+
+        job.refresh_from_db()
+        self.assertEqual(job.status, JobStatus.FAILED)
+        self.assertEqual(
+            job.error_log[0]["code"], ImportErrorCode.INTERNAL_PIPELINE_ERROR
+        )
+
+    def test_missing_job_is_ignored(self):
+        from apps.data_import.runner import process_job
+
+        process_job("00000000-0000-0000-0000-000000000000", ["student_id"])
 
 
 class ImportTemplateApiTest(DataImportApiBase):

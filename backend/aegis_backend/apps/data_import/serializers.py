@@ -3,7 +3,7 @@ Serializers for data-import (Phase 8.2).
 
 ImportJobSerializer surfaces job metadata + summary + nested per-row
 results. A dedicated import-create serializer accepts multipart form data
-(file + import_type) and runs the PH8.3 CSV pipeline synchronously.
+(file + import_type) for the CSV/XLSX pipeline.
 """
 
 from rest_framework import serializers
@@ -70,9 +70,9 @@ class ImportJobCreateSerializer(serializers.Serializer):
     """
     Accepts multipart/form-data: ``file`` + ``import_type``.
 
-    Confirms the upload against the role-authority matrix and runs the CSV
-    pipeline synchronously, populating the job's ImportRecords. No
-    Grade/Attendance/Student records are written at this stage.
+    Confirms the upload against the role-authority matrix only. Parsing and
+    processing happen in the view, so no Grade/Attendance/Student record is
+    written at this stage.
     """
 
     file = serializers.FileField()

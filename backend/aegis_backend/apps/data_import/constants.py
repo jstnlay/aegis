@@ -11,7 +11,9 @@ Locked design decisions:
   library in use.
 - Uploaded files are untrusted input; size and format are validated
   before any parsing.
-- V1 processes synchronously (no Celery/Redis). See specS G.8 / ASM-04.
+- V1 adds no task queue (no Celery/Redis): a small file finishes in the
+  upload request, a larger one in the in-process worker pool. See spec
+  G.8 / ASM-04.
 """
 
 from pathlib import Path
@@ -130,8 +132,17 @@ ALL_ADMIN_IMPORT_TYPES = frozenset(
 #: Maximum accepted import file size in bytes (10 MB).
 MAX_IMPORT_FILE_SIZE = 10 * 1024 * 1024
 
-#: Maximum total rows accepted per import job (defensive bound for v1).
-MAX_IMPORT_ROWS = 5000
+#: Maximum total rows accepted per import job. Sized for a real school file
+#: (a whole school's attendance for a month, or its grades for a term); the
+#: file-size cap above still applies.
+MAX_IMPORT_ROWS = 20000
+
+#: Rows a request processes before handing the rest to a worker thread.
+#: At or below this, the POST response already carries the finished job, which
+#: keeps small uploads instant. Above it the request would outlive the
+#: platform's HTTP timeout, so the job is queued and the client polls for it:
+#: a 5,000-row file takes about a minute, and no request stays open that long.
+IMPORT_SYNC_ROW_LIMIT = 200
 
 # CSV-specific safe defaults (vs. Excel coercion surprises).
 CSV_MAX_COLUMNS = 60
@@ -174,6 +185,9 @@ class ImportErrorCode:
     MULTIPLE_WORKSHEETS = "MULTIPLE_WORKSHEETS"
     WORKSHEET_NOT_FOUND = "WORKSHEET_NOT_FOUND"
     EMPTY_WORKSHEET = "EMPTY_WORKSHEET"
+    #: A row matched a ``finalized`` grade. Finalized grades are locked: the
+    #: importer never overwrites a locked academic record.
+    FINALIZED_GRADE_LOCKED = "FINALIZED_GRADE_LOCKED"
     # Domain-level (PH8.5 grade / PH8.6 attendance) row error codes
     INVALID_STUDENT = "INVALID_STUDENT"
     INVALID_ENROLLMENT = "INVALID_ENROLLMENT"

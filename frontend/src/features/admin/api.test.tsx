@@ -27,6 +27,13 @@ vi.mock("@/lib/pagination", () => ({
   fetchAllPages: vi.fn(async () => ({ results: [], count: 0 })),
 }))
 
+/* Poll faster than the 3 s the app uses: the assertion below only needs to see
+ * a second request happen at all. */
+vi.mock("@/lib/importJobs", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/importJobs")>()
+  return { ...actual, IMPORT_JOB_POLL_INTERVAL_MS: 20 }
+})
+
 const mockedGet = vi.mocked(apiClient.get)
 const mockedFetchAllPages = vi.mocked(fetchAllPages)
 
@@ -171,6 +178,37 @@ describe("admin list clients use the paginated envelope", () => {
     expect(urls).toContain("/academics/grades/")
     expect(urls).toContain("/audit/logs/")
     expect(urls).toContain("/data-import/jobs/")
+  })
+
+  it("keeps refreshing the job list while a job is still processing", async () => {
+    /*
+     * An upload larger than the request returns `processing` and is finished by
+     * a worker, so without the poll the page would show "processing" forever.
+     */
+    mockedFetchAllPages.mockResolvedValue({
+      results: [
+        {
+          id: "job-1",
+          uploaded_by: { id: "u1", name: "Ada Min" },
+          file_name: "grades.csv",
+          import_type: "grades",
+          status: "processing",
+          total_rows: 500,
+          processed_rows: 0,
+          error_rows: 0,
+          created_at: "2026-01-01T00:00:00Z",
+          completed_at: null,
+          record_summary: { success: 0, error: 0, skipped: 0 },
+        },
+      ],
+      count: 1,
+    })
+
+    renderHook(() => useImportJobs(), { wrapper: createWrapper() })
+
+    await waitFor(() =>
+      expect(mockedFetchAllPages.mock.calls.length).toBeGreaterThan(1)
+    )
   })
 
   it("maps every audit filter onto the bounded query parameter", async () => {

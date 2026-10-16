@@ -30,11 +30,19 @@ class RowError(Exception):
         self.message = message
 
 
-#: Required columns for grade imports.
-GRADE_REQUIRED_COLUMNS = ("student_id", "subject_assignment", "grading_period", "score")
+#: Columns always required in a grade import.  A row names its subject
+#: assignment either by UUID (``subject_assignment``) or by the school's own
+#: keys (``section`` + ``subject_code``); see ``GradeImporter``.
+GRADE_REQUIRED_COLUMNS = ("student_id", "grading_period", "score")
 
 #: Optional columns for grade imports.
-GRADE_OPTIONAL_COLUMNS = ("letter_grade", "remarks")
+GRADE_OPTIONAL_COLUMNS = (
+    "subject_assignment",
+    "section",
+    "subject_code",
+    "letter_grade",
+    "remarks",
+)
 
 #: Required columns for attendance imports.
 ATTENDANCE_REQUIRED_COLUMNS = ("student_id", "section", "date", "status")
@@ -148,15 +156,27 @@ GUIDANCE_ALLOWED_COLUMNS = frozenset(
 _TEMPLATES: dict[str, dict[str, tuple[bool, str]]] = {
     ImportType.GRADES: {
         "student_id": (True, "Student's school code, as shown in the Students export."),
-        "subject_assignment": (True, "Subject assignment UUID."),
-        "grading_period": (True, "Grading period UUID."),
+        "grading_period": (True, "Grading period name, e.g. Term 2 (or its UUID)."),
         "score": (True, "Numeric score from 0 to 100."),
+        "subject_assignment": (
+            False,
+            "Subject assignment UUID. Use this, or give section + subject_code.",
+        ),
+        "section": (
+            False,
+            "Section name, e.g. Grade 8 - Bonifacio (or its UUID). "
+            "Required when subject_assignment is not given.",
+        ),
+        "subject_code": (
+            False,
+            "Subject code, e.g. ENG. Required when subject_assignment is not given.",
+        ),
         "letter_grade": (False, "Optional letter grade."),
         "remarks": (False, "Optional remarks."),
     },
     ImportType.ATTENDANCE: {
         "student_id": (True, "Student's school code, as shown in the Students export."),
-        "section": (True, "Section UUID."),
+        "section": (True, "Section name, e.g. Grade 8 - Bonifacio (or its UUID)."),
         "date": (True, "Attendance date, YYYY-MM-DD. Cannot be in the future."),
         "status": (True, "One of: present, late, absent."),
     },
@@ -166,7 +186,7 @@ _TEMPLATES: dict[str, dict[str, tuple[bool, str]]] = {
         "last_name": (True, "Student's last name."),
         "email": (True, "Unique email address. Duplicates are rejected."),
         "grade_level": (True, "Grade level, e.g. 7."),
-        "section": (True, "Section UUID."),
+        "section": (True, "Section name, e.g. Bonifacio."),
         "academic_year": (False, "Academic year label, e.g. 2026-2027."),
         "date_of_birth": (False, "YYYY-MM-DD."),
         "guardian_contact": (False, "Guardian contact number."),
@@ -261,12 +281,27 @@ def column_value(row, name):
     return str(value).strip()
 
 
+def memo(cache, key, produce):
+    """
+    Compute a value once per import job.
+
+    A class sheet repeats the same student, section, subject and term on many
+    rows.  Re-resolving one of those per row costs a query per row for no
+    benefit, so importers pass a per-job dict here.  Failures are not cached:
+    ``produce`` raises before anything is stored.
+    """
+    if key not in cache:
+        cache[key] = produce()
+    return cache[key]
+
+
 class InFileDuplicateTracker:
     """Detect duplicate logical keys within a single uploaded file.
 
-    Grade rows are keyed by (student_id, subject_assignment,
-    grading_period); attendance rows by (student_id, date).  The second
-    occurrence is rejected so an upload cannot silently create duplicates.
+    Grade rows are keyed by the resolved (student, subject assignment,
+    grading period); attendance rows by (student_id, date); guidance rows by
+    (student_id, session_date, session_time).  The second occurrence is
+    rejected so an upload cannot silently overwrite the row it just wrote.
     """
 
     def __init__(self):

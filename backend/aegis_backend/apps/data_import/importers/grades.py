@@ -8,26 +8,35 @@ the model, so this importer does not re-implement them.
 
 Accepted columns::
 
-    student_id        (required)  StudentProfile.student_id school code
-    subject_assignment (required)  SubjectAssignment UUID
-    grading_period    (required)  GradingPeriod UUID
-    score             (required)  numeric 0-100
-    letter_grade      (optional)
-    remarks           (optional)
+    student_id         (required)  StudentProfile.student_id school code
+    grading_period     (required)  GradingPeriod name (e.g. Term 2) or UUID
+    score              (required)  numeric 0-100
+    subject_assignment (optional)  SubjectAssignment UUID
+    section            (optional)  Section name or UUID
+    subject_code       (optional)  Subject code, e.g. ENG
+    letter_grade       (optional)
+    remarks            (optional)
+
+A row names its subject assignment one of two ways.  Either it carries the
+``subject_assignment`` UUID, or it carries the school's own keys ``section``
+and ``subject_code``.  At least one of the two forms must be present.  The
+human form is described in the module docstring of ``resolution.py``.
 
 Business rules enforced here (as the domain defines them):
 - resolve real StudentProfile / SubjectAssignment / GradingPeriod
 - faculty may only import grades for their OWN subject assignments
 - score must be within the domain range (0-100)
 - in-file duplicate rows are rejected
-- existing Grade (student, subject_assignment, grading_period) is rejected
+- re-uploading an existing (student, subject assignment, grading period)
+  updates that grade in place; a ``finalized`` grade is locked and rejected
+  (``FINALIZED_GRADE_LOCKED``) because it is a signed academic record
 - SEC-013 relationship checks run via ``Grade.full_clean()``
 """
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
-from apps.academics.models import Grade, GradingPeriod, SubjectAssignment
+from apps.academics.models import AcademicYear, Grade, SubjectAssignment
 
 from ..constants import ImportErrorCode, RecordStatus
 from .base import (
@@ -36,9 +45,11 @@ from .base import (
     InFileDuplicateTracker,
     RowError,
     column_value,
+    memo,
     recompute_job_counters,
     validate_headers,
 )
+from .resolution import resolve_grading_period, resolve_section, resolve_subject_assignment
 
 
 class GradeImporter:
@@ -48,6 +59,9 @@ class GradeImporter:
         self.job = job
         self.records = records  # list aligned with result.rows
         self.user = user
+        #: Per-job resolution cache: one lookup per distinct student, section,
+        #: subject assignment and grading period, not per row.
+        self.cache = {}
 
     def process(self, headers):
         """
@@ -60,6 +74,8 @@ class GradeImporter:
             required=GRADE_REQUIRED_COLUMNS,
             allowed=GRADE_ALLOWED_COLUMNS,
         )
+        if header_error is None:
+            header_error = self._validate_key_columns(headers)
         if header_error is not None:
             self._fail_all(header_error)
             return
@@ -96,28 +112,79 @@ class GradeImporter:
         except Exception:
             return None
 
+    def _validate_key_columns(self, headers):
+        """
+        A grade row names its subject assignment one of two ways.
+
+        ``subject_assignment`` carries the assignment UUID; otherwise
+        ``section`` + ``subject_code`` carry the school's own keys.  A header
+        row with neither form is rejected, and the message names both.
+        """
+        if "subject_assignment" in headers:
+            return None
+        if "section" in headers and "subject_code" in headers:
+            return None
+        return RowError(
+            ImportErrorCode.MISSING_REQUIRED_COLUMN,
+            "Columns are missing: give either subject_assignment, or both "
+            "section and subject_code.",
+        )
+
+    def _current_academic_year(self):
+        """The year a hand-written school file refers to."""
+        academic_year = AcademicYear.objects.filter(is_current=True).first()
+        if academic_year is None:
+            raise RowError(
+                ImportErrorCode.INVALID_ACADEMIC_YEAR,
+                "No current academic year is configured.",
+            )
+        return academic_year
+
     def _process_row(self, record, faculty_id, tracker):
         row = record.data
 
         student_id = column_value(row, "student_id")
-        subject_assignment_uuid = column_value(row, "subject_assignment")
-        grading_period_uuid = column_value(row, "grading_period")
+        assignment_raw = column_value(row, "subject_assignment")
+        section_raw = column_value(row, "section")
+        subject_code_raw = column_value(row, "subject_code")
+        grading_period_raw = column_value(row, "grading_period")
         score_raw = column_value(row, "score")
 
         if not student_id:
             raise RowError(ImportErrorCode.MISSING_REQUIRED_COLUMN, "student_id is required.")
-        if not subject_assignment_uuid:
-            raise RowError(ImportErrorCode.MISSING_REQUIRED_COLUMN, "subject_assignment is required.")
-        if not grading_period_uuid:
+        if not assignment_raw and not (section_raw and subject_code_raw):
+            raise RowError(
+                ImportErrorCode.MISSING_REQUIRED_COLUMN,
+                "Give either subject_assignment, or both section and subject_code.",
+            )
+        if not grading_period_raw:
             raise RowError(ImportErrorCode.MISSING_REQUIRED_COLUMN, "grading_period is required.")
         if score_raw == "":
             raise RowError(ImportErrorCode.MISSING_REQUIRED_COLUMN, "score is required.")
 
         # --- student resolution -----------------------------------------
-        student = self._resolve_student(student_id)
+        student = memo(self.cache, ("student", student_id), lambda: self._resolve_student(student_id))
 
-        # --- subject assignment + faculty scope -------------------------
-        subject_assignment = self._resolve_assignment(subject_assignment_uuid)
+        # --- subject assignment (UUID form, or section + subject_code) ---
+        if assignment_raw:
+            subject_assignment = memo(
+                self.cache,
+                ("assignment", assignment_raw),
+                lambda: self._resolve_assignment(assignment_raw),
+            )
+        else:
+            section = memo(
+                self.cache,
+                ("section", section_raw),
+                lambda: resolve_section(section_raw, self._current_academic_year()),
+            )
+            subject_assignment = memo(
+                self.cache,
+                ("assignment", section.pk, subject_code_raw),
+                lambda: resolve_subject_assignment(
+                    section, subject_code_raw, section.academic_year
+                ),
+            )
         if faculty_id is not None and subject_assignment.faculty_id != faculty_id:
             raise RowError(
                 ImportErrorCode.FACULTY_SCOPE_DENIED,
@@ -125,7 +192,15 @@ class GradeImporter:
             )
 
         # --- grading period ---------------------------------------------
-        grading_period = self._resolve_grading_period(grading_period_uuid)
+        # Resolved within the assignment's academic year, so "Term 2" can
+        # never silently mean another year's Term 2.
+        grading_period = memo(
+            self.cache,
+            ("period", subject_assignment.academic_year_id, grading_period_raw),
+            lambda: resolve_grading_period(
+                grading_period_raw, subject_assignment.academic_year
+            ),
+        )
 
         # --- score / optional fields ------------------------------------
         score = self._parse_score(score_raw)
@@ -133,7 +208,9 @@ class GradeImporter:
         remarks = column_value(row, "remarks") or None
 
         # --- in-file duplicate ------------------------------------------
-        dup_key = (student_id, subject_assignment_uuid, grading_period_uuid)
+        # Keyed on the resolved records, so the UUID form and the school form
+        # of the same grade are detected as one duplicate row.
+        dup_key = (student.pk, subject_assignment.pk, grading_period.pk)
         if tracker.is_dup(dup_key):
             raise RowError(
                 ImportErrorCode.DUPLICATE_ROW,
@@ -142,30 +219,36 @@ class GradeImporter:
             )
         tracker.mark(dup_key)
 
-        # --- existing grade ---------------------------------------------
-        if Grade.objects.filter(
-            student=student,
-            subject_assignment=subject_assignment,
-            grading_period=grading_period,
-        ).exists():
-            raise RowError(
-                ImportErrorCode.DUPLICATE_ENTITY,
-                "A grade already exists for this student, subject assignment, "
-                "and grading period.",
-            )
-
-        grade = Grade(
-            student=student,
-            subject_assignment=subject_assignment,
-            grading_period=grading_period,
-            score=score,
-            letter_grade=letter_grade,
-            remarks=remarks,
-            encoded_by=subject_assignment.faculty
+        encoded_by = (
+            subject_assignment.faculty
             if faculty_id is None
-            else self.user.faculty_profile,
-            status=Grade.StatusChoices.DRAFT,
+            else self.user.faculty_profile
         )
+
+        # --- existing grade: update in place, unless finalized ----------
+        grade = Grade.objects.filter(
+            student=student,
+            subject_assignment=subject_assignment,
+            grading_period=grading_period,
+        ).first()
+        if grade is not None and grade.status == Grade.StatusChoices.FINALIZED:
+            raise RowError(
+                ImportErrorCode.FINALIZED_GRADE_LOCKED,
+                "This grade is finalized and cannot be imported. Reopen it "
+                "before importing a change.",
+            )
+        if grade is None:
+            grade = Grade(
+                student=student,
+                subject_assignment=subject_assignment,
+                grading_period=grading_period,
+            )
+        grade.score = score
+        grade.letter_grade = letter_grade
+        grade.remarks = remarks
+        grade.encoded_by = encoded_by
+        grade.status = Grade.StatusChoices.DRAFT
+
         with transaction.atomic():
             # full_clean runs SEC-013: grading period academic-year match +
             # active enrollment integrity.  A ValidationError becomes a safe
@@ -208,17 +291,6 @@ class GradeImporter:
             )
         except Exception:
             raise RowError(ImportErrorCode.INVALID_SUBJECT_ASSIGNMENT, "Invalid subject assignment.")
-
-    def _resolve_grading_period(self, grading_period_uuid):
-        try:
-            return GradingPeriod.objects.get(pk=grading_period_uuid)
-        except GradingPeriod.DoesNotExist:
-            raise RowError(
-                ImportErrorCode.INVALID_GRADING_PERIOD,
-                "Grading period not found.",
-            )
-        except Exception:
-            raise RowError(ImportErrorCode.INVALID_GRADING_PERIOD, "Invalid grading period.")
 
     def _map_full_clean_error(self, exc):
         """Map a Grade.full_clean() ValidationError to a safe RowError."""

@@ -1,5 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { apiClient } from "@/lib/api"
+import {
+  IMPORT_JOB_POLL_INTERVAL_MS,
+  isImportJobLive,
+} from "@/lib/importJobs"
 import { fetchAllPages } from "@/lib/pagination"
 import type { Page } from "@/types/api"
 
@@ -97,15 +101,23 @@ export function useFacultyImportJobs() {
         await fetchAllPages<FacultyImportJob>("/data-import/jobs/")
       return results
     },
+    // A file too large for the request finishes in a worker, so the list
+    // refreshes itself while any job is still running.
+    refetchInterval: (query) =>
+      (query.state.data ?? []).some((job) => isImportJobLive(job.status))
+        ? IMPORT_JOB_POLL_INTERVAL_MS
+        : false,
   })
 }
 
 /**
  * Upload a grades or attendance file.
  *
- * The pipeline runs synchronously server-side, so this resolves only once the
- * job is terminal. It posts to the batch-import alias rather than
- * `/data-import/jobs/` so the server pins the import type.
+ * A file small enough to finish inside the request resolves with a terminal
+ * job; a larger one resolves with `pending`/`processing` and is finished by a
+ * worker afterwards (the job list polls itself until then). It posts to the
+ * batch-import alias rather than `/data-import/jobs/` so the server pins the
+ * import type.
  *
  * `sheet` optionally names the XLSX worksheet to import (its title, or its
  * 1-based position among the visible sheets), so a workbook that also carries

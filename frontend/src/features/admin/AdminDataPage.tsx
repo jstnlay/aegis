@@ -45,11 +45,14 @@ import { downloadCsv } from "@/lib/export"
  * Both directions are shaped by what the backend actually supports.
  *
  * Imports: `ImportJobViewSet` allows only admin and faculty, restricts itself
- * to `get`/`post`/`head`/`options`, and **runs the pipeline synchronously** —
- * `create` calls `_run_job` inline, so a job reaches a terminal state within
- * the request that created it. There is no "start" step and no retry or delete
- * route, so neither control exists here. The five `JobStatus` values are the
- * real choices, including `partial` for a job where some rows failed.
+ * to `get`/`post`/`head`/`options`, and **finishes small files inside the
+ * request** — `create` calls `_run_job` inline, so a job of up to 200 rows
+ * reaches a terminal state within the request that created it. A larger file
+ * is handed to a worker (`apps/data_import/runner.py`) and polled here until it
+ * is done. There is no "start" step and no retry or delete route, so neither
+ * control exists here; a job that never finishes is retried by re-uploading,
+ * which corrects the same records. The five `JobStatus` values are the real
+ * choices, including `partial` for a job where some rows failed.
  *
  * Every accepted `ImportType` is backed by a domain importer as of PH11,
  * including `guidance_records`, which writes real `ConsultationRecord` rows.
@@ -211,8 +214,9 @@ function ImportsCard() {
           <CardTitle>Upload a file</CardTitle>
           <CardDescription>
             CSV or XLSX. The server detects the real type from the file&apos;s
-            contents rather than its extension, and processes the upload
-            synchronously — the response already carries the finished job.
+            contents rather than its extension. A small file finishes before
+            you get the response; a large one keeps running in the background
+            and this list refreshes itself until it is done.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">

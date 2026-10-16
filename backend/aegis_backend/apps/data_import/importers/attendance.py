@@ -9,12 +9,17 @@ path exactly; the importer does not invent a second authorization system.
 Accepted columns::
 
     student_id   (required)  StudentProfile.student_id school code
-    section      (required)  Section UUID
+    section      (required)  section name ("Grade 8 - Bonifacio") or UUID
     date         (required)  YYYY-MM-DD (not in the future)
     status       (required)  present | late | absent
 
 ``recorded_by`` is FORBIDDEN: attribution is always server-controlled and
 set to the authenticated faculty profile.
+
+Re-uploading a record for the same student and date applies the corrected
+status in place instead of rejecting the row: a school corrects a class sheet
+and uploads it again.  The faculty-section scope check still runs first, so a
+re-upload can never overwrite a section the uploader may not touch.
 
 EVT-02 note: persistence is primary.  The attendance threshold notification
 runs only AFTER the record is committed and any notification failure is
@@ -26,7 +31,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.attendance.models import AttendanceRecord
-from apps.academics.models import AcademicYear, Enrollment, Section, SubjectAssignment
+from apps.academics.models import AcademicYear, Enrollment, SubjectAssignment
 
 from ..constants import ImportErrorCode, RecordStatus
 from .base import (
@@ -36,9 +41,11 @@ from .base import (
     InFileDuplicateTracker,
     RowError,
     column_value,
+    memo,
     recompute_job_counters,
     validate_headers,
 )
+from .resolution import resolve_section
 
 #: Valid attendance statuses (AttendanceRecord.Status choices).
 _VALID_STATUSES = frozenset(
@@ -53,6 +60,8 @@ class AttendanceImporter:
         self.job = job
         self.records = records
         self.user = user
+        #: One lookup per distinct student and section, not per row.
+        self.cache = {}
 
     def process(self, headers):
         header_error = validate_headers(
@@ -108,21 +117,25 @@ class AttendanceImporter:
         row = record.data
 
         student_id = column_value(row, "student_id")
-        section_uuid = column_value(row, "section")
+        section_raw = column_value(row, "section")
         date_raw = column_value(row, "date")
         status_raw = column_value(row, "status").lower()
 
         if not student_id:
             raise RowError(ImportErrorCode.MISSING_REQUIRED_COLUMN, "student_id is required.")
-        if not section_uuid:
+        if not section_raw:
             raise RowError(ImportErrorCode.MISSING_REQUIRED_COLUMN, "section is required.")
         if not date_raw:
             raise RowError(ImportErrorCode.MISSING_REQUIRED_COLUMN, "date is required.")
         if status_raw == "":
             raise RowError(ImportErrorCode.MISSING_REQUIRED_COLUMN, "status is required.")
 
-        student = self._resolve_student(student_id)
-        section = self._resolve_section(section_uuid)
+        student = memo(self.cache, ("student", student_id), lambda: self._resolve_student(student_id))
+        section = memo(
+            self.cache,
+            ("section", section_raw, current_ay.pk),
+            lambda: resolve_section(section_raw, current_ay),
+        )
         record_date = self._resolve_date(date_raw)
         self._resolve_status(status_raw)
 
@@ -166,14 +179,8 @@ class AttendanceImporter:
         tracker.mark(dup_key)
 
         # --- existing record --------------------------------------------
-        if AttendanceRecord.objects.filter(
-            student=student, date=record_date
-        ).exists():
-            raise RowError(
-                ImportErrorCode.DUPLICATE_ENTITY,
-                "An attendance record already exists for this student "
-                "on the specified date.",
-            )
+        # A re-upload of the same student and date updates the existing record
+        # in place (see the module docstring); it is not an error.
 
         # --- server-controlled attribution -------------------------------
         # Faculty -> own profile.  Admin -> the section's adviser, else the
@@ -186,13 +193,18 @@ class AttendanceImporter:
 
         # --- primary operation: persist the record ----------------------
         with transaction.atomic():
-            record_obj = AttendanceRecord(
-                student=student,
-                section=section,
-                date=record_date,
-                status=status_raw,
-                recorded_by=recorded_by,
-            )
+            record_obj = AttendanceRecord.objects.filter(
+                student=student, date=record_date
+            ).first()
+            if record_obj is None:
+                record_obj = AttendanceRecord(
+                    student=student,
+                    section=section,
+                    date=record_date,
+                )
+            record_obj.section = section
+            record_obj.status = status_raw
+            record_obj.recorded_by = recorded_by
             # full_clean() rejects future dates (domain rule).
             try:
                 record_obj.full_clean()
@@ -288,14 +300,6 @@ class AttendanceImporter:
             )
         except Exception:
             raise RowError(ImportErrorCode.INVALID_STUDENT, "Invalid student identifier.")
-
-    def _resolve_section(self, section_uuid):
-        try:
-            return Section.objects.get(pk=section_uuid)
-        except Section.DoesNotExist:
-            raise RowError(ImportErrorCode.INVALID_SECTION, "Section not found.")
-        except Exception:
-            raise RowError(ImportErrorCode.INVALID_SECTION, "Invalid section.")
 
     def _resolve_date(self, date_raw):
         from datetime import datetime

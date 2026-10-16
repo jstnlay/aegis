@@ -26,7 +26,8 @@ Accepted columns::
 ``counselor`` / ``recorded_by`` are FORBIDDEN: attribution is always
 server-controlled, mirroring the attendance importer's rule for
 ``recorded_by``.  A client-supplied counselor would let an upload forge who
-conducted a session.
+conducted a session.  Re-uploading a session for the same student, date and
+time updates that record in place and keeps its existing counselor.
 
 The ``session_date`` future-date rule mirrors ``BehavioralNote.clean()`` in
 the same app rather than inventing a new one.
@@ -46,6 +47,7 @@ from .base import (
     InFileDuplicateTracker,
     RowError,
     column_value,
+    memo,
     recompute_job_counters,
     validate_headers,
 )
@@ -80,6 +82,8 @@ class GuidanceRecordsImporter:
         self.job = job
         self.records = records
         self.user = user
+        #: One lookup per distinct student (and attributed counselor), not per row.
+        self.cache = {}
 
     def process(self, headers):
         """
@@ -163,7 +167,7 @@ class GuidanceRecordsImporter:
                 ImportErrorCode.MISSING_REQUIRED_COLUMN, "priority_level is required."
             )
 
-        student = self._resolve_student(student_id)
+        student = memo(self.cache, ("student", student_id), lambda: self._resolve_student(student_id))
         session_date = self._resolve_date(date_raw, future_allowed=False)
         session_time = self._resolve_time(time_raw)
         self._resolve_choice(
@@ -202,37 +206,45 @@ class GuidanceRecordsImporter:
             )
         tracker.mark(dup_key)
 
-        # --- existing record --------------------------------------------
-        if ConsultationRecord.objects.filter(
+        # --- existing record: update in place ---------------------------
+        # A re-upload of the same session applies the corrected content
+        # (already validated above) instead of rejecting the row.  The
+        # counselor stays as first attributed: re-attribution would demand a
+        # risk alert or intervention that may no longer exist.
+        record_obj = ConsultationRecord.objects.filter(
             student=student,
             session_date=session_date,
             session_time=session_time,
-        ).exists():
-            raise RowError(
-                ImportErrorCode.DUPLICATE_ENTITY,
-                "A consultation record already exists for this student "
-                "on the specified date and time.",
-            )
+        ).first()
 
-        counselor = self._resolve_counselor(student)
+        counselor = (
+            record_obj.counselor
+            if record_obj is not None
+            else memo(
+                self.cache,
+                ("counselor", student_id),
+                lambda: self._resolve_counselor(student),
+            )
+        )
 
         recommendations = column_value(row, "recommendations") or None
 
         # --- primary operation: persist the record ----------------------
         with transaction.atomic():
-            record_obj = ConsultationRecord(
-                student=student,
-                counselor=counselor,
-                session_date=session_date,
-                session_time=session_time,
-                session_type=type_raw,
-                concern_categories=concerns,
-                session_notes=notes_raw,
-                recommendations=recommendations,
-                next_session_date=next_session_date,
-                priority_level=priority_raw,
-                status=status_raw,
-            )
+            if record_obj is None:
+                record_obj = ConsultationRecord(
+                    student=student,
+                    counselor=counselor,
+                    session_date=session_date,
+                    session_time=session_time,
+                )
+            record_obj.session_type = type_raw
+            record_obj.concern_categories = concerns
+            record_obj.session_notes = notes_raw
+            record_obj.recommendations = recommendations
+            record_obj.next_session_date = next_session_date
+            record_obj.priority_level = priority_raw
+            record_obj.status = status_raw
             try:
                 record_obj.full_clean()
             except ValidationError as exc:

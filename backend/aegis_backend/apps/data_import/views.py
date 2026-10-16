@@ -2,7 +2,8 @@
 Data-import view layer (Phase 8.2 / 8.4).
 
 ImportJobViewSet:
-- POST   /api/v1/data-import/jobs/        create + synchronously process
+- POST   /api/v1/data-import/jobs/        create; small files finish in the
+                                          request, larger ones are queued
 - GET    /api/v1/data-import/jobs/        list own jobs
 - GET    /api/v1/data-import/jobs/{id}/    retrieve job + per-row records
 
@@ -28,6 +29,7 @@ from .constants import (
     ExportFormat,
     ExportType,
     FileType,
+    IMPORT_SYNC_ROW_LIMIT,
     ImportErrorCode,
     ImportType,
     JobStatus,
@@ -43,6 +45,7 @@ from .exports import (
     safe_export_filename,
 )
 from .models import ImportJob, ImportRecord
+from .runner import process_records, run_in_background
 from .serializers import (
     ImportJobCreateSerializer,
     ImportJobSerializer,
@@ -181,19 +184,11 @@ class ImportJobViewSet(viewsets.ModelViewSet):
             # Re-raise so the framework returns a generic 500 envelope.
             raise
 
-        # PH10.9: audit exactly ONE IMPORT event, only once the import
-        # genuinely completed.  FAILED/PARTIAL jobs are not audited as
-        # successful; the hook is fire-and-forget (PH10.7 principle).
-        if job.status == JobStatus.COMPLETED:
-            from apps.audit.import_export_hooks import audit_successful_import
-
-            audit_successful_import(job)
-
         out = ImportJobSerializer(job, context={"request": request})
         return Response(out.data, status=status.HTTP_201_CREATED)
 
     def _run_job(self, job, uploaded_file, file_type, sheet=None):
-        """Synchronous pipeline for a pending job (CSV or XLSX)."""
+        """Parse a pending job, then finish it here or hand it to a worker."""
         from .csv_pipeline import safe_filename
 
         filename = safe_filename(getattr(uploaded_file, "name", ""))
@@ -240,63 +235,19 @@ class ImportJobViewSet(viewsets.ModelViewSet):
         # updates are applied to real rows.
         records = list(job.records.order_by("row_number"))
 
-        self._dispatch_domain_processing(job, records, result.headers)
-
-    def _dispatch_domain_processing(self, job, records, headers):
-        """
-        Route parsed rows to the matching domain importer.
-
-        grades / attendance / students / guidance_records all write real
-        records via their importers.  Should a future import type ever be
-        added without an importer, the file is parsed but nothing is
-        stored, and the job says so instead of reporting a completed
-        import.
-        """
-        from .importers.attendance import AttendanceImporter
-        from .importers.grades import GradeImporter
-        from .importers.guidance import GuidanceRecordsImporter
-        from .importers.students import StudentImporter
-
-        if job.import_type == ImportType.GRADES:
-            GradeImporter(job, records, job.uploaded_by).process(headers)
-            return
-        if job.import_type == ImportType.ATTENDANCE:
-            AttendanceImporter(job, records, job.uploaded_by).process(headers)
-            return
-        if job.import_type == ImportType.STUDENTS:
-            StudentImporter(job, records, job.uploaded_by).process(headers)
-            return
-        if job.import_type == ImportType.GUIDANCE_RECORDS:
-            GuidanceRecordsImporter(job, records, job.uploaded_by).process(headers)
+        if len(records) <= IMPORT_SYNC_ROW_LIMIT:
+            # Small file: finish inside the request, so the response already
+            # carries the outcome.
+            process_records(job, records, result.headers)
             return
 
-        # No domain importer for this type.  The rows parsed cleanly, but
-        # nothing is written, so nothing may be reported as SUCCESS: that
-        # would let an admin conclude the records reached the database.
-        # Rows are SKIPPED and the job fails with an explicit reason, which
-        # also keeps it out of the successful-import audit.
-        skip_message = (
-            "Parsed but not stored: this import type has no domain importer "
-            "yet, so no records were written."
-        )
-        for record in records:
-            record.status = RecordStatus.SKIPPED
-            record.error_message = skip_message
-            record.save()
+        # Large file: the request cannot stay open for minutes.  The rows are
+        # already persisted, so a worker can finish the job and the client
+        # polls GET /data-import/jobs/{id}/ for the outcome.
         job.total_rows = len(records)
-        job.processed_rows = 0
-        job.error_rows = 0
-        job.error_log = [
-            {
-                "code": ImportErrorCode.UNSUPPORTED_IMPORT_TYPE,
-                "message": (
-                    f"No importer is available for '{job.import_type}', so the "
-                    "file was parsed but no records were imported."
-                ),
-            }
-        ]
-        job.status = JobStatus.FAILED
+        job.status = JobStatus.PROCESSING
         job.save()
+        run_in_background(job.pk, result.headers)
 
 
 # ---------------------------------------------------------------------------
