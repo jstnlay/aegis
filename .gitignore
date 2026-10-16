@@ -82,4 +82,13 @@ backend/aegis_backend/ai_engine/saved_models/
 # current state of the system while drifting further from it every commit.
 docs/AEGIS Test Case Log Testing Phase Cycle 1 Complete.md
 
+# Understand Anything output. Locally generated architecture graph (multimegabyte
+# JSON + fingerprints) produced by /understand; regenerated on demand from HEAD,
+# so a committed copy would be a stale blob that drifts every commit.
+.ua/
+
+# Graphify output. Same reasoning: generated knowledge graph, HTML report and
+# per-file cache keyed to the local checkout, not reviewable source.
+graphify-out/
+
 
