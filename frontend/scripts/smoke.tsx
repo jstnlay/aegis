@@ -100,7 +100,12 @@ const shellHtml = renderToString(
 check(shellHtml, "Skip to main content", "AppShell exposes a skip link")
 check(shellHtml, 'id="main-content"', "AppShell exposes the main landmark")
 check(shellHtml, "AEGIS", "AppShell renders the brand")
-check(shellHtml, "Sign out", "AppShell renders the auth actions")
+/*
+ * The account menu button, not "Sign out": the menu starts closed, so its
+ * items are not in the server-rendered markup. This assertion used to look for
+ * "Sign out" and could never pass.
+ */
+check(shellHtml, 'aria-label="Account menu"', "AppShell renders the account menu")
 
 /* ------------------------------------------------------------------ */
 /* Role-aware navigation configuration                                 */
