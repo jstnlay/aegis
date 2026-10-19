@@ -126,7 +126,7 @@ function RecommendationRow({
   return (
     <li className="space-y-1 rounded-md border border-border p-3">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="font-medium">{item.title}</span>
+        <span className="font-medium break-words">{item.title}</span>
         <Badge variant="secondary">
           {ITEM_TYPE_LABELS[item.item_type] ?? item.item_type}
         </Badge>

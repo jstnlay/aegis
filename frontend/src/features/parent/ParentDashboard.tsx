@@ -101,14 +101,14 @@ function ParentDashboard() {
                         : "border-border hover:bg-muted"
                     }`}
                   >
-                    <div className="min-w-0">
-                      <p className="truncate font-medium">
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium">
                         {student.student_name}
-                      </p>
-                      <p className="truncate text-xs text-muted-foreground">
+                      </span>
+                      <span className="block truncate text-xs text-muted-foreground">
                         {student.section_name}
-                      </p>
-                    </div>
+                      </span>
+                    </span>
                     {selectedChildId === student.id && (
                       <Badge
                         variant="secondary"

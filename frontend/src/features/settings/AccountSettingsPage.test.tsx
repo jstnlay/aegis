@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { MemoryRouter } from "react-router-dom"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { apiClient } from "@/lib/api"
@@ -51,9 +52,13 @@ function renderPage() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
+  // `MemoryRouter` because the page's "Your data" card links to the legal
+  // pages, and `Link` requires a router above it.
   return render(
     <QueryClientProvider client={client}>
-      <AccountSettingsPage />
+      <MemoryRouter>
+        <AccountSettingsPage />
+      </MemoryRouter>
     </QueryClientProvider>
   )
 }

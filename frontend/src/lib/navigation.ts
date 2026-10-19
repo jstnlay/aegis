@@ -82,7 +82,10 @@ const ACADEMICS: NavItem = {
   label: "Academics",
   icon: BookOpen,
   // Students get the read-only grade record; faculty get grade encoding.
-  allowedRoles: ["student", "faculty", "admin"],
+  // Admin is deliberately absent: `/app/academics` is `RequireRole(["student",
+  // "faculty"])`, and admin has `admin/academics` instead, so an admin entry
+  // here could only ever bounce off the guard.
+  allowedRoles: ["student", "faculty"],
   status: "available",
 }
 

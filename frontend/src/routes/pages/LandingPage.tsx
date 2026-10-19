@@ -10,6 +10,7 @@ import {
   HelpCircle,
 } from "lucide-react"
 
+import { PublicFooter } from "@/components/brand/PublicFooter"
 import { PublicNav } from "@/components/brand/PublicNav"
 import { SchoolHeader } from "@/components/brand/SchoolHeader"
 import { Reveal } from "@/components/layout/Reveal"
@@ -284,13 +285,7 @@ export function LandingPage() {
         </Reveal>
       </main>
 
-      <footer className="border-t border-border bg-muted/30">
-        <div className="mx-auto w-full max-w-5xl px-4 py-8 text-xs text-muted-foreground lg:px-6">
-          <span>
-            His Care Christian Institute · AEGIS school information system
-          </span>
-        </div>
-      </footer>
+      <PublicFooter />
     </div>
   )
 }
@@ -405,7 +400,7 @@ function AnnouncementsSection() {
             <li key={item.document_id}>
               <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:ring-primary/20">
                 <CardHeader>
-                  <CardTitle className="text-base text-primary">
+                  <CardTitle className="text-base break-words text-primary">
                     {item.title}
                   </CardTitle>
                   <CardAction>
@@ -440,6 +435,7 @@ function ResourcesSection() {
 
   return (
     <section
+      id="resources"
       aria-labelledby="landing-resources"
       className="space-y-4 scroll-mt-20"
     >
@@ -518,7 +514,11 @@ const FAQS = [
 
 function FaqSection() {
   return (
-    <section aria-labelledby="landing-faq" className="space-y-4 scroll-mt-20">
+    <section
+      id="faq"
+      aria-labelledby="landing-faq"
+      className="space-y-4 scroll-mt-20"
+    >
       <h2
         id="landing-faq"
         className="flex items-center gap-2 text-balance text-2xl font-semibold tracking-tight text-primary"

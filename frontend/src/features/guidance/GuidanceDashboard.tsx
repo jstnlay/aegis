@@ -220,7 +220,9 @@ export function GuidanceDashboard() {
         className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
       >
         <div>
-          <h2 className="text-xl font-bold sm:text-2xl">Guidance Center</h2>
+          <h2 className="text-2xl font-bold text-foreground">
+            Guidance Center
+          </h2>
           <p className="mt-1 max-w-prose text-sm text-muted-foreground">
             Welcome back, {greetingName(user)}! Here&apos;s an overview of the
             student support activities today.
@@ -489,7 +491,7 @@ export function GuidanceDashboard() {
               </p>
             ) : recentConsultations.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                No pending consultations
+                No consultations recorded yet.
               </p>
             ) : (
               <ul className="space-y-2">

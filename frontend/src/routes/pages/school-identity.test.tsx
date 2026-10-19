@@ -12,6 +12,7 @@ import {
   SCHOOL_NAME,
 } from "@/lib/school-content"
 import { LandingPage } from "@/routes/pages/LandingPage"
+import { NotFoundPage } from "@/routes/pages/NotFoundPage"
 import { SchoolPage } from "@/routes/pages/SchoolPage"
 
 // The identity assertions below are static; the CMS feeds are covered by
@@ -158,6 +159,46 @@ describe("landing navigation on a phone", () => {
     fireEvent.click(toggle)
     fireEvent.keyDown(document, { key: "Escape" })
     expect(toggle).toHaveAttribute("aria-expanded", "false")
+  })
+
+  it("only links to sections the landing page actually has", () => {
+    const { container } = renderPage(<LandingPage />, "/")
+
+    const toggle = screen.getByRole("button", { name: "Menu" })
+    fireEvent.click(toggle)
+    const panel = document.getElementById("public-nav-menu")!
+    const links = within(panel).getAllByRole("link")
+
+    const anchors = links
+      .map((link) => link.getAttribute("href"))
+      .filter((href): href is string => !!href?.startsWith("#"))
+
+    expect(anchors.length).toBeGreaterThanOrEqual(4)
+    for (const href of anchors) {
+      expect(
+        container.querySelector(`[id="${href.slice(1)}"]`),
+        href
+      ).not.toBeNull()
+    }
+  })
+})
+
+describe("not-found page", () => {
+  it("wears the public chrome, with a main landmark and the policy links", () => {
+    renderPage(<NotFoundPage />, "/nowhere")
+
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Page not found" })
+    ).toBeInTheDocument()
+    expect(screen.getByRole("main")).toBeInTheDocument()
+    expect(screen.getByRole("banner")).toBeInTheDocument()
+    expect(
+      screen.getByRole("link", { name: "Privacy Policy" })
+    ).toHaveAttribute("href", "/privacy")
+    expect(screen.getByRole("link", { name: "Back to home" })).toHaveAttribute(
+      "href",
+      "/"
+    )
   })
 })
 

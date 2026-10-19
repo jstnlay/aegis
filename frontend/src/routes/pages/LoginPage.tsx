@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Navigate } from "react-router-dom"
+import { Link, Navigate } from "react-router-dom"
 import { Loader2 } from "lucide-react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -203,6 +203,28 @@ export function LoginPage() {
               </Button>
             </form>
           </Form>
+          {/*
+            Consent line. Short on purpose: the portal holds no non-essential
+            storage and charges no fee, so there is nothing else to agree to
+            here. The two links open the full text.
+          */}
+          <p className="mt-4 text-center text-xs leading-relaxed text-muted-foreground">
+            By signing in you agree to the{" "}
+            <Link
+              to="/terms"
+              className="underline underline-offset-4 transition-colors hover:text-foreground"
+            >
+              Terms of Use
+            </Link>{" "}
+            and acknowledge the{" "}
+            <Link
+              to="/privacy"
+              className="underline underline-offset-4 transition-colors hover:text-foreground"
+            >
+              Privacy Policy
+            </Link>
+            .
+          </p>
         </CardContent>
       </Card>
     </div>

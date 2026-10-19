@@ -1,5 +1,6 @@
 import { Settings } from "lucide-react"
 import { useState, type FormEvent } from "react"
+import { Link } from "react-router-dom"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -25,6 +26,7 @@ import {
   type NotificationPreference,
 } from "@/features/settings/api"
 import { normalizeApiError } from "@/lib/error"
+import { CONTACT } from "@/lib/school-content"
 
 /**
  * `PasswordChangeSerializer.validate_new_password` enforces `min_length=8`
@@ -584,6 +586,76 @@ function NotificationPreferencesForm({
   )
 }
 
+/**
+ * "Your data" — the data-subject contact point.
+ *
+ * There is deliberately no self-service delete or export button: the backend
+ * user API is list/retrieve/create only, with no deletion route, so a button
+ * here could only fail. A request path the school can actually answer is the
+ * honest surface. The storage list is read from the same facts the Cookie
+ * Policy states.
+ */
+function YourDataSection() {
+  return (
+    <Card>
+      <CardHeader>
+        <div className="space-y-1">
+          <CardTitle>Your data</CardTitle>
+          <CardDescription>
+            What AEGIS holds for your account, and how to ask about it.
+          </CardDescription>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm text-muted-foreground">
+        <ul className="list-disc space-y-1.5 pl-5 leading-relaxed">
+          <li>
+            Your account details and the profile fields above, which you can
+            change here at any time.
+          </li>
+          <li>
+            The school records linked to your account — grades, attendance and
+            assessments, and guidance records where they apply to you.
+          </li>
+          <li>
+            Two sign-in tokens kept in this browser only, so you are not signed
+            out on every page.
+          </li>
+        </ul>
+        <p className="leading-relaxed">
+          To ask for a copy of your information, to correct it, or to ask for it
+          to be erased, write to the school's Data Protection Officer through
+          the registrar's office:{" "}
+          <a
+            href={`mailto:${CONTACT.email}`}
+            className="break-all underline underline-offset-4 transition-colors hover:text-foreground"
+          >
+            {CONTACT.email}
+          </a>
+          . Correction of a school record is a school decision, so it is handled
+          there rather than by a button here.
+        </p>
+        <p className="leading-relaxed">
+          The full details are in the{" "}
+          <Link
+            to="/privacy"
+            className="underline underline-offset-4 transition-colors hover:text-foreground"
+          >
+            Privacy Policy
+          </Link>{" "}
+          and the{" "}
+          <Link
+            to="/cookies"
+            className="underline underline-offset-4 transition-colors hover:text-foreground"
+          >
+            Cookie Policy
+          </Link>
+          .
+        </p>
+      </CardContent>
+    </Card>
+  )
+}
+
 export function AccountSettingsPage() {
   return (
     <div className="space-y-6">
@@ -594,6 +666,8 @@ export function AccountSettingsPage() {
       <PasswordForm />
       <Separator />
       <NotificationPreferencesSection />
+      <Separator />
+      <YourDataSection />
     </div>
   )
 }

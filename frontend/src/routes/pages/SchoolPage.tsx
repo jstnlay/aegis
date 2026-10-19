@@ -1,6 +1,7 @@
 import { ArrowLeft, ArrowRight } from "lucide-react"
 import { Link } from "react-router-dom"
 
+import { PublicFooter } from "@/components/brand/PublicFooter"
 import { SchoolHeader } from "@/components/brand/SchoolHeader"
 import { Reveal } from "@/components/layout/Reveal"
 import { Button } from "@/components/ui/button"
@@ -106,13 +107,7 @@ export function SchoolPage() {
         </Reveal>
       </main>
 
-      <footer className="border-t border-border bg-muted/30">
-        <div className="mx-auto w-full max-w-5xl px-4 py-8 text-xs text-muted-foreground lg:px-6">
-          <span>
-            His Care Christian Institute · AEGIS school information system
-          </span>
-        </div>
-      </footer>
+      <PublicFooter />
     </div>
   )
 }

@@ -15,10 +15,13 @@ import { NotificationsPage } from "@/features/notifications/NotificationsPage"
 import { ReportsPage } from "@/features/reports/ReportsPage"
 import { AccountSettingsPage } from "@/features/settings/AccountSettingsPage"
 import { ChangePasswordPage } from "@/routes/pages/ChangePasswordPage"
+import { CookiePolicyPage } from "@/routes/pages/CookiePolicyPage"
 import { LandingPage } from "@/routes/pages/LandingPage"
 import { LoginPage } from "@/routes/pages/LoginPage"
 import { NotFoundPage } from "@/routes/pages/NotFoundPage"
+import { PrivacyPolicyPage } from "@/routes/pages/PrivacyPolicyPage"
 import { SchoolPage } from "@/routes/pages/SchoolPage"
+import { TermsOfUsePage } from "@/routes/pages/TermsOfUsePage"
 import {
   RoleDashboardRedirect,
   RoleLandingPage,
@@ -51,6 +54,14 @@ export const appRoutes: RouteObject[] = [
   { path: "/login", element: <LoginPage /> },
   // Public "Read more" destination from the landing page (school background).
   { path: "/school", element: <SchoolPage /> },
+  /*
+   * Public legal pages. Reachable signed out, and linked from the public footer
+   * and from the sign-in card. None of them reads an API, so none can fail and
+   * none needs an error state.
+   */
+  { path: "/privacy", element: <PrivacyPolicyPage /> },
+  { path: "/terms", element: <TermsOfUsePage /> },
+  { path: "/cookies", element: <CookiePolicyPage /> },
   { path: "/change-password", element: <ChangePasswordPage /> },
   {
     // Pathless auth boundary: matches only through its children (`/app…`),
