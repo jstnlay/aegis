@@ -258,7 +258,9 @@ function ResponseDetail({ response }: { response: ChatResponse }) {
         <p>
           {/* An absent average renders as a dash, never a 0. */}
           Average:{" "}
-          {typeof grades.average === "number" ? grades.average.toFixed(2) : "—"}
+          {typeof grades.average === "number"
+            ? `${grades.average.toFixed(2)}%`
+            : "—"}
           {typeof grades.subject_count === "number"
             ? ` · ${grades.subject_count} subject(s)`
             : ""}

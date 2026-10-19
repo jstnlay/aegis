@@ -125,12 +125,11 @@ describe("value formatters", () => {
   })
 
   /*
-   * `Grade.score` is a raw 0–100 point value. Appending "%" would assert a
-   * unit the backend never states.
+   * A score of 84.6154 out of 100 is 84.6154%, so the app renders it with a
+   * percent sign — the same unit as the grade tiles and tables.
    */
-  it("renders a score as points out of 100, with no percent sign", () => {
-    expect(formatScoreValue(84.6154)).toBe("84.62 out of 100")
-    expect(formatScoreValue(84.6154)).not.toContain("%")
+  it("renders a score as a percentage", () => {
+    expect(formatScoreValue(84.6154)).toBe("84.62%")
   })
 })
 
@@ -435,7 +434,7 @@ describe("AcademicTrendChart", () => {
     expect(label.indexOf("First Term")).toBeLessThan(
       label.indexOf("Second Term")
     )
-    expect(label).toContain("85.00 out of 100")
+    expect(label).toContain("85.00%")
   })
 
   /*
@@ -474,7 +473,7 @@ describe("AcademicTrendChart", () => {
       (await screen.findByRole("img")).getAttribute("aria-label") ?? ""
     expect(label).toContain("No grades recorded")
     // It must not be reported as a score of zero.
-    expect(label).not.toContain("0.00 out of 100")
+    expect(label).not.toContain("0.00%")
   })
 
   it("shows the empty state when no period carries a score", async () => {
@@ -641,8 +640,8 @@ describe("SubjectTrendChart", () => {
       (await screen.findByRole("img")).getAttribute("aria-label") ?? ""
     expect(label).toContain("MATH")
     expect(label).toContain("SCI")
-    expect(label).toContain("80.00 out of 100")
-    expect(label).toContain("90.00 out of 100")
+    expect(label).toContain("80.00%")
+    expect(label).toContain("90.00%")
   })
 
   it("shows the empty state when no subject has any grade", async () => {
@@ -669,22 +668,20 @@ describe("SubjectTrendChart", () => {
 })
 
 /**
- * PH11.11 — score unit on `SectionPerformanceChart`.
+ * Score unit on `SectionPerformanceChart`.
  *
  * `SectionPerformance.grade_average` is the mean of `Grade.score`, a raw 0–100
- * point value, not a ratio. The chart's own description already said "as points
- * out of 100" while the number written on the bar went through `formatPercent`
- * and gained a `%` sign, so the same figure was labelled in two different units
- * on one card.
+ * point value, so 85 out of 100 is 85%. The app reports grade scores as
+ * percentages everywhere — tiles, tables, tooltips — and this chart follows
+ * that, so the same figure never appears in two units on one screen.
  *
  * What jsdom can and cannot prove is stated plainly, because the limit is real:
  * Recharts measures its container, which jsdom reports as zero, so the bar and
  * its `LabelList` text are never rendered here and the formatter's output cannot
  * be read off the DOM. What *is* asserted below is the unit contract that
- * formatter is required to honour — asserted on the chart's own accessible label
- * and description, and on the shared formatter it now delegates to, which has its
- * own test above pinning that it emits no `%`. A browser check would be needed to
- * see the rendered bar text; see the phase note.
+ * formatter honours — asserted on the chart's own accessible label and
+ * description, and on the shared formatter it delegates to, which has its own
+ * test above. A browser check would be needed to see the rendered bar text.
  */
 describe("SectionPerformanceChart", () => {
   const section = {
@@ -696,7 +693,7 @@ describe("SectionPerformanceChart", () => {
     total_grades: 120,
   }
 
-  it("states the score in points out of 100, never as a percentage", async () => {
+  it("states the score as a percentage, the unit every grade surface uses", async () => {
     renderChart(
       <SectionPerformanceChart
         sectionId="sec-1"
@@ -708,14 +705,13 @@ describe("SectionPerformanceChart", () => {
 
     const label =
       (await screen.findByRole("img")).getAttribute("aria-label") ?? ""
-    expect(label).toContain("85.00 out of 100")
-    expect(label).not.toContain("%")
+    expect(label).toContain("85.00%")
 
     // The description is rendered as text, so the unit is asserted there too —
-    // it is the sentence a sighted reader uses to interpret the bar.
+    // it must not reintroduce a second unit for the same figure.
     const description = document.body.textContent ?? ""
-    expect(description).toContain("points out of 100")
-    expect(description).not.toContain("%")
+    expect(description).toContain("average of finalized grades")
+    expect(description).not.toContain("points out of 100")
   })
 
   it("does not plot a section with no finalized grades as a zero", async () => {

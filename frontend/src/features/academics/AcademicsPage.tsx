@@ -108,8 +108,8 @@ function StatusBadge({ status }: { status: GradeStatus }) {
  * Renders a score, or an explicit "not recorded" marker.
  *
  * `Grade.score` is a raw 0–100 value (`DecimalField(max_digits=5, decimal_places=2)`,
- * serializer-validated to `0 <= score <= 100`) — not a percentage ratio. The
- * table header carries the "out of 100" scale so the unit is never ambiguous.
+ * serializer-validated to `0 <= score <= 100`), so it is shown as a percentage:
+ * 85 out of 100 is 85%. Entry still takes the raw number.
  */
 /**
  * Activity types for an encoded grade (paperwork, term exam, recitation…).
@@ -156,7 +156,7 @@ function ScoreCell({ score }: { score: number | null }) {
   if (score === null) {
     return <span className="text-muted-foreground">Not recorded</span>
   }
-  return <span className="font-medium tabular-nums">{score.toFixed(2)}</span>
+  return <span className="font-medium tabular-nums">{score.toFixed(2)}%</span>
 }
 
 function GradeTable({
@@ -196,7 +196,7 @@ function GradeTable({
           <TableHead scope="col">Grading period</TableHead>
           <TableHead scope="col">Activity</TableHead>
           <TableHead scope="col" className="text-right">
-            Score (0&ndash;100)
+            Score
           </TableHead>
           <TableHead scope="col">Status</TableHead>
           {onEditGrade ? <TableHead scope="col">Update</TableHead> : null}
@@ -338,11 +338,11 @@ function StudentAcademics() {
               ) : average === null ? (
                 <span className="text-muted-foreground">Not recorded</span>
               ) : (
-                average.toFixed(2)
+                `${average.toFixed(2)}%`
               )}
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              Mean of your finalized grade scores (out of 100)
+              Mean of your finalized grade scores
             </p>
           </CardContent>
         </Card>

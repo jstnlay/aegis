@@ -70,7 +70,7 @@ export function SectionPerformanceChart({
       title={data ? `${data.section_name} performance` : "Section performance"}
       description={
         data
-          ? `${data.grade_level} · average of finalized grades, as points out of 100.`
+          ? `${data.grade_level} · average of finalized grades.`
           : "Average of finalized grades for the selected section."
       }
       footer={
@@ -161,17 +161,11 @@ export function SectionPerformanceChart({
                   dataKey="average"
                   position="top"
                   /*
-                    PH11.11. This was `formatPercent`, which appends a `%` sign —
-                    wrong for this series. `SectionPerformance.grade_average` is
-                    the mean of `Grade.score`, a raw 0–100 point value
-                    (`DecimalField(max_digits=5, decimal_places=2)`,
-                    serializer-validated to 0–100), which PH11.7 established is
-                    points out of 100. The bar therefore said "85.0%" for a score
-                    of 85.00 out of 100: a unit the backend never reported, on the
-                    one chart whose own description already said "as points out of
-                    100". `formatScoreValue` is what every other score label in
-                    the app uses, so the units are now consistent across the chart
-                    set.
+                    `SectionPerformance.grade_average` is the mean of
+                    `Grade.score`, a raw 0–100 point value, so 85 out of 100 is
+                    85%. `formatScoreValue` is what every score label in the app
+                    uses, so the bar, the tiles and the tables all report the
+                    same unit.
                   */
                   formatter={(value: unknown) =>
                     formatScoreValue(Number(value))

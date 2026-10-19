@@ -62,7 +62,7 @@ export function GradeLevelPerformanceChart() {
   return (
     <ChartCard
       title="Grade-level performance"
-      description="Average of finalized grades, by grade level. Scores are points out of 100."
+      description="Average of finalized grades, by grade level."
       footer={
         bars.length > 0
           ? `${bars.reduce((sum, bar) => sum + bar.gradesCounted, 0)} finalized grades counted.`

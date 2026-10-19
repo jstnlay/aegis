@@ -92,7 +92,7 @@ export function AdminAnalyticsPage() {
         </MetricCard>
         <MetricCard
           title="Overall grade average"
-          hint="Mean of finalized grades, in points out of 100"
+          hint="Mean of finalized grades"
           icon={ChartNoAxesColumn}
           isLoading={schoolWideQuery.isLoading}
           isError={schoolWideQuery.isError}

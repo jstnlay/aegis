@@ -497,7 +497,7 @@ describe("FacultyAdvisoryPage class summary (TC-FAC-17)", () => {
     expect(await screen.findByText("12")).toBeInTheDocument()
     expect(screen.getByText("15")).toBeInTheDocument()
     // The single recorded score of 90.
-    expect(screen.getByText("90.00")).toBeInTheDocument()
+    expect(screen.getByText("90.00%")).toBeInTheDocument()
   })
 
   it("downloads the same summary through the export endpoint", async () => {

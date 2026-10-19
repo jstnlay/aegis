@@ -60,7 +60,7 @@ export function AcademicTrendChart() {
   return (
     <ChartCard
       title="Academic performance across periods"
-      description="School-wide average of finalized grades per grading period, in academic order. Scores are points out of 100."
+      description="School-wide average of finalized grades per grading period, in academic order."
       footer={
         points.length > 0
           ? `${formatCountValue(

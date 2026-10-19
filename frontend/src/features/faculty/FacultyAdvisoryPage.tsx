@@ -390,7 +390,7 @@ function ClassSummaryCard() {
         row.average === null ? (
           <span className="text-muted-foreground">&mdash;</span>
         ) : (
-          <span className="tabular-nums">{row.average.toFixed(2)}</span>
+          <span className="tabular-nums">{row.average.toFixed(2)}%</span>
         ),
     },
   ]

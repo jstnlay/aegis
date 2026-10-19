@@ -117,16 +117,17 @@ export function formatCountValue(value: number | null | undefined): string {
 }
 
 /**
- * A score out of 100 for a tooltip.
+ * A finalized grade score for a tooltip, rendered as a percentage.
  *
- * `Grade.score` is a raw 0–100 point value, not a ratio, so this appends no
- * percent sign — PH11.7 established that the unit is points out of 100.
+ * `Grade.score` is a raw 0–100 point value, so a score of 85 out of 100 is
+ * 85%. Every grade surface reports it that way — tiles, tables and charts —
+ * so one screen never shows the same score in two units.
  */
 export function formatScoreValue(value: number | null | undefined): string {
   if (value === null || value === undefined || !Number.isFinite(value)) {
     return "No grades recorded"
   }
-  return `${value.toFixed(2)} out of 100`
+  return `${value.toFixed(2)}%`
 }
 
 /**

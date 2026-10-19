@@ -96,7 +96,7 @@ describe("StudentAcademicTrendChart", () => {
     expect(plot).toBeInTheDocument()
     // The label carries the real figures, so a reader who cannot see the plot
     // still gets the numbers rather than a tooltip-only value.
-    expect(plot).toHaveAccessibleName(/First Term: 88\.00 out of 100/)
+    expect(plot).toHaveAccessibleName(/First Term: 88\.00%/)
     expect(plot).toHaveAccessibleName(/2 grades counted/)
     // A period with no scores is reported as absent, not as a zero.
     expect(plot).toHaveAccessibleName(/Second Term: No grades recorded/)
