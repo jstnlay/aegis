@@ -7,7 +7,11 @@ import {
 } from "@/components/charts/StudentTrendCharts"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { ErrorNote, PendingRegion } from "@/components/feedback/Feedback"
+import {
+  EmptyState,
+  ErrorNote,
+  PendingRegion,
+} from "@/components/feedback/Feedback"
 import { Label } from "@/components/ui/label"
 import { MetricCard } from "@/components/ui/metric-card"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -122,10 +126,7 @@ function ParentDashboard() {
               </div>
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">
-              No linked students found. Please contact the school
-              administration.
-            </p>
+            <EmptyState message="No linked students found. Please contact the school administration." />
           )}
         </CardContent>
       </Card>
@@ -195,9 +196,7 @@ function ParentDashboard() {
               ) : dataError ? (
                 <ErrorNote message="Unable to load academic progress. Please try again." />
               ) : periods.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No grading period data available
-                </p>
+                <EmptyState message="No grading period data available." />
               ) : (
                 <div className="space-y-3">
                   <div className="space-y-1.5">
@@ -223,9 +222,9 @@ function ParentDashboard() {
                   </div>
 
                   {grades.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      No finalized grades for {selectedPeriod}
-                    </p>
+                    <EmptyState
+                      message={`No finalized grades for ${selectedPeriod}.`}
+                    />
                   ) : (
                     <div className="space-y-2">
                       <p className="text-sm font-medium">Grades by Subject</p>
@@ -302,9 +301,7 @@ function ParentDashboard() {
               ) : dataError ? (
                 <ErrorNote message="Unable to load grades. Please try again." />
               ) : allGrades.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No finalized grades available
-                </p>
+                <EmptyState message="No finalized grades available." />
               ) : (
                 <ul className="space-y-3">
                   {allGrades.slice(0, 5).map((grade, idx) => (

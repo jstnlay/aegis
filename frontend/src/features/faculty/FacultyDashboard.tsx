@@ -22,7 +22,11 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { ErrorNote, PendingRegion } from "@/components/feedback/Feedback"
+import {
+  EmptyState,
+  ErrorNote,
+  PendingRegion,
+} from "@/components/feedback/Feedback"
 import { MetricCard } from "@/components/ui/metric-card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/features/auth/AuthContext"
@@ -138,9 +142,7 @@ function FacultyDashboard() {
               submissions={statsQuery.data.pending_submissions}
             />
           ) : (
-            <p className="text-sm text-muted-foreground">
-              No pending grades — everything is finalized.
-            </p>
+            <EmptyState message="No pending grades — everything is finalized." />
           )}
         </CardContent>
       </Card>
@@ -204,9 +206,7 @@ function FacultyDashboard() {
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-muted-foreground">
-                No subject assignments found
-              </p>
+              <EmptyState message="No subject assignments found." />
             )}
           </CardContent>
         </Card>
@@ -239,7 +239,7 @@ function FacultyDashboard() {
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-muted-foreground">No sections found</p>
+              <EmptyState message="No sections found." />
             )}
           </CardContent>
         </Card>

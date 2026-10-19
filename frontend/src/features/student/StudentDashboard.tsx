@@ -6,7 +6,11 @@ import {
 } from "@/components/charts/StudentTrendCharts"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { ErrorNote, PendingRegion } from "@/components/feedback/Feedback"
+import {
+  EmptyState,
+  ErrorNote,
+  PendingRegion,
+} from "@/components/feedback/Feedback"
 import { Label } from "@/components/ui/label"
 import { MetricCard } from "@/components/ui/metric-card"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -154,9 +158,7 @@ export function StudentDashboard() {
               // it must not look like the "no grading period data" line below it.
               <ErrorNote message="Unable to load academic progress. Please try again." />
             ) : periods.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No grading period data available
-              </p>
+              <EmptyState message="No grading period data available." />
             ) : (
               <div className="space-y-3">
                 <div className="space-y-1.5">
@@ -176,9 +178,9 @@ export function StudentDashboard() {
                   </select>
                 </div>
                 {displayGrades.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No finalized grades for {selectedPeriod}
-                  </p>
+                  <EmptyState
+                    message={`No finalized grades for ${selectedPeriod}.`}
+                  />
                 ) : (
                   <div className="space-y-2">
                     <p className="text-sm font-medium">Grades by Subject</p>

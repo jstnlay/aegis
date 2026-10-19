@@ -4,7 +4,11 @@ import { Link } from "react-router-dom"
 import { NewCasesTrendChart } from "@/components/charts/NewCasesTrend"
 import { RiskLevelBars } from "@/components/charts/RiskLevelBars"
 import { RiskStatusDonut } from "@/components/charts/RiskStatusDonut"
-import { ErrorNote, PendingRegion } from "@/components/feedback/Feedback"
+import {
+  EmptyState,
+  ErrorNote,
+  PendingRegion,
+} from "@/components/feedback/Feedback"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { MetricCard } from "@/components/ui/metric-card"
@@ -350,7 +354,7 @@ export function GuidanceDashboard() {
                 Risk levels are unavailable.
               </p>
             ) : alerts.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No risk alerts</p>
+              <EmptyState message="No risk alerts." />
             ) : (
               <RiskLevelBars alerts={alerts} />
             )}
@@ -424,7 +428,7 @@ export function GuidanceDashboard() {
                 Risk alerts are unavailable.
               </p>
             ) : alerts.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No risk alerts</p>
+              <EmptyState message="No risk alerts." />
             ) : (
               <ul className="space-y-2">
                 {recentAlerts.map((alert) => (
@@ -490,9 +494,7 @@ export function GuidanceDashboard() {
                 Consultations are unavailable.
               </p>
             ) : recentConsultations.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No consultations recorded yet.
-              </p>
+              <EmptyState message="No consultations recorded yet." />
             ) : (
               <ul className="space-y-2">
                 {recentConsultations.map((consultation) => (
@@ -569,9 +571,7 @@ export function GuidanceDashboard() {
               Consultations are unavailable.
             </p>
           ) : upcomingFollowUps.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No follow-ups scheduled.
-            </p>
+            <EmptyState message="No follow-ups scheduled." />
           ) : (
             <ul className="space-y-2">
               {upcomingFollowUps.map((consultation) => (
