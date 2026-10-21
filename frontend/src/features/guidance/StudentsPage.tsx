@@ -113,7 +113,12 @@ export function StudentsPage() {
         sortValue: (row) => row.name,
         sortTieBreak: (row) => row.code,
         cell: (row) => (
-          <div className="flex flex-wrap items-center gap-2">
+          /*
+            The name and the risk badge stay on one line. Wrapped, the badge
+            dropped onto its own line under the name and read as a stray
+            label rather than as the student's risk level.
+          */
+          <div className="flex items-center gap-2 whitespace-nowrap">
             <span className="font-medium">{row.name}</span>
             <AtRiskBadge level={row.atRiskLevel} />
           </div>
@@ -124,7 +129,7 @@ export function StudentsPage() {
         header: "Code",
         sortValue: (row) => row.code,
         cell: (row) => (
-          <span className="tabular-nums text-sm text-muted-foreground">
+          <span className="tabular-nums whitespace-nowrap text-sm text-muted-foreground">
             {row.code ?? NO_CODE}
           </span>
         ),

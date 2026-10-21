@@ -1,0 +1,363 @@
+{
+  "key": "aegis-admin-dashboard-mobile",
+  "name": "Administration Panel / Mobile",
+  "width": 390,
+  "background": "#F2F2F2",
+  "root": {
+    "type": "frame",
+    "layout": "col",
+    "gap": 0,
+    "pad": 0,
+    "align": "start",
+    "justify": "start",
+    "width": "fill",
+    "fill": "#F2F2F2",
+    "radius": 0,
+    "children": [
+      {
+        "type": "frame",
+        "layout": "row",
+        "gap": 0,
+        "pad": [
+          12,
+          16
+        ],
+        "align": "center",
+        "justify": "space-between",
+        "width": "fill",
+        "fill": "#FFFFFF",
+        "radius": 0,
+        "children": [
+          {
+            "type": "text",
+            "content": "ADMINISTRATION PANEL",
+            "size": 15,
+            "weight": "Bold",
+            "color": "#9B1313",
+            "width": "hug"
+          },
+          {
+            "type": "rect",
+            "w": 32,
+            "h": 32,
+            "fill": "#9B1313",
+            "radius": 16,
+            "name": "avatar"
+          }
+        ]
+      },
+      {
+        "type": "frame",
+        "layout": "col",
+        "gap": 16,
+        "pad": 16,
+        "align": "start",
+        "justify": "start",
+        "width": "fill",
+        "fill": "#F2F2F2",
+        "radius": 0,
+        "children": [
+          {
+            "type": "text",
+            "content": "Administration Panel",
+            "size": 22,
+            "weight": "Bold",
+            "color": "#1A1A1A",
+            "width": "hug"
+          },
+          {
+            "type": "text",
+            "content": "School-wide aggregates only. Individual student records are not shown here.",
+            "size": 13,
+            "weight": "Regular",
+            "color": "#6B6B6B",
+            "width": "hug"
+          },
+          {
+            "type": "frame",
+            "layout": "row",
+            "gap": 12,
+            "pad": 0,
+            "align": "start",
+            "justify": "start",
+            "width": "fill",
+            "radius": 0,
+            "children": [
+              {
+                "type": "frame",
+                "layout": "col",
+                "gap": 6,
+                "pad": 16,
+                "align": "start",
+                "justify": "start",
+                "width": "fill",
+                "fill": "#FFFFFF",
+                "radius": 12,
+                "stroke": "#E4E4E4",
+                "strokeWidth": 1,
+                "children": [
+                  {
+                    "type": "text",
+                    "content": "Total Students",
+                    "size": 13,
+                    "weight": "Medium",
+                    "color": "#6B6B6B",
+                    "width": "hug"
+                  },
+                  {
+                    "type": "text",
+                    "content": "104",
+                    "size": 24,
+                    "weight": "Bold",
+                    "color": "#1A1A1A",
+                    "width": "hug"
+                  },
+                  {
+                    "type": "text",
+                    "content": "Active student enrollments",
+                    "size": 11,
+                    "weight": "Regular",
+                    "color": "#6B6B6B",
+                    "width": "hug"
+                  }
+                ]
+              },
+              {
+                "type": "frame",
+                "layout": "col",
+                "gap": 6,
+                "pad": 16,
+                "align": "start",
+                "justify": "start",
+                "width": "fill",
+                "fill": "#FFFFFF",
+                "radius": 12,
+                "stroke": "#E4E4E4",
+                "strokeWidth": 1,
+                "children": [
+                  {
+                    "type": "text",
+                    "content": "At-Risk Students",
+                    "size": 13,
+                    "weight": "Medium",
+                    "color": "#6B6B6B",
+                    "width": "hug"
+                  },
+                  {
+                    "type": "text",
+                    "content": "0",
+                    "size": 24,
+                    "weight": "Bold",
+                    "color": "#1A1A1A",
+                    "width": "hug"
+                  },
+                  {
+                    "type": "text",
+                    "content": "Latest score moderate or high",
+                    "size": 11,
+                    "weight": "Regular",
+                    "color": "#6B6B6B",
+                    "width": "hug"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "frame",
+            "layout": "row",
+            "gap": 12,
+            "pad": 0,
+            "align": "start",
+            "justify": "start",
+            "width": "fill",
+            "radius": 0,
+            "children": [
+              {
+                "type": "frame",
+                "layout": "col",
+                "gap": 6,
+                "pad": 16,
+                "align": "start",
+                "justify": "start",
+                "width": "fill",
+                "fill": "#FFFFFF",
+                "radius": 12,
+                "stroke": "#E4E4E4",
+                "strokeWidth": 1,
+                "children": [
+                  {
+                    "type": "text",
+                    "content": "High Risk Students",
+                    "size": 13,
+                    "weight": "Medium",
+                    "color": "#6B6B6B",
+                    "width": "hug"
+                  },
+                  {
+                    "type": "text",
+                    "content": "0",
+                    "size": 24,
+                    "weight": "Bold",
+                    "color": "#1A1A1A",
+                    "width": "hug"
+                  },
+                  {
+                    "type": "text",
+                    "content": "Latest score at the high level",
+                    "size": 11,
+                    "weight": "Regular",
+                    "color": "#6B6B6B",
+                    "width": "hug"
+                  }
+                ]
+              },
+              {
+                "type": "frame",
+                "layout": "col",
+                "gap": 6,
+                "pad": 16,
+                "align": "start",
+                "justify": "start",
+                "width": "fill",
+                "fill": "#FFFFFF",
+                "radius": 12,
+                "stroke": "#E4E4E4",
+                "strokeWidth": 1,
+                "children": [
+                  {
+                    "type": "text",
+                    "content": "Active Alerts",
+                    "size": 13,
+                    "weight": "Medium",
+                    "color": "#6B6B6B",
+                    "width": "hug"
+                  },
+                  {
+                    "type": "text",
+                    "content": "16",
+                    "size": 24,
+                    "weight": "Bold",
+                    "color": "#1A1A1A",
+                    "width": "hug"
+                  },
+                  {
+                    "type": "text",
+                    "content": "Alerts not yet resolved",
+                    "size": 11,
+                    "weight": "Regular",
+                    "color": "#6B6B6B",
+                    "width": "hug"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "frame",
+            "layout": "col",
+            "gap": 6,
+            "pad": 16,
+            "align": "start",
+            "justify": "start",
+            "width": "fill",
+            "fill": "#FFFFFF",
+            "radius": 12,
+            "stroke": "#E4E4E4",
+            "strokeWidth": 1,
+            "children": [
+              {
+                "type": "text",
+                "content": "Risk distribution",
+                "size": 15,
+                "weight": "Semi Bold",
+                "color": "#1A1A1A",
+                "width": "hug"
+              },
+              {
+                "type": "text",
+                "content": "Students by their latest computed risk level.",
+                "size": 12,
+                "weight": "Regular",
+                "color": "#6B6B6B",
+                "width": "hug"
+              },
+              {
+                "type": "text",
+                "content": "The risk engine has not produced any scores yet, so there is no distribution to show.",
+                "size": 12,
+                "weight": "Regular",
+                "color": "#6B6B6B",
+                "width": "hug"
+              }
+            ]
+          },
+          {
+            "type": "frame",
+            "layout": "col",
+            "gap": 12,
+            "pad": 16,
+            "align": "start",
+            "justify": "start",
+            "width": "fill",
+            "fill": "#FFFFFF",
+            "radius": 12,
+            "stroke": "#E4E4E4",
+            "strokeWidth": 1,
+            "children": [
+              {
+                "type": "text",
+                "content": "Trend overview (last 30 days)",
+                "size": 15,
+                "weight": "Semi Bold",
+                "color": "#1A1A1A",
+                "width": "hug"
+              },
+              {
+                "type": "frame",
+                "layout": "row",
+                "gap": 16,
+                "pad": 0,
+                "align": "end",
+                "justify": "start",
+                "width": "fill",
+                "radius": 0,
+                "h": 140,
+                "children": [
+                  {
+                    "type": "rect",
+                    "w": 40,
+                    "h": 120,
+                    "fill": "#9B1313",
+                    "radius": 4
+                  },
+                  {
+                    "type": "rect",
+                    "w": 72,
+                    "h": 120,
+                    "fill": "#9B1313",
+                    "radius": 4
+                  },
+                  {
+                    "type": "rect",
+                    "w": 56,
+                    "h": 120,
+                    "fill": "#9B1313",
+                    "radius": 4
+                  },
+                  {
+                    "type": "rect",
+                    "w": 96,
+                    "h": 120,
+                    "fill": "#9B1313",
+                    "radius": 4
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

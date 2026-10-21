@@ -1,0 +1,561 @@
+{
+  "key": "aegis-student-dashboard-mobile",
+  "name": "Student Dashboard / Mobile",
+  "width": 390,
+  "background": "#F2F2F2",
+  "root": {
+    "type": "frame",
+    "layout": "col",
+    "gap": 0,
+    "pad": 0,
+    "align": "start",
+    "justify": "start",
+    "width": "fill",
+    "fill": "#F2F2F2",
+    "radius": 0,
+    "children": [
+      {
+        "type": "frame",
+        "layout": "row",
+        "gap": 0,
+        "pad": [
+          12,
+          16
+        ],
+        "align": "center",
+        "justify": "space-between",
+        "width": "fill",
+        "fill": "#FFFFFF",
+        "radius": 0,
+        "children": [
+          {
+            "type": "text",
+            "content": "STUDENT DASHBOARD",
+            "size": 15,
+            "weight": "Bold",
+            "color": "#9B1313",
+            "width": "hug"
+          },
+          {
+            "type": "rect",
+            "w": 32,
+            "h": 32,
+            "fill": "#9B1313",
+            "radius": 16,
+            "name": "avatar"
+          }
+        ]
+      },
+      {
+        "type": "frame",
+        "layout": "col",
+        "gap": 16,
+        "pad": 16,
+        "align": "start",
+        "justify": "start",
+        "width": "fill",
+        "fill": "#F2F2F2",
+        "radius": 0,
+        "children": [
+          {
+            "type": "text",
+            "content": "Student Dashboard",
+            "size": 22,
+            "weight": "Bold",
+            "color": "#1A1A1A",
+            "width": "hug"
+          },
+          {
+            "type": "text",
+            "content": "Your academic record at a glance.",
+            "size": 13,
+            "weight": "Regular",
+            "color": "#6B6B6B",
+            "width": "hug"
+          },
+          {
+            "type": "frame",
+            "layout": "col",
+            "gap": 6,
+            "pad": 16,
+            "align": "start",
+            "justify": "start",
+            "width": "fill",
+            "fill": "#FFFFFF",
+            "radius": 12,
+            "stroke": "#E4E4E4",
+            "strokeWidth": 1,
+            "children": [
+              {
+                "type": "text",
+                "content": "Average Grade",
+                "size": 13,
+                "weight": "Medium",
+                "color": "#6B6B6B",
+                "width": "hug"
+              },
+              {
+                "type": "text",
+                "content": "80.61%",
+                "size": 24,
+                "weight": "Bold",
+                "color": "#1A1A1A",
+                "width": "hug"
+              },
+              {
+                "type": "text",
+                "content": "Overall academic performance",
+                "size": 11,
+                "weight": "Regular",
+                "color": "#6B6B6B",
+                "width": "hug"
+              }
+            ]
+          },
+          {
+            "type": "frame",
+            "layout": "row",
+            "gap": 12,
+            "pad": 0,
+            "align": "start",
+            "justify": "start",
+            "width": "fill",
+            "radius": 0,
+            "children": [
+              {
+                "type": "frame",
+                "layout": "col",
+                "gap": 6,
+                "pad": 16,
+                "align": "start",
+                "justify": "start",
+                "width": "fill",
+                "fill": "#FFFFFF",
+                "radius": 12,
+                "stroke": "#E4E4E4",
+                "strokeWidth": 1,
+                "children": [
+                  {
+                    "type": "text",
+                    "content": "Attendance Rate",
+                    "size": 13,
+                    "weight": "Medium",
+                    "color": "#6B6B6B",
+                    "width": "hug"
+                  },
+                  {
+                    "type": "text",
+                    "content": "80.0%",
+                    "size": 24,
+                    "weight": "Bold",
+                    "color": "#1A1A1A",
+                    "width": "hug"
+                  },
+                  {
+                    "type": "text",
+                    "content": "12 present, 3 absent",
+                    "size": 11,
+                    "weight": "Regular",
+                    "color": "#6B6B6B",
+                    "width": "hug"
+                  }
+                ]
+              },
+              {
+                "type": "frame",
+                "layout": "col",
+                "gap": 6,
+                "pad": 16,
+                "align": "start",
+                "justify": "start",
+                "width": "fill",
+                "fill": "#FFFFFF",
+                "radius": 12,
+                "stroke": "#E4E4E4",
+                "strokeWidth": 1,
+                "children": [
+                  {
+                    "type": "text",
+                    "content": "Total Subjects",
+                    "size": 13,
+                    "weight": "Medium",
+                    "color": "#6B6B6B",
+                    "width": "hug"
+                  },
+                  {
+                    "type": "text",
+                    "content": "8",
+                    "size": 24,
+                    "weight": "Bold",
+                    "color": "#1A1A1A",
+                    "width": "hug"
+                  },
+                  {
+                    "type": "text",
+                    "content": "Subjects with finalized grades",
+                    "size": 11,
+                    "weight": "Regular",
+                    "color": "#6B6B6B",
+                    "width": "hug"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "frame",
+            "layout": "col",
+            "gap": 10,
+            "pad": 16,
+            "align": "start",
+            "justify": "start",
+            "width": "fill",
+            "fill": "#FFFFFF",
+            "radius": 12,
+            "stroke": "#E4E4E4",
+            "strokeWidth": 1,
+            "children": [
+              {
+                "type": "text",
+                "content": "Academic Progress",
+                "size": 15,
+                "weight": "Semi Bold",
+                "color": "#1A1A1A",
+                "width": "hug"
+              },
+              {
+                "type": "text",
+                "content": "Grading period",
+                "size": 12,
+                "weight": "Regular",
+                "color": "#6B6B6B",
+                "width": "hug"
+              },
+              {
+                "type": "rect",
+                "w": 300,
+                "h": 36,
+                "fill": "#FFFFFF",
+                "radius": 8,
+                "name": "Term 1 â€” Average: 80.61%"
+              },
+              {
+                "type": "text",
+                "content": "Grades by Subject",
+                "size": 13,
+                "weight": "Medium",
+                "color": "#1A1A1A",
+                "width": "hug"
+              },
+              {
+                "type": "frame",
+                "layout": "row",
+                "gap": 0,
+                "pad": 12,
+                "align": "center",
+                "justify": "space-between",
+                "width": "fill",
+                "radius": 8,
+                "stroke": "#E4E4E4",
+                "strokeWidth": 1,
+                "children": [
+                  {
+                    "type": "frame",
+                    "layout": "col",
+                    "gap": 2,
+                    "pad": 0,
+                    "align": "start",
+                    "justify": "start",
+                    "width": "fill",
+                    "radius": 0,
+                    "children": [
+                      {
+                        "type": "text",
+                        "content": "Filipino",
+                        "size": 14,
+                        "weight": "Medium",
+                        "color": "#1A1A1A",
+                        "width": "hug"
+                      },
+                      {
+                        "type": "text",
+                        "content": "FIL-10",
+                        "size": 11,
+                        "weight": "Regular",
+                        "color": "#6B6B6B",
+                        "width": "hug"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "frame",
+                    "layout": "row",
+                    "gap": 8,
+                    "pad": 0,
+                    "align": "center",
+                    "justify": "start",
+                    "width": "hug",
+                    "radius": 0,
+                    "children": [
+                      {
+                        "type": "text",
+                        "content": "84.41%",
+                        "size": 14,
+                        "weight": "Bold",
+                        "color": "#1A1A1A",
+                        "width": "hug"
+                      },
+                      {
+                        "type": "rect",
+                        "w": 62,
+                        "h": 22,
+                        "fill": "#EFEFEF",
+                        "radius": 11,
+                        "name": "badge"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "frame",
+                "layout": "row",
+                "gap": 0,
+                "pad": 12,
+                "align": "center",
+                "justify": "space-between",
+                "width": "fill",
+                "radius": 8,
+                "stroke": "#E4E4E4",
+                "strokeWidth": 1,
+                "children": [
+                  {
+                    "type": "frame",
+                    "layout": "col",
+                    "gap": 2,
+                    "pad": 0,
+                    "align": "start",
+                    "justify": "start",
+                    "width": "fill",
+                    "radius": 0,
+                    "children": [
+                      {
+                        "type": "text",
+                        "content": "English",
+                        "size": 14,
+                        "weight": "Medium",
+                        "color": "#1A1A1A",
+                        "width": "hug"
+                      },
+                      {
+                        "type": "text",
+                        "content": "ENG-10",
+                        "size": 11,
+                        "weight": "Regular",
+                        "color": "#6B6B6B",
+                        "width": "hug"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "frame",
+                    "layout": "row",
+                    "gap": 8,
+                    "pad": 0,
+                    "align": "center",
+                    "justify": "start",
+                    "width": "hug",
+                    "radius": 0,
+                    "children": [
+                      {
+                        "type": "text",
+                        "content": "81.21%",
+                        "size": 14,
+                        "weight": "Bold",
+                        "color": "#1A1A1A",
+                        "width": "hug"
+                      },
+                      {
+                        "type": "rect",
+                        "w": 62,
+                        "h": 22,
+                        "fill": "#EFEFEF",
+                        "radius": 11,
+                        "name": "badge"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "frame",
+                "layout": "row",
+                "gap": 0,
+                "pad": 12,
+                "align": "center",
+                "justify": "space-between",
+                "width": "fill",
+                "radius": 8,
+                "stroke": "#E4E4E4",
+                "strokeWidth": 1,
+                "children": [
+                  {
+                    "type": "frame",
+                    "layout": "col",
+                    "gap": 2,
+                    "pad": 0,
+                    "align": "start",
+                    "justify": "start",
+                    "width": "fill",
+                    "radius": 0,
+                    "children": [
+                      {
+                        "type": "text",
+                        "content": "Mathematics",
+                        "size": 14,
+                        "weight": "Medium",
+                        "color": "#1A1A1A",
+                        "width": "hug"
+                      },
+                      {
+                        "type": "text",
+                        "content": "MATH-10",
+                        "size": 11,
+                        "weight": "Regular",
+                        "color": "#6B6B6B",
+                        "width": "hug"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "frame",
+                    "layout": "row",
+                    "gap": 8,
+                    "pad": 0,
+                    "align": "center",
+                    "justify": "start",
+                    "width": "hug",
+                    "radius": 0,
+                    "children": [
+                      {
+                        "type": "text",
+                        "content": "76.69%",
+                        "size": 14,
+                        "weight": "Bold",
+                        "color": "#1A1A1A",
+                        "width": "hug"
+                      },
+                      {
+                        "type": "rect",
+                        "w": 62,
+                        "h": 22,
+                        "fill": "#EFEFEF",
+                        "radius": 11,
+                        "name": "badge"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "frame",
+            "layout": "col",
+            "gap": 6,
+            "pad": 16,
+            "align": "start",
+            "justify": "start",
+            "width": "fill",
+            "fill": "#FFFFFF",
+            "radius": 12,
+            "stroke": "#E4E4E4",
+            "strokeWidth": 1,
+            "children": [
+              {
+                "type": "text",
+                "content": "Recommended for you",
+                "size": 15,
+                "weight": "Semi Bold",
+                "color": "#1A1A1A",
+                "width": "hug"
+              },
+              {
+                "type": "text",
+                "content": "Matched to your grades and attendance.",
+                "size": 12,
+                "weight": "Regular",
+                "color": "#6B6B6B",
+                "width": "hug"
+              }
+            ]
+          },
+          {
+            "type": "frame",
+            "layout": "col",
+            "gap": 12,
+            "pad": 16,
+            "align": "start",
+            "justify": "start",
+            "width": "fill",
+            "fill": "#FFFFFF",
+            "radius": 12,
+            "stroke": "#E4E4E4",
+            "strokeWidth": 1,
+            "children": [
+              {
+                "type": "text",
+                "content": "Academic Trend",
+                "size": 15,
+                "weight": "Semi Bold",
+                "color": "#1A1A1A",
+                "width": "hug"
+              },
+              {
+                "type": "frame",
+                "layout": "row",
+                "gap": 16,
+                "pad": 0,
+                "align": "end",
+                "justify": "start",
+                "width": "fill",
+                "radius": 0,
+                "h": 140,
+                "children": [
+                  {
+                    "type": "rect",
+                    "w": 40,
+                    "h": 120,
+                    "fill": "#9B1313",
+                    "radius": 4
+                  },
+                  {
+                    "type": "rect",
+                    "w": 72,
+                    "h": 120,
+                    "fill": "#9B1313",
+                    "radius": 4
+                  },
+                  {
+                    "type": "rect",
+                    "w": 56,
+                    "h": 120,
+                    "fill": "#9B1313",
+                    "radius": 4
+                  },
+                  {
+                    "type": "rect",
+                    "w": 96,
+                    "h": 120,
+                    "fill": "#9B1313",
+                    "radius": 4
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

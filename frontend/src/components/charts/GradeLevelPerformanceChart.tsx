@@ -18,7 +18,6 @@ import {
   GRID_COLOR,
   SCORE_DOMAIN,
   SCORE_TICKS,
-  chartColor,
   formatScoreValue,
   toChartValue,
 } from "@/components/charts/chart-config"
@@ -136,7 +135,7 @@ export function GradeLevelPerformanceChart() {
               <Bar
                 dataKey="average"
                 name="Average score"
-                fill={chartColor(0)}
+                fill="var(--primary)"
                 radius={[4, 4, 0, 0]}
                 isAnimationActive={false}
               />

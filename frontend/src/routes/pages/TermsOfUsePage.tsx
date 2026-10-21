@@ -1,21 +1,10 @@
 import { LegalPageLayout } from "@/routes/pages/LegalPageLayout"
 
-/**
- * Terms of Use — the "User Agreement" the audit looked for.
- *
- * A separate "User Agreement" page was not written: this school runs one
- * portal, and a second document covering the same subject with the same party
- * would state the same obligations twice and invite the two to drift apart.
- * Everything a user agreement would say is here.
- *
- * The "no fees" section states only what the code does: AEGIS processes no
- * payment and there is no checkout anywhere in the portal.
- */
 export function TermsOfUsePage() {
   return (
     <LegalPageLayout
       title="Terms of Use"
-      intro="These terms cover your use of AEGIS, the school's information system. They describe what the school expects from you, and what you can expect from the system."
+      intro="These terms cover your use of AEGIS, the school's information system: what the school expects from you, and what you can expect from the system."
     >
       <section aria-labelledby="terms-accept" className="space-y-3">
         <h2 id="terms-accept" className="text-lg font-semibold text-primary">
@@ -23,8 +12,8 @@ export function TermsOfUsePage() {
         </h2>
         <p className="text-sm leading-relaxed text-muted-foreground">
           By signing in to AEGIS you accept these terms. If you do not accept
-          them, do not use the portal and tell the school office, so the school
-          can record your child's information on paper instead.
+          them, do not use the portal and tell the school office, so your
+          child's information can be recorded on paper instead.
         </p>
       </section>
 
@@ -34,8 +23,8 @@ export function TermsOfUsePage() {
         </h2>
         <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed text-muted-foreground">
           <li>
-            AEGIS accounts are issued by the school. You may not create an
-            account for yourself or for anyone else.
+            Accounts are issued by the school. You may not create one for
+            yourself or for anyone else.
           </li>
           <li>
             Keep your password to yourself. Do not let anyone else sign in with
@@ -69,8 +58,8 @@ export function TermsOfUsePage() {
             portal offers you;
           </li>
           <li>
-            share records, screenshots or downloaded files with anyone who is
-            not entitled to them;
+            share records, screenshots or downloaded files with anyone not
+            entitled to them;
           </li>
           <li>
             attempt to break, overload, probe or bypass the system's access
@@ -80,8 +69,7 @@ export function TermsOfUsePage() {
         </ul>
         <p className="text-sm leading-relaxed text-muted-foreground">
           The server decides what each account can reach. Trying to reach more
-          than your role allows is a breach of these terms even if the attempt
-          fails.
+          than your role allows breaches these terms even if the attempt fails.
         </p>
       </section>
 
@@ -91,10 +79,10 @@ export function TermsOfUsePage() {
         </h2>
         <p className="text-sm leading-relaxed text-muted-foreground">
           Grades, attendance and guidance records shown in AEGIS are official
-          school records. They cannot be edited from the portal by a student or
-          a parent. If something is wrong, ask the registrar or the teacher
-          concerned to look at it. Correction is a school decision, made on
-          evidence, not a self-service button.
+          school records. Students and parents cannot edit them from the portal.
+          If something is wrong, ask the registrar or the teacher concerned.
+          Correction is a school decision, made on evidence, not a self-service
+          button.
         </p>
         <p className="text-sm leading-relaxed text-muted-foreground">
           Guidance records are confidential to the guidance office. They are
@@ -110,8 +98,8 @@ export function TermsOfUsePage() {
         <p className="text-sm leading-relaxed text-muted-foreground">
           AEGIS is provided by the school to its students, parents and staff at
           no charge. The portal takes no payment and processes no payment
-          details. Tuition and other school fees are handled outside this
-          system, through the school office.
+          details. Tuition and other school fees are handled through the school
+          office.
         </p>
       </section>
 
@@ -123,10 +111,10 @@ export function TermsOfUsePage() {
           Availability
         </h2>
         <p className="text-sm leading-relaxed text-muted-foreground">
-          The school maintains AEGIS so that it is available during school use,
-          but it may be unavailable for maintenance, updates or faults. When a
-          part of the system cannot load, the portal says so rather than showing
-          an empty page.
+          The school maintains AEGIS for use during the school day, but it may
+          be unavailable for maintenance, updates or faults. When a part of the
+          system cannot load, the portal says so rather than showing an empty
+          page.
         </p>
       </section>
 
@@ -173,8 +161,8 @@ export function TermsOfUsePage() {
         </h2>
         <p className="text-sm leading-relaxed text-muted-foreground">
           These terms are governed by the laws of the Republic of the
-          Philippines. When they change, the date at the top of this page
-          changes with them.
+          Philippines. When they change, the date at the top of the page changes
+          with them.
         </p>
       </section>
     </LegalPageLayout>

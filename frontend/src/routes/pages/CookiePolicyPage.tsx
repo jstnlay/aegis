@@ -1,39 +1,20 @@
 import { LegalPageLayout } from "@/routes/pages/LegalPageLayout"
 
-/**
- * Cookie Policy.
- *
- * The audit found no cookie is ever set: the API authenticates with bearer
- * tokens held in `localStorage`, and the only other browser storage is one
- * `sessionStorage` flag on the landing page. The three keys below are the
- * complete list, and they are named exactly as the code names them
- * (`@/lib/auth-storage`, `@/routes/pages/LandingPage`). If any of those change,
- * this page changes with them.
- *
- * That is also why the site carries no accept/reject banner: there is no
- * non-essential storage to consent to. The one-line notice in the site footer
- * is the whole disclosure.
- */
 export function CookiePolicyPage() {
   return (
     <LegalPageLayout
       title="Cookie Policy"
-      intro="This page lists everything AEGIS stores in your browser. The list is short, because the portal is deliberately built to hold as little as possible."
+      intro="This page lists everything AEGIS stores in your browser: five items, all of them needed for the portal to work."
     >
       <section aria-labelledby="cookies-none" className="space-y-3">
         <h2 id="cookies-none" className="text-lg font-semibold text-primary">
           AEGIS sets no cookies
         </h2>
         <p className="text-sm leading-relaxed text-muted-foreground">
-          A cookie is a small file a site asks your browser to send back with
-          every request. AEGIS does not use cookies at all. It does not use
-          analytics, advertising or tracking of any kind, and it loads no
-          third-party script that could set one.
-        </p>
-        <p className="text-sm leading-relaxed text-muted-foreground">
-          AEGIS does store three small items in your browser's own storage. They
-          stay on your device and are sent only to the school's own server, as
-          part of normal requests. They are listed in full below.
+          AEGIS does not use cookies, analytics, advertising or third-party
+          tracking scripts. It does use your browser's own storage for the five
+          items below. They stay on your device and are not sent to anyone
+          outside the school.
         </p>
       </section>
 
@@ -72,8 +53,7 @@ export function CookiePolicyPage() {
                 </th>
                 <td className="py-2 pr-4">Local storage</td>
                 <td className="py-2 pr-4">
-                  Proves who you are on each request, so you stay signed in
-                  while you move between pages.
+                  Keeps you signed in between pages.
                 </td>
                 <td className="py-2">
                   Until you sign out or the token expires.
@@ -91,11 +71,11 @@ export function CookiePolicyPage() {
                   Renews your session without asking for your password again.
                 </td>
                 <td className="py-2">
-                  Until you sign out, or until another account signs in on this
+                  Until you sign out, or another account signs in on this
                   browser.
                 </td>
               </tr>
-              <tr>
+              <tr className="border-b border-border/60">
                 <th
                   scope="row"
                   className="py-2 pr-4 text-left font-mono text-xs font-normal text-foreground"
@@ -104,17 +84,45 @@ export function CookiePolicyPage() {
                 </th>
                 <td className="py-2 pr-4">Session storage</td>
                 <td className="py-2 pr-4">
-                  Remembers that the landing page's entrance animation has
-                  already played, so it does not replay on every visit.
+                  Stops the landing page entrance animation from replaying on
+                  every visit.
                 </td>
                 <td className="py-2">Until you close the tab or browser.</td>
+              </tr>
+              <tr className="border-b border-border/60">
+                <th
+                  scope="row"
+                  className="py-2 pr-4 text-left font-mono text-xs font-normal text-foreground"
+                >
+                  aegis:archive:consultations
+                </th>
+                <td className="py-2 pr-4">Local storage</td>
+                <td className="py-2 pr-4">
+                  Remembers your choice to hide completed consultations. Hiding
+                  changes the list only; the records stay on the server.
+                </td>
+                <td className="py-2">Until you clear browser data.</td>
+              </tr>
+              <tr>
+                <th
+                  scope="row"
+                  className="py-2 pr-4 text-left font-mono text-xs font-normal text-foreground"
+                >
+                  aegis:archive:interventions
+                </th>
+                <td className="py-2 pr-4">Local storage</td>
+                <td className="py-2 pr-4">
+                  Remembers your choice to hide completed interventions. Hiding
+                  changes the list only; the records stay on the server.
+                </td>
+                <td className="py-2">Until you clear browser data.</td>
               </tr>
             </tbody>
           </table>
         </div>
         <p className="text-sm leading-relaxed text-muted-foreground">
-          None of these items identifies you to anyone outside the school. None
-          is used to build a profile, and none is shared.
+          None of these items is used to build a profile or shared with a third
+          party.
         </p>
       </section>
 
@@ -123,16 +131,12 @@ export function CookiePolicyPage() {
           Why there is no accept button
         </h2>
         <p className="text-sm leading-relaxed text-muted-foreground">
-          Consent banners exist to ask permission for storage that is not needed
-          to run the site. Everything listed above is needed for the portal to
-          work, and there is nothing else to ask about. So the site tells you
-          what it stores — in the footer and on this page — instead of asking
-          you to dismiss a banner.
+          Consent banners ask permission for storage that is not needed to run
+          the site. All five items above are needed, so there is nothing to ask.
         </p>
         <p className="text-sm leading-relaxed text-muted-foreground">
-          If the school ever adds a feature that needs non-essential storage or
-          third-party tooling, this page will say so and a real choice will be
-          offered before anything is stored.
+          If the school adds non-essential storage or third-party tooling, this
+          page will say so and ask before storing anything.
         </p>
       </section>
 
@@ -141,9 +145,8 @@ export function CookiePolicyPage() {
           Removing what is stored
         </h2>
         <p className="text-sm leading-relaxed text-muted-foreground">
-          You can clear this browser storage at any time from your browser's
-          settings, under site data or storage. Doing so signs you out; you can
-          sign in again with your school account.
+          Clear site data in your browser settings at any time. This signs you
+          out; sign in again with your school account.
         </p>
       </section>
     </LegalPageLayout>

@@ -80,7 +80,7 @@ export function AdminAnalyticsPage() {
         <ErrorNote message="Unable to load the school-wide metrics. Please try again." />
       ) : null}
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">
         <MetricCard
           title="Active students"
           hint="Enrolled students with an active record"

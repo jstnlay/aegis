@@ -45,11 +45,13 @@ describe("landing school identity", () => {
     ).toBeInTheDocument()
 
     // The campus photo is the hero backdrop now; the old side-by-side
-    // banner <img> is intentionally gone (blank slot).
+    // banner <img> is intentionally gone (blank slot). The photo sits on a
+    // child element rather than an inline style on the section, so the
+    // phone layout can drop it — an inline style outranks a utility class.
     const hero = container.querySelector(
       'section[aria-labelledby="landing-hero"]'
     )
-    expect(hero?.getAttribute("style")).toContain("/cover-photo.png")
+    expect(hero?.querySelector('[style*="/cover-photo.png"]')).not.toBeNull()
     expect(
       screen.queryByRole("img", { name: /banner: DepEd authorization/ })
     ).not.toBeInTheDocument()

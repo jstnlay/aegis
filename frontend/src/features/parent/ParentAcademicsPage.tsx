@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 
 import { Badge } from "@/components/ui/badge"
 import {
@@ -66,6 +66,16 @@ export function ParentAcademicsPage() {
   const child: LinkedStudent | undefined = linked.find(
     (c) => c.id === selectedChildId
   )
+
+  // A parent with one child should land on that child's record, not on an
+  // empty picker. Runs only while nothing is selected, so a deliberate
+  // choice is never overwritten.
+  useEffect(() => {
+    const first = linked[0]
+    if (!selectedChildId && first) {
+      setSelectedChildId(first.id)
+    }
+  }, [linked, selectedChildId])
 
   const gradesQuery = useChildGrades(selectedChildId || null)
   const summaryQuery = useChildAttendanceSummary(selectedChildId || null)
@@ -262,7 +272,7 @@ function AcademicRecord({
         <Badge variant="outline">{child.student_id}</Badge>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Average grade</CardTitle>

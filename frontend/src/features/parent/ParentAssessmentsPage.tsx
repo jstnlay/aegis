@@ -1,5 +1,5 @@
 import { ClipboardCheck } from "lucide-react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 
 import { Badge } from "@/components/ui/badge"
 import { ErrorNote } from "@/components/feedback/Feedback"
@@ -70,6 +70,16 @@ export function ParentAssessmentsPage() {
   const linkedQuery = useLinkedStudents()
   const linked = linkedQuery.data ?? []
   const child = linked.find((c) => c.id === selectedChildId)
+
+  // A parent with one child should land on that child's record, not on an
+  // empty picker. Runs only while nothing is selected, so a deliberate
+  // choice is never overwritten.
+  useEffect(() => {
+    const first = linked[0]
+    if (!selectedChildId && first) {
+      setSelectedChildId(first.id)
+    }
+  }, [linked, selectedChildId])
 
   const assessmentsQuery = useParentAssessments(linkedQuery.isSuccess)
   const resultsQuery = useChildResults(selectedChildId || null)

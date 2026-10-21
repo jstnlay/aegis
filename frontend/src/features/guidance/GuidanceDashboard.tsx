@@ -1,4 +1,10 @@
-import { ClipboardList } from "lucide-react"
+import {
+  CalendarClock,
+  ClipboardCheck,
+  ClipboardList,
+  ShieldAlert,
+  Users,
+} from "lucide-react"
 import { Link } from "react-router-dom"
 
 import { NewCasesTrendChart } from "@/components/charts/NewCasesTrend"
@@ -225,11 +231,10 @@ export function GuidanceDashboard() {
       >
         <div>
           <h2 className="text-2xl font-bold text-foreground">
-            Guidance Center
+            Welcome back, {greetingName(user)}!
           </h2>
           <p className="mt-1 max-w-prose text-sm text-muted-foreground">
-            Welcome back, {greetingName(user)}! Here&apos;s an overview of the
-            student support activities today.
+            Here&apos;s an overview of the student support activities today.
           </p>
         </div>
         <div className="flex items-center gap-3 rounded-lg border border-border bg-card/80 px-4 py-3 shadow-sm backdrop-blur-sm">
@@ -270,9 +275,9 @@ export function GuidanceDashboard() {
       {/* ---------------------------------------------------------------- */}
       {/* Metric tiles                                                     */}
       {/* ---------------------------------------------------------------- */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <MetricCard
-          centered
+          icon={ShieldAlert}
           title="Active Cases"
           hint="Open risk alerts (not yet resolved)"
           isLoading={statsQuery.isLoading}
@@ -282,7 +287,7 @@ export function GuidanceDashboard() {
         </MetricCard>
 
         <MetricCard
-          centered
+          icon={Users}
           title="At-Risk Students"
           hint="Distinct students with an open moderate/high alert"
           isLoading={statsQuery.isLoading}
@@ -292,7 +297,7 @@ export function GuidanceDashboard() {
         </MetricCard>
 
         <MetricCard
-          centered
+          icon={CalendarClock}
           title="Pending Follow-up"
           hint="Your ongoing and follow-up consultations"
           isLoading={statsQuery.isLoading}
@@ -308,7 +313,7 @@ export function GuidanceDashboard() {
           sentence that never explains it.
         */}
         <MetricCard
-          centered
+          icon={ClipboardCheck}
           title="Assessment Completion"
           hint={
             statsQuery.isError
@@ -324,293 +329,261 @@ export function GuidanceDashboard() {
         </MetricCard>
       </div>
 
-      {/* ---------------------------------------------------------------- */}
-      {/* Analytics                                                        */}
-      {/* ---------------------------------------------------------------- */}
       {/*
-        Every chart together, directly under the figures they explain. The bars
-        used to live inside the Risk Alerts card while the donut and the trend
-        sat at the bottom of the page, which scattered the one glance a
-        counselor needs across three places.
+        Two columns, per the Dashboard reference: working lists on the left,
+        the consultation feed and its summaries on the right.
       */}
-      <section aria-labelledby="guidance-analytics" className="space-y-4">
-        <h3
-          id="guidance-analytics"
-          className="text-lg font-semibold tracking-tight"
-        >
-          Analytics
-        </h3>
-        <Card>
-          <CardHeader>
-            <PanelHeader title="Risk Level Distribution" />
-          </CardHeader>
-          <CardContent>
-            {riskAlertsQuery.isLoading ? (
-              <PendingRegion label="Risk level distribution">
-                <Skeleton className="h-32 w-full" />
-              </PendingRegion>
-            ) : riskAlertsQuery.isError ? (
-              <p className="text-sm text-muted-foreground">
-                Risk levels are unavailable.
-              </p>
-            ) : alerts.length === 0 ? (
-              <EmptyState message="No risk alerts." />
-            ) : (
-              <RiskLevelBars alerts={alerts} />
-            )}
-          </CardContent>
-        </Card>
-        <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid items-start gap-4 lg:grid-cols-2">
+        <div className="space-y-4">
           <Card>
             <CardHeader>
-              <PanelHeader title="Case Status Overview" />
+              <PanelHeader title="Risk Alerts" to="/app/guidance/risk-alerts" />
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
               {riskAlertsQuery.isLoading ? (
-                <PendingRegion label="Case status overview">
+                <PendingRegion label="Risk alerts">
                   <Skeleton className="h-32 w-full" />
                 </PendingRegion>
               ) : riskAlertsQuery.isError ? (
                 <p className="text-sm text-muted-foreground">
-                  Case status is unavailable.
+                  Risk alerts are unavailable.
                 </p>
+              ) : alerts.length === 0 ? (
+                <EmptyState message="No risk alerts." />
               ) : (
-                <RiskStatusDonut alerts={alerts} />
+                <>
+                  <RiskLevelBars alerts={alerts} />
+                  <ul className="space-y-2">
+                    {recentAlerts.map((alert) => (
+                      <li
+                        key={alert.id}
+                        className="rounded-md border border-border p-3"
+                        data-risk={alert.risk_level}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium">
+                              {alert.student_name}
+                            </p>
+                            {/*
+                              `RiskAlertSerializer` exposes no student ID code, so
+                              no code is rendered here — the UUID is deliberately
+                              not shown as a substitute. The student profile page
+                              is the place a human-facing code is available.
+                            */}
+                            <p className="truncate text-xs text-muted-foreground">
+                              {alertStatusLabel(alert.status)}
+                            </p>
+                          </div>
+                          <Badge
+                            variant="secondary"
+                            className={`shrink-0 ${riskLevelBadgeClass(alert.risk_level)}`}
+                            data-risk-level={alert.risk_level}
+                          >
+                            {alert.risk_level.toUpperCase()}
+                          </Badge>
+                        </div>
+                        {alert.risk_factors.length > 0 && (
+                          <p className="mt-1.5 text-xs text-muted-foreground">
+                            {alert.risk_factors
+                              .slice(0, 2)
+                              .map(riskFactorLabel)
+                              .filter(Boolean)
+                              .join(", ")}
+                            {alert.risk_factors.length > 2 && " …"}
+                          </p>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </>
               )}
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between gap-2">
-                <CardTitle>Monthly Trend</CardTitle>
-                <span className="text-xs text-muted-foreground">
-                  Last 6 Months
-                </span>
-              </div>
+              <PanelHeader
+                title="Upcoming Follow-ups"
+                to="/app/guidance/consultations"
+              />
             </CardHeader>
             <CardContent>
-              {riskAlertsQuery.isLoading ? (
-                <PendingRegion label="Monthly trend">
-                  <Skeleton className="h-32 w-full" />
+              {consultationsQuery.isLoading ? (
+                <PendingRegion label="Upcoming follow-ups">
+                  <Skeleton className="h-24 w-full" />
                 </PendingRegion>
-              ) : riskAlertsQuery.isError ? (
+              ) : consultationsQuery.isError ? (
                 <p className="text-sm text-muted-foreground">
-                  The trend is unavailable.
+                  Consultations are unavailable.
                 </p>
-              ) : hasRecentCaseHistory(alerts) ? (
-                <NewCasesTrendChart alerts={alerts} />
+              ) : upcomingFollowUps.length === 0 ? (
+                <EmptyState message="No follow-ups scheduled." />
               ) : (
-                <p className="text-sm text-muted-foreground">
-                  No new cases recorded in the last six months.
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </section>
-
-      {/* ---------------------------------------------------------------- */}
-      {/* Risk alerts + recent consultations                               */}
-      {/* ---------------------------------------------------------------- */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <PanelHeader title="Risk Alerts" to="/app/guidance/risk-alerts" />
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {riskAlertsQuery.isLoading ? (
-              <PendingRegion label="Risk alerts">
-                <Skeleton className="h-32 w-full" />
-              </PendingRegion>
-            ) : riskAlertsQuery.isError ? (
-              <p className="text-sm text-muted-foreground">
-                Risk alerts are unavailable.
-              </p>
-            ) : alerts.length === 0 ? (
-              <EmptyState message="No risk alerts." />
-            ) : (
-              <ul className="space-y-2">
-                {recentAlerts.map((alert) => (
-                  <li
-                    key={alert.id}
-                    className="rounded-md border border-border p-3"
-                    data-risk={alert.risk_level}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">
-                          {alert.student_name}
-                        </p>
-                        {/*
-                          `RiskAlertSerializer` exposes no student ID code, so no
-                          code is rendered here — the UUID is deliberately not
-                          shown as a substitute. The student profile page is the
-                          place a human-facing code is available.
-                        */}
-                        <p className="truncate text-xs text-muted-foreground">
-                          {alertStatusLabel(alert.status)}
-                        </p>
+                <ul className="space-y-2">
+                  {upcomingFollowUps.map((consultation) => (
+                    <li
+                      key={consultation.id}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border p-3"
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span
+                          aria-hidden="true"
+                          className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary"
+                        >
+                          {initialsOf(consultation.student_name) || "—"}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">
+                            {consultation.student_name}
+                          </p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {formatSessionDate(
+                              consultation.next_session_date ?? ""
+                            )}
+                          </p>
+                        </div>
                       </div>
-                      <Badge
-                        variant="secondary"
-                        className={`shrink-0 ${riskLevelBadgeClass(alert.risk_level)}`}
-                        data-risk-level={alert.risk_level}
-                      >
-                        {alert.risk_level.toUpperCase()}
-                      </Badge>
-                    </div>
-                    {alert.risk_factors.length > 0 && (
-                      <p className="mt-1.5 text-xs text-muted-foreground">
-                        {alert.risk_factors
-                          .slice(0, 2)
-                          .map(riskFactorLabel)
-                          .filter(Boolean)
-                          .join(", ")}
-                        {alert.risk_factors.length > 2 && " …"}
-                      </p>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <PanelHeader
-              title="Recent Consultations"
-              to="/app/guidance/consultations"
-            />
-          </CardHeader>
-          <CardContent>
-            {consultationsQuery.isLoading ? (
-              <PendingRegion label="Recent consultations">
-                <Skeleton className="h-32 w-full" />
-              </PendingRegion>
-            ) : consultationsQuery.isError ? (
-              <p className="text-sm text-muted-foreground">
-                Consultations are unavailable.
-              </p>
-            ) : recentConsultations.length === 0 ? (
-              <EmptyState message="No consultations recorded yet." />
-            ) : (
-              <ul className="space-y-2">
-                {recentConsultations.map((consultation) => (
-                  <li
-                    key={consultation.id}
-                    className="flex flex-wrap items-start justify-between gap-2 rounded-md border border-border p-3"
-                  >
-                    <div className="flex min-w-0 items-center gap-3">
-                      <span
-                        aria-hidden="true"
-                        className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground"
-                      >
-                        {initialsOf(consultation.student_name) || "—"}
-                      </span>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">
-                          {consultation.student_name}
-                        </p>
-                        <p className="truncate text-xs text-muted-foreground">
-                          {
-                            CONSULTATION_SESSION_TYPE_LABELS[
-                              consultation.session_type
-                            ]
-                          }{" "}
-                          · {formatSessionDate(consultation.session_date)} ·{" "}
-                          {formatSessionTime(consultation.session_time)}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex shrink-0 flex-col items-end gap-1">
                       <Badge
                         variant="secondary"
                         className={consultationStatusBadgeClass(
                           consultation.status
                         )}
-                        data-consultation-status={consultation.status}
                       >
                         {consultationStatusLabel(consultation.status)}
                       </Badge>
-                      <span className="text-xs text-muted-foreground">
-                        {
-                          CONSULTATION_PRIORITY_LABELS[
-                            consultation.priority_level
-                          ]
-                        }{" "}
-                        priority
-                      </span>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+        </div>
 
-      {/* ---------------------------------------------------------------- */}
-      {/* Upcoming follow-ups                                              */}
-      {/* ---------------------------------------------------------------- */}
-      <Card>
-        <CardHeader>
-          <PanelHeader
-            title="Upcoming Follow-ups"
-            to="/app/guidance/consultations"
-          />
-        </CardHeader>
-        <CardContent>
-          {consultationsQuery.isLoading ? (
-            <PendingRegion label="Upcoming follow-ups">
-              <Skeleton className="h-24 w-full" />
-            </PendingRegion>
-          ) : consultationsQuery.isError ? (
-            <p className="text-sm text-muted-foreground">
-              Consultations are unavailable.
-            </p>
-          ) : upcomingFollowUps.length === 0 ? (
-            <EmptyState message="No follow-ups scheduled." />
-          ) : (
-            <ul className="space-y-2">
-              {upcomingFollowUps.map((consultation) => (
-                <li
-                  key={consultation.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border p-3"
-                >
-                  <div className="flex min-w-0 items-center gap-3">
-                    <span
-                      aria-hidden="true"
-                      className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary"
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <PanelHeader
+                title="Recent Consultations"
+                to="/app/guidance/consultations"
+              />
+            </CardHeader>
+            <CardContent>
+              {consultationsQuery.isLoading ? (
+                <PendingRegion label="Recent consultations">
+                  <Skeleton className="h-32 w-full" />
+                </PendingRegion>
+              ) : consultationsQuery.isError ? (
+                <p className="text-sm text-muted-foreground">
+                  Consultations are unavailable.
+                </p>
+              ) : recentConsultations.length === 0 ? (
+                <EmptyState message="No consultations recorded yet." />
+              ) : (
+                <ul className="space-y-2">
+                  {recentConsultations.map((consultation) => (
+                    <li
+                      key={consultation.id}
+                      className="flex flex-wrap items-start justify-between gap-2 rounded-md border border-border p-3"
                     >
-                      {initialsOf(consultation.student_name) || "—"}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">
-                        {consultation.student_name}
-                      </p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {formatSessionDate(
-                          consultation.next_session_date ?? ""
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                  <Badge
-                    variant="secondary"
-                    className={consultationStatusBadgeClass(
-                      consultation.status
-                    )}
-                  >
-                    {consultationStatusLabel(consultation.status)}
-                  </Badge>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span
+                          aria-hidden="true"
+                          className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground"
+                        >
+                          {initialsOf(consultation.student_name) || "—"}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">
+                            {consultation.student_name}
+                          </p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {
+                              CONSULTATION_SESSION_TYPE_LABELS[
+                                consultation.session_type
+                              ]
+                            }{" "}
+                            · {formatSessionDate(consultation.session_date)} ·{" "}
+                            {formatSessionTime(consultation.session_time)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        <Badge
+                          variant="secondary"
+                          className={consultationStatusBadgeClass(
+                            consultation.status
+                          )}
+                          data-consultation-status={consultation.status}
+                        >
+                          {consultationStatusLabel(consultation.status)}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {
+                            CONSULTATION_PRIORITY_LABELS[
+                              consultation.priority_level
+                            ]
+                          }{" "}
+                          priority
+                        </span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <PanelHeader title="Case Status Overview" />
+              </CardHeader>
+              <CardContent>
+                {riskAlertsQuery.isLoading ? (
+                  <PendingRegion label="Case status overview">
+                    <Skeleton className="h-32 w-full" />
+                  </PendingRegion>
+                ) : riskAlertsQuery.isError ? (
+                  <p className="text-sm text-muted-foreground">
+                    Case status is unavailable.
+                  </p>
+                ) : (
+                  <RiskStatusDonut alerts={alerts} />
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between gap-2">
+                  <CardTitle>Monthly Trend</CardTitle>
+                  <span className="text-xs text-muted-foreground">
+                    Last 6 Months
+                  </span>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {riskAlertsQuery.isLoading ? (
+                  <PendingRegion label="Monthly trend">
+                    <Skeleton className="h-32 w-full" />
+                  </PendingRegion>
+                ) : riskAlertsQuery.isError ? (
+                  <p className="text-sm text-muted-foreground">
+                    The trend is unavailable.
+                  </p>
+                ) : hasRecentCaseHistory(alerts) ? (
+                  <NewCasesTrendChart alerts={alerts} />
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No new cases recorded in the last six months.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

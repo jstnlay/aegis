@@ -49,7 +49,7 @@ export function RecommendationsCard({
   const items = data?.recommendations ?? []
 
   return (
-    <Card className="col-span-1 md:col-span-2 lg:col-span-3">
+    <Card className="col-span-2 lg:col-span-3">
       <CardHeader>
         <div className="flex flex-row items-center justify-between space-y-0">
           <CardTitle className="flex items-center gap-2 text-sm font-medium">

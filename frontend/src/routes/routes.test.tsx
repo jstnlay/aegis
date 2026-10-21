@@ -98,7 +98,7 @@ const ROLE_CASES: ReadonlyArray<{ role: Role; heading: RegExp }> = [
   { role: "student", heading: /Student Dashboard/i },
   { role: "parent", heading: /Parent Portal/i },
   { role: "faculty", heading: /Faculty Dashboard/i },
-  { role: "guidance", heading: /Guidance Center/i },
+  { role: "guidance", heading: /Welcome back/i },
   { role: "admin", heading: /Administration Panel/i },
 ]
 
@@ -186,7 +186,7 @@ describe("PH11.7 domain routes", () => {
     ).toBeInTheDocument()
     expect(screen.queryByText(/Encode a grade/i)).not.toBeInTheDocument()
     expect(
-      screen.queryByRole("heading", { name: /Guidance Center/i })
+      screen.queryByRole("heading", { name: /Welcome back/i })
     ).not.toBeInTheDocument()
   })
 

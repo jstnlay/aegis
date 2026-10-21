@@ -1,5 +1,5 @@
 import { useMemo } from "react"
-import { ClipboardList, LayoutGrid, Users } from "lucide-react"
+import { CalendarCheck, ClipboardList, NotebookPen, Users } from "lucide-react"
 import { Link } from "react-router-dom"
 
 import {
@@ -15,7 +15,6 @@ import {
 import { ChartFrame } from "@/components/charts/ChartCard"
 import {
   AXIS_COLOR,
-  chartColor,
   formatCountValue,
   GRID_COLOR,
 } from "@/components/charts/chart-config"
@@ -31,11 +30,19 @@ import { MetricCard } from "@/components/ui/metric-card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/features/auth/AuthContext"
 import {
+  useFacultyAttendanceSummary,
+  useFacultyBehavioralNotes,
   useFacultyDashboardStats,
   useFacultySections,
   useFacultySubjectAssignments,
 } from "@/features/faculty/api"
-import { formatCount } from "@/lib/metric-format"
+import { formatCount, formatPercent } from "@/lib/metric-format"
+
+const NOTE_TYPE_LABELS = {
+  positive: "Positive",
+  warning: "Warning",
+  incident: "Incident",
+} as const
 
 /**
  * The shared metric tile. The private copy that lived here is gone since this
@@ -50,6 +57,8 @@ function FacultyDashboard() {
   const statsQuery = useFacultyDashboardStats()
   const assignmentsQuery = useFacultySubjectAssignments()
   const sectionsQuery = useFacultySections()
+  const attendanceQuery = useFacultyAttendanceSummary()
+  const notesQuery = useFacultyBehavioralNotes()
 
   // `null` means the aggregate could not be measured at all; a real 0
   // (no pending work, no sections) is preserved and rendered as "0".
@@ -62,16 +71,13 @@ function FacultyDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-1">
         <h2 className="text-2xl font-bold text-foreground">
           Faculty Dashboard
         </h2>
-        <Badge
-          variant="outline"
-          className="w-max max-w-full border-border bg-maroon-100 text-maroon-800"
-        >
-          <span className="truncate">{user.email}</span>
-        </Badge>
+        <p className="text-sm text-muted-foreground">
+          Your sections, attendance and grading at a glance.
+        </p>
       </div>
 
       {/*
@@ -86,7 +92,7 @@ function FacultyDashboard() {
         <ErrorNote message="Unable to load the faculty statistics. Please try again." />
       ) : null}
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <MetricCard
           title="Total Students"
           hint="Active enrollments across all sections"
@@ -95,6 +101,20 @@ function FacultyDashboard() {
           isError={statsQuery.isError}
         >
           {formatCount(statsQuery.data?.total_students ?? null)}
+        </MetricCard>
+
+        <MetricCard
+          title="Attendance"
+          hint={
+            attendanceQuery.data?.records
+              ? `${attendanceQuery.data.present} present, ${attendanceQuery.data.late} late, ${attendanceQuery.data.absent} absent`
+              : "No attendance recorded yet"
+          }
+          icon={CalendarCheck}
+          isLoading={attendanceQuery.isLoading}
+          isError={attendanceQuery.isError}
+        >
+          {formatPercent(attendanceQuery.data?.attendance_rate, 1)}
         </MetricCard>
 
         <MetricCard
@@ -112,14 +132,89 @@ function FacultyDashboard() {
         </MetricCard>
 
         <MetricCard
-          title="Sections"
-          hint="Assigned teaching sections"
-          icon={LayoutGrid}
-          isLoading={sectionsQuery.isLoading}
-          isError={sectionsQuery.isError}
+          title="Behavior Notes"
+          hint={
+            notesQuery.data
+              ? `${notesQuery.data.total} note${notesQuery.data.total === 1 ? "" : "s"} for your students`
+              : "No notes recorded yet"
+          }
+          icon={NotebookPen}
+          isLoading={notesQuery.isLoading}
+          isError={notesQuery.isError}
         >
-          {formatCount(sectionsQuery.data?.length ?? null)}
+          {formatCount(notesQuery.data?.total ?? null)}
         </MetricCard>
+      </div>
+
+      <div className="grid items-start gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Quick actions</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              <Button asChild variant="outline" size="sm">
+                <Link to="/app/academics">Encode a grade</Link>
+              </Button>
+              <Button asChild variant="outline" size="sm">
+                <Link to="/app/attendance">Take attendance</Link>
+              </Button>
+              <Button asChild variant="outline" size="sm">
+                <Link to="/app/faculty/advisory">Advisory class</Link>
+              </Button>
+              <Button asChild variant="outline" size="sm">
+                <Link to="/app/faculty/advisory">Add behavior note</Link>
+              </Button>
+              <Button asChild variant="outline" size="sm">
+                <Link to="/app/faculty/import">Imports & exports</Link>
+              </Button>
+              <Button asChild variant="outline" size="sm">
+                <Link to="/app/reports">Reports</Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Notes</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {notesQuery.isLoading ? (
+              <PendingRegion label="Recent behavior notes">
+                <Skeleton className="h-24 w-full" />
+              </PendingRegion>
+            ) : notesQuery.isError ? (
+              <ErrorNote message="Unable to load behavior notes. Please try again." />
+            ) : notesQuery.data && notesQuery.data.recent.length > 0 ? (
+              <ul className="space-y-2">
+                {notesQuery.data.recent.map((note) => (
+                  <li
+                    key={note.id}
+                    className="rounded-md border border-border p-3"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="min-w-0 truncate text-sm font-medium">
+                        {note.student_name}
+                      </p>
+                      <Badge variant="secondary" className="shrink-0">
+                        {NOTE_TYPE_LABELS[note.note_type]}
+                      </Badge>
+                    </div>
+                    <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                      {note.note_text}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {note.date_recorded}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <EmptyState message="No behavior notes recorded yet." />
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       <Card>
@@ -144,31 +239,6 @@ function FacultyDashboard() {
           ) : (
             <EmptyState message="No pending grades — everything is finalized." />
           )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Quick actions</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-2">
-            <Button asChild variant="outline" size="sm">
-              <Link to="/app/academics">Encode a grade</Link>
-            </Button>
-            <Button asChild variant="outline" size="sm">
-              <Link to="/app/attendance">Take attendance</Link>
-            </Button>
-            <Button asChild variant="outline" size="sm">
-              <Link to="/app/faculty/advisory">Advisory class</Link>
-            </Button>
-            <Button asChild variant="outline" size="sm">
-              <Link to="/app/faculty/import">Imports & exports</Link>
-            </Button>
-            <Button asChild variant="outline" size="sm">
-              <Link to="/app/reports">Reports</Link>
-            </Button>
-          </div>
         </CardContent>
       </Card>
 
@@ -319,7 +389,7 @@ function PendingGradesChart({
           <Bar
             dataKey="count"
             name="Pending"
-            fill={chartColor(0)}
+            fill="var(--primary)"
             radius={[4, 4, 0, 0]}
             // Two bars in a full-width frame would each sprawl across half the
             // card; capped, they read as two columns instead of two walls.

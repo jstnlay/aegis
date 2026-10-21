@@ -14,7 +14,14 @@ import { StudentsPage } from "@/features/guidance/StudentsPage"
 import { NotificationsPage } from "@/features/notifications/NotificationsPage"
 import { ReportsPage } from "@/features/reports/ReportsPage"
 import { AccountSettingsPage } from "@/features/settings/AccountSettingsPage"
+import { AcceptInvitationPage } from "@/routes/pages/AcceptInvitationPage"
 import { ChangePasswordPage } from "@/routes/pages/ChangePasswordPage"
+import { ForgotPasswordPage } from "@/routes/pages/ForgotPasswordPage"
+import { RegisterPage } from "@/routes/pages/RegisterPage"
+import {
+  ResetPasswordPage,
+  SetPasswordPage,
+} from "@/routes/pages/ResetPasswordPage"
 import { CookiePolicyPage } from "@/routes/pages/CookiePolicyPage"
 import { LandingPage } from "@/routes/pages/LandingPage"
 import { LoginPage } from "@/routes/pages/LoginPage"
@@ -63,6 +70,19 @@ export const appRoutes: RouteObject[] = [
   { path: "/terms", element: <TermsOfUsePage /> },
   { path: "/cookies", element: <CookiePolicyPage /> },
   { path: "/change-password", element: <ChangePasswordPage /> },
+  // Password recovery. Both are public: the reset link in the email is the
+  // credential, so neither needs a session.
+  { path: "/forgot-password", element: <ForgotPasswordPage /> },
+  { path: "/reset-password", element: <ResetPasswordPage /> },
+  // The link a newly provisioned account follows. Same redemption, different
+  // wording: no administrator chooses a colleague's password.
+  { path: "/set-password", element: <SetPasswordPage /> },
+  // Student registration. A request, not an account: an administrator
+  // approves it before any account exists.
+  { path: "/register", element: <RegisterPage /> },
+  // Parent invitation. The school issued the link, so the account and the
+  // child it opens are both decided by the invitation.
+  { path: "/accept-invitation", element: <AcceptInvitationPage /> },
   {
     // Pathless auth boundary: matches only through its children (`/app…`),
     // so `/` renders the public landing page and never bounces to /login.

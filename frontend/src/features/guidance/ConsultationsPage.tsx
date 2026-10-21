@@ -786,7 +786,9 @@ export function ConsultationsPage() {
         sortTieBreak: (row) => codeByStudent.get(row.student) ?? null,
         cell: (row) => (
           <>
-            <div className="font-medium">{row.student_name}</div>
+            <div className="font-medium whitespace-nowrap">
+              {row.student_name}
+            </div>
             {codeByStudent.get(row.student) ? (
               <div className="text-xs text-muted-foreground">
                 {codeByStudent.get(row.student)}
@@ -802,8 +804,8 @@ export function ConsultationsPage() {
         sortTieBreak: (row) => row.session_time,
         cell: (row) => (
           <>
-            <div className="text-sm">{row.session_date}</div>
-            <div className="text-xs text-muted-foreground">
+            <div className="text-sm whitespace-nowrap">{row.session_date}</div>
+            <div className="text-xs whitespace-nowrap text-muted-foreground">
               {formatTime(row.session_time)}
             </div>
           </>
@@ -813,7 +815,7 @@ export function ConsultationsPage() {
         key: "type",
         header: "Type",
         sortValue: (row) => row.session_type,
-        cellClassName: "text-sm text-muted-foreground",
+        cellClassName: "text-sm whitespace-nowrap text-muted-foreground",
         cell: (row) => CONSULTATION_SESSION_TYPE_LABELS[row.session_type],
       },
       {

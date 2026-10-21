@@ -179,11 +179,7 @@ describe("PH11.11 feed-card states", () => {
   it("still shows the empty state when the request succeeded with no alerts", () => {
     renderWithAlerts({ data: [] } as never)
 
-    // Twice, not once: the analytics card and the alert list are two views of
-    // the same empty set, and either one going silent would read as a section
-    // that failed to load.
-    const emptyStates = screen.getAllByText(/No risk alerts/i)
-    expect(emptyStates).toHaveLength(2)
+    expect(screen.getByText(/No risk alerts/i)).toBeInTheDocument()
     expect(screen.queryByRole("alert")).not.toBeInTheDocument()
   })
 
@@ -226,15 +222,12 @@ describe("GuidanceDashboard", () => {
     expect(screen.getByText(/Open risk alerts/i)).toBeInTheDocument()
   })
 
-  it("centers the metric tiles like the reference stat cards", () => {
+  it("left-aligns the metric tiles like the reference stat cards", () => {
     renderWithClient()
 
-    // The reference's cards center title, figure and hint. The class lives on
-    // the header and content primitives rather than the card root, so the
-    // assertion follows it there.
     const tile = screen.getByText(/Active Cases/i).closest('[data-slot="card"]')
     expect(tile).not.toBeNull()
-    expect(tile?.querySelector('[data-slot="card-content"]')).toHaveClass(
+    expect(tile?.querySelector('[data-slot="card-content"]')).not.toHaveClass(
       "text-center"
     )
   })

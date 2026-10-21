@@ -1,21 +1,37 @@
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 
 import {
   StudentAcademicTrendChart,
   StudentAttendanceTrendChart,
 } from "@/components/charts/StudentTrendCharts"
 import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import {
   EmptyState,
   ErrorNote,
   PendingRegion,
 } from "@/components/feedback/Feedback"
+import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { MetricCard } from "@/components/ui/metric-card"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/features/auth/AuthContext"
 import {
+  useNominateParent,
   useStudentDashboardData,
   useStudentProfileId,
 } from "@/features/student/api"
@@ -70,16 +86,13 @@ export function StudentDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-1">
         <h2 className="text-2xl font-bold text-foreground">
           Student Dashboard
         </h2>
-        <Badge
-          variant="outline"
-          className="w-max max-w-full border-border bg-maroon-100 text-maroon-800"
-        >
-          <span className="truncate">{user.email}</span>
-        </Badge>
+        <p className="text-sm text-muted-foreground">
+          Your academic record at a glance.
+        </p>
       </div>
 
       {/*
@@ -93,8 +106,9 @@ export function StudentDashboard() {
         but with nothing to say why. A bare "N/A" is an answer nobody can act on;
         the hint now names the state, the way Attendance Rate already did.
       */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
         <MetricCard
+          className="col-span-2 lg:col-span-1"
           title="Average Grade"
           hint={
             dataError
@@ -139,7 +153,7 @@ export function StudentDashboard() {
           {formatCount(totalSubjects)}
         </MetricCard>
 
-        <Card className="col-span-1 md:col-span-2 lg:col-span-3">
+        <Card className="col-span-2 lg:col-span-3">
           <CardHeader>
             <CardTitle>Academic Progress</CardTitle>
           </CardHeader>
@@ -244,7 +258,9 @@ export function StudentDashboard() {
 
         <RecommendationsCard studentId={profileQuery.data ?? null} />
 
-        <Card className="col-span-1 md:col-span-2 lg:col-span-3">
+        <FamilyAccessCard />
+
+        <Card className="col-span-2 lg:col-span-3">
           <CardHeader>
             <CardTitle>Academic Trend</CardTitle>
           </CardHeader>
@@ -253,7 +269,7 @@ export function StudentDashboard() {
           </CardContent>
         </Card>
 
-        <Card className="col-span-1 md:col-span-2 lg:col-span-3">
+        <Card className="col-span-2 lg:col-span-3">
           <CardHeader>
             <CardTitle>Attendance Trend</CardTitle>
           </CardHeader>
@@ -265,5 +281,97 @@ export function StudentDashboard() {
         </Card>
       </div>
     </div>
+  )
+}
+
+/**
+ * Ask for a parent or guardian to have family access.
+ *
+ * A nomination is a request. The school reviews it and issues the
+ * invitation, and the parent sets their own password when they accept it.
+ * Nothing here grants access — the wording says so, because a student
+ * should not think a submitted form has already shared their record.
+ */
+function FamilyAccessCard() {
+  const nominate = useNominateParent()
+  const [name, setName] = useState("")
+  const [email, setEmail] = useState("")
+  const [relationship, setRelationship] = useState("mother")
+
+  const canSubmit =
+    name.trim().length > 0 && email.trim().length > 0 && !nominate.isPending
+
+  return (
+    <Card className="col-span-2 lg:col-span-3">
+      <CardHeader>
+        <CardTitle>Family access</CardTitle>
+        <CardDescription>
+          Ask for a parent or guardian to be able to follow your academic
+          record. The school reviews every request, and your parent sets their
+          own password when they accept the invitation.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {nominate.isSuccess ? (
+          <p className="text-sm text-muted-foreground">
+            The request was received. The school will review it and contact your
+            parent with an invitation.
+          </p>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="family-name">Parent or guardian name</Label>
+              <Input
+                id="family-name"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="Maria Cruz"
+                disabled={nominate.isPending}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="family-email">Their email address</Label>
+              <Input
+                id="family-email"
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="maria@example.com"
+                disabled={nominate.isPending}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="family-relationship">Relationship</Label>
+              <Select value={relationship} onValueChange={setRelationship}>
+                <SelectTrigger id="family-relationship">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="mother">Mother</SelectItem>
+                  <SelectItem value="father">Father</SelectItem>
+                  <SelectItem value="guardian">Guardian</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="sm:col-span-3">
+              <Button
+                size="sm"
+                disabled={!canSubmit}
+                onClick={() =>
+                  nominate.mutate({
+                    full_name: name.trim(),
+                    email: email.trim(),
+                    relationship,
+                  })
+                }
+              >
+                {nominate.isPending ? "Sending…" : "Request family access"}
+              </Button>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }

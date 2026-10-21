@@ -34,8 +34,8 @@ export function RiskStatusDonut({ alerts }: { alerts: readonly RiskAlert[] }) {
   const drawn = slices.filter((slice) => slice.count > 0)
 
   return (
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-      <div className="relative sm:w-40">
+    <div className="flex flex-col gap-4">
+      <div className="relative mx-auto w-40 shrink-0">
         <ChartFrame
           height={150}
           label={`Donut chart of ${total} total cases. ${drawn

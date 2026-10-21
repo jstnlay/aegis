@@ -32,6 +32,20 @@ vi.mock("@/lib/api", () => ({
 const mockedFetchAllPages = vi.mocked(fetchAllPages)
 const mockedGet = vi.mocked(apiClient.get)
 
+const directory = [
+  {
+    id: "sp-1",
+    name: "Ana Reyes",
+    code: "S-1001",
+    latestActivity: "2025-02-10",
+    openAlertCount: 1,
+    atRiskLevel: "high",
+    consultationCount: 1,
+    interventionCount: 1,
+    resultCount: 1,
+  },
+]
+
 const enrollments = [
   {
     id: "en-1",
@@ -332,6 +346,9 @@ beforeEach(() => {
     return { count: 0, results: [] }
   })
   mockedGet.mockImplementation(async (url: string) => {
+    if (url.startsWith("/guidance/students/")) {
+      return { data: { students: directory } } as never
+    }
     if (url.startsWith("/guidance/reports/student/")) {
       return { data: report } as never
     }
@@ -366,7 +383,19 @@ describe("StudentProfilePage", () => {
   })
 
   it("shows an em-dash when no guidance record carries a code", async () => {
-    // Ana's only activity here is a risk alert, which has no code field.
+    // The code now comes from the server-computed directory, so the row
+    // itself is what carries the absence of one.
+    mockedGet.mockImplementation(async (url: string) => {
+      if (url.startsWith("/guidance/students/")) {
+        return {
+          data: { students: [{ ...directory[0], code: null }] },
+        } as never
+      }
+      if (url.startsWith("/guidance/reports/student/")) {
+        return { data: report } as never
+      }
+      return { data: [] } as never
+    })
     mockedFetchAllPages.mockImplementation(async (url: string) => {
       if (url.includes("/academics/enrollments/")) {
         return { count: enrollments.length, results: enrollments }
@@ -538,6 +567,10 @@ describe("StudentProfilePage", () => {
    */
   it("ignores report totals that include other counselors", async () => {
     mockedGet.mockImplementation(async (url: string) => {
+      if (url.startsWith("/guidance/students/")) {
+        return { data: { students: directory } } as never
+      }
+
       if (url.startsWith("/guidance/reports/student/")) {
         return {
           data: {
@@ -599,6 +632,10 @@ describe("StudentProfilePage", () => {
 
   it("reports no attendance rather than fake zeros when the summary is empty", async () => {
     mockedGet.mockImplementation(async (url: string) => {
+      if (url.startsWith("/guidance/students/")) {
+        return { data: { students: directory } } as never
+      }
+
       if (url.startsWith("/attendance/summary/")) return { data: [] } as never
       if (url.startsWith("/guidance/reports/student/")) {
         return { data: report } as never
@@ -678,6 +715,10 @@ describe("StudentProfilePage", () => {
 
     beforeEach(() => {
       mockedGet.mockImplementation(async (url: string) => {
+        if (url.startsWith("/guidance/students/")) {
+          return { data: { students: directory } } as never
+        }
+
         if (url === "/guidance/reports/student/sp-1/") return { data: report }
         return { data: [] }
       })

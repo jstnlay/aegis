@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react"
-import { useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { apiClient } from "@/lib/api"
 import { fetchAllPages } from "@/lib/pagination"
 
@@ -284,4 +284,23 @@ export function useStudentDashboardData(studentId: string) {
       gradingPeriodsQuery.isFetching,
     error: attendanceQuery.error || gradesQuery.error || metricsQuery.error,
   }
+}
+
+/**
+ * Nominate a parent or guardian for family access.
+ *
+ * A nomination is a request, not an account: the school reviews it and
+ * issues the invitation, and only the parent, on accepting it, gets access
+ * to the student's record.
+ */
+export function useNominateParent() {
+  return useMutation<
+    void,
+    Error,
+    { full_name: string; email: string; relationship: string }
+  >({
+    mutationFn: async (payload) => {
+      await apiClient.post("/accounts/parent-invitations/", payload)
+    },
+  })
 }

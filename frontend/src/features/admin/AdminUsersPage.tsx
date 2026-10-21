@@ -33,9 +33,17 @@ import {
 import {
   USER_ROLES,
   USER_ROLE_LABELS,
+  useAdminParentInvitations,
+  useAdminRegistrations,
   useAdminUsers,
+  useApproveParentInvitation,
+  useApproveRegistration,
   useCreateUser,
+  useRejectParentInvitation,
+  useRejectRegistration,
+  useSections,
   useUpdateUser,
+  type AdminRegistration,
   type AdminUser,
   type UpdateUserPayload,
   type UserRole,
@@ -99,10 +107,12 @@ export function AdminUsersPage() {
       header: "Name",
       cell: (user) => (
         <div className="min-w-0">
-          <div className="font-medium">
+          <div className="font-medium whitespace-nowrap">
             {[user.first_name, user.last_name].filter(Boolean).join(" ") || "—"}
           </div>
-          <div className="text-xs text-muted-foreground">{user.email}</div>
+          <div className="text-xs whitespace-nowrap text-muted-foreground">
+            {user.email}
+          </div>
         </div>
       ),
     },
@@ -149,6 +159,10 @@ export function AdminUsersPage() {
           role and sign-in access from its row.
         </p>
       </div>
+
+      <PendingRegistrationsCard />
+
+      <PendingParentInvitationsCard />
 
       <Card>
         <CardHeader>
@@ -223,6 +237,224 @@ export function AdminUsersPage() {
   )
 }
 
+/**
+ * The student registration queue.
+ *
+ * A registration is a request, and this is where it becomes an account. The
+ * section is chosen here rather than by the applicant: the student said who
+ * they are, the school says where they sit.
+ *
+ * The queue is administrator-only, like every other administrator surface.
+ */
+function PendingRegistrationsCard() {
+  const registrations = useAdminRegistrations("pending")
+  const sectionsQuery = useSections()
+  const approve = useApproveRegistration()
+  const reject = useRejectRegistration()
+
+  const requests = registrations.data ?? []
+  const sections = sectionsQuery.list.data ?? []
+  const error = registrations.isError
+    ? normalizeApiError(registrations.error).message
+    : null
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="space-y-1">
+          <CardTitle>Pending registrations</CardTitle>
+          <CardDescription>
+            Students who asked for an account. Approving one creates the account
+            and its student profile; rejecting one closes the request without
+            granting anything.
+          </CardDescription>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {error ? <ErrorNote message={error} /> : null}
+
+        {requests.length === 0 && !registrations.isLoading ? (
+          <p className="text-sm text-muted-foreground">
+            No registration requests are waiting.
+          </p>
+        ) : null}
+
+        <ul className="space-y-3">
+          {requests.map((request) => (
+            <RegistrationRow
+              key={request.id}
+              request={request}
+              sections={sections}
+              onApprove={(sectionId) =>
+                approve.mutate({
+                  id: request.id,
+                  body: { section_id: sectionId },
+                })
+              }
+              onReject={() => reject.mutate({ id: request.id })}
+              busy={approve.isPending || reject.isPending}
+            />
+          ))}
+        </ul>
+      </CardContent>
+    </Card>
+  )
+}
+
+/** One request in the queue, with its approve and reject actions. */
+function RegistrationRow({
+  request,
+  sections,
+  onApprove,
+  onReject,
+  busy,
+}: {
+  request: AdminRegistration
+  sections: { id: string; name: string; grade_level_name: string }[]
+  onApprove: (sectionId: string | null) => void
+  onReject: () => void
+  busy: boolean
+}) {
+  const [sectionId, setSectionId] = useState<string>("")
+
+  return (
+    <li className="flex flex-col gap-3 rounded-md border border-border p-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0">
+        <p className="font-medium whitespace-nowrap">{request.full_name}</p>
+        <p className="truncate text-xs text-muted-foreground">
+          {request.email}
+          {request.student_code ? ` · ${request.student_code}` : ""}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {request.status === "verified"
+            ? "Email verified — waiting for approval."
+            : "Not yet verified."}
+        </p>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="space-y-1.5">
+          <Label htmlFor={`registration-section-${request.id}`}>Section</Label>
+          <Select value={sectionId} onValueChange={setSectionId}>
+            <SelectTrigger
+              id={`registration-section-${request.id}`}
+              className="w-56"
+            >
+              <SelectValue placeholder="Choose a section" />
+            </SelectTrigger>
+            <SelectContent>
+              {sections.map((section) => (
+                <SelectItem key={section.id} value={section.id}>
+                  {section.name} — {section.grade_level_name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <Button
+          size="sm"
+          disabled={busy || request.status !== "verified"}
+          onClick={() => onApprove(sectionId || null)}
+        >
+          Approve
+        </Button>
+        <Button size="sm" variant="outline" disabled={busy} onClick={onReject}>
+          Reject
+        </Button>
+      </div>
+    </li>
+  )
+}
+
+/**
+ * The parent-nomination queue.
+ *
+ * A student may nominate a parent for themselves; the school decides. This
+ * is where the school decides: approving issues the invitation link, and the
+ * parent accepts it. Until then nobody has an account.
+ */
+function PendingParentInvitationsCard() {
+  const invitations = useAdminParentInvitations("pending")
+  const approve = useApproveParentInvitation()
+  const reject = useRejectParentInvitation()
+
+  const rows = invitations.data ?? []
+  const error = invitations.isError
+    ? normalizeApiError(invitations.error).message
+    : null
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="space-y-1">
+          <CardTitle>Parent nominations</CardTitle>
+          <CardDescription>
+            Parents a student asked for. Approving one issues an invitation
+            link; the parent sets their own password and sees their child's
+            record. Rejecting one closes the request without granting anything.
+          </CardDescription>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {error ? <ErrorNote message={error} /> : null}
+
+        {rows.length === 0 && !invitations.isLoading ? (
+          <p className="text-sm text-muted-foreground">
+            No parent nominations are waiting.
+          </p>
+        ) : null}
+
+        <ul className="space-y-3">
+          {rows.map((invitation) => (
+            <li
+              key={invitation.id}
+              className="flex flex-col gap-3 rounded-md border border-border p-3 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div className="min-w-0">
+                <p className="font-medium whitespace-nowrap">
+                  {invitation.full_name}
+                </p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {invitation.email}
+                  {invitation.student_name
+                    ? ` · for ${invitation.student_name}`
+                    : ""}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {invitation.status === "approved"
+                    ? "Invitation sent — waiting for the parent."
+                    : "Waiting for approval."}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  disabled={
+                    approve.isPending ||
+                    reject.isPending ||
+                    invitation.status !== "pending"
+                  }
+                  onClick={() => approve.mutate({ id: invitation.id })}
+                >
+                  Approve
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={approve.isPending || reject.isPending}
+                  onClick={() => reject.mutate({ id: invitation.id })}
+                >
+                  Reject
+                </Button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </CardContent>
+    </Card>
+  )
+}
+
 function NewUserDialog() {
   const create = useCreateUser()
   const [open, setOpen] = useState(false)
@@ -231,14 +463,12 @@ function NewUserDialog() {
     first_name: "",
     last_name: "",
     role: "student" as UserRole,
-    password: "",
   })
 
   const canSubmit =
     form.email.trim().length > 0 &&
     form.first_name.trim().length > 0 &&
-    form.last_name.trim().length > 0 &&
-    form.password.length >= 8
+    form.last_name.trim().length > 0
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -251,7 +481,9 @@ function NewUserDialog() {
           <DialogDescription>
             `POST /accounts/users/create/`. The role is chosen here because this
             is where the account's shape is decided; revise it later with "Edit
-            access" on the account's row.
+            access" on the account's row. A one-time link that lets the person
+            set their own password is emailed to them, so no password is chosen
+            here and none travels by email.
           </DialogDescription>
         </DialogHeader>
 
@@ -270,7 +502,6 @@ function NewUserDialog() {
                 first_name: form.first_name.trim(),
                 last_name: form.last_name.trim(),
                 role: form.role,
-                password: form.password,
               },
               {
                 onSuccess: () => {
@@ -280,7 +511,6 @@ function NewUserDialog() {
                     first_name: "",
                     last_name: "",
                     role: "student",
-                    password: "",
                   })
                 },
               }
@@ -335,19 +565,6 @@ function NewUserDialog() {
               value: role,
               label: USER_ROLE_LABELS[role],
             }))}
-          />
-
-          <Field
-            label="Initial password"
-            id="new-user-password"
-            // `password`, as it was as a hand-rolled `<Input>`. Admitting this form
-            // to the shared `Field` must not have silently unmasked the field.
-            type="password"
-            value={form.password}
-            onChange={(value) => setForm({ ...form, password: value })}
-            required
-            // Mirrors UserCreateSerializer's min_length=8.
-            hint="At least 8 characters. The backend validates it against the project password rules."
           />
 
           {create.isError ? (

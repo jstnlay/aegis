@@ -86,7 +86,7 @@ export function NewCasesTrendChart({
           />
           <Bar
             dataKey="count"
-            fill="var(--chart-4)"
+            fill="var(--risk-moderate)"
             radius={[3, 3, 0, 0]}
             maxBarSize={26}
             isAnimationActive={false}

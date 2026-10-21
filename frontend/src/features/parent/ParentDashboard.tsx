@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 
 import {
@@ -63,18 +63,25 @@ function ParentDashboard() {
     [linkedStudents, selectedChildId]
   )
 
+  // A parent with one child should land on that child's record, not on a
+  // prompt asking them to pick the only option. Runs only while nothing is
+  // selected, so a deliberate choice is never overwritten.
+  useEffect(() => {
+    const first = linkedStudents[0]
+    if (!selectedChildId && first) {
+      setSelectedChildId(first.id)
+    }
+  }, [linkedStudents, selectedChildId])
+
   if (!user) return null
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-1">
         <h2 className="text-2xl font-bold text-foreground">Parent Portal</h2>
-        <Badge
-          variant="outline"
-          className="w-max max-w-full border-border bg-maroon-100 text-maroon-800"
-        >
-          <span className="truncate">{user.email}</span>
-        </Badge>
+        <p className="text-sm text-muted-foreground">
+          Follow your child&apos;s academic record.
+        </p>
       </div>
 
       <Card>
@@ -89,41 +96,31 @@ function ParentDashboard() {
           ) : linkedStudentsError ? (
             <ErrorNote message="Unable to load linked students. Please try again." />
           ) : linkedStudents.length > 0 ? (
-            <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">
-                Select a child to view their dashboard:
-              </p>
-              <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
-                {linkedStudents.map((student) => (
-                  <button
-                    key={student.id}
-                    onClick={() => setSelectedChildId(student.id)}
-                    aria-pressed={selectedChildId === student.id}
-                    className={`flex items-center justify-between gap-2 rounded-md border p-3 text-left transition-colors ${
-                      selectedChildId === student.id
-                        ? "border-maroon-500 bg-maroon-50"
-                        : "border-border hover:bg-muted"
-                    }`}
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate font-medium">
-                        {student.student_name}
-                      </span>
-                      <span className="block truncate text-xs text-muted-foreground">
-                        {student.section_name}
-                      </span>
-                    </span>
-                    {selectedChildId === student.id && (
-                      <Badge
-                        variant="secondary"
-                        className="shrink-0 bg-maroon-200 text-maroon-800"
-                      >
-                        Active
-                      </Badge>
-                    )}
-                  </button>
-                ))}
-              </div>
+            /*
+             * Chips, not a stack of cards: a parent with one child gets one
+             * chip naming the child and the section, and a parent with several
+             * switches between them in place. The child's name and section are
+             * not repeated in a heading below, so the record is named once.
+             */
+            <div className="flex flex-wrap gap-2">
+              {linkedStudents.map((student) => (
+                <button
+                  key={student.id}
+                  type="button"
+                  onClick={() => setSelectedChildId(student.id)}
+                  aria-pressed={selectedChildId === student.id}
+                  className={`rounded-full border px-3 py-1.5 text-left text-sm transition-colors ${
+                    selectedChildId === student.id
+                      ? "border-maroon-500 bg-maroon-50 text-maroon-900"
+                      : "border-border hover:bg-muted"
+                  }`}
+                >
+                  <span className="font-medium">{student.student_name}</span>
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    {student.section_name}
+                  </span>
+                </button>
+              ))}
             </div>
           ) : (
             <EmptyState message="No linked students found. Please contact the school administration." />
@@ -133,22 +130,13 @@ function ParentDashboard() {
 
       {selectedChildId && (
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <div className="mb-4">
-            <h3 className="text-xl font-bold">
-              {selectedStudent?.student_name ?? "Student"}&apos;s Dashboard
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              {selectedStudent?.section_name}
-            </p>
-          </div>
-
           {/*
             PH11.16 (TC-PAR-08): the hint is state-aware for the same reason the
             Attendance Rate one already was. "N/A" plus a static sentence tells a
             parent the average is unavailable but never that the child simply has
             no finalized grades yet.
           */}
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4">
             <MetricCard
               title="Average Grade"
               hint={

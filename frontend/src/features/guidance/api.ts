@@ -1921,12 +1921,6 @@ export interface GuidanceStudent {
   resultCount: number
 }
 
-function laterDate(a: string | null, b: string | null): string | null {
-  if (!a) return b
-  if (!b) return a
-  return a > b ? a : b
-}
-
 /**
  * Students with guidance activity.
  *
@@ -1948,139 +1942,14 @@ function laterDate(a: string | null, b: string | null): string | null {
  * and renders as an em-dash rather than a raw UUID.
  */
 export function useGuidanceStudents() {
-  const alertsQuery = useRiskAlerts()
-  const consultationsQuery = useConsultations()
-  const interventionsQuery = useInterventions()
-  const resultsQuery = useGuidanceAssessmentResults()
-  const notesQuery = useBehavioralNotes()
-
   return useQuery<{ students: GuidanceStudent[] }, Error>({
     queryKey: [...GUIDANCE_KEY, "students"],
     queryFn: async () => {
-      const sources = [
-        alertsQuery,
-        consultationsQuery,
-        interventionsQuery,
-        resultsQuery,
-        notesQuery,
-      ]
-
-      // A failed source must not read as "this counselor has no students".
-      // The directory is a claim about the caseload, so an unreachable
-      // endpoint has to surface as an error rather than an empty list.
-      const failed = sources.find((source) => source.isError)
-      if (failed?.error) throw failed.error
-
-      const alerts = alertsQuery.data
-      const consultations = consultationsQuery.data
-      const interventions = interventionsQuery.data
-      const results = resultsQuery.data
-      const notes = notesQuery.data
-
-      const rows = new Map<string, GuidanceStudent>()
-
-      function ensure(
-        id: string,
-        name: string,
-        code: string | null
-      ): GuidanceStudent {
-        let row = rows.get(id)
-        if (!row) {
-          row = {
-            id,
-            name,
-            code,
-            latestActivity: null,
-            openAlertCount: 0,
-            atRiskLevel: null,
-            consultationCount: 0,
-            interventionCount: 0,
-            resultCount: 0,
-          }
-          rows.set(id, row)
-        } else {
-          // A later source may supply the name or the code the first one lacked.
-          if (row.name !== name && name) row.name = name
-          if (row.code === null && code !== null) row.code = code
-        }
-        return row
-      }
-
-      for (const alert of alerts ?? []) {
-        const row = ensure(alert.student, alert.student_name, null)
-        if (OPEN_ALERT_STATUSES.includes(alert.status)) row.openAlertCount += 1
-        if (
-          OPEN_ALERT_STATUSES.includes(alert.status) &&
-          (alert.risk_level === "high" || alert.risk_level === "moderate")
-        ) {
-          // Escalating wins: once any open alert is high, the student is high.
-          if (row.atRiskLevel !== "high") row.atRiskLevel = alert.risk_level
-        }
-        row.latestActivity = laterDate(row.latestActivity, alert.generated_at)
-      }
-
-      for (const consultation of consultations ?? []) {
-        const row = ensure(
-          consultation.student,
-          consultation.student_name,
-          null
-        )
-        row.consultationCount += 1
-        row.latestActivity = laterDate(
-          row.latestActivity,
-          consultation.session_date
-        )
-      }
-
-      for (const intervention of interventions ?? []) {
-        const row = ensure(
-          intervention.student,
-          intervention.student_name,
-          null
-        )
-        row.interventionCount += 1
-        row.latestActivity = laterDate(
-          row.latestActivity,
-          intervention.plan_start_date
-        )
-      }
-
-      for (const result of results ?? []) {
-        const row = ensure(
-          result.student,
-          result.student_name,
-          result.student_id
-        )
-        row.resultCount += 1
-        row.latestActivity = laterDate(
-          row.latestActivity,
-          result.completed_at ?? result.started_at
-        )
-      }
-
-      // Behavioral notes are the other guidance-readable source that carries a
-      // student number, so they contribute codes even though they are not
-      // counted as an activity type of their own.
-      for (const note of notes ?? []) {
-        const row = ensure(
-          note.student,
-          note.student_name,
-          note.student_id_code
-        )
-        row.latestActivity = laterDate(row.latestActivity, note.date_recorded)
-      }
-
-      const students = Array.from(rows.values()).sort((a, b) =>
-        a.name.localeCompare(b.name)
+      const { data } = await apiClient.get<{ students: GuidanceStudent[] }>(
+        "/guidance/students/"
       )
-      return { students }
+      return data
     },
-    enabled:
-      !alertsQuery.isLoading &&
-      !consultationsQuery.isLoading &&
-      !interventionsQuery.isLoading &&
-      !resultsQuery.isLoading &&
-      !notesQuery.isLoading,
   })
 }
 

@@ -63,7 +63,11 @@ export interface AuthContextValue {
    * instead of one sentence that has to cover both.
    */
   sessionEndedBy: SessionEndReason | null
-  login: (email: string, password: string) => Promise<void>
+  login: (
+    email: string,
+    password: string,
+    rememberMe?: boolean
+  ) => Promise<void>
   logout: () => Promise<void>
   changePassword: (
     currentPassword: string,
@@ -221,57 +225,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [endSession])
 
-  const login = useCallback(async (email: string, password: string) => {
-    const response = await loginRequest(email, password)
-    tokenStorage.setTokens(response.access, response.refresh)
-    /*
-     * PH11 QA cycle 2 (TC-GUI-05): sign-in starts from an empty cache.
-     *
-     * `logout` and the session-expiry path already clear the query client;
-     * `login` did not, so a second account signing in on the same browser was
-     * served the first account's cached dashboards for up to `staleTime`
-     * (60 s) — and `AccountSettingsPage` was seeded from their cached
-     * `/accounts/me/` profile. Every query key is role-scoped but not
-     * user-scoped, so those keys really do collide, which is the same defect
-     * the session-expiry comment below describes from the other direction.
-     *
-     * Cleared only once the new tokens are stored: if the sign-in fails, the
-     * account that was already signed in keeps its cache.
-     */
-    queryClient.clear()
-    setMustChangePassword(response.must_change_password)
-    // Cleared here rather than on the failure path: the explanation belongs to
-    // the sign-in form, so it must not survive a successful sign-in and reappear
-    // if a later one fails for an unrelated reason.
-    setSessionEndedBy(null)
+  const login = useCallback(
+    async (email: string, password: string, rememberMe = false) => {
+      const response = await loginRequest(email, password, rememberMe)
+      tokenStorage.setTokens(response.access, response.refresh)
+      /*
+       * PH11 QA cycle 2 (TC-GUI-05): sign-in starts from an empty cache.
+       *
+       * `logout` and the session-expiry path already clear the query client;
+       * `login` did not, so a second account signing in on the same browser was
+       * served the first account's cached dashboards for up to `staleTime`
+       * (60 s) — and `AccountSettingsPage` was seeded from their cached
+       * `/accounts/me/` profile. Every query key is role-scoped but not
+       * user-scoped, so those keys really do collide, which is the same defect
+       * the session-expiry comment below describes from the other direction.
+       *
+       * Cleared only once the new tokens are stored: if the sign-in fails, the
+       * account that was already signed in keeps its cache.
+       */
+      queryClient.clear()
+      setMustChangePassword(response.must_change_password)
+      // Cleared here rather than on the failure path: the explanation belongs to
+      // the sign-in form, so it must not survive a successful sign-in and reappear
+      // if a later one fails for an unrelated reason.
+      setSessionEndedBy(null)
 
-    if (response.must_change_password) {
-      setUser(null)
-      setStatus("restricted")
-      return
-    }
-
-    try {
-      const currentUser = await fetchCurrentUser()
-      setUser(currentUser)
-      setMustChangePassword(false)
-      setStatus("authenticated")
-    } catch (error) {
-      const normalized = normalizeApiError(error)
-
-      if (normalized.isPasswordChangeRequired) {
+      if (response.must_change_password) {
         setUser(null)
-        setMustChangePassword(true)
         setStatus("restricted")
         return
       }
 
-      tokenStorage.clear()
-      setUser(null)
-      setMustChangePassword(false)
-      setStatus("unauthenticated")
-    }
-  }, [])
+      try {
+        const currentUser = await fetchCurrentUser()
+        setUser(currentUser)
+        setMustChangePassword(false)
+        setStatus("authenticated")
+      } catch (error) {
+        const normalized = normalizeApiError(error)
+
+        if (normalized.isPasswordChangeRequired) {
+          setUser(null)
+          setMustChangePassword(true)
+          setStatus("restricted")
+          return
+        }
+
+        tokenStorage.clear()
+        setUser(null)
+        setMustChangePassword(false)
+        setStatus("unauthenticated")
+      }
+    },
+    []
+  )
 
   const logout = useCallback(async () => {
     const refresh = tokenStorage.getRefreshToken()

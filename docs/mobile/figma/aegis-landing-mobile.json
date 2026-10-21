@@ -1,0 +1,203 @@
+{
+  "key": "aegis-landing-mobile",
+  "name": "Landing / Mobile",
+  "width": 390,
+  "background": "#F2F2F2",
+  "root": {
+    "type": "frame",
+    "layout": "col",
+    "gap": 0,
+    "pad": 0,
+    "align": "start",
+    "justify": "start",
+    "width": "fill",
+    "fill": "#F2F2F2",
+    "radius": 0,
+    "children": [
+      {
+        "type": "frame",
+        "layout": "col",
+        "gap": 2,
+        "pad": [
+          12,
+          16
+        ],
+        "align": "start",
+        "justify": "start",
+        "width": "fill",
+        "fill": "#FFFFFF",
+        "radius": 0,
+        "children": [
+          {
+            "type": "text",
+            "content": "AEGIS",
+            "size": 18,
+            "weight": "Bold",
+            "color": "#9B1313",
+            "width": "hug"
+          },
+          {
+            "type": "text",
+            "content": "HIS CARE CHRISTIAN INSTITUTE",
+            "size": 10,
+            "weight": "Regular",
+            "color": "#6B6B6B",
+            "width": "hug"
+          }
+        ]
+      },
+      {
+        "type": "frame",
+        "layout": "col",
+        "gap": 16,
+        "pad": 16,
+        "align": "start",
+        "justify": "start",
+        "width": "fill",
+        "fill": "#F2F2F2",
+        "radius": 0,
+        "children": [
+          {
+            "type": "frame",
+            "layout": "col",
+            "gap": 12,
+            "pad": 16,
+            "align": "start",
+            "justify": "start",
+            "width": "fill",
+            "fill": "#FFFFFF",
+            "radius": 12,
+            "stroke": "#E4E4E4",
+            "strokeWidth": 1,
+            "children": [
+              {
+                "type": "text",
+                "content": "HIS CARE CHRISTIAN INSTITUTE",
+                "size": 24,
+                "weight": "Bold",
+                "color": "#9B1313",
+                "width": "hug"
+              },
+              {
+                "type": "text",
+                "content": "of Santa Maria, Sto. Tomas Batangas Inc.",
+                "size": 14,
+                "weight": "Medium",
+                "color": "#1A1A1A",
+                "width": "hug"
+              },
+              {
+                "type": "text",
+                "content": "His Care Christian Institute was founded in April 2007 by Leila D. Paragoso and Clemente T. Paragoso. From a small preschool, it has grown into a school serving students from Nursery to Grade 10 in Batangas.",
+                "size": 13,
+                "weight": "Regular",
+                "color": "#6B6B6B",
+                "width": "hug"
+              },
+              {
+                "type": "rect",
+                "w": 118,
+                "h": 40,
+                "fill": "#9B1313",
+                "radius": 8,
+                "name": "Read more"
+              }
+            ]
+          },
+          {
+            "type": "frame",
+            "layout": "col",
+            "gap": 12,
+            "pad": 0,
+            "align": "start",
+            "justify": "start",
+            "width": "fill",
+            "radius": 0,
+            "children": [
+              {
+                "type": "text",
+                "content": "ABOUT THE SCHOOL",
+                "size": 12,
+                "weight": "Bold",
+                "color": "#9B1313",
+                "width": "hug"
+              },
+              {
+                "type": "text",
+                "content": "Leila D. Paragoso and Clemente T. Paragoso both in their 60's founded His Care Christian Institute in April 2007.",
+                "size": 13,
+                "weight": "Regular",
+                "color": "#6B6B6B",
+                "width": "hug"
+              },
+              {
+                "type": "rect",
+                "w": 110,
+                "h": 36,
+                "fill": "#FFFFFF",
+                "radius": 8,
+                "name": "Read more"
+              }
+            ]
+          },
+          {
+            "type": "frame",
+            "layout": "col",
+            "gap": 12,
+            "pad": 0,
+            "align": "start",
+            "justify": "start",
+            "width": "fill",
+            "radius": 0,
+            "children": [
+              {
+                "type": "text",
+                "content": "MISSION",
+                "size": 12,
+                "weight": "Bold",
+                "color": "#9B1313",
+                "width": "hug"
+              },
+              {
+                "type": "text",
+                "content": "His Care Christian Institute is dedicated to providing quality basic education where biblical values are injected and incorporated as a guide in training up the students.",
+                "size": 13,
+                "weight": "Regular",
+                "color": "#6B6B6B",
+                "width": "hug"
+              }
+            ]
+          },
+          {
+            "type": "frame",
+            "layout": "col",
+            "gap": 12,
+            "pad": 0,
+            "align": "start",
+            "justify": "start",
+            "width": "fill",
+            "radius": 0,
+            "children": [
+              {
+                "type": "text",
+                "content": "VISION",
+                "size": 12,
+                "weight": "Bold",
+                "color": "#9B1313",
+                "width": "hug"
+              },
+              {
+                "type": "text",
+                "content": "â€”",
+                "size": 13,
+                "weight": "Regular",
+                "color": "#6B6B6B",
+                "width": "hug"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

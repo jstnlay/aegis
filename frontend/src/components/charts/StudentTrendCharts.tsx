@@ -16,7 +16,6 @@ import {
   GRID_COLOR,
   SCORE_DOMAIN,
   SCORE_TICKS,
-  chartColor,
   formatCountValue,
   formatScoreValue,
   toChartValue,
@@ -153,7 +152,7 @@ export function StudentAcademicTrendChart({
             type="monotone"
             dataKey="average"
             name="Average score"
-            stroke={chartColor(0)}
+            stroke="var(--primary)"
             strokeWidth={2}
             dot={{ r: 4 }}
             // A period with no scores stays a gap.

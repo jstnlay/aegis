@@ -6,17 +6,6 @@ import { PublicFooter } from "@/components/brand/PublicFooter"
 import { SchoolHeader } from "@/components/brand/SchoolHeader"
 import { CONTACT, SCHOOL_NAME } from "@/lib/school-content"
 
-/**
- * Shared chrome for the three legal pages (privacy, terms, cookies).
- *
- * They share the public header and footer but not `PublicNav`: its entries are
- * anchor links into the landing page's sections, and none of those anchors
- * exist here.
- *
- * The date is a constant rather than a build value so the school can see and
- * edit exactly what is published. It is the date the text last changed, so it
- * must be bumped whenever any of the three pages is edited.
- */
 export const LEGAL_LAST_UPDATED = "October 2026"
 
 export function LegalPageLayout({
@@ -25,7 +14,6 @@ export function LegalPageLayout({
   children,
 }: {
   title: string
-  /** One-paragraph plain-language summary shown under the heading. */
   intro: string
   children: ReactNode
 }) {
@@ -61,7 +49,7 @@ export function LegalPageLayout({
           className="space-y-3 rounded-2xl border border-border/70 bg-primary/5 p-6"
         >
           <h2 id="legal-contact" className="text-lg font-semibold text-primary">
-            How to reach us about this policy
+            How to contact the school
           </h2>
           <p className="text-sm leading-relaxed text-muted-foreground">
             {SCHOOL_NAME} is the personal information controller for AEGIS.

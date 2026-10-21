@@ -59,7 +59,7 @@ describe("AdminDashboard", () => {
   it("renders loading state", () => {
     renderWithClient(<AdminDashboard />)
     expect(
-      screen.getByRole("heading", { name: /Overall Grade Average/i })
+      screen.getByRole("heading", { name: /Total Students/i })
     ).toBeInTheDocument()
   })
 
@@ -72,7 +72,7 @@ describe("AdminDashboard", () => {
     const pending = screen.getAllByRole("status")
     expect(pending.length).toBeGreaterThan(0)
     expect(pending[0]).toHaveAttribute("aria-busy", "true")
-    expect(pending[0]).toHaveTextContent(/Overall Grade Average/i)
+    expect(pending[0]).toHaveTextContent(/Total Students/i)
     expect(
       screen.getByRole("heading", { name: /Total Students/i })
     ).toBeInTheDocument()

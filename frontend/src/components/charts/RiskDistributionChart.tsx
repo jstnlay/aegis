@@ -44,9 +44,9 @@ const SLICES: readonly {
   label: string
   color: string
 }[] = [
-  { key: "low", label: "Low", color: "var(--chart-2)" },
-  { key: "moderate", label: "Moderate", color: "var(--chart-4)" },
-  { key: "high", label: "High", color: "var(--destructive)" },
+  { key: "low", label: "Low", color: "var(--risk-low)" },
+  { key: "moderate", label: "Moderate", color: "var(--risk-moderate)" },
+  { key: "high", label: "High", color: "var(--risk-high)" },
   {
     key: "insufficient_data",
     label: "Insufficient data",

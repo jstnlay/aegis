@@ -175,7 +175,7 @@ function GradeTable({
   onEditGrade?: (grade: Grade) => void
 }) {
   return (
-    <Table scrollLabel={caption}>
+    <Table scrollLabel={caption} className="min-w-[40rem]">
       {/*
         PH11.11. `scrollLabel` added. This is a five-to-seven column table with a
         `Subject`, `Section` and `Grading period` column of free text, so it is the
@@ -207,15 +207,19 @@ function GradeTable({
           <TableRow key={grade.id}>
             {showStudent ? (
               <TableCell>
-                <span className="font-medium">{grade.student_name}</span>
+                <span className="font-medium whitespace-nowrap">
+                  {grade.student_name}
+                </span>
                 <span className="ml-1.5 text-xs text-muted-foreground">
                   {grade.student_id}
                 </span>
               </TableCell>
             ) : null}
             <TableCell>
-              <span className="font-medium">{grade.subject_name}</span>
-              <span className="ml-1.5 text-xs text-muted-foreground">
+              <span className="font-medium whitespace-nowrap">
+                {grade.subject_name}
+              </span>
+              <span className="ml-1.5 whitespace-nowrap text-xs text-muted-foreground">
                 {grade.subject_code}
               </span>
             </TableCell>
@@ -313,7 +317,7 @@ function StudentAcademics() {
         <ErrorNote message={normalizeApiError(profileQuery.error).message} />
       ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-2">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">

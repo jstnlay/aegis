@@ -21,6 +21,7 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { useAuth } from "@/features/auth/AuthContext"
 import { normalizeApiError } from "@/lib/error"
 import { SCHOOL_NAME } from "@/lib/school-content"
@@ -31,6 +32,14 @@ const loginSchema = z.object({
     .min(1, "Email is required.")
     .email("Enter a valid email address."),
   password: z.string().min(1, "Password is required."),
+  /**
+   * Document element 3, "Remember Me".
+   *
+   * It picks the session length and nothing else: ticked, the refresh token
+   * lives a day; unticked, the session is idle-bounded at 15 minutes. The
+   * password is never stored either way.
+   */
+  rememberMe: z.boolean(),
 })
 
 type LoginFormValues = z.infer<typeof loginSchema>
@@ -48,7 +57,7 @@ export function LoginPage() {
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { email: "", password: "" },
+    defaultValues: { email: "", password: "", rememberMe: false },
     mode: "onBlur",
   })
 
@@ -69,7 +78,7 @@ export function LoginPage() {
   async function onSubmit(values: LoginFormValues) {
     setServerError(null)
     try {
-      await login(values.email, values.password)
+      await login(values.email, values.password, values.rememberMe)
     } catch (error) {
       const normalized = normalizeApiError(error)
       if (normalized.isCancelled) return
@@ -188,6 +197,45 @@ export function LoginPage() {
                 )}
               />
 
+              <div className="flex items-center justify-between gap-3">
+                <FormField
+                  control={form.control}
+                  name="rememberMe"
+                  render={({ field }) => (
+                    <FormItem>
+                      <div className="flex items-center gap-2">
+                        <input
+                          id="remember-me"
+                          type="checkbox"
+                          checked={field.value}
+                          onChange={(event) =>
+                            field.onChange(event.target.checked)
+                          }
+                          onBlur={field.onBlur}
+                          disabled={isSubmitting}
+                          className="size-4 shrink-0 rounded border-border accent-maroon-600"
+                        />
+                        <Label
+                          htmlFor="remember-me"
+                          className="text-sm font-normal text-muted-foreground"
+                        >
+                          Remember me
+                        </Label>
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Document element 4, "Forgot Password" link. */}
+                <Link
+                  to="/forgot-password"
+                  className="text-sm underline underline-offset-4 transition-colors hover:text-foreground"
+                >
+                  Forgot password?
+                </Link>
+              </div>
+
               <Button type="submit" className="w-full" disabled={isSubmitting}>
                 {isSubmitting ? (
                   <>
@@ -201,6 +249,17 @@ export function LoginPage() {
                   "Sign in"
                 )}
               </Button>
+
+              {/* Document element 6, "Sign Up" link. */}
+              <p className="text-center text-sm">
+                New student?{" "}
+                <Link
+                  to="/register"
+                  className="underline underline-offset-4 transition-colors hover:text-foreground"
+                >
+                  Request an account
+                </Link>
+              </p>
             </form>
           </Form>
           {/*

@@ -426,7 +426,9 @@ export function RiskAlertsPage() {
         sortTieBreak: (row) => codeByStudent.get(row.student) ?? null,
         cell: (row) => (
           <>
-            <div className="font-medium">{row.student_name}</div>
+            <div className="font-medium whitespace-nowrap">
+              {row.student_name}
+            </div>
             {codeByStudent.get(row.student) ? (
               <div className="text-xs text-muted-foreground">
                 {codeByStudent.get(row.student)}
@@ -551,7 +553,7 @@ export function RiskAlertsPage() {
         measured (no alerts in that status), not missing, which is why an
         empty file still draws five zeroes rather than hiding the row.
       */}
-      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-5">
         <MetricCard
           centered
           title="Total Alerts"

@@ -41,6 +41,12 @@ export interface AuthTokens {
 /** POST /api/v1/auth/login/ — standard pair + PH8.7 onboarding flag. */
 export interface LoginResponse extends AuthTokens {
   must_change_password: boolean
+  /**
+   * The session length the server granted: true when the sign-in asked to be
+   * remembered (refresh token for a day), false for an idle session (15
+   * minutes).
+   */
+  remember_me: boolean
 }
 
 /** POST /api/v1/auth/token/refresh/ — rotates the refresh token (PH10). */
@@ -55,4 +61,16 @@ export interface PasswordChangePayload {
 /** POST /api/v1/auth/logout/ request body. */
 export interface LogoutPayload {
   refresh: string
+}
+
+/** POST /api/v1/accounts/password/forgot/ request body. */
+export interface PasswordForgotPayload {
+  email: string
+}
+
+/** POST /api/v1/accounts/password/reset/ request body. */
+export interface PasswordResetPayload {
+  token: string
+  new_password: string
+  confirm_password: string
 }

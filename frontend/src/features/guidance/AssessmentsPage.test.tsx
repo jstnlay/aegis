@@ -34,7 +34,22 @@ vi.mock("@/lib/api", () => ({
 }))
 
 const mockedFetchAllPages = vi.mocked(fetchAllPages)
+const mockedGet = vi.mocked(apiClient.get)
 const mockedPost = vi.mocked(apiClient.post)
+
+const guidanceDirectory = [
+  {
+    id: "sp-1",
+    name: "Ana Reyes",
+    code: "S-1001",
+    latestActivity: "2025-02-01",
+    openAlertCount: 1,
+    atRiskLevel: "high",
+    consultationCount: 0,
+    interventionCount: 0,
+    resultCount: 1,
+  },
+]
 
 const questions = [
   {
@@ -190,6 +205,12 @@ function stubDraftWithQuestions() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mockedGet.mockImplementation(async (url: string) => {
+    if (url.startsWith("/guidance/students/")) {
+      return { data: { students: guidanceDirectory } } as never
+    }
+    return { data: [] } as never
+  })
   mockedFetchAllPages.mockImplementation(async (url: string) => {
     if (url.includes("/assessments/assessments/")) {
       return { count: assessments.length, results: assessments }

@@ -83,11 +83,14 @@ describe("Cookie Policy", () => {
       screen.getByRole("heading", { name: /sets no cookies/i })
     ).toBeInTheDocument()
 
-    // Exact keys, matching `@/lib/auth-storage` and the landing hero flag.
+    // Exact keys, matching `@/lib/auth-storage`, the landing hero flag and the
+    // guidance archive toggles.
     for (const key of [
       "aegis.access_token",
       "aegis.refresh_token",
       "aegis:hero-entrance-seen",
+      "aegis:archive:consultations",
+      "aegis:archive:interventions",
     ]) {
       expect(screen.getByText(key), key).toBeInTheDocument()
     }

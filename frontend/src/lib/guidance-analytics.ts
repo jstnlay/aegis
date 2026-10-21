@@ -19,9 +19,9 @@ import type { RiskAlert, RiskLevel } from "@/features/guidance/api"
 
 /** One risk level and the token that paints it. */
 export const RISK_LEVEL_COLORS = {
-  high: "var(--destructive)",
-  moderate: "var(--chart-4)",
-  low: "var(--chart-2)",
+  high: "var(--risk-high)",
+  moderate: "var(--risk-moderate)",
+  low: "var(--risk-low)",
 } as const
 
 export const RISK_LEVEL_LABELS: Record<RiskLevel, string> = {

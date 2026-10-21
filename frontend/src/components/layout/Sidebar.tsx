@@ -51,7 +51,6 @@ function AvailableNavLink({ item }: { item: NavItem }) {
   return (
     <NavLink
       to={itemHref(item)}
-      end={item.route === "dashboard"}
       className={({ isActive }) =>
         cn(
           // `rounded-lg` because the active state is a white pill on the brand

@@ -170,7 +170,9 @@ function RosterCard({
       key: "student_name",
       header: "Student",
       cell: (entry) => (
-        <span className="font-medium">{entry.student_name}</span>
+        <span className="font-medium whitespace-nowrap">
+          {entry.student_name}
+        </span>
       ),
     },
     {
@@ -343,7 +345,11 @@ function ClassSummaryCard() {
     {
       key: "student_name",
       header: "Student",
-      cell: (row) => <span className="font-medium">{row.student_name}</span>,
+      cell: (row) => (
+        <span className="font-medium whitespace-nowrap">
+          {row.student_name}
+        </span>
+      ),
     },
     {
       key: "student_id",

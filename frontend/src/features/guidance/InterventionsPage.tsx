@@ -926,7 +926,9 @@ export function InterventionsPage() {
         sortTieBreak: (row) => codeByStudent.get(row.student) ?? null,
         cell: (row) => (
           <>
-            <div className="font-medium">{row.student_name}</div>
+            <div className="font-medium whitespace-nowrap">
+              {row.student_name}
+            </div>
             {codeByStudent.get(row.student) ? (
               <div className="text-xs text-muted-foreground">
                 {codeByStudent.get(row.student)}

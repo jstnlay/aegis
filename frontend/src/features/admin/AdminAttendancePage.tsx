@@ -332,8 +332,10 @@ function SummaryTable({
       header: "Student",
       cell: (row) => (
         <div className="min-w-0">
-          <div className="font-medium">{row.student_name}</div>
-          <div className="text-xs text-muted-foreground">
+          <div className="font-medium whitespace-nowrap">
+            {row.student_name}
+          </div>
+          <div className="text-xs whitespace-nowrap text-muted-foreground">
             {row.student_id_code}
           </div>
         </div>
@@ -407,7 +409,9 @@ function RecordsTable({
       header: "Student",
       cell: (record) => (
         <div className="min-w-0">
-          <div className="text-sm font-medium">{record.student_name}</div>
+          <div className="text-sm font-medium whitespace-nowrap">
+            {record.student_name}
+          </div>
           <div className="text-xs text-muted-foreground">
             {record.student_id_code}
           </div>

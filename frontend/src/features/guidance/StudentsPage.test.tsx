@@ -9,19 +9,15 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { MemoryRouter } from "react-router-dom"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { fetchAllPages } from "@/lib/pagination"
+import { apiClient } from "@/lib/api"
 
 import { StudentsPage } from "./StudentsPage"
-
-vi.mock("@/lib/pagination", () => ({
-  fetchAllPages: vi.fn(),
-}))
 
 vi.mock("@/lib/api", () => ({
   API_BASE_URL: "http://localhost:8000/api/v1",
   onSessionExpired: vi.fn(() => () => {}),
   apiClient: {
-    get: vi.fn(async () => ({ data: [] })),
+    get: vi.fn(async () => ({ data: { students: [] } })),
     post: vi.fn(async () => ({ data: {} })),
     put: vi.fn(async () => ({ data: {} })),
     patch: vi.fn(async () => ({ data: {} })),
@@ -29,123 +25,36 @@ vi.mock("@/lib/api", () => ({
   },
 }))
 
-const mockedFetchAllPages = vi.mocked(fetchAllPages)
+const mockedGet = vi.mocked(apiClient.get)
 
-function alert(overrides: Record<string, unknown> = {}) {
+/**
+ * One row of the directory, as the server sends it.
+ *
+ * The aggregation moved to the server: the page used to fetch five complete
+ * lists and add them up in the browser. What is left here is the page's own
+ * job — rendering the rows it is given.
+ */
+function student(overrides: Record<string, unknown> = {}) {
   return {
-    id: "ra-1",
-    student: "sp-1",
-    student_name: "Ana Reyes",
-    risk_level: "high",
-    risk_factors: [],
-    source: "manual",
-    status: "active",
-    assigned_counselor: null,
-    assigned_counselor_name: null,
-    generated_at: "2025-02-10T00:00:00Z",
-    last_updated: "2025-02-10T00:00:00Z",
-    created_at: "2025-02-10T00:00:00Z",
-    updated_at: "2025-02-10T00:00:00Z",
+    id: "sp-1",
+    name: "Ana Reyes",
+    code: "S-1001",
+    latestActivity: "2025-02-12",
+    openAlertCount: 1,
+    atRiskLevel: "high",
+    consultationCount: 1,
+    interventionCount: 0,
+    resultCount: 0,
     ...overrides,
   }
 }
 
-function consultation(overrides: Record<string, unknown> = {}) {
-  return {
-    id: "c-1",
-    student: "sp-1",
-    student_name: "Ana Reyes",
-    counselor: "gp-1",
-    counselor_name: "Robin Vega",
-    session_date: "2025-02-12",
-    session_time: "09:30:00",
-    session_type: "individual_counseling",
-    concern_categories: [],
-    session_notes: "Session notes.",
-    recommendations: null,
-    next_session_date: null,
-    priority_level: "medium",
-    status: "ongoing",
-    created_at: "2025-02-12T00:00:00Z",
-    updated_at: "2025-02-12T00:00:00Z",
-    ...overrides,
-  }
-}
-
-function intervention(overrides: Record<string, unknown> = {}) {
-  return {
-    id: "i-1",
-    student: "sp-1",
-    student_name: "Ana Reyes",
-    risk_alert: null,
-    risk_alert_student: null,
-    assigned_counselor: "gp-1",
-    assigned_counselor_name: "Robin Vega",
-    plan_start_date: "2025-01-05",
-    target_review_date: null,
-    status: "active",
-    created_at: "2025-01-05T00:00:00Z",
-    updated_at: "2025-01-05T00:00:00Z",
-    ...overrides,
-  }
-}
-
-function result(overrides: Record<string, unknown> = {}) {
-  return {
-    id: "ar-1",
-    assessment: "a-1",
-    assessment_title: "Wellness Check-In",
-    student: "sp-1",
-    student_name: "Ana Reyes",
-    student_id: "S-1001",
-    score: "8.00",
-    total_possible: "10.00",
-    percentage: "80.00",
-    status: "completed",
-    started_at: "2025-02-01T00:00:00Z",
-    completed_at: "2025-02-01T01:00:00Z",
-    ...overrides,
-  }
-}
-
-function note(overrides: Record<string, unknown> = {}) {
-  return {
-    id: "bn-1",
-    student: "sp-1",
-    student_name: "Ana Reyes",
-    student_id_code: "S-1001",
-    recorded_by: "f-1",
-    recorded_by_name: "Sam Faculty",
-    note_type: "positive",
-    note_text: "Helped a classmate.",
-    date_recorded: "2025-01-20",
-    created_at: "2025-01-20T00:00:00Z",
-    updated_at: "2025-01-20T00:00:00Z",
-    ...overrides,
-  }
-}
-
-function stub(fixtures: {
-  alerts?: unknown[]
-  consultations?: unknown[]
-  interventions?: unknown[]
-  results?: unknown[]
-  notes?: unknown[]
-}) {
-  mockedFetchAllPages.mockImplementation(async (url: string) => {
-    const bag = url.includes("/guidance/risk-alerts/")
-      ? fixtures.alerts
-      : url.includes("/guidance/consultations/")
-        ? fixtures.consultations
-        : url.includes("/guidance/interventions/")
-          ? fixtures.interventions
-          : url.includes("/assessments/assessment-results/")
-            ? fixtures.results
-            : url.includes("/guidance/behavioral-notes/")
-              ? fixtures.notes
-              : undefined
-    const results = bag ?? []
-    return { count: results.length, results }
+function stub(students: unknown[]) {
+  mockedGet.mockImplementation(async (url: string) => {
+    if (String(url).includes("/guidance/students/")) {
+      return { data: { students } }
+    }
+    return { data: [] }
   })
 }
 
@@ -173,7 +82,7 @@ beforeEach(() => {
 
 describe("StudentsPage", () => {
   it("is titled Students with guidance activity", async () => {
-    stub({})
+    stub([])
     renderPage()
 
     expect(
@@ -184,44 +93,24 @@ describe("StudentsPage", () => {
     ).toBeInTheDocument()
   })
 
-  it("never requests the enrollment endpoint", async () => {
-    stub({ alerts: [alert()] })
+  it("asks for the directory and for nothing else", async () => {
+    stub([student()])
     renderPage()
     await screen.findByText("Ana Reyes")
 
-    // The directory must be built from guidance activity only. An enrollment
-    // fetch would mean the roster is back.
-    expect(
-      mockedFetchAllPages.mock.calls.filter(([url]) =>
-        String(url).includes("/academics/enrollments/")
-      )
-    ).toHaveLength(0)
+    // The directory is one request. It is not the enrollment table: a
+    // counselor has never worked with every enrolled student.
+    const urls = mockedGet.mock.calls.map(([url]) => String(url))
+    expect(urls).toEqual(["/guidance/students/"])
   })
 
-  it("lists a student discovered from each of the four activity sources", async () => {
-    stub({
-      alerts: [
-        alert({ id: "ra-1", student: "sp-1", student_name: "Ana Reyes" }),
-      ],
-      consultations: [
-        consultation({ id: "c-1", student: "sp-2", student_name: "Ben Cruz" }),
-      ],
-      interventions: [
-        intervention({
-          id: "i-1",
-          student: "sp-3",
-          student_name: "Cara Diaz",
-        }),
-      ],
-      results: [
-        result({
-          id: "ar-1",
-          student: "sp-4",
-          student_name: "Dan Ellis",
-          student_id: "S-1004",
-        }),
-      ],
-    })
+  it("lists every student the server returns", async () => {
+    stub([
+      student({ id: "sp-1", name: "Ana Reyes" }),
+      student({ id: "sp-2", name: "Ben Cruz" }),
+      student({ id: "sp-3", name: "Cara Diaz" }),
+      student({ id: "sp-4", name: "Dan Ellis" }),
+    ])
     renderPage()
 
     expect(await screen.findByText("Ana Reyes")).toBeInTheDocument()
@@ -232,10 +121,8 @@ describe("StudentsPage", () => {
     expect(screen.getAllByRole("row")).toHaveLength(5)
   })
 
-  it("omits a student who appears only in behavioral notes", async () => {
-    // Notes contribute a code but are not themselves an activity type, so a
-    // student with nothing but a note is not a guidance student.
-    stub({ notes: [note()] })
+  it("shows an empty state when the server has no students", async () => {
+    stub([])
     renderPage()
 
     expect(
@@ -243,20 +130,18 @@ describe("StudentsPage", () => {
     ).toBeInTheDocument()
   })
 
-  it("shows an em-dash when no guidance record carries a student code", async () => {
-    stub({ alerts: [alert()] })
+  it("shows an em-dash when no record carries a student code", async () => {
+    stub([student({ code: null })])
     renderPage()
     await screen.findByText("Ana Reyes")
 
     const row = screen.getByText("Ana Reyes").closest("tr") as HTMLElement
-    // RiskAlert carries no student number, so the code cell must be an em-dash
-    // rather than a raw UUID.
     expect(within(row).getByText("—")).toBeInTheDocument()
     expect(row.textContent).not.toContain("sp-1")
   })
 
-  it("uses the code when a source does carry one", async () => {
-    stub({ results: [result()] })
+  it("uses the code when the server carries one", async () => {
+    stub([student({ code: "S-1001" })])
     renderPage()
     await screen.findByText("Ana Reyes")
 
@@ -264,22 +149,13 @@ describe("StudentsPage", () => {
     expect(within(row).getByText("S-1001")).toBeInTheDocument()
   })
 
-  it("counts only open alerts, and flags at risk only for open moderate/high", async () => {
-    stub({
-      alerts: [
-        alert({ id: "ra-1", status: "active", risk_level: "high" }),
-        alert({ id: "ra-2", status: "resolved", risk_level: "high" }),
-        alert({ id: "ra-3", status: "escalated", risk_level: "moderate" }),
-      ],
-    })
+  it("flags a student the server marked at risk", async () => {
+    stub([student({ atRiskLevel: "high" })])
     renderPage()
     await screen.findByText("Ana Reyes")
 
     const row = screen.getByText("Ana Reyes").closest("tr") as HTMLElement
-    // Two open alerts (active + escalated); the resolved one does not count.
-    expect(within(row).getByText("2")).toBeInTheDocument()
     expect(row).toHaveAttribute("data-at-risk", "true")
-    // high wins over moderate.
     expect(within(row).getByText("High")).toHaveAttribute(
       "data-at-risk-level",
       "high"
@@ -287,7 +163,7 @@ describe("StudentsPage", () => {
   })
 
   it("uses warning semantics for a moderate-only student, not high", async () => {
-    stub({ alerts: [alert({ risk_level: "moderate" })] })
+    stub([student({ atRiskLevel: "moderate" })])
     renderPage()
     await screen.findByText("Ana Reyes")
 
@@ -301,18 +177,8 @@ describe("StudentsPage", () => {
     expect(pill.className).not.toContain("text-destructive")
   })
 
-  it("does not flag a student whose only escalating alert is resolved", async () => {
-    stub({ alerts: [alert({ status: "resolved", risk_level: "high" })] })
-    renderPage()
-    await screen.findByText("Ana Reyes")
-
-    const row = screen.getByText("Ana Reyes").closest("tr") as HTMLElement
-    expect(row).toHaveAttribute("data-at-risk", "false")
-    expect(within(row).queryByText("High")).toBeNull()
-  })
-
-  it("does not flag a student whose only open alert is low", async () => {
-    stub({ alerts: [alert({ risk_level: "low" })] })
+  it("does not flag a student the server marked as not at risk", async () => {
+    stub([student({ atRiskLevel: null })])
     renderPage()
     await screen.findByText("Ana Reyes")
 
@@ -323,15 +189,14 @@ describe("StudentsPage", () => {
   })
 
   it("counts each activity type separately", async () => {
-    stub({
-      alerts: [
-        alert({ id: "ra-1", status: "active" }),
-        alert({ id: "ra-2", status: "active", risk_level: "low" }),
-      ],
-      consultations: [consultation({ id: "c-1" }), consultation({ id: "c-2" })],
-      interventions: [intervention()],
-      results: [result()],
-    })
+    stub([
+      student({
+        openAlertCount: 2,
+        consultationCount: 2,
+        interventionCount: 1,
+        resultCount: 1,
+      }),
+    ])
     renderPage()
     await screen.findByText("Ana Reyes")
 
@@ -345,14 +210,17 @@ describe("StudentsPage", () => {
   })
 
   it("filters by activity type", async () => {
-    stub({
-      alerts: [
-        alert({ id: "ra-1", student: "sp-1", student_name: "Ana Reyes" }),
-      ],
-      consultations: [
-        consultation({ id: "c-1", student: "sp-2", student_name: "Ben Cruz" }),
-      ],
-    })
+    stub([
+      student({ id: "sp-1", name: "Ana Reyes", consultationCount: 0 }),
+      student({
+        id: "sp-2",
+        name: "Ben Cruz",
+        openAlertCount: 0,
+        interventionCount: 0,
+        resultCount: 0,
+        consultationCount: 1,
+      }),
+    ])
     renderPage()
     await screen.findByText("Ana Reyes")
 
@@ -366,19 +234,10 @@ describe("StudentsPage", () => {
   })
 
   it("searches by name and by code", async () => {
-    stub({
-      alerts: [
-        alert({ id: "ra-1", student: "sp-1", student_name: "Ana Reyes" }),
-      ],
-      results: [
-        result({
-          id: "ar-1",
-          student: "sp-2",
-          student_name: "Ben Cruz",
-          student_id: "S-1002",
-        }),
-      ],
-    })
+    stub([
+      student({ id: "sp-1", name: "Ana Reyes", code: "S-1001" }),
+      student({ id: "sp-2", name: "Ben Cruz", code: "S-1002" }),
+    ])
     renderPage()
     await screen.findByText("Ana Reyes")
 
@@ -390,7 +249,7 @@ describe("StudentsPage", () => {
   })
 
   it("shows an empty state when filters exclude everything", async () => {
-    stub({ alerts: [alert()] })
+    stub([student()])
     renderPage()
     await screen.findByText("Ana Reyes")
 
@@ -404,7 +263,7 @@ describe("StudentsPage", () => {
   })
 
   it("links each row to the profile using the StudentProfile UUID", async () => {
-    stub({ alerts: [alert()] })
+    stub([student({ id: "sp-1" })])
     renderPage()
     await screen.findByText("Ana Reyes")
 
@@ -417,7 +276,7 @@ describe("StudentsPage", () => {
   })
 
   it("surfaces a fetch failure", async () => {
-    mockedFetchAllPages.mockRejectedValue(new Error("boom"))
+    mockedGet.mockRejectedValue(new Error("boom"))
     renderPage()
 
     const alert = await screen.findByRole("alert")

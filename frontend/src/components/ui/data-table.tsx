@@ -194,8 +194,15 @@ export function DataTable<T>({
         the page. PH11.2 §12.4 requires that behaviour explicitly. `scrollLabel`
         additionally makes that container focusable and named, so the overflow is
         reachable from the keyboard rather than only by dragging.
+
+        The minimum width is what makes that scroll real. A `w-full` table
+        shrinks to the phone viewport instead, so every column is squeezed to
+        a few characters wide and a student name or a student code wraps over
+        three lines. Holding the table at 40rem keeps the columns readable and
+        lets the container scroll horizontally, which is the behaviour the
+        overflow container was there for.
       */}
-      <Table scrollLabel={caption}>
+      <Table scrollLabel={caption} className="min-w-[40rem]">
         <TableCaption className="sr-only">{caption}</TableCaption>
         <TableHeader>
           <TableRow>

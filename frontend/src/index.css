@@ -212,6 +212,12 @@
   --chart-4: oklch(0.828 0.189 84.4);
   --chart-5: oklch(0.769 0.188 70.1);
 
+  /* Risk levels — the reference dashboard's maroon-to-pink steps, sampled
+     from the design rather than reused from the generic chart palette. */
+  --risk-high: #af1c2e;
+  --risk-moderate: #df5e6a;
+  --risk-low: #f5bac1;
+
   /*
    * Sidebar — the HCCI brand maroon itself, not a darker step of it. The
    * reference dashboard shows the exact `--primary` red down the whole left

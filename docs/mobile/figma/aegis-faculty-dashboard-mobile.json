@@ -1,0 +1,358 @@
+{
+  "key": "aegis-faculty-dashboard-mobile",
+  "name": "Faculty Dashboard / Mobile",
+  "width": 390,
+  "background": "#F2F2F2",
+  "root": {
+    "type": "frame",
+    "layout": "col",
+    "gap": 0,
+    "pad": 0,
+    "align": "start",
+    "justify": "start",
+    "width": "fill",
+    "fill": "#F2F2F2",
+    "radius": 0,
+    "children": [
+      {
+        "type": "frame",
+        "layout": "row",
+        "gap": 0,
+        "pad": [
+          12,
+          16
+        ],
+        "align": "center",
+        "justify": "space-between",
+        "width": "fill",
+        "fill": "#FFFFFF",
+        "radius": 0,
+        "children": [
+          {
+            "type": "text",
+            "content": "FACULTY DASHBOARD",
+            "size": 15,
+            "weight": "Bold",
+            "color": "#9B1313",
+            "width": "hug"
+          },
+          {
+            "type": "rect",
+            "w": 32,
+            "h": 32,
+            "fill": "#9B1313",
+            "radius": 16,
+            "name": "avatar"
+          }
+        ]
+      },
+      {
+        "type": "frame",
+        "layout": "col",
+        "gap": 16,
+        "pad": 16,
+        "align": "start",
+        "justify": "start",
+        "width": "fill",
+        "fill": "#F2F2F2",
+        "radius": 0,
+        "children": [
+          {
+            "type": "text",
+            "content": "Faculty Dashboard",
+            "size": 22,
+            "weight": "Bold",
+            "color": "#1A1A1A",
+            "width": "hug"
+          },
+          {
+            "type": "text",
+            "content": "Your sections, attendance and grading at a glance.",
+            "size": 13,
+            "weight": "Regular",
+            "color": "#6B6B6B",
+            "width": "hug"
+          },
+          {
+            "type": "frame",
+            "layout": "row",
+            "gap": 12,
+            "pad": 0,
+            "align": "start",
+            "justify": "start",
+            "width": "fill",
+            "radius": 0,
+            "children": [
+              {
+                "type": "frame",
+                "layout": "col",
+                "gap": 6,
+                "pad": 16,
+                "align": "start",
+                "justify": "start",
+                "width": "fill",
+                "fill": "#FFFFFF",
+                "radius": 12,
+                "stroke": "#E4E4E4",
+                "strokeWidth": 1,
+                "children": [
+                  {
+                    "type": "text",
+                    "content": "Total Students",
+                    "size": 13,
+                    "weight": "Medium",
+                    "color": "#6B6B6B",
+                    "width": "hug"
+                  },
+                  {
+                    "type": "text",
+                    "content": "25",
+                    "size": 24,
+                    "weight": "Bold",
+                    "color": "#1A1A1A",
+                    "width": "hug"
+                  },
+                  {
+                    "type": "text",
+                    "content": "Active enrollments across all sections",
+                    "size": 11,
+                    "weight": "Regular",
+                    "color": "#6B6B6B",
+                    "width": "hug"
+                  }
+                ]
+              },
+              {
+                "type": "frame",
+                "layout": "col",
+                "gap": 6,
+                "pad": 16,
+                "align": "start",
+                "justify": "start",
+                "width": "fill",
+                "fill": "#FFFFFF",
+                "radius": 12,
+                "stroke": "#E4E4E4",
+                "strokeWidth": 1,
+                "children": [
+                  {
+                    "type": "text",
+                    "content": "Attendance",
+                    "size": 13,
+                    "weight": "Medium",
+                    "color": "#6B6B6B",
+                    "width": "hug"
+                  },
+                  {
+                    "type": "text",
+                    "content": "90.1%",
+                    "size": 24,
+                    "weight": "Bold",
+                    "color": "#1A1A1A",
+                    "width": "hug"
+                  },
+                  {
+                    "type": "text",
+                    "content": "303 present, 35 late, 37 absent",
+                    "size": 11,
+                    "weight": "Regular",
+                    "color": "#6B6B6B",
+                    "width": "hug"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "frame",
+            "layout": "row",
+            "gap": 12,
+            "pad": 0,
+            "align": "start",
+            "justify": "start",
+            "width": "fill",
+            "radius": 0,
+            "children": [
+              {
+                "type": "frame",
+                "layout": "col",
+                "gap": 6,
+                "pad": 16,
+                "align": "start",
+                "justify": "start",
+                "width": "fill",
+                "fill": "#FFFFFF",
+                "radius": 12,
+                "stroke": "#E4E4E4",
+                "strokeWidth": 1,
+                "children": [
+                  {
+                    "type": "text",
+                    "content": "Pending Grades",
+                    "size": 13,
+                    "weight": "Medium",
+                    "color": "#6B6B6B",
+                    "width": "hug"
+                  },
+                  {
+                    "type": "text",
+                    "content": "25",
+                    "size": 24,
+                    "weight": "Bold",
+                    "color": "#1A1A1A",
+                    "width": "hug"
+                  },
+                  {
+                    "type": "text",
+                    "content": "16 drafts + 9 submissions",
+                    "size": 11,
+                    "weight": "Regular",
+                    "color": "#6B6B6B",
+                    "width": "hug"
+                  }
+                ]
+              },
+              {
+                "type": "frame",
+                "layout": "col",
+                "gap": 6,
+                "pad": 16,
+                "align": "start",
+                "justify": "start",
+                "width": "fill",
+                "fill": "#FFFFFF",
+                "radius": 12,
+                "stroke": "#E4E4E4",
+                "strokeWidth": 1,
+                "children": [
+                  {
+                    "type": "text",
+                    "content": "Behavior Notes",
+                    "size": 13,
+                    "weight": "Medium",
+                    "color": "#6B6B6B",
+                    "width": "hug"
+                  },
+                  {
+                    "type": "text",
+                    "content": "0",
+                    "size": 24,
+                    "weight": "Bold",
+                    "color": "#1A1A1A",
+                    "width": "hug"
+                  },
+                  {
+                    "type": "text",
+                    "content": "No notes for your students",
+                    "size": 11,
+                    "weight": "Regular",
+                    "color": "#6B6B6B",
+                    "width": "hug"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "frame",
+            "layout": "col",
+            "gap": 10,
+            "pad": 16,
+            "align": "start",
+            "justify": "start",
+            "width": "fill",
+            "fill": "#FFFFFF",
+            "radius": 12,
+            "stroke": "#E4E4E4",
+            "strokeWidth": 1,
+            "children": [
+              {
+                "type": "text",
+                "content": "Quick actions",
+                "size": 15,
+                "weight": "Semi Bold",
+                "color": "#1A1A1A",
+                "width": "hug"
+              },
+              {
+                "type": "frame",
+                "layout": "row",
+                "gap": 8,
+                "pad": 0,
+                "align": "start",
+                "justify": "start",
+                "width": "fill",
+                "radius": 0,
+                "children": [
+                  {
+                    "type": "rect",
+                    "w": 120,
+                    "h": 34,
+                    "fill": "#FFFFFF",
+                    "radius": 8,
+                    "name": "Encode a grade"
+                  },
+                  {
+                    "type": "rect",
+                    "w": 120,
+                    "h": 34,
+                    "fill": "#FFFFFF",
+                    "radius": 8,
+                    "name": "Take attendance"
+                  },
+                  {
+                    "type": "rect",
+                    "w": 120,
+                    "h": 34,
+                    "fill": "#FFFFFF",
+                    "radius": 8,
+                    "name": "Advisory class"
+                  },
+                  {
+                    "type": "rect",
+                    "w": 130,
+                    "h": 34,
+                    "fill": "#FFFFFF",
+                    "radius": 8,
+                    "name": "Add behavior note"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "frame",
+            "layout": "col",
+            "gap": 6,
+            "pad": 16,
+            "align": "start",
+            "justify": "start",
+            "width": "fill",
+            "fill": "#FFFFFF",
+            "radius": 12,
+            "stroke": "#E4E4E4",
+            "strokeWidth": 1,
+            "children": [
+              {
+                "type": "text",
+                "content": "Recent Notes",
+                "size": 15,
+                "weight": "Semi Bold",
+                "color": "#1A1A1A",
+                "width": "hug"
+              },
+              {
+                "type": "text",
+                "content": "No behavior notes recorded yet.",
+                "size": 12,
+                "weight": "Regular",
+                "color": "#6B6B6B",
+                "width": "hug"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

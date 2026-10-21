@@ -1,9 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { apiClient } from "@/lib/api"
-import {
-  IMPORT_JOB_POLL_INTERVAL_MS,
-  isImportJobLive,
-} from "@/lib/importJobs"
+import { IMPORT_JOB_POLL_INTERVAL_MS, isImportJobLive } from "@/lib/importJobs"
 import { fetchAllPages } from "@/lib/pagination"
 import type { Page } from "@/types/api"
 
@@ -24,6 +21,32 @@ export interface DashboardStats {
   total_students: number
   pending_grades: number
   pending_submissions: number
+}
+
+/** Aggregate attendance across the faculty's own sections. */
+export interface FacultyAttendance {
+  /** Present or late over recorded days; null when nothing is recorded. */
+  attendance_rate: number | null
+  present: number
+  late: number
+  absent: number
+  records: number
+}
+
+/** One behavioral note, as the guidance endpoint returns it. */
+export interface BehavioralNoteRecord {
+  id: string
+  student: string
+  student_name: string
+  note_type: "positive" | "warning" | "incident"
+  note_text: string
+  date_recorded: string
+  recorded_by_name: string
+}
+
+export interface FacultyBehaviorNotes {
+  total: number
+  recent: BehavioralNoteRecord[]
 }
 
 interface EnrollmentRecord {
@@ -52,6 +75,8 @@ const queryKeys = {
   sections: ["academics", "sections"] as const,
   facultyEnrollments: ["enrollments", "faculty"] as const,
   dashboardStats: ["analytics", "faculty", "dashboard"] as const,
+  facultyAttendance: ["attendance", "faculty", "summary"] as const,
+  facultyBehaviorNotes: ["guidance", "faculty", "behavioral-notes"] as const,
   importJobs: ["faculty", "import-jobs"] as const,
 }
 
@@ -197,6 +222,63 @@ export function useFacultyDashboardStats() {
         pending_grades: gradesDraftRes.data.count,
         pending_submissions: gradesSubmittedRes.data.count,
       }
+    },
+  })
+}
+
+/**
+ * Attendance across the faculty's own sections.
+ *
+ * `/attendance/summary/` is already scoped by `AttendanceRecordViewSet`: a
+ * faculty user only ever receives rows for their sections. Counts are summed
+ * here; the rate treats late as attended, the same formula the parent academic
+ * record uses. A section with no recorded days is `null`, not 0%.
+ */
+export function useFacultyAttendanceSummary() {
+  return useQuery<FacultyAttendance>({
+    queryKey: queryKeys.facultyAttendance,
+    queryFn: async () => {
+      const { data } = await apiClient.get<
+        Array<{
+          present_count: number
+          late_count: number
+          absent_count: number
+          total_records: number
+        }>
+      >("/attendance/summary/")
+
+      const present = data.reduce((sum, row) => sum + row.present_count, 0)
+      const late = data.reduce((sum, row) => sum + row.late_count, 0)
+      const absent = data.reduce((sum, row) => sum + row.absent_count, 0)
+      const records = data.reduce((sum, row) => sum + row.total_records, 0)
+
+      return {
+        attendance_rate:
+          records > 0 ? ((present + late) / records) * 100 : null,
+        present,
+        late,
+        absent,
+        records,
+      }
+    },
+  })
+}
+
+/**
+ * Behavioral notes for the faculty's students, newest first.
+ *
+ * The endpoint is guidance-scoped server-side, but a faculty user may already
+ * read notes for students in their sections. Five rows are fetched so the
+ * dashboard can show a short list and the exact `count` in one request.
+ */
+export function useFacultyBehavioralNotes() {
+  return useQuery<FacultyBehaviorNotes>({
+    queryKey: queryKeys.facultyBehaviorNotes,
+    queryFn: async () => {
+      const { data } = await apiClient.get<Page<BehavioralNoteRecord>>(
+        "/guidance/behavioral-notes/?page_size=5"
+      )
+      return { total: data.count, recent: data.results }
     },
   })
 }

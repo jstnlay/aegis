@@ -62,7 +62,11 @@ const user: User = {
   updated_at: "2025-01-01T00:00:00Z",
 }
 
-const tokenPair = { access: "access-token", refresh: "refresh-token" }
+const tokenPair = {
+  access: "access-token",
+  refresh: "refresh-token",
+  remember_me: false,
+}
 
 /**
  * A NormalizedApiError-shaped object — `normalizeApiError()` is idempotent
@@ -467,6 +471,7 @@ describe("session expiration", () => {
       access: "new-access",
       refresh: "new-refresh",
       must_change_password: false,
+      remember_me: false,
     })
 
     await act(async () => {
@@ -803,6 +808,7 @@ describe("signing in as a second account", () => {
       access: "access",
       refresh: "refresh",
       must_change_password: false,
+      remember_me: false,
     })
     mockedMe.mockResolvedValue(user)
 

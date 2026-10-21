@@ -96,7 +96,9 @@ export function AdminGradesPage() {
       header: "Student",
       cell: (grade) => (
         <div className="min-w-0">
-          <div className="font-medium">{grade.student_name}</div>
+          <div className="font-medium whitespace-nowrap">
+            {grade.student_name}
+          </div>
           <div className="text-xs text-muted-foreground">
             {grade.student_id} · {grade.section_name}
           </div>
@@ -109,7 +111,7 @@ export function AdminGradesPage() {
       cell: (grade) => (
         <div className="min-w-0">
           <div className="text-sm">{grade.subject_name}</div>
-          <div className="text-xs text-muted-foreground">
+          <div className="text-xs whitespace-nowrap text-muted-foreground">
             {grade.subject_code}
           </div>
         </div>

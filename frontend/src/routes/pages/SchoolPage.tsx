@@ -33,7 +33,7 @@ export function SchoolPage() {
         </Button>
       </SchoolHeader>
 
-      <main className="mx-auto w-full max-w-5xl space-y-8 px-4 py-12 md:space-y-12 lg:px-6">
+      <main className="mx-auto w-full max-w-6xl space-y-8 px-4 py-12 md:space-y-12 lg:px-6">
         <Reveal>
           <div className="space-y-3">
             <Link

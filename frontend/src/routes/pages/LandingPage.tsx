@@ -2,12 +2,10 @@ import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 import {
   ArrowRight,
-  Bell,
   BookOpen,
   CalendarCheck,
   ChevronDown,
   HeartHandshake,
-  HelpCircle,
 } from "lucide-react"
 
 import { PublicFooter } from "@/components/brand/PublicFooter"
@@ -45,6 +43,9 @@ import { cn } from "@/lib/utils"
 
 /** Hero entrance runs on the first landing visit of a session, not every one. */
 const HERO_SEEN_KEY = "aegis:hero-entrance-seen"
+
+const SECTION_TITLE =
+  "text-sm font-semibold uppercase tracking-[0.18em] text-primary"
 
 function useHeroEntrance() {
   const [animate] = useState(() => {
@@ -96,17 +97,30 @@ export function LandingPage() {
         </Button>
       </SchoolHeader>
 
-      <main className="mx-auto w-full max-w-5xl space-y-12 px-4 py-12 md:space-y-16 lg:px-6">
+      <main className="mx-auto w-full max-w-6xl space-y-12 px-4 py-12 md:space-y-16 lg:px-6">
         <section
           aria-labelledby="landing-hero"
-          className="relative min-h-[20rem] overflow-hidden rounded-2xl border border-border bg-center bg-cover shadow-sm max-md:bg-left"
-          style={{ backgroundImage: "url(/cover-photo.png)" }}
+          className="relative min-h-[20rem] overflow-hidden rounded-2xl border border-border bg-background shadow-sm"
         >
           {/* Solid light veil on the left where the copy sits, opening to the
-                bare campus photo on the right, per the school's reference. */}
+                bare campus photo on the right, per the school's reference.
+                Below `md` the photo is dropped and the veil is opaque: at
+                phone width the headline sat on top of the campus signage and
+                neither could be read. The photo is a child element, not an
+                inline background on the section, so the phone layout can
+                switch it off — an inline style outranks a utility class. */}
           <div
             aria-hidden="true"
-            className="absolute inset-0 bg-gradient-to-r from-background via-background/95 to-background/70 md:to-transparent"
+            className="absolute inset-0 hidden bg-cover bg-center md:block"
+            style={{ backgroundImage: "url(/cover-photo.png)" }}
+          />
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 hidden bg-gradient-to-r from-background via-background/95 to-background/70 md:block"
+          />
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 bg-background md:hidden"
           />
           <div
             className={cn(
@@ -153,10 +167,7 @@ export function LandingPage() {
             aria-labelledby="landing-about"
             className="space-y-4 scroll-mt-20"
           >
-            <h2
-              id="landing-about"
-              className="text-balance text-2xl font-semibold tracking-tight text-primary"
-            >
+            <h2 id="landing-about" className={SECTION_TITLE}>
               About the school
             </h2>
             <p className="max-w-prose text-sm leading-relaxed text-pretty text-muted-foreground">
@@ -180,10 +191,7 @@ export function LandingPage() {
             aria-labelledby="landing-mission-vision"
             className="space-y-4 rounded-2xl border border-border/70 bg-muted/50 p-6 md:p-8"
           >
-            <h2
-              id="landing-mission-vision"
-              className="text-balance text-2xl font-semibold tracking-tight text-primary"
-            >
+            <h2 id="landing-mission-vision" className={SECTION_TITLE}>
               Mission &amp; vision
             </h2>
             <div className="grid gap-4 md:grid-cols-2">
@@ -234,10 +242,7 @@ export function LandingPage() {
             aria-labelledby="landing-contact"
             className="space-y-4 rounded-2xl border border-border/70 bg-primary/5 p-6 scroll-mt-20 md:p-8"
           >
-            <h2
-              id="landing-contact"
-              className="text-balance text-2xl font-semibold tracking-tight text-primary"
-            >
+            <h2 id="landing-contact" className={SECTION_TITLE}>
               Contact
             </h2>
             <div className="grid gap-4 sm:grid-cols-3">
@@ -312,10 +317,7 @@ const PORTAL_HIGHLIGHTS = [
 function PortalHighlights() {
   return (
     <section aria-labelledby="landing-portal" className="space-y-4">
-      <h2
-        id="landing-portal"
-        className="text-balance text-2xl font-semibold tracking-tight text-primary"
-      >
+      <h2 id="landing-portal" className={SECTION_TITLE}>
         What AEGIS offers
       </h2>
       <div className="grid gap-4 md:grid-cols-3">
@@ -366,11 +368,7 @@ function AnnouncementsSection() {
       aria-labelledby="landing-announcements"
       className="space-y-4 scroll-mt-20"
     >
-      <h2
-        id="landing-announcements"
-        className="flex items-center gap-2 text-balance text-2xl font-semibold tracking-tight text-primary"
-      >
-        <Bell aria-hidden="true" className="size-5 text-muted-foreground" />
+      <h2 id="landing-announcements" className={SECTION_TITLE}>
         Announcements
       </h2>
       {query.isLoading ? (
@@ -439,11 +437,7 @@ function ResourcesSection() {
       aria-labelledby="landing-resources"
       className="space-y-4 scroll-mt-20"
     >
-      <h2
-        id="landing-resources"
-        className="flex items-center gap-2 text-balance text-2xl font-semibold tracking-tight text-primary"
-      >
-        <BookOpen aria-hidden="true" className="size-5 text-muted-foreground" />
+      <h2 id="landing-resources" className={SECTION_TITLE}>
         Resources
       </h2>
       {query.isLoading ? (
@@ -519,14 +513,7 @@ function FaqSection() {
       aria-labelledby="landing-faq"
       className="space-y-4 scroll-mt-20"
     >
-      <h2
-        id="landing-faq"
-        className="flex items-center gap-2 text-balance text-2xl font-semibold tracking-tight text-primary"
-      >
-        <HelpCircle
-          aria-hidden="true"
-          className="size-5 text-muted-foreground"
-        />
+      <h2 id="landing-faq" className={SECTION_TITLE}>
         Frequently asked questions
       </h2>
       <div className="space-y-2">
