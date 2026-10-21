@@ -5,6 +5,7 @@ Environment-agnostic settings. Environment-specific overrides
 go in development.py or production.py.
 """
 
+import logging
 from pathlib import Path
 from decouple import config, Csv
 
@@ -120,8 +121,76 @@ DATABASES = {
         "PASSWORD": config("DATABASE_PASSWORD", default=""),
         "HOST": config("DATABASE_HOST", default="localhost"),
         "PORT": config("DATABASE_PORT", default="5432"),
+        # Persistent connections. Without this, Django opens and closes a
+        # PostgreSQL connection per request, which is a handshake on every
+        # API call and the first thing that runs out of database
+        # connections under load. 60 seconds is inside the lifetime of a
+        # typical proxy/pooler idle timeout, and the health check drops a
+        # connection the server has already closed instead of failing a
+        # request on it.
+        "CONN_MAX_AGE": config("DATABASE_CONN_MAX_AGE", default=60, cast=int),
+        "CONN_HEALTH_CHECKS": True,
     }
 }
+
+# ---------------------------------------------------------------------------
+# Cache
+# ---------------------------------------------------------------------------
+#
+# The default cache is used by DRF throttling, so the rate limits that protect
+# login, refresh, import, export, password change and registration are
+# enforced through it.
+#
+# The built-in local-memory cache is per-process: with more than one worker
+# or instance the effective limit is multiplied by the number of processes.
+# That is acceptable for a single-process deployment and wrong for a scaled
+# one.
+#
+# So the backend is named explicitly here, and a shared cache is one
+# environment variable away. With `REDIS_URL` set and `django-redis`
+# installed, every worker shares one throttle history and the limits hold
+# however many workers there are. Without it, they hold per process.
+# ---------------------------------------------------------------------------
+
+REDIS_URL = config("REDIS_URL", default="")
+
+
+def _default_cache():
+    if REDIS_URL:
+        try:
+            import django_redis  # noqa: F401
+        except ImportError:
+            logging.getLogger(__name__).warning(
+                "REDIS_URL is set but django-redis is not installed. The "
+                "throttle limits fall back to the per-process local cache, so "
+                "they are multiplied by the number of workers. Install "
+                "django-redis, or unset REDIS_URL if this deployment runs a "
+                "single worker."
+            )
+        else:
+            return {
+                "BACKEND": "django_redis.cache.RedisCache",
+                "LOCATION": REDIS_URL,
+                "OPTIONS": {
+                    "CLIENT_CLASS": "django_redis.client.DefaultClient",
+                    # A Redis outage must not take the API down with it. With
+                    # this, a cache that cannot be reached is treated as an
+                    # empty cache: the request is served, and the rate limit
+                    # for that window is not enforced. 500s on every request
+                    # would be a worse failure than a briefly unenforced
+                    # limit.
+                    "IGNORE_EXCEPTIONS": True,
+                },
+                "TIMEOUT": 300,
+            }
+    return {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "aegis-default-cache",
+        "TIMEOUT": 300,
+    }
+
+
+CACHES = {"default": _default_cache()}
 
 # ---------------------------------------------------------------------------
 # Custom User Model
@@ -216,6 +285,24 @@ REST_FRAMEWORK = {
         "data_import": "30/min",
         # Controlled-export file downloads (PH8.8).
         "data_export": "60/min",
+        # Health and readiness probes. Anonymous and cheap, but the readiness
+        # probe opens a database connection, so the cap stops it from being
+        # a denial-of-service amplifier.
+        "health": "120/min",
+        # Self-service password changes. The endpoint checks the current
+        # password, so this is the cap on how often a stolen access token may
+        # try to guess it.
+        "password_change": "10/min",
+        # Password recovery. Each request may send an email, so the cap
+        # bounds how much mail a stranger can make the school send.
+        "password_forgot": "5/min",
+        # Reset redemptions are keyed on the token, not the client.
+        "password_reset": "10/min",
+        # Student registration. Each submission may send a verification
+        # email, so an open form must not be usable to flood an inbox.
+        "registration": "5/min",
+        # Parent nominations. Each one reaches an administrator's queue.
+        "parent_invitation": "5/min",
     },
     "EXCEPTION_HANDLER": "core.exceptions.custom_exception_handler",
 }
@@ -227,12 +314,34 @@ REST_FRAMEWORK = {
 from datetime import timedelta
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=config("JWT_ACCESS_LIFETIME_MINUTES", default=30, cast=int)),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=config("JWT_REFRESH_LIFETIME_DAYS", default=7, cast=int)),
+    # An idle session is short: 15 minutes for the access token.
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=config("JWT_ACCESS_LIFETIME_MINUTES", default=15, cast=int)),
+    # "Remember me" is the ceiling: one day. A sign-in that did not ask to be
+    # remembered gets the shorter idle lifetime below instead (see
+    # accounts/serializers.py).
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=config("JWT_REFRESH_LIFETIME_DAYS", default=1, cast=int)),
+    # The idle session's refresh token. It is not a SimpleJWT setting, so it
+    # is read by the login serializer directly; the name keeps it next to the
+    # lifetimes it belongs with.
+    "SESSION_REFRESH_LIFETIME": timedelta(minutes=config("JWT_SESSION_REFRESH_LIFETIME_MINUTES", default=15, cast=int)),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
     "AUTH_HEADER_TYPES": ("Bearer",),
 }
+
+# ---------------------------------------------------------------------------
+# Frontend URL and outgoing mail
+# ---------------------------------------------------------------------------
+#
+# The frontend is a separate service, so any link the backend mails out
+# (password reset, account invitation) is built from this base URL.
+AEGIS_FRONTEND_URL = config("AEGIS_FRONTEND_URL", default="http://127.0.0.1:5173")
+
+#: The address outgoing mail is sent from. Without it, Django uses the
+# webserver's own account, which is usually not a deliverable address.
+DEFAULT_FROM_EMAIL = config(
+    "DEFAULT_FROM_EMAIL", default="no-reply@localhost"
+)
 
 # ---------------------------------------------------------------------------
 # CORS

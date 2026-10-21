@@ -10,10 +10,11 @@ explicit approved access exists.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 from django.db.models import Avg, Count, Q
+from django.db.models.functions import TruncDate
 from django.utils import timezone
 
 
@@ -397,8 +398,13 @@ def school_wide_aggregates() -> dict[str, Any]:
 
 
 def risk_distribution() -> dict[str, Any]:
-    """Distribution of risk levels across students (from latest RiskScore)."""
-    from apps.guidance.models import RiskScore
+    """Distribution of risk levels across students (from latest RiskScore).
+
+    Also returns two alert aggregates for the admin dashboard: the number of
+    unresolved alerts and a 30-day daily trend. Both are counts only, so
+    NFR-010's anonymisation rule holds without a display-layer decision.
+    """
+    from apps.guidance.models import RiskAlert, RiskScore
 
     # Latest RiskScore per student (only READY status)
     latest_scores = set()
@@ -415,7 +421,33 @@ def risk_distribution() -> dict[str, Any]:
         else:
             distribution["insufficient_data"] += 1
 
-    return {"distribution": distribution, "total_with_scores": len(latest_scores)}
+    today = timezone.localdate()
+    start = today - timedelta(days=29)
+    per_day = {
+        row["day"]: row["count"]
+        for row in (
+            RiskAlert.objects.filter(created_at__date__gte=start)
+            .annotate(day=TruncDate("created_at"))
+            .values("day")
+            .annotate(count=Count("id"))
+        )
+    }
+    alert_trend = [
+        {
+            "date": (start + timedelta(days=offset)).isoformat(),
+            "count": per_day.get(start + timedelta(days=offset), 0),
+        }
+        for offset in range(30)
+    ]
+
+    return {
+        "distribution": distribution,
+        "total_with_scores": len(latest_scores),
+        "active_alerts": RiskAlert.objects.exclude(
+            status=RiskAlert.Status.RESOLVED
+        ).count(),
+        "alert_trend": alert_trend,
+    }
 
 
 def low_performance_students(threshold=75, limit=20) -> list[dict[str, Any]]:

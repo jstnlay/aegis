@@ -47,6 +47,14 @@ class AttendanceRecord(TimestampedModel):
         verbose_name = "attendance record"
         verbose_name_plural = "attendance records"
         ordering = ["-date", "student__user__last_name"]
+        # The attendance summary counts a student's records by status
+        # (present / late / absent), and the school-wide trend groups by
+        # date. The unique constraint covers (student, date) only, so the
+        # status filter and the date range are both unindexed without this.
+        indexes = [
+            models.Index(fields=["student", "status"], name="attend_student_status_idx"),
+            models.Index(fields=["date"], name="attend_date_idx"),
+        ]
 
     def __str__(self):
         return (

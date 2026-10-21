@@ -2,6 +2,7 @@ import uuid
 
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.utils import timezone
 from django.db.models import Q
 
 from .managers import UserManager
@@ -52,6 +53,12 @@ class User(AbstractUser):
         ordering = ["-created_at"]
         verbose_name = "user"
         verbose_name_plural = "users"
+        # Every role-scoped queryset in the project filters on
+        # ``role`` ("student", "faculty", ...), and the account list the
+        # administrator screen reads is ordered by creation date.
+        indexes = [
+            models.Index(fields=["role"], name="user_role_idx"),
+        ]
 
     def __str__(self):
         return f"{self.get_full_name()} ({self.get_role_display()})"
@@ -234,3 +241,192 @@ class ConsentRecord(TimestampedModel):
     @property
     def is_active(self):
         return self.revoked_at is None
+
+
+class PasswordResetToken(TimestampedModel):
+    """
+    A single-use password-reset token.
+
+    The token itself is never stored. What is stored is its SHA-256 hash, so a
+    database leak does not hand out password resets: the raw value exists only
+    in the email that was sent.
+
+    One live token per account. Issuing a new one closes the previous, so an
+    older link in an old inbox cannot be used after a newer request. Using a
+    token closes it too.
+
+    The row is kept after it is used rather than deleted, so the audit trail
+    can answer "a reset was requested for this account, and here is when it
+    was redeemed" without the audit table having to hold credentials.
+    """
+
+    user = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.CASCADE,
+        related_name="password_reset_tokens",
+    )
+    token_hash = models.CharField(max_length=64, unique=True)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "password reset token"
+        verbose_name_plural = "password reset tokens"
+        indexes = [
+            models.Index(fields=["user", "expires_at"], name="pwd_reset_user_time_idx"),
+        ]
+
+    def __str__(self):
+        # Deliberately says nothing about the account or the token.
+        return "Password reset token"
+
+    @property
+    def is_used(self):
+        return self.used_at is not None
+
+    @property
+    def is_expired(self):
+        return self.expires_at <= timezone.now()
+
+
+class RegistrationRequest(TimestampedModel):
+    """
+    A student's request for an account.
+
+    A request is not an account. It has no role, no permissions and no
+    session: a student who registers has asked for access, and an
+    administrator grants it. That separation is what keeps the role model
+    intact — there is no code path from this table to a role.
+
+    The password is hashed on submission, so a request never holds a
+    plaintext password, and it is carried into the account only when an
+    administrator approves.
+
+    The email must be verified before an administrator spends time on it, so
+    the request proves the applicant owns the address.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending verification"
+        VERIFIED = "verified", "Verified, awaiting approval"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+
+    email = models.EmailField()
+    full_name = models.CharField(max_length=150)
+    password_hash = models.CharField(max_length=128)
+    student_code = models.CharField(
+        max_length=20,
+        blank=True,
+        help_text="The student number from the school's records, if the applicant knows it.",
+    )
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.PENDING
+    )
+    verification_token_hash = models.CharField(max_length=64, unique=True)
+    verification_expires_at = models.DateTimeField()
+    reviewed_by = models.ForeignKey(
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="reviewed_registrations",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    review_note = models.TextField(blank=True)
+
+    class Meta:
+        verbose_name = "registration request"
+        verbose_name_plural = "registration requests"
+        ordering = ["-created_at"]
+        constraints = [
+            # One live request per address. Approved and rejected requests stay
+            # on record; they just stop blocking a new one.
+            models.UniqueConstraint(
+                fields=["email"],
+                condition=Q(status__in=["pending", "verified"]),
+                name="one_live_registration_per_email",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.full_name} ({self.status})"
+
+    @property
+    def is_verified(self):
+        return self.status in (self.Status.VERIFIED, self.Status.APPROVED)
+
+
+class ParentInvitation(TimestampedModel):
+    """
+    A parent's invitation to have an account.
+
+    A parent's account reveals a child's grades, attendance, guidance records
+    and behavioural notes, so it is not something a stranger may ask for
+    and have. The invitation is the school-side fact: a student may
+    nominate a parent, but an administrator approves the nomination and
+    issues the invitation, and only then does the parent get a link.
+
+    The token is issued at approval, not at nomination, so the link that
+    reaches the parent's inbox is the one the school approved.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Waiting for approval"
+        APPROVED = "approved", "Approved, invitation sent"
+        ACCEPTED = "accepted", "Accepted"
+        REJECTED = "rejected", "Rejected"
+        EXPIRED = "expired", "Expired"
+
+    email = models.EmailField()
+    full_name = models.CharField(max_length=150)
+    relationship = models.CharField(
+        max_length=20,
+        choices=ParentProfile.RelationshipType.choices,
+        default=ParentProfile.RelationshipType.OTHER,
+    )
+    student = models.ForeignKey(
+        "accounts.StudentProfile",
+        on_delete=models.CASCADE,
+        related_name="parent_invitations",
+    )
+    nominated_by = models.ForeignKey(
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="nominated_parent_invitations",
+        help_text="The student who nominated this parent, when a student did.",
+    )
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.PENDING
+    )
+    token_hash = models.CharField(max_length=64, null=True, blank=True, unique=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    approved_by = models.ForeignKey(
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="approved_parent_invitations",
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    review_note = models.TextField(blank=True)
+
+    class Meta:
+        verbose_name = "parent invitation"
+        verbose_name_plural = "parent invitations"
+        ordering = ["-created_at"]
+        constraints = [
+            # One live invitation per address for the same child. An accepted
+            # or rejected invitation stays on record and stops blocking.
+            models.UniqueConstraint(
+                fields=["email", "student"],
+                condition=Q(status__in=["pending", "approved"]),
+                name="one_live_parent_invitation_per_child",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.full_name} for {self.student} ({self.status})"

@@ -35,6 +35,7 @@ from .models import (
     ProgressNote,
     RiskAlert,
 )
+from .student_directory import student_directory
 from .serializers import (
     BehavioralNoteSerializer,
     ConsultationRecordSerializer,
@@ -1066,3 +1067,22 @@ class GuidanceReportView(APIView):
 
         audit_successful_export(EXPORT_DOMAIN_MODELS[ExportType.GUIDANCE_REPORT])
         return response
+
+
+class GuidanceStudentDirectoryView(APIView):
+    """
+    GET /api/v1/guidance/students/ - the caseload directory.
+
+    One row per student with guidance activity, computed on the server.
+    The page used to download five complete lists and add them up in the
+    browser; the payload grew with the caseload and the arithmetic was
+    repeated in every browser on every load.
+
+    The visibility rules are the ones the individual endpoints already
+    enforce, so a counselor sees exactly what those endpoints would show.
+    """
+
+    permission_classes = [IsGuidanceUser]
+
+    def get(self, request):
+        return Response({"students": student_directory(request.user)})

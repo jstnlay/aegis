@@ -141,6 +141,10 @@ class AnalyticsServiceTest(AnalyticsTestBase):
         result = services.risk_distribution()
         self.assertIn("distribution", result)
         self.assertEqual(result["total_with_scores"], 0)
+        # The admin dashboard reads these two aggregates; both are counts only.
+        self.assertEqual(result["active_alerts"], 0)
+        self.assertEqual(len(result["alert_trend"]), 30)
+        self.assertEqual(sum(point["count"] for point in result["alert_trend"]), 0)
 
 
 # ---------------------------------------------------------------------------

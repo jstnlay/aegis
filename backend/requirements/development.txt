@@ -1,2 +1,16 @@
-# AEGIS Backend - Development Requirements
+﻿# AEGIS Backend - Development Requirements
 -r base.txt
+
+# A Redis stand-in for local development.
+#
+# The rate limits run through the default cache, and the local-memory cache
+# is per-process: with more than one worker every limit is multiplied by the
+# number of workers. `scripts/fake_redis.py` serves the Redis protocol from
+# this package, so the shared-cache path can be exercised on a machine with
+# no Redis service:
+#
+#     python scripts/fake_redis.py
+#     REDIS_URL=redis://127.0.0.1:6379/0 python manage.py runserver
+#
+# Development only. A production deployment points REDIS_URL at a real Redis.
+fakeredis>=2.40

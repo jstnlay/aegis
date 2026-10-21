@@ -6,6 +6,7 @@ role-based permissions, grade lifecycle, and data-scope authorization.
 """
 
 from decimal import Decimal
+from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
@@ -639,6 +640,31 @@ class GradeFinalizeActionTest(AcademicsTestBase):
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_finalize_rolls_back_when_the_notification_dispatch_fails(self):
+        """
+        The status change and the notifications are one transaction.
+
+        Publishing a grade and then failing to tell the family about it
+        leaves the record and the people who rely on it disagree. With the
+        transaction, the failed dispatch takes the status change with it and
+        the grade stays finalizable.
+        """
+        self.grade1.status = Grade.StatusChoices.SUBMITTED
+        self.grade1.save()
+
+        with mock.patch(
+            "apps.notifications.events.dispatch_event",
+            side_effect=RuntimeError("notification dispatch failed"),
+        ):
+            with self.assertRaises(RuntimeError):
+                self.client.post(
+                    f"/api/v1/academics/grades/{self.grade1.id}/finalize/",
+                    format="json",
+                )
+
+        self.grade1.refresh_from_db()
+        self.assertEqual(self.grade1.status, Grade.StatusChoices.SUBMITTED)
 
     def test_faculty_cannot_finalize(self):
         self.grade1.status = Grade.StatusChoices.SUBMITTED

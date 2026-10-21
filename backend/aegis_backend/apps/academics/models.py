@@ -176,6 +176,13 @@ class Enrollment(TimestampedModel):
         unique_together = ("student", "section", "academic_year")
         verbose_name = "enrollment"
         verbose_name_plural = "enrollments"
+        # The roster of a section, and the active-enrollment count per
+        # section, are read on every student dashboard and every analytics
+        # aggregate. Without this index each of those is a sequential scan
+        # of the enrollment table.
+        indexes = [
+            models.Index(fields=["section", "is_active"], name="enroll_section_active_idx"),
+        ]
 
     def __str__(self):
         return f"{self.student} — {self.section} ({self.academic_year})"
@@ -213,6 +220,18 @@ class Grade(TimestampedModel):
         unique_together = ("student", "subject_assignment", "grading_period")
         verbose_name = "grade"
         verbose_name_plural = "grades"
+        # Two hot read paths:
+        #   - a student's grades for one grading period (student dashboard,
+        #     academic record, exports), and
+        #   - every finalized grade in a period (analytics aggregates,
+        #     grade-level comparison, subject trends).
+        # Both filter on columns the unique constraint does not cover.
+        indexes = [
+            models.Index(fields=["status"], name="grade_status_idx"),
+            models.Index(
+                fields=["student", "grading_period"], name="grade_student_period_idx"
+            ),
+        ]
 
     def __str__(self):
         score_display = f"{self.score}" if self.score is not None else "N/A"

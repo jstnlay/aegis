@@ -1,12 +1,20 @@
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError
+from django.conf import settings
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from apps.audit.hooks import audit_successful_login
 
-from .models import ConsentRecord, FacultyProfile, ParentStudentLink, User
+from .models import (
+    ConsentRecord,
+    FacultyProfile,
+    ParentInvitation,
+    ParentStudentLink,
+    RegistrationRequest,
+    User,
+)
 
 
 class AegisTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -20,12 +28,45 @@ class AegisTokenObtainPairSerializer(TokenObtainPairSerializer):
 
     PH10.7: after successful token issuance, records a LOGIN audit event
     with the authenticated user, client IP, and user-agent.
+
+    Session length (document element 3, "Remember Me")
+    -------------------------------------------------
+    Two session lengths, from one setting pair:
+
+    - without ``remember_me``: an idle session. The access token and the
+      refresh token both live 15 minutes, so a browser left alone is signed
+      out after a quarter of an hour. The client refreshes silently on a
+      401, so an active user never notices.
+    - with ``remember_me``: the refresh token lives a day. The access token
+      still lives 15 minutes — a long session must never mean a long-lived
+      access token.
+
+    The flag is a session-lifetime choice and nothing more. It grants no
+    extra permission, and it is not stored on the account: the lifetime is
+    carried by the token itself, so it cannot be changed after the fact.
     """
+
+    remember_me = serializers.BooleanField(required=False, default=False)
+
+    @property
+    def _remember_me(self) -> bool:
+        request = self.context.get("request")
+        data = getattr(request, "data", None) or {}
+        return bool(data.get("remember_me", False))
+
+    def get_token(self, user):
+        token = super().get_token(user)
+        if not self._remember_me:
+            token.set_exp(
+                lifetime=settings.SIMPLE_JWT["SESSION_REFRESH_LIFETIME"]
+            )
+        return token
 
     def validate(self, attrs):
         data = super().validate(attrs)
         audit_successful_login(self.user)
         data["must_change_password"] = bool(self.user.must_change_password)
+        data["remember_me"] = self._remember_me
         return data
 
 
@@ -98,7 +139,19 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
 
 class UserCreateSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True, min_length=8)
+    """
+    Administrator account creation.
+
+    The password is optional. Without one, the account is created with an
+    unusable password and a one-time set-password link is emailed to the
+    person, so no administrator ever chooses a colleague's password and no
+    password travels by email. With one, the account is created as before —
+    an administrator may still set a password directly.
+    """
+
+    password = serializers.CharField(
+        write_only=True, min_length=8, required=False, allow_blank=True, default=""
+    )
 
     class Meta:
         model = User
@@ -108,9 +161,15 @@ class UserCreateSerializer(serializers.ModelSerializer):
         )
 
     def create(self, validated_data):
-        password = validated_data.pop("password")
+        password = validated_data.pop("password", "") or ""
         user = User(**validated_data)
-        user.set_password(password)
+        if password:
+            user.set_password(password)
+        else:
+            # The account cannot sign in until the person sets a password
+            # from the link the administrator's request triggers.
+            user.set_unusable_password()
+            user.must_change_password = True
         user.save()
         return user
 
@@ -308,3 +367,201 @@ class ConsentRecordSerializer(serializers.ModelSerializer):
                     )
                 }
             )
+
+
+class PasswordForgotSerializer(serializers.Serializer):
+    """
+    A request for a password reset link.
+
+    The only field is the address. The response never depends on whether the
+    address belongs to an account, so this endpoint cannot be used to find out
+    who has one.
+    """
+
+    email = serializers.EmailField()
+
+
+class PasswordResetSerializer(serializers.Serializer):
+    """
+    Redemption of a password reset link.
+
+    The token is the credential; the account is whatever the token points at,
+    so a request cannot name a different account.
+    """
+
+    token = serializers.CharField(write_only=True)
+    new_password = serializers.CharField(write_only=True, min_length=8)
+    confirm_password = serializers.CharField(write_only=True)
+
+    def validate(self, attrs):
+        if attrs["new_password"] != attrs["confirm_password"]:
+            raise serializers.ValidationError(
+                {"confirm_password": "The two passwords do not match."}
+            )
+        return attrs
+
+    def validate_new_password(self, value):
+        user = self.context.get("user")
+        try:
+            validate_password(value, user=user)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(" ".join(exc.messages))
+        return value
+
+
+class RegistrationRequestSerializer(serializers.Serializer):
+    """
+    A student's request for an account.
+
+    There is no role field, and no field that could become one. The role is
+    granted by an administrator at approval, from the account side, never
+    from here.
+    """
+
+    full_name = serializers.CharField(max_length=150)
+    email = serializers.EmailField()
+    student_code = serializers.CharField(
+        max_length=20, required=False, allow_blank=True, default=""
+    )
+    password = serializers.CharField(write_only=True, min_length=8)
+    confirm_password = serializers.CharField(write_only=True)
+
+    def validate(self, attrs):
+        if attrs["password"] != attrs["confirm_password"]:
+            raise serializers.ValidationError(
+                {"confirm_password": "The two passwords do not match."}
+            )
+        return attrs
+
+    def validate_password(self, value):
+        try:
+            validate_password(value)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(" ".join(exc.messages))
+        return value
+
+
+class AdminRegistrationSerializer(serializers.ModelSerializer):
+    """
+    A registration request, as the administrator sees it.
+
+    The password hash is never exposed: the administrator grants an account,
+    they do not read a credential.
+    """
+
+    reviewed_by_name = serializers.CharField(
+        source="reviewed_by.get_full_name", read_only=True, default=None
+    )
+
+    class Meta:
+        model = RegistrationRequest
+        fields = (
+            "id",
+            "full_name",
+            "email",
+            "student_code",
+            "status",
+            "created_at",
+            "reviewed_at",
+            "reviewed_by_name",
+            "review_note",
+        )
+        read_only_fields = fields
+
+
+class RegistrationApprovalSerializer(serializers.Serializer):
+    """
+    An administrator's decision to approve a request.
+
+    The section is the administrator's to name, not the applicant's: the
+    student said who they are, the school says where they sit.
+    """
+
+    section_id = serializers.UUIDField(required=False, allow_null=True)
+    grade_level_id = serializers.UUIDField(required=False, allow_null=True)
+    note = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class RegistrationRejectionSerializer(serializers.Serializer):
+    """An administrator's decision to close a request without granting it."""
+
+    note = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class ParentInvitationSerializer(serializers.Serializer):
+    """
+    A nomination of a parent for a child.
+
+    A student nominates a parent for themselves; an administrator may
+    nominate one for any child by student number. There is no role field
+    and no way to become a parent from this payload: the account is
+    created only when the parent accepts an invitation the school issued.
+    """
+
+    full_name = serializers.CharField(max_length=150)
+    email = serializers.EmailField()
+    relationship = serializers.ChoiceField(
+        choices=[
+            ("mother", "Mother"),
+            ("father", "Father"),
+            ("guardian", "Guardian"),
+            ("other", "Other"),
+        ],
+        default="other",
+    )
+    student_code = serializers.CharField(
+        max_length=20, required=False, allow_blank=True, default=""
+    )
+
+
+class ParentInvitationAcceptSerializer(serializers.Serializer):
+    """Redemption of a parent invitation."""
+
+    token = serializers.CharField(write_only=True)
+    password = serializers.CharField(write_only=True, min_length=8)
+    confirm_password = serializers.CharField(write_only=True)
+
+    def validate(self, attrs):
+        if attrs["password"] != attrs["confirm_password"]:
+            raise serializers.ValidationError(
+                {"confirm_password": "The two passwords do not match."}
+            )
+        return attrs
+
+    def validate_password(self, value):
+        try:
+            validate_password(value)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(" ".join(exc.messages))
+        return value
+
+
+class AdminParentInvitationSerializer(serializers.ModelSerializer):
+    """A parent invitation, as the administrator sees it."""
+
+    student_name = serializers.CharField(
+        source="student.user.get_full_name", read_only=True, default=None
+    )
+    student_code = serializers.CharField(
+        source="student.student_id", read_only=True, default=None
+    )
+    nominated_by_name = serializers.CharField(
+        source="nominated_by.get_full_name", read_only=True, default=None
+    )
+
+    class Meta:
+        model = ParentInvitation
+        fields = (
+            "id",
+            "full_name",
+            "email",
+            "relationship",
+            "status",
+            "student_name",
+            "student_code",
+            "nominated_by_name",
+            "created_at",
+            "reviewed_at",
+            "review_note",
+        )
+        read_only_fields = fields

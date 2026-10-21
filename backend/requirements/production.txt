@@ -4,3 +4,12 @@
 # WSGI server for the Render web service
 # (gunicorn config.wsgi:application --bind 0.0.0.0:$PORT).
 gunicorn>=26,<27
+
+# Shared cache for the rate limits.
+#
+# The DRF throttles (login, refresh, import, export, password change,
+# registration) run through the default cache. The local-memory cache is
+# per-process, so with more than one gunicorn worker every limit is
+# multiplied by the number of workers. Point REDIS_URL at a Redis instance
+# and these limits hold across the whole deployment.
+django-redis>=5,<7

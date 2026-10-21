@@ -11,14 +11,18 @@ method is *not* reclassified, so a server fault on a read is not disguised as
 a client error.
 """
 
+from unittest import mock
+
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.test import RequestFactory, SimpleTestCase
+from django.db.utils import OperationalError
+from django.test import RequestFactory, SimpleTestCase, TestCase
 from rest_framework import status
 from rest_framework.exceptions import (
     NotFound,
     PermissionDenied,
     ValidationError as DRFValidationError,
 )
+from rest_framework.test import APIClient
 
 from core.exceptions import custom_exception_handler, drf_validation_error_from
 
@@ -229,3 +233,51 @@ class ErrorMessageSummaryTests(SimpleTestCase):
             response.data["error"]["details"], {"order": ["Already used."]}
         )
         self.assertEqual(response.data["error"]["message"], "order: Already used.")
+
+class HealthProbeTests(TestCase):
+    """
+    The probes a deployment calls without a token.
+
+    They must answer anonymously, they must not leak anything about the
+    deployment, and readiness must fail when the database does.
+    """
+
+    def setUp(self):
+        self.client = APIClient()
+
+    def test_liveness_answers_without_a_token(self):
+        response = self.client.get("/api/v1/health/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json(), {"status": "ok"})
+
+    def test_readiness_reports_the_database(self):
+        response = self.client.get("/api/v1/ready/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json(), {"status": "ok", "database": True})
+
+    def test_readiness_fails_when_the_database_does_not_answer(self):
+        broken = mock.MagicMock()
+        broken.cursor.side_effect = OperationalError("no route to host")
+
+        with mock.patch("core.health.connection", broken):
+            response = self.client.get("/api/v1/ready/")
+
+        self.assertEqual(
+            response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE
+        )
+        self.assertEqual(
+            response.json(), {"status": "unavailable", "database": False}
+        )
+
+    def test_probe_failure_does_not_leak_the_database_error(self):
+        broken = mock.MagicMock()
+        broken.cursor.side_effect = OperationalError("password=hunter2 host=db.internal")
+
+        with mock.patch("core.health.connection", broken):
+            response = self.client.get("/api/v1/ready/")
+
+        body = response.content.decode()
+        self.assertNotIn("hunter2", body)
+        self.assertNotIn("db.internal", body)

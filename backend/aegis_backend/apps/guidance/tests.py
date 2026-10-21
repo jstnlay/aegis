@@ -1866,3 +1866,172 @@ class GuidanceReportExportTest(GuidanceTestBase):
             "Risk alerts",
         ):
             self.assertIn(section, csv_body, f"missing section: {section}")
+
+
+class GuidanceStudentDirectoryTest(GuidanceTestBase):
+    """
+    The caseload directory, computed on the server.
+
+    The page used to fetch five complete lists and add them up in the
+    browser. These tests pin the answer the server now gives, and the
+    visibility rules it has to keep: the counselor's own consultations and
+    interventions, everyone's risk alerts, and the results of the
+    assessments the counselor created.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.client = APIClient()
+        self.client.force_authenticate(self.guidance_user)
+        # The shared fixtures give the first student a risk alert and an
+        # intervention. The counts here are about this endpoint, so the
+        # fixtures' records are cleared and each test states its own.
+        RiskAlert.objects.all().delete()
+        ConsultationRecord.objects.all().delete()
+        Intervention.objects.all().delete()
+        BehavioralNote.objects.all().delete()
+
+    def _directory(self):
+        response = self.client.get("/api/v1/guidance/students/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        return {row["id"]: row for row in response.data["students"]}
+
+    def test_a_student_with_activity_is_listed_with_the_counts(self):
+        RiskAlert.objects.create(
+            student=self.student_profile,
+            risk_level="high",
+            risk_factors=[],
+            source="manual",
+            status="active",
+            generated_at=timezone.now(),
+        )
+        ConsultationRecord.objects.create(
+            student=self.student_profile,
+            counselor=self.guidance_profile,
+            session_date=self.today,
+            session_time=time(10, 0),
+            session_type="individual_counseling",
+            concern_categories=["academic"],
+            session_notes="Discussed academic performance.",
+            priority_level="medium",
+        )
+
+        rows = self._directory()
+
+        self.assertEqual(list(rows), [str(self.student_profile.id)])
+        row = rows[str(self.student_profile.id)]
+        self.assertEqual(row["name"], "Stu Dent")
+        self.assertEqual(row["code"], "STU-GR-001")
+        self.assertEqual(row["openAlertCount"], 1)
+        self.assertEqual(row["consultationCount"], 1)
+        self.assertEqual(row["interventionCount"], 0)
+        self.assertEqual(row["resultCount"], 0)
+        self.assertEqual(row["atRiskLevel"], "high")
+
+    def test_only_open_alerts_count(self):
+        for status_value, level in (("active", "high"), ("resolved", "high")):
+            RiskAlert.objects.create(
+                student=self.student_profile,
+                risk_level=level,
+                risk_factors=[],
+                source="manual",
+                status=status_value,
+                generated_at=timezone.now(),
+            )
+
+        row = self._directory()[str(self.student_profile.id)]
+
+        self.assertEqual(row["openAlertCount"], 1)
+        self.assertEqual(row["atRiskLevel"], "high")
+
+    def test_high_risk_wins_over_moderate(self):
+        for level in ("moderate", "high"):
+            RiskAlert.objects.create(
+                student=self.student_profile,
+                risk_level=level,
+                risk_factors=[],
+                source="manual",
+                status="active",
+                generated_at=timezone.now(),
+            )
+
+        row = self._directory()[str(self.student_profile.id)]
+
+        self.assertEqual(row["atRiskLevel"], "high")
+
+    def test_a_low_alert_does_not_flag_the_student(self):
+        RiskAlert.objects.create(
+            student=self.student_profile,
+            risk_level="low",
+            risk_factors=[],
+            source="manual",
+            status="active",
+            generated_at=timezone.now(),
+        )
+
+        row = self._directory()[str(self.student_profile.id)]
+
+        self.assertIsNone(row["atRiskLevel"])
+
+    def test_another_counselors_consultation_is_not_in_the_directory(self):
+        ConsultationRecord.objects.create(
+            student=self.student_profile,
+            counselor=self.guidance2_profile,
+            session_date=self.today,
+            session_time=time(10, 0),
+            session_type="individual_counseling",
+            concern_categories=["academic"],
+            session_notes="A colleague's session.",
+            priority_level="medium",
+        )
+
+        # The student is in nobody's caseload as far as this counselor is
+        # concerned: a colleague's session is not this counselor's activity.
+        self.assertEqual(self._directory(), {})
+
+    def test_a_student_with_only_a_behavioural_note_is_not_listed(self):
+        BehavioralNote.objects.create(
+            student=self.student_profile,
+            recorded_by=self.faculty_profile,
+            note_type="positive",
+            note_text="Helped a classmate.",
+            date_recorded=self.today,
+        )
+
+        # A note is not an activity type: it contributes to a student who
+        # has activity, and on its own it is not a caseload entry.
+        self.assertEqual(self._directory(), {})
+
+    def test_the_latest_activity_is_the_latest_across_the_sources(self):
+        RiskAlert.objects.create(
+            student=self.student_profile,
+            risk_level="high",
+            risk_factors=[],
+            source="manual",
+            status="active",
+            generated_at=timezone.now(),
+        )
+        ConsultationRecord.objects.create(
+            student=self.student_profile,
+            counselor=self.guidance_profile,
+            session_date=self.today + timedelta(days=5),
+            session_time=time(10, 0),
+            session_type="individual_counseling",
+            concern_categories=["academic"],
+            session_notes="Later session.",
+            priority_level="medium",
+        )
+
+        row = self._directory()[str(self.student_profile.id)]
+
+        self.assertEqual(
+            row["latestActivity"],
+            (self.today + timedelta(days=5)).isoformat(),
+        )
+
+    def test_the_endpoint_is_guidance_only(self):
+        self.client.force_authenticate(self.faculty_user)
+
+        response = self.client.get("/api/v1/guidance/students/")
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

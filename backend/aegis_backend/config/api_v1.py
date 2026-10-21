@@ -6,7 +6,13 @@ All versioned endpoints are routed through here.
 
 from django.urls import path, include
 
+from core.health import health, ready
+
 urlpatterns = [
+    # Probes first: they are the endpoints a load balancer and an
+    # orchestrator call, and they must answer without a token.
+    path("health/", health, name="health"),
+    path("ready/", ready, name="ready"),
     path("auth/", include("apps.accounts.urls.auth")),
     path("accounts/", include("apps.accounts.urls.accounts")),
     path("academics/", include("apps.academics.urls.academics")),

@@ -7,6 +7,7 @@ self-service privilege escalation, SEC-002 auth throttling, and
 SEC-003 logout / refresh-token revocation.
 """
 
+import hashlib
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase, override_settings
@@ -159,6 +160,58 @@ class JWTLoginTest(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("access", response.data)
         self.assertIn("refresh", response.data)
+
+    def _refresh_lifetime_seconds(self, refresh_token):
+        """Seconds until the refresh token expires, from its own claim."""
+        import time
+
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        payload = RefreshToken(refresh_token).payload
+        return int(payload["exp"] - time.time())
+
+    def test_idle_session_ends_after_fifteen_minutes(self):
+        """
+        Without "remember me" the session is idle-bounded.
+
+        The access token and the refresh token both live 15 minutes, so a
+        browser left alone is signed out after a quarter of an hour and
+        cannot be replayed afterwards.
+        """
+        response = self.client.post(
+            self.login_url,
+            {"email": "jwt@example.com", "password": "jwtpass123"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data["remember_me"])
+
+        lifetime = self._refresh_lifetime_seconds(response.data["refresh"])
+        self.assertLessEqual(lifetime, 15 * 60)
+        self.assertGreater(lifetime, 14 * 60)
+
+    def test_remember_me_extends_the_refresh_token_to_one_day(self):
+        """
+        With "remember me" the refresh token lives a day.
+
+        The access token is untouched: a long session must never mean a
+        long-lived access token.
+        """
+        response = self.client.post(
+            self.login_url,
+            {
+                "email": "jwt@example.com",
+                "password": "jwtpass123",
+                "remember_me": True,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["remember_me"])
+
+        lifetime = self._refresh_lifetime_seconds(response.data["refresh"])
+        self.assertGreater(lifetime, 23 * 3600)
+        self.assertLessEqual(lifetime, 24 * 3600)
 
     def test_login_with_wrong_password(self):
         response = self.client.post(
@@ -755,6 +808,100 @@ class SEC002AuthThrottlingTest(TestCase):
         self.assertEqual(first.status_code, status.HTTP_200_OK)
         self.assertEqual(second.status_code, status.HTTP_200_OK)
         self.assertEqual(third.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+
+@mock.patch.dict(
+    "core.throttling.PasswordChangeRateThrottle.THROTTLE_RATES",
+    {"password_change": "3/min"},
+)
+class SEC002PasswordChangeThrottlingTest(TestCase):
+    """
+    Regression tests for the password-change rate limit (SEC-002 family).
+
+    The endpoint verifies the current password, so an unauthenticated
+    caller cannot reach it at all. The limit that matters is the one on a
+    stolen access token: without it, that token could guess the current
+    password as fast as the network allows.
+
+    The bucket is keyed on the account, not the client IP: the threat model
+    is one compromised token, and a shared office IP must not lock out every
+    account behind it.
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.client = APIClient()
+        self.url = "/api/v1/accounts/password/change/"
+        self.user = User.objects.create_user(
+            email="sec002-password@example.com",
+            password="pass12345",
+            first_name="Sec",
+            last_name="Password",
+            role="student",
+        )
+        self.other = User.objects.create_user(
+            email="sec002-other@example.com",
+            password="pass12345",
+            first_name="Other",
+            last_name="Account",
+            role="student",
+        )
+
+    def tearDown(self):
+        cache.clear()
+
+    def _token(self, user):
+        login = self.client.post(
+            "/api/v1/auth/login/",
+            {"email": user.email, "password": "pass12345"},
+            format="json",
+        )
+        self.assertEqual(login.status_code, status.HTTP_200_OK)
+        return login.data["access"]
+
+    def _change(self, token, current_password="wrong-password"):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+        return self.client.post(
+            self.url,
+            {
+                "current_password": current_password,
+                "new_password": "newpass12345",
+            },
+            format="json",
+        )
+
+    def test_password_change_throttled_after_repeated_attempts(self):
+        """Three attempts fill the bucket; the fourth is rejected."""
+        token = self._token(self.user)
+
+        for _ in range(3):
+            response = self._change(token)
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        fourth = self._change(token)
+        self.assertEqual(fourth.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+        self.assertEqual(fourth.data["error"]["code"], "RATE_LIMIT_EXCEEDED")
+
+    def test_throttle_is_per_account_not_per_client(self):
+        """One account exhausting its bucket must not block another."""
+        token = self._token(self.user)
+        for _ in range(3):
+            self._change(token)
+        blocked = self._change(token)
+        self.assertEqual(blocked.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+        other_token = self._token(self.other)
+        other = self._change(other_token)
+        self.assertEqual(other.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_successful_change_below_the_limit_still_works(self):
+        token = self._token(self.user)
+
+        response = self._change(token, current_password="pass12345")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("newpass12345"))
 
 
 # ---------------------------------------------------------------------------
@@ -2190,3 +2337,784 @@ class ConsentRevokeTest(ConsentTestBase):
         self.assertEqual(
             response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED
         )
+
+
+@mock.patch.dict(
+    "core.throttling.PasswordForgotRateThrottle.THROTTLE_RATES",
+    {"password_forgot": "5/min"},
+)
+class PasswordResetFlowTest(TestCase):
+    """
+    The password recovery flow.
+
+    Three properties matter and are asserted here: the request answer never
+    depends on whether the address belongs to an account, the token is single
+    use, and a successful reset revokes the sessions it must.
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.client = APIClient()
+        self.forgot_url = "/api/v1/accounts/password/forgot/"
+        self.reset_url = "/api/v1/accounts/password/reset/"
+        self.user = User.objects.create_user(
+            email="reset@example.com",
+            password="pass12345",
+            first_name="Reset",
+            last_name="Tester",
+            role="student",
+        )
+
+    def tearDown(self):
+        cache.clear()
+
+    def _forgot(self, email):
+        return self.client.post(
+            self.forgot_url, {"email": email}, format="json"
+        )
+
+    def _token_for(self, user):
+        from apps.accounts.password_reset import issue_reset_token
+
+        raw_token, _record = issue_reset_token(user)
+        return raw_token
+
+    def test_unknown_address_gets_the_same_answer_as_a_known_one(self):
+        """The endpoint must not be usable to find out who has an account."""
+        known = self._forgot("reset@example.com")
+        unknown = self._forgot("nobody@example.com")
+
+        self.assertEqual(known.status_code, status.HTTP_202_ACCEPTED)
+        self.assertEqual(unknown.status_code, status.HTTP_202_ACCEPTED)
+        self.assertEqual(known.data, unknown.data)
+
+    def test_the_email_carries_the_reset_link(self):
+        """The link the recipient follows is the one the token opens."""
+        from django.core import mail
+
+        from apps.accounts.models import PasswordResetToken
+
+        self._forgot("reset@example.com")
+
+        self.assertEqual(len(mail.outbox), 1)
+        message = mail.outbox[0]
+        self.assertEqual(message.to, ["reset@example.com"])
+
+        body = message.body
+        self.assertIn("/reset-password?token=", body)
+
+        # The token in the link is the one that was stored.
+        raw_token = body.split("/reset-password?token=")[1].split()[0]
+        record = PasswordResetToken.objects.get(user=self.user)
+        self.assertEqual(
+            record.token_hash,
+            hashlib.sha256(raw_token.encode("utf-8")).hexdigest(),
+        )
+
+    def test_an_unknown_address_sends_no_mail(self):
+        from django.core import mail
+
+        self._forgot("nobody@example.com")
+
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_request_creates_one_token_and_closes_the_previous_one(self):
+        from apps.accounts.models import PasswordResetToken
+
+        self._forgot("reset@example.com")
+        self._forgot("reset@example.com")
+
+        tokens = PasswordResetToken.objects.filter(user=self.user)
+        self.assertEqual(tokens.count(), 2)
+        self.assertEqual(tokens.filter(used_at__isnull=True).count(), 1)
+
+    def test_reset_sets_the_new_password(self):
+        from django.contrib.auth import get_user_model
+
+        token = self._token_for(self.user)
+
+        response = self.client.post(
+            self.reset_url,
+            {
+                "token": token,
+                "new_password": "brandnewpass1",
+                "confirm_password": "brandnewpass1",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.user = get_user_model().objects.get(pk=self.user.pk)
+        self.assertTrue(self.user.check_password("brandnewpass1"))
+
+    def test_token_cannot_be_used_twice(self):
+        token = self._token_for(self.user)
+        payload = {
+            "token": token,
+            "new_password": "brandnewpass1",
+            "confirm_password": "brandnewpass1",
+        }
+
+        first = self.client.post(self.reset_url, payload, format="json")
+        second = self.client.post(self.reset_url, payload, format="json")
+
+        self.assertEqual(first.status_code, status.HTTP_200_OK)
+        self.assertEqual(second.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_expired_token_is_refused(self):
+        from django.utils import timezone
+
+        from apps.accounts.models import PasswordResetToken
+
+        token = self._token_for(self.user)
+        PasswordResetToken.objects.filter(user=self.user).update(
+            expires_at=timezone.now() - timezone.timedelta(minutes=1)
+        )
+
+        response = self.client.post(
+            self.reset_url,
+            {
+                "token": token,
+                "new_password": "brandnewpass1",
+                "confirm_password": "brandnewpass1",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_unknown_token_is_refused(self):
+        response = self.client.post(
+            self.reset_url,
+            {
+                "token": "not-a-real-token",
+                "new_password": "brandnewpass1",
+                "confirm_password": "brandnewpass1",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_mismatched_confirmation_is_refused(self):
+        token = self._token_for(self.user)
+
+        response = self.client.post(
+            self.reset_url,
+            {
+                "token": token,
+                "new_password": "brandnewpass1",
+                "confirm_password": "something-else1",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_reset_revokes_outstanding_sessions(self):
+        """A reset exists because a session may be stolen."""
+        from django.utils import timezone
+        from rest_framework_simplejwt.token_blacklist.models import (
+            BlacklistedToken,
+            OutstandingToken,
+        )
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        token = self._token_for(self.user)
+        refresh = RefreshToken.for_user(self.user)
+        # Issuing a refresh token already recorded it in the blacklist
+        # application's outstanding-token table.
+        outstanding = OutstandingToken.objects.get(jti=str(refresh["jti"]))
+
+        response = self.client.post(
+            self.reset_url,
+            {
+                "token": token,
+                "new_password": "brandnewpass1",
+                "confirm_password": "brandnewpass1",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        outstanding.refresh_from_db()
+        self.assertTrue(
+            BlacklistedToken.objects.filter(token=outstanding).exists(),
+            "the outstanding refresh token was not blacklisted by the reset",
+        )
+
+    def test_reset_is_written_to_the_audit_trail(self):
+        """A password reset is a security event and belongs in the trail."""
+        from apps.audit.models import AuditLog
+
+        token = self._token_for(self.user)
+
+        self.client.post(
+            self.reset_url,
+            {
+                "token": token,
+                "new_password": "brandnewpass1",
+                "confirm_password": "brandnewpass1",
+            },
+            format="json",
+        )
+
+        self.assertTrue(
+            AuditLog.objects.filter(
+                model_name="accounts.PasswordResetToken"
+            ).exists(),
+            "no audit row was written for the reset",
+        )
+
+    def test_reset_clears_the_initial_password_state(self):
+        from django.contrib.auth import get_user_model
+
+        self.user.must_change_password = True
+        self.user.save(update_fields=["must_change_password"])
+        token = self._token_for(self.user)
+
+        self.client.post(
+            self.reset_url,
+            {
+                "token": token,
+                "new_password": "brandnewpass1",
+                "confirm_password": "brandnewpass1",
+            },
+            format="json",
+        )
+
+        self.user = get_user_model().objects.get(pk=self.user.pk)
+        self.assertFalse(self.user.must_change_password)
+
+
+@mock.patch.dict(
+    "core.throttling.RegistrationRateThrottle.THROTTLE_RATES",
+    {"registration": "5/min"},
+)
+class StudentRegistrationTest(TestCase):
+    """
+    Student registration.
+
+    The point of the whole flow: a registration request is not an account.
+    It carries no role and no permissions, and the only way to an account
+    runs through an administrator's approval.
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.client = APIClient()
+        self.submit_url = "/api/v1/accounts/registrations/"
+        self.verify_url = "/api/v1/accounts/registrations/verify/"
+        self.admin_list_url = "/api/v1/accounts/admin/registrations/"
+        self.admin = User.objects.create_user(
+            email="admin@example.com",
+            password="pass12345",
+            first_name="Admin",
+            last_name="Person",
+            role="admin",
+        )
+        self.student = User.objects.create_user(
+            email="student@example.com",
+            password="pass12345",
+            first_name="Student",
+            last_name="Person",
+            role="student",
+        )
+
+    def tearDown(self):
+        cache.clear()
+
+    def _submit(self, **overrides):
+        payload = {
+            "full_name": "Juan Dela Cruz",
+            "email": "juan@example.com",
+            "student_code": "AEGIS-QA-S0001",
+            "password": "brandnewpass1",
+            "confirm_password": "brandnewpass1",
+        }
+        payload.update(overrides)
+        return self.client.post(self.submit_url, payload, format="json")
+
+    def _admin_headers(self):
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        token = RefreshToken.for_user(self.admin)
+        return {"HTTP_AUTHORIZATION": f"Bearer {token.access_token}"}
+
+    def test_request_gets_the_same_answer_whatever_the_address(self):
+        fresh = self._submit()
+        unknown = self._submit(email="nobody@example.com")
+        existing = self._submit(email="student@example.com")
+
+        for response in (fresh, unknown, existing):
+            self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
+        self.assertEqual(fresh.data, unknown.data)
+        self.assertEqual(fresh.data, existing.data)
+
+    def test_a_request_creates_no_account(self):
+        from apps.accounts.models import RegistrationRequest
+
+        self._submit()
+
+        self.assertEqual(RegistrationRequest.objects.count(), 1)
+        self.assertFalse(
+            User.objects.filter(email="juan@example.com").exists(),
+            "a registration request must not create an account",
+        )
+
+    def test_the_request_stores_no_plaintext_password(self):
+        from apps.accounts.models import RegistrationRequest
+
+        self._submit()
+
+        request_row = RegistrationRequest.objects.get()
+        self.assertNotIn("brandnewpass1", request_row.password_hash)
+        self.assertTrue(request_row.password_hash.startswith("pbkdf2_sha256$"))
+
+    def test_verification_moves_the_request_to_verified(self):
+        from django.core import mail
+
+        from apps.accounts.models import RegistrationRequest
+
+        self._submit()
+        request_row = RegistrationRequest.objects.get()
+
+        body = mail.outbox[0].body
+        raw_token = body.split("/register?token=")[1].split()[0]
+
+        response = self.client.get(self.verify_url, {"token": raw_token})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        request_row.refresh_from_db()
+        self.assertEqual(
+            request_row.status, RegistrationRequest.Status.VERIFIED
+        )
+
+    def test_an_unknown_verification_token_is_refused(self):
+        response = self.client.get(self.verify_url, {"token": "not-a-token"})
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_only_an_administrator_may_see_the_queue(self):
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        token = RefreshToken.for_user(self.student)
+        response = self.client.get(
+            self.admin_list_url,
+            HTTP_AUTHORIZATION=f"Bearer {token.access_token}",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_approval_creates_the_account_and_the_student_profile(self):
+        from apps.accounts.models import StudentProfile
+
+        self._submit()
+        from apps.accounts.models import RegistrationRequest
+
+        request_row = RegistrationRequest.objects.get()
+        request_row.status = RegistrationRequest.Status.VERIFIED
+        request_row.save(update_fields=["status"])
+
+        response = self.client.post(
+            f"{self.admin_list_url}{request_row.pk}/approve/",
+            {},
+            format="json",
+            **self._admin_headers(),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        user = User.objects.get(email="juan@example.com")
+        self.assertEqual(user.role, User.Role.STUDENT)
+        self.assertTrue(user.check_password("brandnewpass1"))
+        self.assertFalse(user.must_change_password)
+        self.assertTrue(StudentProfile.objects.filter(user=user).exists())
+
+        request_row.refresh_from_db()
+        self.assertEqual(
+            request_row.status, RegistrationRequest.Status.APPROVED
+        )
+        self.assertEqual(request_row.reviewed_by_id, self.admin.id)
+
+    def test_rejection_creates_no_account(self):
+        from apps.accounts.models import RegistrationRequest
+
+        self._submit()
+        request_row = RegistrationRequest.objects.get()
+
+        response = self.client.post(
+            f"{self.admin_list_url}{request_row.pk}/reject/",
+            {"note": "No enrolment on record."},
+            format="json",
+            **self._admin_headers(),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(User.objects.filter(email="juan@example.com").exists())
+        request_row.refresh_from_db()
+        self.assertEqual(
+            request_row.status, RegistrationRequest.Status.REJECTED
+        )
+        self.assertEqual(request_row.review_note, "No enrolment on record.")
+
+
+@mock.patch.dict(
+    "core.throttling.ParentInvitationRateThrottle.THROTTLE_RATES",
+    {"parent_invitation": "5/min"},
+)
+class ParentInvitationTest(TestCase):
+    """
+    Parent invitations.
+
+    The rule: a parent's account shows a child's academic record, so it is
+    not something anyone may request from a public form. A nomination is a
+    request; an administrator issues the invitation; the parent accepts.
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.client = APIClient()
+        self.create_url = "/api/v1/accounts/parent-invitations/"
+        self.accept_url = "/api/v1/accounts/parent-invitations/accept/"
+        self.admin_list_url = "/api/v1/accounts/admin/parent-invitations/"
+        self.admin = User.objects.create_user(
+            email="admin@example.com",
+            password="pass12345",
+            first_name="Admin",
+            last_name="Person",
+            role="admin",
+        )
+        self.student_user = User.objects.create_user(
+            email="student@example.com",
+            password="pass12345",
+            first_name="Student",
+            last_name="Person",
+            role="student",
+        )
+        from apps.academics.models import AcademicYear, GradeLevel, Section
+
+        level = GradeLevel.objects.create(name="Grade 7", level_number=7)
+        year = AcademicYear.objects.create(
+            name="2026-2027",
+            start_date=timezone.localdate(),
+            end_date=timezone.localdate() + timezone.timedelta(days=365),
+            is_current=True,
+        )
+        self.section = Section.objects.create(
+            name="Rizal",
+            grade_level=level,
+            academic_year=year,
+        )
+        from apps.accounts.models import StudentProfile
+
+        self.student = StudentProfile.objects.create(
+            user=self.student_user,
+            student_id="AEGIS-QA-S0001",
+            grade_level=level,
+            section=self.section,
+            enrollment_date=timezone.localdate(),
+        )
+
+    def tearDown(self):
+        cache.clear()
+
+    def _student_token(self):
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        return str(RefreshToken.for_user(self.student_user).access_token)
+
+    def _admin_token(self):
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        return str(RefreshToken.for_user(self.admin).access_token)
+
+    def test_a_nomination_creates_no_account(self):
+        from apps.accounts.models import ParentInvitation, User
+
+        response = self.client.post(
+            self.create_url,
+            {
+                "full_name": "Maria Cruz",
+                "email": "maria@example.com",
+                "relationship": "mother",
+            },
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self._student_token()}",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
+        self.assertEqual(ParentInvitation.objects.count(), 1)
+        self.assertFalse(User.objects.filter(email="maria@example.com").exists())
+
+    def test_a_nomination_is_scoped_to_the_nominating_student(self):
+        from apps.accounts.models import ParentInvitation
+
+        self.client.post(
+            self.create_url,
+            {
+                "full_name": "Maria Cruz",
+                "email": "maria@example.com",
+                "relationship": "mother",
+            },
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self._student_token()}",
+        )
+
+        invitation = ParentInvitation.objects.get()
+        self.assertEqual(invitation.student_id, self.student.id)
+        self.assertEqual(invitation.nominated_by_id, self.student_user.id)
+
+    def test_only_an_administrator_may_issue_the_invitation(self):
+        from apps.accounts.models import ParentInvitation
+
+        self.client.post(
+            self.create_url,
+            {
+                "full_name": "Maria Cruz",
+                "email": "maria@example.com",
+                "relationship": "mother",
+            },
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self._student_token()}",
+        )
+        invitation = ParentInvitation.objects.get()
+
+        response = self.client.post(
+            f"{self.admin_list_url}{invitation.pk}/approve/",
+            {},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self._student_token()}",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_approval_issues_the_invitation_link(self):
+        from django.core import mail
+
+        from apps.accounts.models import ParentInvitation
+
+        self.client.post(
+            self.create_url,
+            {
+                "full_name": "Maria Cruz",
+                "email": "maria@example.com",
+                "relationship": "mother",
+            },
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self._student_token()}",
+        )
+        invitation = ParentInvitation.objects.get()
+
+        response = self.client.post(
+            f"{self.admin_list_url}{invitation.pk}/approve/",
+            {},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self._admin_token()}",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        invitation.refresh_from_db()
+        self.assertEqual(
+            invitation.status, ParentInvitation.Status.APPROVED
+        )
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("/accept-invitation?token=", mail.outbox[0].body)
+
+    def test_accepting_creates_the_account_and_the_child_link(self):
+        from django.core import mail
+
+        from apps.accounts.models import (
+            ParentInvitation,
+            ParentProfile,
+            ParentStudentLink,
+            User,
+        )
+
+        self.client.post(
+            self.create_url,
+            {
+                "full_name": "Maria Cruz",
+                "email": "maria@example.com",
+                "relationship": "mother",
+            },
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self._student_token()}",
+        )
+        invitation = ParentInvitation.objects.get()
+        self.client.post(
+            f"{self.admin_list_url}{invitation.pk}/approve/",
+            {},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self._admin_token()}",
+        )
+        raw_token = mail.outbox[0].body.split("/accept-invitation?token=")[1].split()[0]
+
+        response = self.client.post(
+            self.accept_url,
+            {
+                "token": raw_token,
+                "password": "brandnewpass1",
+                "confirm_password": "brandnewpass1",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        user = User.objects.get(email="maria@example.com")
+        self.assertEqual(user.role, User.Role.PARENT)
+        self.assertTrue(user.check_password("brandnewpass1"))
+        profile = ParentProfile.objects.get(user=user)
+        self.assertTrue(
+            ParentStudentLink.objects.filter(
+                parent=profile, student=self.student
+            ).exists()
+        )
+
+    def test_an_invitation_can_be_used_only_once(self):
+        from django.core import mail
+
+        from apps.accounts.models import ParentInvitation
+
+        self.client.post(
+            self.create_url,
+            {
+                "full_name": "Maria Cruz",
+                "email": "maria@example.com",
+                "relationship": "mother",
+            },
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self._student_token()}",
+        )
+        invitation = ParentInvitation.objects.get()
+        self.client.post(
+            f"{self.admin_list_url}{invitation.pk}/approve/",
+            {},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self._admin_token()}",
+        )
+        raw_token = mail.outbox[0].body.split("/accept-invitation?token=")[1].split()[0]
+        payload = {
+            "token": raw_token,
+            "password": "brandnewpass1",
+            "confirm_password": "brandnewpass1",
+        }
+
+        first = self.client.post(self.accept_url, payload, format="json")
+        second = self.client.post(self.accept_url, payload, format="json")
+
+        self.assertEqual(first.status_code, status.HTTP_200_OK)
+        self.assertEqual(second.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_an_unknown_token_is_refused(self):
+        response = self.client.post(
+            self.accept_url,
+            {
+                "token": "not-a-token",
+                "password": "brandnewpass1",
+                "confirm_password": "brandnewpass1",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class StaffSetPasswordLinkTest(TestCase):
+    """
+    A provisioned staff account sets its own password.
+
+    The administrator creates the account; the person sets the password
+    from a one-time link that is emailed to them. No administrator chooses
+    a colleague's password, and no password travels by email.
+    """
+
+    def setUp(self):
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        self.client = APIClient()
+        self.admin = User.objects.create_user(
+            email="staffadmin@example.com",
+            password="pass12345",
+            first_name="Staff",
+            last_name="Admin",
+            role="admin",
+        )
+        self.token = str(
+            RefreshToken.for_user(self.admin).access_token
+        )
+
+    def _create(self, **overrides):
+        payload = {
+            "email": "new.teacher@example.com",
+            "username": "",
+            "first_name": "New",
+            "last_name": "Teacher",
+            "role": "faculty",
+        }
+        payload.update(overrides)
+        return self.client.post(
+            "/api/v1/accounts/users/create/",
+            payload,
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.token}",
+        )
+
+    def test_account_created_without_a_password_cannot_sign_in_yet(self):
+        response = self._create()
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        user = User.objects.get(email="new.teacher@example.com")
+        self.assertFalse(user.has_usable_password())
+        self.assertTrue(user.must_change_password)
+
+    def test_the_set_password_link_is_emailed(self):
+        from django.core import mail
+
+        self._create()
+
+        self.assertEqual(len(mail.outbox), 1)
+        body = mail.outbox[0].body
+        self.assertIn("/set-password?token=", body)
+        # No password in the mail: not even the administrator's own.
+        self.assertNotIn("password:", body.lower().split("set your password")[0])
+
+    def test_the_link_sets_the_password_and_clears_the_onboarding_flag(self):
+        from django.core import mail
+
+        self._create()
+        raw_token = mail.outbox[0].body.split("/set-password?token=")[1].split()[0]
+
+        response = self.client.post(
+            "/api/v1/accounts/password/reset/",
+            {
+                "token": raw_token,
+                "new_password": "brandnewpass1",
+                "confirm_password": "brandnewpass1",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        user = User.objects.get(email="new.teacher@example.com")
+        self.assertTrue(user.check_password("brandnewpass1"))
+        self.assertFalse(user.must_change_password)
+
+        login = self.client.post(
+            "/api/v1/auth/login/",
+            {
+                "email": "new.teacher@example.com",
+                "password": "brandnewpass1",
+            },
+            format="json",
+        )
+        self.assertEqual(login.status_code, status.HTTP_200_OK)
+
+    def test_an_account_created_with_a_password_keeps_it_and_sends_no_mail(self):
+        from django.core import mail
+
+        response = self._create(password="chosenpass123")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        user = User.objects.get(email="new.teacher@example.com")
+        self.assertTrue(user.check_password("chosenpass123"))
+        self.assertEqual(len(mail.outbox), 0)

@@ -5,6 +5,7 @@ Provides scoped querysets per role and enforces both role-level
 and data-scope permissions as required by Phase 2 authorization rules.
 """
 
+from django.db import transaction
 from rest_framework import generics, viewsets, status
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
@@ -692,19 +693,35 @@ class GradeViewSet(viewsets.ModelViewSet):
         return Response(output.data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["post"], url_path="finalize")
+    @transaction.atomic
     def finalize(self, request, pk=None):
         """
         POST /grades/{id}/finalize/
         Admin finalizes a grade. Changes status from submitted to finalized.
+
+        The status change and the notifications that announce it are one
+        transaction. Two things go wrong without it:
+
+        - The read-then-write was a race. Two administrators finalizing the
+          same grade at the same time both read "submitted", both wrote
+          "finalized", and both dispatched a notification set. The row is
+          locked for the read now, so the second caller sees the finalized
+          row and is told the grade is no longer finalizable.
+        - A failure in the notification dispatch left the grade published
+          and the family never told. Inside the transaction the rollback
+          takes the status change with it, so the grade stays submitted and
+          the admin can try again.
         """
         grade = self.get_object()
-        if grade.status != Grade.StatusChoices.SUBMITTED:
+        locked = Grade.objects.select_for_update().get(pk=grade.pk)
+        if locked.status != Grade.StatusChoices.SUBMITTED:
             return Response(
                 {"detail": "Only submitted grades can be finalized."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        grade.status = Grade.StatusChoices.FINALIZED
-        grade.save()
+        locked.status = Grade.StatusChoices.FINALIZED
+        locked.save(update_fields=["status", "updated_at"])
+        grade = locked
 
         # GRADE_POSTED notification (EVT-01)
         from apps.notifications.events import dispatch_event

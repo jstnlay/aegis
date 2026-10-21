@@ -323,6 +323,17 @@ class RiskScore(TimestampedModel):
         verbose_name = "risk score"
         verbose_name_plural = "risk scores"
         ordering = ["-computed_at", "-created_at"]
+        # Every risk aggregate reads the latest computable scores
+        # ("computation_status = 'ready'"), and the guidance dashboard and
+        # student profile both read one student's latest score.
+        indexes = [
+            models.Index(
+                fields=["computation_status"], name="risk_score_status_idx"
+            ),
+            models.Index(
+                fields=["student", "computed_at"], name="risk_score_student_time_idx"
+            ),
+        ]
 
     def __str__(self):
         score_display = f"{self.risk_score}" if self.risk_score is not None else "N/A"
@@ -408,6 +419,15 @@ class RiskAlert(TimestampedModel):
         verbose_name = "risk alert"
         verbose_name_plural = "risk alerts"
         ordering = ["-generated_at", "-created_at"]
+        # Open alerts are counted per student for the guidance dashboard and
+        # per day for the 30-day trend, so both the status filter and the
+        # creation date are read in a range query.
+        indexes = [
+            models.Index(fields=["status"], name="risk_alert_status_idx"),
+            models.Index(
+                fields=["status", "created_at"], name="risk_alert_status_time_idx"
+            ),
+        ]
 
     def __str__(self):
         return (

@@ -10,6 +10,7 @@ from rest_framework.routers import DefaultRouter
 
 from ..views import (
     BehavioralNoteViewSet,
+    GuidanceStudentDirectoryView,
     ConsultationRecordViewSet,
     GuidanceReportView,
     InterventionViewSet,
@@ -29,6 +30,11 @@ router.register("interventions", InterventionViewSet, basename="intervention")
 app_name = "guidance"
 
 urlpatterns = [
+    path(
+        "students/",
+        GuidanceStudentDirectoryView.as_view(),
+        name="guidance-student-directory",
+    ),
     path(
         "reports/student/<uuid:student_id>/",
         GuidanceReportView.as_view(),
