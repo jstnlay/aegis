@@ -20,6 +20,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 
 from apps.accounts.models import (
     FacultyProfile,
@@ -1134,6 +1135,45 @@ _HARDcoded_PATTERNS = re.compile(
 )
 
 
+def _migrated_sqlite_environment(tmp_path, **extra):
+    """
+    Run the seed script against a throwaway database it can actually use.
+
+    The script calls ``django.setup()`` and then writes real rows, so it needs
+    a migrated database. Two environments have been used for this test and
+    both are wrong:
+
+    - Development settings (the script's own default) point at PostgreSQL. A
+      machine with a running server passes; CI, which has no database
+      service, fails with ``connection to server at "localhost" ... refused``.
+      The test then measures the developer's laptop, not the script.
+
+    - The test settings use ``NAME=":memory:"``. A subprocess gets its own
+      empty memory database, so the first query fails with "no such table".
+
+    A file-backed database in the test's temporary directory is migrated once
+    and handed to the subprocess by path. The subprocess runs the real seed
+    script end to end, and the file is removed with the temporary directory.
+    """
+    database = Path(tmp_path) / "seed_e2e.sqlite3"
+
+    database_environment = {
+        "DJANGO_SETTINGS_MODULE": "config.settings.test",
+        "DJANGO_TEST_DATABASE_NAME": str(database),
+    }
+
+    subprocess.run(
+        [sys.executable, "aegis_backend/manage.py", "migrate", "--no-input"],
+        capture_output=True,
+        text=True,
+        cwd=str(_SEED_SCRIPT.parent.parent),
+        env={**os.environ, **database_environment},
+        check=True,
+    )
+
+    return {**os.environ, **database_environment, **extra}
+
+
 class SEC012HardcodedSeedPasswordTest(TestCase):
     """
     Regression tests for SEC-012.
@@ -1197,17 +1237,18 @@ class SEC012HardcodedSeedPasswordTest(TestCase):
     # D — supplied environment variable is used successfully
     def test_D_supplied_env_var_succeeds(self):
         test_password = "SEC012_Test_Pass_2026!"
-        env = {**os.environ}
-        env["PHASE7_E2E_PASSWORD"] = test_password
-        env.pop("DJANGO_SETTINGS_MODULE", None)
-        result = subprocess.run(
-            [sys.executable, str(_SEED_SCRIPT)],
-            capture_output=True,
-            text=True,
-            timeout=15,
-            cwd=str(_SEED_SCRIPT.parent.parent),
-            env=env,
-        )
+        with tempfile.TemporaryDirectory() as tmp:
+            env = _migrated_sqlite_environment(
+                tmp, PHASE7_E2E_PASSWORD=test_password
+            )
+            result = subprocess.run(
+                [sys.executable, str(_SEED_SCRIPT)],
+                capture_output=True,
+                text=True,
+                timeout=180,
+                cwd=str(_SEED_SCRIPT.parent.parent),
+                env=env,
+            )
         self.assertEqual(
             result.returncode, 0, f"Script failed: {result.stdout} {result.stderr}"
         )
@@ -1216,17 +1257,18 @@ class SEC012HardcodedSeedPasswordTest(TestCase):
     # E — supplied password is never printed
     def test_E_password_never_printed(self):
         test_password = "SEC012_Secret_NotPrinted!"
-        env = {**os.environ}
-        env["PHASE7_E2E_PASSWORD"] = test_password
-        env.pop("DJANGO_SETTINGS_MODULE", None)
-        result = subprocess.run(
-            [sys.executable, str(_SEED_SCRIPT)],
-            capture_output=True,
-            text=True,
-            timeout=15,
-            cwd=str(_SEED_SCRIPT.parent.parent),
-            env=env,
-        )
+        with tempfile.TemporaryDirectory() as tmp:
+            env = _migrated_sqlite_environment(
+                tmp, PHASE7_E2E_PASSWORD=test_password
+            )
+            result = subprocess.run(
+                [sys.executable, str(_SEED_SCRIPT)],
+                capture_output=True,
+                text=True,
+                timeout=180,
+                cwd=str(_SEED_SCRIPT.parent.parent),
+                env=env,
+            )
         combined = result.stdout + result.stderr
         self.assertNotIn(test_password, combined)
 
@@ -1251,18 +1293,21 @@ class SEC012HardcodedSeedPasswordTest(TestCase):
     # H — seed script works end-to-end with env var (subprocess)
     def test_H_seed_script_end_to_end_with_env(self):
         test_password = "SEC012_E2E_EndToEnd!"
-        env = {**os.environ}
-        env["PHASE7_E2E_PASSWORD"] = test_password
-        env.pop("DJANGO_SETTINGS_MODULE", None)
-        result = subprocess.run(
-            [sys.executable, str(_SEED_SCRIPT)],
-            capture_output=True,
-            text=True,
-            timeout=15,
-            cwd=str(_SEED_SCRIPT.parent.parent),
-            env=env,
+        with tempfile.TemporaryDirectory() as tmp:
+            env = _migrated_sqlite_environment(
+                tmp, PHASE7_E2E_PASSWORD=test_password
+            )
+            result = subprocess.run(
+                [sys.executable, str(_SEED_SCRIPT)],
+                capture_output=True,
+                text=True,
+                timeout=180,
+                cwd=str(_SEED_SCRIPT.parent.parent),
+                env=env,
+            )
+        self.assertEqual(
+            result.returncode, 0, f"Script failed: {result.stdout} {result.stderr}"
         )
-        self.assertEqual(result.returncode, 0)
         self.assertIn("e2e.admin@aegis.dev", result.stdout)
         self.assertIn("e2e.student@aegis.dev", result.stdout)
 

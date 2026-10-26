@@ -16,8 +16,6 @@ Locked design decisions:
   G.8 / ASM-04.
 """
 
-from pathlib import Path
-
 
 # ---------------------------------------------------------------------------
 # File types
@@ -247,8 +245,16 @@ def sanitized_filename(filename):
 
     Used for logging/storage metadata so that client-supplied path
     components never reach the filesystem or logs.
+
+    Both separators are stripped, not just the host's. An upload arrives as
+    an arbitrary client-supplied string, and the browser that sent it may
+    have been on Windows: ``Path("..\\..\\students.xlsx").name`` is
+    ``"..\\..\\students.xlsx"`` on POSIX, because a backslash is an ordinary
+    filename character there. Splitting on ``/`` and ``\\`` explicitly keeps
+    the result the same on every platform and keeps a traversal sequence out
+    of the logs regardless of which separator carried it.
     """
-    name = Path(filename or "").name
+    name = (filename or "").replace("\\", "/").rsplit("/", 1)[-1]
     return name[:255] if name else ""
 
 

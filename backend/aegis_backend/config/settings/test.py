@@ -9,16 +9,23 @@ this file is invoked explicitly via:
 
 from .base import *  # noqa: F401, F403
 
+import os
+
 from django.contrib.auth.hashers import PBKDF2PasswordHasher
 
 # ---------------------------------------------------------------------------
 # Override database for testing
 # ---------------------------------------------------------------------------
-
+#
+# In-memory by default: the suite is fast and needs no service. Tests that run
+# the code under test in a subprocess cannot use it, because a subprocess gets
+# its own empty memory database with no schema. Those tests set
+# DJANGO_TEST_DATABASE_NAME to a file path, migrate it once, and pass the same
+# path to the subprocess.
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
-        "NAME": ":memory:",
+        "NAME": os.environ.get("DJANGO_TEST_DATABASE_NAME") or ":memory:",
     }
 }
 
