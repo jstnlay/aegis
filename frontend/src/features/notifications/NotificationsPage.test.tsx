@@ -217,6 +217,34 @@ describe("NotificationsPage", () => {
     expect(container.textContent).toContain("from Robin Vega")
   })
 
+  it("shows a parent the child's notification with the full message body", async () => {
+    // TC-PAR-06: the log asked for parents to "view the notification in full
+    // message". The row is addressed to the parent and is rendered whole.
+    const fullMessage =
+      "Your child's grade for Math 7 has been finalized with a score of 88.50. Open the grade to see the breakdown, the remarks entered by the teacher, and the grading period it belongs to."
+    mockedFetchAllPages.mockImplementation(async (url: string) =>
+      url.includes("is_read=false")
+        ? { count: 1, results: [makeNotification({ id: "p-1" })] }
+        : {
+            count: 1,
+            results: [
+              makeNotification({
+                id: "p-1",
+                title: "Grade Posted",
+                message: fullMessage,
+              }),
+            ],
+          }
+    )
+
+    const { container } = renderPage("parent")
+
+    await screen.findByText("Grade Posted")
+    // The whole body, not a truncated summary.
+    expect(container.textContent).toContain(fullMessage)
+    expect(screen.getByText(/1 unread notification/i)).toBeInTheDocument()
+  })
+
   it("shows an unread count and a Mark all read control", async () => {
     mockedFetchAllPages.mockImplementation(async (url: string) =>
       url.includes("is_read=false")
