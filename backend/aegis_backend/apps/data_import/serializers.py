@@ -135,6 +135,7 @@ class ImportJobStatusSerializer(serializers.ModelSerializer):
             "total_rows",
             "processed_rows",
             "error_rows",
+            "error_log",
             "created_at",
             "completed_at",
             "record_summary",

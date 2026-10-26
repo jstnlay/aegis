@@ -334,4 +334,10 @@ class GradeImporter:
             record.mapped_to_model = ""
             record.mapped_to_id = None
             record.save()
+        # TC-FAC-12/14: a header rejection fails the file before any row is
+        # processed, so the per-row messages alone leave the history reading
+        # "0 of 0 rows" with no reason.  Record the reason on the job itself.
+        self.job.error_log = [
+            {"code": header_error.code, "message": header_error.message}
+        ]
         recompute_job_counters(self.job, self.records)

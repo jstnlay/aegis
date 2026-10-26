@@ -138,6 +138,20 @@ function envelopeOf(payload: unknown): ApiErrorEnvelope | null {
   }
 }
 
+/**
+ * A body the frozen envelope does not cover: a DRF view that answers with
+ * its own `{ "detail": "..." }` (the grade `encode` view's 404/403/409 for
+ * TC-FAC-07, among others). Reads the human text so the UI shows
+ * "A grade already exists…" instead of Axios's opaque
+ * "Request failed with status 409."
+ */
+function detailMessage(payload: unknown): string | null {
+  if (typeof payload !== "object" || payload === null) return null
+  const detail = (payload as { detail?: unknown }).detail
+  const text = coerceMessage(detail)
+  return text ? text.trim() : null
+}
+
 export function normalizeApiError(error: unknown): NormalizedApiError {
   if (
     error &&
@@ -162,6 +176,9 @@ export function normalizeApiError(error: unknown): NormalizedApiError {
           : `HTTP_${status ?? "ERROR"}`)
     const message =
       envelope?.error.message ??
+      (status && !network && !cancelled
+        ? detailMessage(error.response?.data)
+        : null) ??
       (cancelled
         ? "Request cancelled."
         : network

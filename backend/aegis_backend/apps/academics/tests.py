@@ -1177,6 +1177,49 @@ class StudentProfileManageTest(AcademicsTestBase):
         self.student_profile.refresh_from_db()
         self.assertIsNone(self.student_profile.guardian_contact)
 
+    def test_guardian_contact_with_letters_is_rejected(self):
+        # TC-FAC-01/02 Cycle-3 item: a contact number is a phone number.
+        self._as_faculty()
+        response = self.client.patch(
+            self.profile_url(self.student_profile),
+            data=self.valid_payload(guardian_contact="Call 0917-GATE"),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("guardian_contact", response.data["error"]["details"])
+        self.student_profile.refresh_from_db()
+        self.assertIsNone(self.student_profile.guardian_contact)
+
+    def test_guardian_contact_over_fifteen_digits_is_rejected(self):
+        self._as_faculty()
+        response = self.client.patch(
+            self.profile_url(self.student_profile),
+            data=self.valid_payload(
+                guardian_contact="0917555" + "0123456789"
+            ),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("guardian_contact", response.data["error"]["details"])
+        self.student_profile.refresh_from_db()
+        self.assertIsNone(self.student_profile.guardian_contact)
+
+    def test_guardian_contact_with_leading_plus_is_accepted(self):
+        self._as_faculty()
+        response = self.client.patch(
+            self.profile_url(self.student_profile),
+            data=self.valid_payload(guardian_contact="+63 917-555-0100"),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.student_profile.refresh_from_db()
+        self.assertEqual(
+            self.student_profile.guardian_contact, "+63 917-555-0100"
+        )
+
     def test_section_must_belong_to_the_grade_level(self):
         self._as_faculty()
         response = self.client.patch(

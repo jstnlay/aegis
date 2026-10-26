@@ -247,10 +247,26 @@ function HistoryCard() {
       key: "rows",
       header: "Rows",
       cell: (job) => (
-        <span className="text-sm text-muted-foreground">
-          {job.processed_rows} of {job.total_rows}
-          {job.error_rows > 0 ? ` · ${job.error_rows} failed` : ""}
-        </span>
+        <div className="text-sm">
+          <span className="text-muted-foreground">
+            {job.processed_rows} of {job.total_rows}
+            {job.error_rows > 0 ? ` · ${job.error_rows} failed` : ""}
+          </span>
+          {/*
+            TC-FAC-12/14: a failed header-validation job processes no rows at
+            all, so the counts alone read as an unexplained "0 of 0". The
+            reason lives in the job's error_log; surface the first message
+            inline (the full list stays one click away in the job detail).
+          */}
+          {job.error_log[0]?.message ? (
+            <div
+              className="mt-0.5 max-w-sm text-xs text-destructive"
+              title={job.error_log[0].message}
+            >
+              {job.error_log[0].message}
+            </div>
+          ) : null}
+        </div>
       ),
     },
     {

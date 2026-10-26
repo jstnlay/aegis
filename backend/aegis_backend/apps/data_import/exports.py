@@ -102,6 +102,81 @@ _COLUMN_MAP = {
     ExportType.GUIDANCE_REPORT: GUIDANCE_REPORT_COLUMNS,
 }
 
+# ---------------------------------------------------------------------------
+# Round-trip (re-importable) exports (PH12 — TC-ADM-03/04/05, FR-037).
+#
+# The QA cycle-3 log failed each "import an exported file" row because the
+# exporter's human-readable columns are not the importer's schema (e.g. the
+# attendance export carries ``recorded_by``/``student_name`` while
+# ATTENDANCE_ALLOWED_COLUMNS is the four required columns only).  A round-trip
+# export emits exactly the columns the matching importer accepts
+# (``importers/base.py``), so the exported file re-imports without edits.
+# Server-controlled columns (``recorded_by``, ``counselor``) stay out by the
+# same anti-forgery rule the importer enforces.
+# ---------------------------------------------------------------------------
+
+#: Grades importer schema: required + optional (see GRADE_ALLOWED_COLUMNS).
+GRADE_ROUNDTRIP_COLUMNS = [
+    "student_id",
+    "grading_period",
+    "score",
+    "subject_assignment",
+    "section",
+    "subject_code",
+    "letter_grade",
+    "remarks",
+]
+
+#: Attendance importer schema (see ATTENDANCE_ALLOWED_COLUMNS).
+ATTENDANCE_ROUNDTRIP_COLUMNS = ["student_id", "section", "date", "status"]
+
+# Admin round-trip student file: the official student list the importer
+# requires, so identity columns (email, first_name, last_name) are present
+# here.  This is the "more than anonymized" variant of the design lock-in
+# above: it stays admin-only and arrives only through the opt-in
+# ``?schema=reimport`` request on the admin-only students export.
+# shortcut: no consent gate on identity columns; upgrade when the TC-ADM-17
+# explicit-consent decision lands (see constants.py PH8.8 consent note).
+STUDENT_ROUNDTRIP_COLUMNS = [
+    "student_id",
+    "first_name",
+    "last_name",
+    "email",
+    "grade_level",
+    "section",
+    "enrollment_date",
+    "guardian_contact",
+    "date_of_birth",
+]
+
+#: Guidance-records importer schema (see GUIDANCE_ALLOWED_COLUMNS).
+GUIDANCE_ROUNDTRIP_COLUMNS = [
+    "student_id",
+    "session_date",
+    "session_time",
+    "session_type",
+    "concern_categories",
+    "session_notes",
+    "priority_level",
+    "recommendations",
+    "next_session_date",
+    "status",
+]
+
+_ROUNDTRIP_COLUMN_MAP = {
+    ExportType.GRADES: GRADE_ROUNDTRIP_COLUMNS,
+    ExportType.ATTENDANCE: ATTENDANCE_ROUNDTRIP_COLUMNS,
+    ExportType.STUDENTS: STUDENT_ROUNDTRIP_COLUMNS,
+    ExportType.GUIDANCE_RECORDS: GUIDANCE_ROUNDTRIP_COLUMNS,
+}
+
+
+def columns_for(export_type, reimport=False):
+    """Look up the render columns for a kind and (optional) round-trip schema."""
+    if reimport:
+        return _ROUNDTRIP_COLUMN_MAP[export_type]
+    return _COLUMN_MAP[export_type]
+
 
 class ExportError(Exception):
     """Raised when an export cannot be produced (maps to a 4xx/5xx response)."""
@@ -137,10 +212,12 @@ def _format(value):
     return str(value)
 
 
-def safe_export_filename(export_type, file_format):
+def safe_export_filename(export_type, file_format, variant=None):
     """
     Build a sanitized, static export filename for the given kind/format.
 
+    ``variant`` (e.g. ``"reimport"``) disambiguates the round-trip schema from
+    the default file, so a tester never uploads the wrong-flavor export.
     Filenames are fully server-controlled (no client input), so header/CRLF
     injection is impossible by construction; the sanitizer guards the
     generated name against any stray control characters regardless.
@@ -148,6 +225,8 @@ def safe_export_filename(export_type, file_format):
     slug = str(export_type).lower()
     ext = str(file_format).lower()
     base = f"aegis_{slug}_export"
+    if variant:
+        base = f"{base}_{variant}"
     cleaned = _UNSAFE_FILENAME_RE.sub("_", base).strip("._")
     return f"{cleaned}.{ext}"
 
@@ -306,6 +385,24 @@ def _student_queryset():
     )
 
 
+def _guidance_record_queryset():
+    """
+    Build the admin-only ConsultationRecord export queryset.
+
+    The guidance-records import (`ImportJobViewSet` limits that import to
+    admins, `ADMIN_ONLY_IMPORT_TYPES`) carries counseling sessions, so its
+    export is admin-scoped on the same term: a counselor's own sessions stay
+    reachable through the guidance report export instead.
+    """
+    from apps.guidance.models import ConsultationRecord
+
+    return (
+        ConsultationRecord.objects.all()
+        .select_related("student__user")
+        .order_by("session_date", "session_time", "student__student_id")
+    )
+
+
 def _advisory_queryset_for(user):
     """
     Build the faculty-only advisory class summary queryset.
@@ -385,6 +482,7 @@ def grade_rows(queryset):
             "student_id": g.student.student_id,
             "student_name": _student_full_name(g.student),
             "grade_level": g.student.grade_level.name if g.student.grade_level else "",
+            "subject_assignment": g.subject_assignment_id,
             "section": g.subject_assignment.section.name,
             "subject_code": g.subject_assignment.subject.code,
             "subject_name": g.subject_assignment.subject.name,
@@ -446,6 +544,41 @@ def advisory_rows(queryset):
         }
 
 
+def student_roundtrip_rows(queryset):
+    """Admin round-trip student rows carrying the importer's identity columns."""
+    for sp in queryset:
+        yield {
+            "student_id": sp.student_id,
+            "first_name": sp.user.first_name,
+            "last_name": sp.user.last_name,
+            "email": sp.user.email,
+            "grade_level": sp.grade_level.name if sp.grade_level else "",
+            "section": sp.section.name if sp.section else "",
+            "enrollment_date": sp.enrollment_date,
+            "guardian_contact": sp.guardian_contact or "",
+            "date_of_birth": sp.date_of_birth if sp.date_of_birth else "",
+        }
+
+
+def guidance_rows(queryset):
+    """Consultation-record rows matching the guidance-records import schema."""
+    for cr in queryset:
+        yield {
+            "student_id": cr.student.student_id,
+            "session_date": cr.session_date,
+            "session_time": cr.session_time if cr.session_time else "",
+            "session_type": cr.session_type,
+            "concern_categories": "|".join(
+                str(c) for c in (cr.concern_categories or [])
+            ),
+            "session_notes": cr.session_notes,
+            "priority_level": cr.priority_level,
+            "recommendations": cr.recommendations or "",
+            "next_session_date": cr.next_session_date if cr.next_session_date else "",
+            "status": cr.status,
+        }
+
+
 _ROW_BUILDERS = {
     ExportType.GRADES: grade_rows,
     ExportType.ATTENDANCE: attendance_rows,
@@ -453,22 +586,41 @@ _ROW_BUILDERS = {
     ExportType.ADVISORY: advisory_rows,
 }
 
+_ROUNDTRIP_ROW_BUILDERS = {
+    ExportType.GRADES: grade_rows,
+    ExportType.ATTENDANCE: attendance_rows,
+    ExportType.STUDENTS: student_roundtrip_rows,
+    ExportType.GUIDANCE_RECORDS: guidance_rows,
+    # ADVISORY is an aggregate, not a re-importable table, and it has no
+    # importer.  It maps to itself so a request that leaves `schema` unset
+    # still resolves when it reaches this builder set (see `_rows_for`).
+    ExportType.ADVISORY: advisory_rows,
+}
 
-def _rows_for(export_type, queryset):
-    return _ROW_BUILDERS[export_type](queryset)
+
+def _rows_for(export_type, queryset, reimport=False):
+    """
+    Pick the row builder for a kind.
+
+    The two maps differ only where a kind has both a readable and a
+    re-importable shape; every other kind resolves to the same builder, so a
+    missing key here would be a programming error, not a user error.
+    """
+    builders = _ROUNDTRIP_ROW_BUILDERS if reimport else _ROW_BUILDERS
+    return builders[export_type](queryset)
 
 
-def rows_for_queryset(export_type, queryset):
+def rows_for_queryset(export_type, queryset, reimport=False):
     """Return the full list of ordered row dictionaries for a queryset."""
-    return list(_rows_for(export_type, queryset))
+    return list(_rows_for(export_type, queryset, reimport))
 
 
-def render_csv(export_type, rows):
+def render_csv(export_type, rows, columns=None):
     """
     Render an ordered, sanitized CSV payload (UTF-8 + BOM) with a stable
     header row.
     """
-    columns = _COLUMN_MAP[export_type]
+    columns = columns if columns is not None else _COLUMN_MAP[export_type]
     buffer = io.StringIO()
     writer = csv.writer(buffer)
     writer.writerow(columns)
@@ -477,14 +629,14 @@ def render_csv(export_type, rows):
     return ("\ufeff" + buffer.getvalue()).encode("utf-8")
 
 
-def render_xlsx(export_type, rows):
+def render_xlsx(export_type, rows, columns=None):
     """
     Render an ordered XLSX payload (openpyxl) with a stable header row.
     """
     from openpyxl import Workbook
     from openpyxl.utils import get_column_letter
 
-    columns = _COLUMN_MAP[export_type]
+    columns = columns if columns is not None else _COLUMN_MAP[export_type]
     wb = Workbook()
     ws = wb.active
     ws.title = "Export"
@@ -500,11 +652,11 @@ def render_xlsx(export_type, rows):
     return buffer.getvalue()
 
 
-def build_export_payload(export_type, rows, file_format):
+def build_export_payload(export_type, rows, file_format, columns=None):
     """Return the raw file bytes for the given format."""
     if file_format == ExportFormat.CSV:
-        return render_csv(export_type, rows)
-    return render_xlsx(export_type, rows)
+        return render_csv(export_type, rows, columns)
+    return render_xlsx(export_type, rows, columns)
 
 
 def export_queryset_for(export_type, user):
@@ -526,6 +678,13 @@ def export_queryset_for(export_type, user):
                 "Student export is available to administrators only.",
             )
         qs = _student_queryset()
+    elif export_type == ExportType.GUIDANCE_RECORDS:
+        if user.role != "admin":
+            raise ExportError(
+                ExportErrorCode.PERMISSION_DENIED,
+                "The guidance-records export is available to administrators only.",
+            )
+        qs = _guidance_record_queryset()
     elif export_type == ExportType.ADVISORY:
         # Faculty-only: an advisory class summary is an aggregate of exactly
         # one faculty member's own class, so there is nothing for another

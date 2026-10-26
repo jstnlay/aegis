@@ -5,6 +5,7 @@ Academics serializers.
 from rest_framework import serializers
 
 from apps.accounts.models import StudentProfile
+from apps.accounts.validators import validate_guardian_contact
 
 from .models import (
     AcademicYear,
@@ -167,9 +168,12 @@ class StudentProfileManageSerializer(serializers.ModelSerializer):
     )
     section = serializers.PrimaryKeyRelatedField(queryset=Section.objects.all())
     # Blank is not "clear the value": a whitespace-only guardian contact is
-    # the same incomplete record the QA log rejects.
+    # the same incomplete record the QA log rejects. The value must also be
+    # a real phone number (TC-FAC-01/02): letters were saved before the
+    # format check existed.
     guardian_contact = serializers.CharField(
-        max_length=StudentProfile._meta.get_field("guardian_contact").max_length
+        max_length=StudentProfile._meta.get_field("guardian_contact").max_length,
+        validators=[validate_guardian_contact],
     )
     date_of_birth = serializers.DateField()
 

@@ -40,6 +40,7 @@ from .exports import (
     ExportError,
     build_content_disposition,
     build_export_payload,
+    columns_for,
     export_queryset_for,
     rows_for_queryset,
     safe_export_filename,
@@ -71,6 +72,9 @@ EXPORT_DOMAIN_MODELS = {
     # the audit event targets that student rather than a report model that
     # does not exist.
     ExportType.GUIDANCE_REPORT: "accounts.StudentProfile",
+    # TC-ADM-05: the guidance-records export is a table dump of counseling
+    # sessions, so the audit event targets the real record model.
+    ExportType.GUIDANCE_RECORDS: "guidance.ConsultationRecord",
 }
 
 
@@ -321,11 +325,14 @@ class ImportTemplateView(APIView):
 # GET /api/v1/data-import/exports/grades/      ?file_format=csv|xlsx
 # GET /api/v1/data-import/exports/attendance/  ?file_format=csv|xlsx
 # GET /api/v1/data-import/exports/students/    ?file_format=csv|xlsx  [admin]
+# GET /api/v1/data-import/exports/guidance-records/   (admin; TC-ADM-05)
 #
-# All exports operate on server-authorized querysets built by
-# ``export_queryset_for``.  No unrestricted fetching; no generic
-# export-everything endpoint; no arbitrary column selection.  Supported
-# formats are CSV and XLSX only.
+# Every export additionally accepts ?schema=reimport, which renders the
+# re-importable column set that matches the importer schema in
+# importers/base.py (TC-ADM-03/04 round-trip).  All exports operate on
+# server-authorized querysets built by ``export_queryset_for``.  No
+# unrestricted fetching; no generic export-everything endpoint; no arbitrary
+# column selection.  Supported formats are CSV and XLSX only.
 
 
 class ExportViewMixin(APIView):
@@ -353,6 +360,25 @@ class ExportViewMixin(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # TC-ADM-03/04: the default file is the human-readable document; the
+        # "reimport" schema renders exactly the columns of the matching
+        # import template, so the download can be uploaded unchanged.  The
+        # client names the default explicitly as "standard", so that value is
+        # accepted alongside an absent parameter.
+        schema = (self._param("schema") or "").lower()
+        if schema not in ("", "standard", "reimport"):
+            return Response(
+                {
+                    "success": False,
+                    "error": {
+                        "code": ExportErrorCode.UNSUPPORTED_EXPORT_TYPE,
+                        "message": "Unsupported schema. Use 'standard' or 'reimport'.",
+                    },
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        reimport = schema == "reimport"
+
         try:
             qs = export_queryset_for(self.export_type, request.user)
         except ExportError as exc:
@@ -367,7 +393,7 @@ class ExportViewMixin(APIView):
             )
 
         try:
-            rows = rows_for_queryset(self.export_type, qs)
+            rows = rows_for_queryset(self.export_type, qs, reimport=reimport)
         except ExportError as exc:
             return self._export_error(exc)
         except Exception:
@@ -392,7 +418,10 @@ class ExportViewMixin(APIView):
             )
 
         try:
-            payload = build_export_payload(self.export_type, rows, file_format)
+            payload = build_export_payload(
+                self.export_type, rows, file_format,
+                columns=columns_for(self.export_type, reimport),
+            )
         except ExportError as exc:
             return self._export_error(exc)
         except Exception:
@@ -403,7 +432,9 @@ class ExportViewMixin(APIView):
                 )
             )
 
-        filename = safe_export_filename(self.export_type, file_format)
+        filename = safe_export_filename(
+            self.export_type, file_format, variant="reimport" if reimport else None
+        )
         content_type = (
             "text/csv; charset=utf-8"
             if file_format == ExportFormat.CSV
@@ -470,3 +501,9 @@ class AdvisoryExportView(ExportViewMixin):
     """
 
     export_type = ExportType.ADVISORY
+
+
+class GuidanceRecordsExportView(ExportViewMixin):
+    """GET /api/v1/data-import/exports/guidance-records/ (admin only)."""
+
+    export_type = ExportType.GUIDANCE_RECORDS

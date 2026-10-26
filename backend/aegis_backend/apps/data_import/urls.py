@@ -14,6 +14,7 @@ from .views import (
     AdvisoryExportView,
     AttendanceExportView,
     GradesExportView,
+    GuidanceRecordsExportView,
     ImportJobViewSet,
     ImportTemplateView,
     StudentsExportView,
@@ -50,5 +51,10 @@ urlpatterns = [
         "exports/advisory/",
         AdvisoryExportView.as_view(),
         name="export-advisory",
+    ),
+    path(
+        "exports/guidance-records/",
+        GuidanceRecordsExportView.as_view(),
+        name="export-guidance-records",
     ),
 ]

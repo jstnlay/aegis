@@ -14,12 +14,26 @@ import { apiClient } from "@/lib/api"
 /**
  * The controlled-export kinds the backend authorizes.
  *
- * `grades`, `attendance` and `students` match `ExportType.ALL` (the
- * administrator authority list, of which `students` is admin-only).
- * `advisory` is the faculty-only advisory class summary (FR-016 /
- * TC-FAC-20) and is deliberately not part of that list.
+ * `grades`, `attendance`, `students` and `guidance_records` match
+ * `ExportType.ALL` (the administrator authority list, of which `students`,
+ * `guidance_records` are admin-only). `advisory` is the faculty-only advisory
+ * class summary (FR-016 / TC-FAC-20) and is deliberately not part of that
+ * list.
  */
-export type ExportKind = "grades" | "attendance" | "students" | "advisory"
+export type ExportKind =
+  | "grades"
+  | "attendance"
+  | "students"
+  | "advisory"
+  | "guidance_records"
+
+/**
+ * Which header flavor the file carries: `standard` is the human-readable
+ * document, `reimport` (PH12 / TC-ADM-03/04/05) is the round-trip file whose
+ * columns are exactly the matching import template's, so the download can be
+ * uploaded unchanged.
+ */
+export type ExportSchema = "standard" | "reimport"
 export type ExportFormat = "csv" | "xlsx"
 
 /**
@@ -33,10 +47,11 @@ export type ExportFormat = "csv" | "xlsx"
  */
 export async function downloadExport(
   kind: ExportKind,
-  format: ExportFormat
+  format: ExportFormat,
+  schema: ExportSchema = "standard"
 ): Promise<void> {
   const response = await apiClient.get(`/data-import/exports/${kind}/`, {
-    params: { file_format: format },
+    params: schema === "reimport" ? { file_format: format, schema } : { file_format: format },
     responseType: "blob",
   })
 

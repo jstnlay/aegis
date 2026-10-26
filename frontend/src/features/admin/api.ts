@@ -72,9 +72,11 @@
  * `_run_job` inline, so a job reaches a terminal state within the request. The
  * statuses below are the real `JobStatus` choices, including `partial`.
  *
- * Exports are three separate GET endpoints returning a file, not a job list:
- * grades and attendance for staff, students admin-only. Each requires
- * `?file_format=csv|xlsx` and rejects anything else with a 400.
+ * Exports are GET endpoints returning a file, not a job list: grades and
+ * attendance for staff, students and guidance-records admin-only. Each
+ * requires `?file_format=csv|xlsx` and rejects anything else with a 400;
+ * `?schema=reimport` swaps the header row for the round-trip columns that
+ * match the import template (TC-ADM-03/04/05).
  *
  * ---------------------------------------------------------------------------
  * §6 Audit log is read-only
@@ -1081,6 +1083,7 @@ export {
   downloadExport,
   filenameFromDisposition,
   type ExportKind,
+  type ExportSchema,
 } from "@/lib/export"
 
 /* ========================================================================== */

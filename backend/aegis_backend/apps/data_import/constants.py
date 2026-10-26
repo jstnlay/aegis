@@ -256,10 +256,11 @@ def sanitized_filename(filename):
 # Controlled export constants (Phase 8.8)
 # ---------------------------------------------------------------------------
 #
-# Export kinds supported by the controlled-export surface.  Only three
-# kinds are authorized: grades, attendance, and students.  Students is
-# admin-only by default.  There is no consent model in the codebase;
-# consent handling is explicitly excluded from PH8.8.
+# Export kinds supported by the controlled-export surface.  The
+# administrator authority list is grades, attendance, students, and (PH12 /
+# TC-ADM-05) guidance_records.  Students is admin-only by default.  There is
+# no consent model in the codebase; consent handling is explicitly excluded
+# from PH8.8 (the reimport variant carries identity columns — see exports.py).
 
 
 class ExportType:
@@ -278,6 +279,10 @@ class ExportType:
     # outside `ALL` for the same reason - `ALL` is the administrator authority
     # list, and this export is scoped to a guidance counselor's own student.
     GUIDANCE_REPORT = "guidance_report"
+    # PH12 / TC-ADM-05: the round-trip guidance-records file. Like the
+    # guidance-records import itself (ADMIN_ONLY_IMPORT_TYPES) this is an
+    # administrator authority surface, so it lives inside `ALL`.
+    GUIDANCE_RECORDS = "guidance_records"
 
     CHOICES = (
         (GRADES, "Grades"),
@@ -285,9 +290,10 @@ class ExportType:
         (STUDENTS, "Students"),
         (ADVISORY, "Advisory class summary"),
         (GUIDANCE_REPORT, "Student guidance report"),
+        (GUIDANCE_RECORDS, "Guidance records"),
     )
 
-    ALL = frozenset((GRADES, ATTENDANCE, STUDENTS))
+    ALL = frozenset((GRADES, ATTENDANCE, STUDENTS, GUIDANCE_RECORDS))
 
 
 class ExportFormat:

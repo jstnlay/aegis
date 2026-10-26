@@ -57,6 +57,21 @@ describe("normalizeApiError", () => {
     expect(normalized.isPasswordChangeRequired).toBe(false)
   })
 
+  it("surfaces a DRF {detail} body for hand-rolled view errors (TC-FAC-07 409)", () => {
+    const error = axiosError(409, {
+      detail:
+        "A grade already exists for this student, subject assignment, and grading period.",
+    })
+
+    const normalized = normalizeApiError(error)
+
+    expect(normalized.code).toBe("HTTP_409")
+    expect(normalized.message).toBe(
+      "A grade already exists for this student, subject assignment, and grading period."
+    )
+    expect(normalized.status).toBe(409)
+  })
+
   it("flags the password-change-required onboarding 401", () => {
     const error = axiosError(
       401,

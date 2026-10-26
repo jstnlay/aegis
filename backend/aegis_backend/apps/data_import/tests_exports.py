@@ -1,5 +1,5 @@
-"""
-PH8.8 — Controlled Export tests.
+﻿"""
+PH8.8 â€” Controlled Export tests.
 
 Covers authorization, role/scope isolation, anonymized student export,
 CSV/XLSX format correctness, determinism, CSV-injection neutralization,
@@ -234,7 +234,7 @@ class ExportAuthorizationTest(ExportApiBase):
 
 
 # ---------------------------------------------------------------------------
-# PH8.9 — Security / integration regression (invalid input, methods, leakage)
+# PH8.9 â€” Security / integration regression (invalid input, methods, leakage)
 # ---------------------------------------------------------------------------
 
 
@@ -292,7 +292,7 @@ class ExportSecurityRegressionTest(ExportApiBase):
     def test_parent_no_link_sees_no_attendance(self):
         # Parent with no linked child has zero attendance rows in scope, so
         # the export answers with the no-data message (TC-FAC-19) instead of
-        # a file — and certainly never with someone else's rows.
+        # a file â€” and certainly never with someone else's rows.
         ParentProfile.objects.create(user=self.parent_user, relationship_to_student="mother")
         AttendanceRecord.objects.create(
             student=self.dom["s1"], section=self.dom["section"],
@@ -717,7 +717,10 @@ class ExportConstantsTest(TestCase):
 
     def test_export_types(self):
         self.assertEqual(
-            ExportType.ALL, frozenset({"grades", "attendance", "students"})
+            ExportType.ALL,
+            frozenset(
+                {"grades", "attendance", "students", "guidance_records"}
+            ),
         )
 
     def test_max_export_rows(self):
@@ -725,7 +728,7 @@ class ExportConstantsTest(TestCase):
 
 
 # ---------------------------------------------------------------------------
-# FR-016 / TC-FAC-20 — advisory class summary export
+# FR-016 / TC-FAC-20 â€” advisory class summary export
 # ---------------------------------------------------------------------------
 
 
@@ -836,3 +839,196 @@ class AdvisoryExportTest(ExportApiBase):
             file_format="csv",
         )
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+# ---------------------------------------------------------------------------
+# PH12 — Round-trip (re-importable) exports (TC-ADM-03/04/05, FR-037)
+# ---------------------------------------------------------------------------
+
+
+class RoundTripExportTest(ExportApiBase):
+    """
+    ``?schema=reimport`` exports must feed the matching importer unchanged.
+
+    Cycle-3 failed every "import an exported file" row because the readable
+    export carries columns (``student_name``, ``recorded_by``, ...) the
+    importer forbids or cannot use. Acceptance here is the QA log's own: the
+    downloaded file is uploaded through the real job pipeline and every row
+    imports.
+    """
+
+    def _export_csv(self, kind, user, schema="reimport"):
+        resp = self._get(
+            f"/api/v1/data-import/exports/{kind}/",
+            user,
+            file_format="csv",
+            schema=schema,
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.content)
+        self.assertIn("reimport", resp["Content-Disposition"])
+        return resp.content
+
+    def _header(self, csv_bytes):
+        """First CSV row of a raw (BOM-bearing) export body."""
+        text = csv_bytes
+        if text.startswith(b"\xef\xbb\xbf"):
+            text = text[len(b"\xef\xbb\xbf"):]
+        return list(csv.reader(io.StringIO(text.decode("utf-8"))))[0]
+
+    def _import_csv(self, csv_bytes, import_type, user=None):
+        """Upload through the real (synchronous) job pipeline."""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        self._auth(user or self.admin_user)
+        resp = self.client.post(
+            "/api/v1/data-import/jobs/",
+            {
+                "file": SimpleUploadedFile(
+                    "roundtrip.csv", csv_bytes, content_type="text/csv"
+                ),
+                "import_type": import_type,
+            },
+            format="multipart",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED, resp.content)
+        return resp.data
+
+    def test_rejects_unknown_schema(self):
+        resp = self._get(
+            "/api/v1/data-import/exports/grades/",
+            self.admin_user,
+            file_format="csv",
+            schema="bogus",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            resp.json()["error"]["code"], ExportErrorCode.UNSUPPORTED_EXPORT_TYPE
+        )
+
+    def test_faculty_cannot_export_guidance_records(self):
+        resp = self._get(
+            "/api/v1/data-import/exports/guidance-records/",
+            self.faculty_user,
+            file_format="csv",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_grades_roundtrip(self):
+        from apps.academics.models import Grade
+        from apps.data_import.exports import GRADE_ROUNDTRIP_COLUMNS
+
+        self._seed_grade(score=90)
+        csv_bytes = self._export_csv("grades", self.admin_user)
+        self.assertEqual(self._header(csv_bytes), GRADE_ROUNDTRIP_COLUMNS)
+
+        Grade.objects.all().delete()
+        job = self._import_csv(csv_bytes, "grades")
+        self.assertEqual(job["status"], "completed")
+        self.assertEqual(job["processed_rows"], 1)
+        self.assertEqual(job["error_rows"], 0)
+
+        self.assertEqual(Grade.objects.count(), 1)
+        grade = Grade.objects.get()
+        self.assertEqual(grade.student.student_id, "STU-001")
+        self.assertEqual(grade.score, 90)
+
+    def test_attendance_roundtrip(self):
+        from apps.attendance.models import AttendanceRecord
+        from apps.data_import.exports import ATTENDANCE_ROUNDTRIP_COLUMNS
+
+        self._seed_attendance()
+        csv_bytes = self._export_csv("attendance", self.admin_user)
+        self.assertEqual(self._header(csv_bytes), ATTENDANCE_ROUNDTRIP_COLUMNS)
+
+        AttendanceRecord.objects.all().delete()
+        job = self._import_csv(csv_bytes, "attendance")
+        self.assertEqual(job["status"], "completed")
+        self.assertEqual(job["processed_rows"], 1)
+        self.assertEqual(job["error_rows"], 0)
+
+        self.assertEqual(AttendanceRecord.objects.count(), 1)
+        record = AttendanceRecord.objects.get()
+        self.assertEqual(record.student.student_id, "STU-001")
+        self.assertEqual(str(record.date), "2025-07-01")
+        self.assertEqual(record.status, "present")
+
+    def test_students_roundtrip(self):
+        from apps.academics.models import Enrollment
+        from apps.accounts.models import StudentProfile, User
+        from apps.data_import.exports import STUDENT_ROUNDTRIP_COLUMNS
+
+        csv_bytes = self._export_csv("students", self.admin_user)
+        self.assertEqual(self._header(csv_bytes), STUDENT_ROUNDTRIP_COLUMNS)
+
+        # Re-importing an existing roster would trip duplicate-email
+        # validation, so clear the students the file was built from.
+        # Deletion order honors the PROTECT foreign keys: enrollments and
+        # profiles first, then the student users they point at.
+        Enrollment.objects.all().delete()
+        StudentProfile.objects.all().delete()
+        User.objects.filter(role="student").delete()
+        job = self._import_csv(csv_bytes, "students")
+        self.assertEqual(job["status"], "completed")
+        self.assertEqual(job["processed_rows"], 3)
+        self.assertEqual(job["error_rows"], 0)
+
+        self.assertEqual(StudentProfile.objects.count(), 3)
+        self.assertTrue(
+            StudentProfile.objects.filter(user__email="s1@test.com").exists()
+        )
+
+    def test_guidance_records_roundtrip(self):
+        from django.utils import timezone
+
+        from apps.accounts.models import GuidanceProfile
+        from apps.data_import.exports import GUIDANCE_ROUNDTRIP_COLUMNS
+        from apps.guidance.models import ConsultationRecord, RiskAlert
+
+        counselor_user = User.objects.create_user(
+            email="guide_rt@test.com", password="pass12345",
+            first_name="Guide", last_name="Round", role="guidance",
+        )
+        counselor = GuidanceProfile.objects.create(
+            user=counselor_user, employee_id="GDE-RT-001"
+        )
+        ConsultationRecord.objects.create(
+            student=self.dom["s1"],
+            counselor=counselor,
+            session_date="2025-07-01",
+            session_time="10:30",
+            session_type="individual_counseling",
+            concern_categories=["academic"],
+            session_notes="Round-trip session note.",
+            priority_level="high",
+            status="ongoing",
+        )
+        # The importer attributes the counselor server-side from the
+        # student's assigned counselor (anti-forgery), so one must exist on
+        # the student before the re-import.
+        RiskAlert.objects.create(
+            student=self.dom["s1"],
+            assigned_counselor=counselor,
+            risk_level="high",
+            risk_factors=["declining_grades"],
+            generated_at=timezone.now(),
+        )
+        csv_bytes = self._export_csv("guidance-records", self.admin_user)
+        self.assertEqual(self._header(csv_bytes), GUIDANCE_ROUNDTRIP_COLUMNS)
+
+        ConsultationRecord.objects.all().delete()
+        job = self._import_csv(csv_bytes, "guidance_records")
+        self.assertEqual(job["status"], "completed")
+        self.assertEqual(job["processed_rows"], 1)
+        self.assertEqual(job["error_rows"], 0)
+
+        restored = ConsultationRecord.objects.get()
+        self.assertEqual(str(restored.session_time), "10:30:00")
+        self.assertEqual(restored.concern_categories, ["academic"])
+        self.assertEqual(restored.priority_level, "high")
+
+    def test_students_reimport_does_not_leak_credentials(self):
+        """The round-trip student file must never carry a password column."""
+        from apps.data_import.exports import STUDENT_ROUNDTRIP_COLUMNS
+
+        self._export_csv("students", self.admin_user)
+        self.assertFalse(
+            [c for c in STUDENT_ROUNDTRIP_COLUMNS if "password" in c]
+        )

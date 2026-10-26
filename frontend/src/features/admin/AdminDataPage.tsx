@@ -37,7 +37,7 @@ import {
   type ImportType,
 } from "@/features/admin/api"
 import { normalizeApiError } from "@/lib/error"
-import { downloadCsv } from "@/lib/export"
+import { downloadCsv, type ExportSchema } from "@/lib/export"
 
 /**
  * Imports and exports.
@@ -61,9 +61,11 @@ import { downloadCsv } from "@/lib/export"
  * is the header the importer validates — and it ships headers only, because
  * an example row would have to contain an invented `student_id` or `score`.
  *
- * Exports: three separate GET endpoints returning a **file**, not a job list.
- * They are a download rather than a query, and each requires `?file_format` —
- * anything but csv or xlsx is rejected with a 400.
+ * Exports: GET endpoints returning a **file**, not a job list. They are a
+ * download rather than a query, and each requires `?file_format` —
+ * anything but csv or xlsx is rejected with a 400. `?schema=reimport` swaps
+ * the file for the round-trip columns that match that import's template
+ * (TC-ADM-03/04/05); guidance-records is admin-only (TC-ADM-05).
  */
 
 const STATUS_VARIANT: Record<
@@ -504,10 +506,17 @@ const EXPORTS: readonly {
     label: "Students",
     description: "The student roster. Administrators only.",
   },
+  {
+    kind: "guidance_records",
+    label: "Guidance records",
+    description:
+      "Counseling session records, in the re-importable schema. Administrators only.",
+  },
 ]
 
 function ExportsCard() {
   const [format, setFormat] = useState<"csv" | "xlsx">("csv")
+  const [schema, setSchema] = useState<ExportSchema>("standard")
   const [pendingKind, setPendingKind] = useState<ExportKind | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -515,7 +524,7 @@ function ExportsCard() {
     setPendingKind(kind)
     setError(null)
     try {
-      await downloadExport(kind, format)
+      await downloadExport(kind, format, schema)
     } catch (caught) {
       setError(normalizeApiError(caught).message)
     } finally {
@@ -545,6 +554,23 @@ function ExportsCard() {
             <SelectContent>
               <SelectItem value="csv">CSV</SelectItem>
               <SelectItem value="xlsx">Excel (XLSX)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5 sm:max-w-xs">
+          <Label htmlFor="export-schema">Schema</Label>
+          <Select
+            value={schema}
+            onValueChange={(value) => setSchema(value as ExportSchema)}
+          >
+            <SelectTrigger id="export-schema">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="standard">Standard (readable file)</SelectItem>
+              <SelectItem value="reimport">
+                Round-trip (re-importable)
+              </SelectItem>
             </SelectContent>
           </Select>
         </div>

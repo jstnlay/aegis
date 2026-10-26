@@ -169,6 +169,10 @@ class StudentImporter:
             record.status = RecordStatus.ERROR
             record.error_message = error.message
             record.save()
+        # TC-FAC-12/14: a header rejection fails the file before any row is
+        # processed, so the per-row messages alone leave the history reading
+        # "0 of 0 rows" with no reason.  Record the reason on the job itself.
+        self.job.error_log = [{"code": error.code, "message": error.message}]
         recompute_job_counters(self.job, self.records)
 
     # ------------------------------------------------------------------
@@ -353,12 +357,21 @@ class StudentImporter:
         return parsed
 
     def _resolve_guardian(self, raw):
+        from apps.accounts.validators import validate_guardian_contact
+
         if not raw:
             return None
         if len(raw) > _GUARDIAN_MAX_LENGTH:
             raise RowError(
                 ImportErrorCode.INVALID_STUDENT_ID,
                 "guardian_contact exceeds the maximum length.",
+            )
+        try:
+            validate_guardian_contact(raw)
+        except ValueError:
+            raise RowError(
+                ImportErrorCode.INVALID_STUDENT,
+                "guardian_contact must be a phone number of 7-15 digits.",
             )
         return raw
 
