@@ -366,9 +366,13 @@ class StudentImporter:
                 ImportErrorCode.INVALID_STUDENT_ID,
                 "guardian_contact exceeds the maximum length.",
             )
+        # The validator raises Django's ValidationError, which derives from
+        # Exception rather than ValueError: catching ValueError here let the
+        # exception escape the per-row handling and the caller reported only
+        # the generic "The row could not be processed." instead of the reason.
         try:
             validate_guardian_contact(raw)
-        except ValueError:
+        except DjangoValidationError:
             raise RowError(
                 ImportErrorCode.INVALID_STUDENT,
                 "guardian_contact must be a phone number of 7-15 digits.",

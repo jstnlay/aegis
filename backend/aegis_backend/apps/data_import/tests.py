@@ -2738,6 +2738,70 @@ class StudentImportDomainTest(StudentImportApiTest):
         self.assertEqual(job.status, JobStatus.FAILED)
         self._assert_row_failed(job, "non-student account")
 
+    def test_guardian_contact_with_letters_fails_the_row(self):
+        """A non-phone guardian contact is a row error, not a crash.
+
+        TC-FAC-01/02: the QA log recorded the system saving guardian
+        contacts carrying letters. The importer validates the format via
+        ``apps.accounts.validators``, and that validator raises Django's
+        ``ValidationError`` - which does not inherit from ``ValueError``,
+        so the guard has to catch the right class or the exception escapes
+        the per-row handling and becomes a 500 instead of a failed row.
+        """
+        headers = self.HEAD + ["guardian_contact"]
+        resp = self._stu_upload(
+            headers,
+            [
+                [
+                    "STU-GC1", "Juan", "Dela Cruz", "gc1@test.com",
+                    self.dom["grade_name"], self.dom["section_name"],
+                    "not-a-phone",
+                ]
+            ],
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        job = self._job_from(resp)
+        self.assertEqual(job.status, JobStatus.FAILED)
+        self._assert_row_failed(job, "phone number of 7-15 digits")
+        self.assertFalse(User.objects.filter(email="gc1@test.com").exists())
+
+    def test_guardian_contact_too_short_fails_the_row(self):
+        """Digit-count bounds are enforced too, not just the letter check."""
+        headers = self.HEAD + ["guardian_contact"]
+        resp = self._stu_upload(
+            headers,
+            [
+                [
+                    "STU-GC2", "Juan", "Dela Cruz", "gc2@test.com",
+                    self.dom["grade_name"], self.dom["section_name"],
+                    "123",
+                ]
+            ],
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        job = self._job_from(resp)
+        self.assertEqual(job.status, JobStatus.FAILED)
+        self._assert_row_failed(job, "phone number of 7-15 digits")
+
+    def test_valid_guardian_contact_is_stored(self):
+        """The separators the seed data uses are accepted."""
+        headers = self.HEAD + ["guardian_contact"]
+        resp = self._stu_upload(
+            headers,
+            [
+                [
+                    "STU-GC3", "Juan", "Dela Cruz", "gc3@test.com",
+                    self.dom["grade_name"], self.dom["section_name"],
+                    "0917-555-0100",
+                ]
+            ],
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        job = self._job_from(resp)
+        self.assertEqual(job.status, JobStatus.COMPLETED)
+        profile = StudentProfile.objects.get(student_id="STU-GC3")
+        self.assertEqual(profile.guardian_contact, "0917-555-0100")
+
     def test_student_user_without_profile_gets_profile(self):
         dom = self.dom
         user = User.objects.create_user(
