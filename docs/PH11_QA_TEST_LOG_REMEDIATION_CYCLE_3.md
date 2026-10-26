@@ -137,6 +137,57 @@ No load harness exists (`backend/scripts/` has no k6/locust/pyperf script).
 1. **Load test:** add a k6 (or locust) script in `backend/scripts/` hitting: login → role dashboards (per TC-SYS-04 fixtures), one read-heavy page per role, and one write action; run at the reduced-concurrency scale SQAP Section 14.6 defines. Record baseline vs N-user latency; store the result doc next to QA notes. Then re-test TC-SYS-03 with numbers.
 2. **ML consistency (TC-SYS-05):** verification already exists backend-side — `ai_engine/benchmark.py`, `ai_engine/validation.py`, `ai_engine/tests.py`, `train_risk_model.py`, `run_risk_computation.py`. Procedure: seed `seed_qa_dataset.py`, run computation twice on identical inputs, diff `risk_factors`/`classified` outputs, attach the two dumps as evidence. Do not attempt to verify through the student UI.
 
+### 11.1 Test invocation — a misattributed failure mode, now closed
+
+Running the backend suite without `--settings=config.settings.test` produces
+failures that do not look like a configuration mistake, and it cost most of a
+day to trace once. Both symptoms observed during the Cycle-3 re-test sweep came
+from this single cause.
+
+| Invocation | Result |
+| --- | --- |
+| `manage.py test apps.audit.tests_authentication` (development settings) | 3 failures (`429`), 69.0 s |
+| same, `--settings=config.settings.test` | **OK**, 1.0 s |
+| `manage.py test apps.audit apps.cms core` (development) | 3 failures, 1985 s |
+| same, `--settings=config.settings.test` | **OK**, 29.3 s |
+
+Why the development defaults break a test run:
+
+- **`login: 15/min` per client IP.** The suite logs in hundreds of times from
+  one pseudo-IP, so past the 15th login every request returns `429`.
+  `audit_successful_logout()` wraps `record_audit()` in `except Exception`, so
+  the `429` reaches the test as a **missing `AuditLog` row** rather than as an
+  HTTP error — the three tests asserting on the stored row fail while the ones
+  asserting only on the status code pass. The failing set then moves between
+  runs as the budget is spent in a different place (3 failures one run, 6 the
+  next, different members), which is what makes it look like a real defect.
+- **PostgreSQL instead of in-memory SQLite.** A `--keepdb` database can drift
+  out of step with the migrations: `cms_systemsetting` was empty because
+  `0004_seed_system_settings` was recorded as applied against a database
+  created before that migration existed, so the admin settings `PATCH` 404'd
+  on a row that was never seeded.
+- **Full-strength PBKDF2** (1,500,000 iterations) per fixture user, measured
+  near 1.76 s per hash, pushes a full run past two hours.
+
+Two changes close it:
+
+1. `manage.py` selects `config.settings.test` for the `test` subcommand, and
+   **refuses** a test run pointed anywhere else — by `--settings` or by
+   `DJANGO_SETTINGS_MODULE` — naming the cause instead of running for hours.
+   Scoped to `test`; `check`, `showmigrations`, `shell`, `migrate`, `runserver`
+   and the custom commands still use development/PostgreSQL.
+2. `backend/scripts/run_tests.py` is the entry point the message points at. It
+   sets the module before Django starts, so it also covers entry points that
+   never load `manage.py`, and repairs a wrong ambient `DJANGO_SETTINGS_MODULE`
+   rather than inheriting it.
+
+    python scripts/run_tests.py                 # whole suite
+    python scripts/run_tests.py apps.audit      # one app
+
+No test and no application code changed for this; `config.settings.test`
+already existed and already set `login: "1000000/min"`, documented in its own
+comment. It was simply easy not to load.
+
 ---
 
 ## 12. PASSED-with-caveats (no failure, tracked only)
