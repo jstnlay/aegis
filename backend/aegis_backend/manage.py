@@ -6,7 +6,18 @@ import sys
 
 def main():
     """Run administrative tasks."""
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings.development')
+    # `test` runs against config.settings.test unless the caller says
+    # otherwise. Development settings are production-realistic: live
+    # PostgreSQL, full-strength password hashing, and a login throttle of
+    # 15/min per IP. None of those suit a suite that logs in hundreds of
+    # times from one pseudo-IP, and the failure is easy to misread as a real
+    # defect. An explicit --settings still wins - Django overwrites
+    # DJANGO_SETTINGS_MODULE from the flag.
+    if "DJANGO_SETTINGS_MODULE" not in os.environ:
+        is_test = len(sys.argv) > 1 and sys.argv[1] == "test"
+        os.environ["DJANGO_SETTINGS_MODULE"] = (
+            "config.settings.test" if is_test else "config.settings.development"
+        )
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:
