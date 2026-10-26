@@ -99,9 +99,7 @@ describe("RegisterPage", () => {
     await waitFor(() =>
       expect(verifyRegistrationRequest).toHaveBeenCalledWith("abc123")
     )
-    expect(
-      await screen.findByText(/Request verified/i)
-    ).toBeInTheDocument()
+    expect(await screen.findByText(/Request verified/i)).toBeInTheDocument()
   })
 
   it("refuses a token that does not verify", async () => {
@@ -110,6 +108,8 @@ describe("RegisterPage", () => {
     )
     renderPage("/register?token=stale")
 
-    expect(await screen.findByText(/This link has expired/i)).toBeInTheDocument()
+    expect(
+      await screen.findByText(/This link has expired/i)
+    ).toBeInTheDocument()
   })
 })

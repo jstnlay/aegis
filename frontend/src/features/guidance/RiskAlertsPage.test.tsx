@@ -222,9 +222,7 @@ describe("RiskAlertsPage", () => {
     // shrink them — they read the same unfiltered counts as the filter chips.
     // Headings, not text: the filter chips repeat these words as buttons.
     const cardFor = (title: string) =>
-      screen
-        .getByRole("heading", { name: title })
-        .closest('[data-slot="card"]')
+      screen.getByRole("heading", { name: title }).closest('[data-slot="card"]')
     expect(cardFor("Total Alerts")).toHaveTextContent("4")
     expect(cardFor("Active")).toHaveTextContent("1")
     expect(cardFor("Under monitoring")).toHaveTextContent("1")

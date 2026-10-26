@@ -34,9 +34,7 @@ describe("AcceptInvitationPage", () => {
     fireEvent.change(screen.getByLabelText("Confirm password"), {
       target: { value: "brandnewpass1" },
     })
-    fireEvent.click(
-      screen.getByRole("button", { name: "Create my account" })
-    )
+    fireEvent.click(screen.getByRole("button", { name: "Create my account" }))
 
     await waitFor(() =>
       expect(acceptParentInvitationRequest).toHaveBeenCalledTimes(1)
@@ -57,9 +55,7 @@ describe("AcceptInvitationPage", () => {
     fireEvent.change(screen.getByLabelText("Confirm password"), {
       target: { value: "brandnewpass1" },
     })
-    fireEvent.click(
-      screen.getByRole("button", { name: "Create my account" })
-    )
+    fireEvent.click(screen.getByRole("button", { name: "Create my account" }))
 
     expect(
       await screen.findByText(/Your parent account is ready/i)
@@ -69,9 +65,7 @@ describe("AcceptInvitationPage", () => {
   it("refuses a link with no token", () => {
     renderPage("/accept-invitation")
 
-    expect(
-      screen.getByText(/missing its token/i)
-    ).toBeInTheDocument()
+    expect(screen.getByText(/missing its token/i)).toBeInTheDocument()
     expect(
       screen.queryByRole("button", { name: "Create my account" })
     ).not.toBeInTheDocument()

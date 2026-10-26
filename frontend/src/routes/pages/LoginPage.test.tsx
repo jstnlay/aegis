@@ -71,11 +71,7 @@ describe("LoginPage", () => {
     await fillAndSubmit()
 
     await waitFor(() => expect(login).toHaveBeenCalledTimes(1))
-    expect(login).toHaveBeenCalledWith(
-      "student@school.edu",
-      "pass12345",
-      false
-    )
+    expect(login).toHaveBeenCalledWith("student@school.edu", "pass12345", false)
   })
 
   it("asks for a remembered session when the box is ticked", async () => {
@@ -85,10 +81,6 @@ describe("LoginPage", () => {
     await fillAndSubmit()
 
     await waitFor(() => expect(login).toHaveBeenCalledTimes(1))
-    expect(login).toHaveBeenCalledWith(
-      "student@school.edu",
-      "pass12345",
-      true
-    )
+    expect(login).toHaveBeenCalledWith("student@school.edu", "pass12345", true)
   })
 })

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useMemo } from "react"
 import { Link } from "react-router-dom"
 
 import {
@@ -16,7 +16,7 @@ import { Label } from "@/components/ui/label"
 import { MetricCard } from "@/components/ui/metric-card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/features/auth/AuthContext"
-import { useLinkedStudents } from "@/features/parent/api"
+import { useLinkedStudents, useSelectedChild } from "@/features/parent/api"
 import { useStudentDashboardData } from "@/features/student/api"
 import { formatPercent } from "@/lib/metric-format"
 import { scoreStatus, scoreStatusLabel } from "@/lib/score-status"
@@ -36,13 +36,16 @@ import { scoreStatus, scoreStatusLabel } from "@/lib/score-status"
 
 function ParentDashboard() {
   const { user } = useAuth()
-  const [selectedChildId, setSelectedChildId] = useState<string>("")
 
+  // A parent with one child lands on that child's record; see useSelectedChild.
   const linkedStudentsQuery = useLinkedStudents()
   const linkedStudents = useMemo(
     () => linkedStudentsQuery.data || [],
     [linkedStudentsQuery.data]
   )
+  const { selectedChildId, setSelectedChildId } =
+    useSelectedChild(linkedStudents)
+
   const studentsLoading = linkedStudentsQuery.isLoading
   const linkedStudentsError = linkedStudentsQuery.isError
 
@@ -62,16 +65,6 @@ function ParentDashboard() {
     () => linkedStudents.find((s: { id: string }) => s.id === selectedChildId),
     [linkedStudents, selectedChildId]
   )
-
-  // A parent with one child should land on that child's record, not on a
-  // prompt asking them to pick the only option. Runs only while nothing is
-  // selected, so a deliberate choice is never overwritten.
-  useEffect(() => {
-    const first = linkedStudents[0]
-    if (!selectedChildId && first) {
-      setSelectedChildId(first.id)
-    }
-  }, [linkedStudents, selectedChildId])
 
   if (!user) return null
 

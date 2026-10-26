@@ -216,9 +216,9 @@ function ImportsCard() {
           <CardTitle>Upload a file</CardTitle>
           <CardDescription>
             CSV or XLSX. The server detects the real type from the file&apos;s
-            contents rather than its extension. A small file finishes before
-            you get the response; a large one keeps running in the background
-            and this list refreshes itself until it is done.
+            contents rather than its extension. A small file finishes before you
+            get the response; a large one keeps running in the background and
+            this list refreshes itself until it is done.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">

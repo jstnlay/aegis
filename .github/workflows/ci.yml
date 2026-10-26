@@ -83,12 +83,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # `npm run lint` and `npm run format:check` are NOT gated here yet.
-      # Both fail on master for files this work never touches (4 react-hooks
-      # errors and 26 unformatted files under src/features/parent/), so
-      # wiring them in would open a permanently red build - which teaches
-      # people to ignore CI. Fix the existing findings, then add the two
-      # steps; nothing else has to change.
+      - name: Lint
+        run: npm run lint
+
+      - name: Format check
+        run: npm run format:check
+
       - name: Type check
         run: npm run typecheck
 

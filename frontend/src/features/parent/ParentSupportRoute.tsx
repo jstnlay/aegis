@@ -1,5 +1,3 @@
-import { useEffect, useState } from "react"
-
 import { ErrorNote, LoadingState } from "@/components/feedback/Feedback"
 import {
   Card,
@@ -16,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { useLinkedStudents } from "@/features/parent/api"
+import { useLinkedStudents, useSelectedChild } from "@/features/parent/api"
 import { ParentSupportPage } from "@/features/parent/ParentSupportPage"
 
 /**
@@ -36,20 +34,12 @@ import { ParentSupportPage } from "@/features/parent/ParentSupportPage"
  * `ChildPicker` in `ParentAcademicsPage`.
  */
 export function ParentSupportRoute() {
-  const [selectedChildId, setSelectedChildId] = useState<string>("")
   const linkedQuery = useLinkedStudents()
   const linked = linkedQuery.data ?? []
-  const child = linked.find((c) => c.id === selectedChildId)
 
-  // A parent with one child should land on that child's record, not on an
-  // empty picker. Runs only while nothing is selected, so a deliberate
-  // choice is never overwritten.
-  useEffect(() => {
-    const first = linked[0]
-    if (!selectedChildId && first) {
-      setSelectedChildId(first.id)
-    }
-  }, [linked, selectedChildId])
+  // A parent with one child lands on that child's record; see useSelectedChild.
+  const { selectedChildId, setSelectedChildId, child } =
+    useSelectedChild(linked)
 
   if (linkedQuery.isLoading) {
     return <LoadingState label="Loading linked students" />

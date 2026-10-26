@@ -81,9 +81,7 @@ describe("ResetPasswordPage", () => {
   it("refuses a link with no token", () => {
     renderPage(<ResetPasswordPage />, "/reset-password")
 
-    expect(
-      screen.getByText(/missing its token/i)
-    ).toBeInTheDocument()
+    expect(screen.getByText(/missing its token/i)).toBeInTheDocument()
     expect(
       screen.queryByRole("button", { name: "Set new password" })
     ).not.toBeInTheDocument()

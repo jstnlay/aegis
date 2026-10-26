@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 
 import { Badge } from "@/components/ui/badge"
 import {
@@ -29,6 +29,7 @@ import {
   useChildAttendanceSummary,
   useChildGrades,
   useLinkedStudents,
+  useSelectedChild,
   type LinkedStudent,
   type ParentGrade,
 } from "@/features/parent/api"
@@ -57,25 +58,15 @@ const ATTENDANCE_FILTERS = [
 
 export function ParentAcademicsPage() {
   const { user } = useAuth()
-  const [selectedChildId, setSelectedChildId] = useState<string>("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [search, setSearch] = useState("")
 
   const linkedQuery = useLinkedStudents()
   const linked = linkedQuery.data ?? []
-  const child: LinkedStudent | undefined = linked.find(
-    (c) => c.id === selectedChildId
-  )
 
-  // A parent with one child should land on that child's record, not on an
-  // empty picker. Runs only while nothing is selected, so a deliberate
-  // choice is never overwritten.
-  useEffect(() => {
-    const first = linked[0]
-    if (!selectedChildId && first) {
-      setSelectedChildId(first.id)
-    }
-  }, [linked, selectedChildId])
+  // A parent with one child lands on that child's record; see useSelectedChild.
+  const { selectedChildId, setSelectedChildId, child } =
+    useSelectedChild(linked)
 
   const gradesQuery = useChildGrades(selectedChildId || null)
   const summaryQuery = useChildAttendanceSummary(selectedChildId || null)

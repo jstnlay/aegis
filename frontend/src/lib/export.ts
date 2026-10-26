@@ -21,11 +21,7 @@ import { apiClient } from "@/lib/api"
  * list.
  */
 export type ExportKind =
-  | "grades"
-  | "attendance"
-  | "students"
-  | "advisory"
-  | "guidance_records"
+  "grades" | "attendance" | "students" | "advisory" | "guidance_records"
 
 /**
  * Which header flavor the file carries: `standard` is the human-readable
@@ -51,7 +47,10 @@ export async function downloadExport(
   schema: ExportSchema = "standard"
 ): Promise<void> {
   const response = await apiClient.get(`/data-import/exports/${kind}/`, {
-    params: schema === "reimport" ? { file_format: format, schema } : { file_format: format },
+    params:
+      schema === "reimport"
+        ? { file_format: format, schema }
+        : { file_format: format },
     responseType: "blob",
   })
 

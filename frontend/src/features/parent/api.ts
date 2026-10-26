@@ -54,6 +54,7 @@
  */
 
 import { useQuery } from "@tanstack/react-query"
+import { useMemo, useState } from "react"
 
 import { apiClient } from "@/lib/api"
 import { fetchAllPages } from "@/lib/pagination"
@@ -104,6 +105,55 @@ export function useLinkedStudents() {
       return Array.from(studentMap.values())
     },
   })
+}
+
+/**
+ * The child a parent page is currently showing, plus the setter for an
+ * explicit choice.
+ *
+ * A parent with one child should land on that child's record rather than on a
+ * picker with a single option. The obvious way to do that is an effect that
+ * calls `setSelectedChildId(first.id)` once the list loads, and that is what
+ * every parent page used to do. React 19's `react-hooks/set-state-in-effect`
+ * rule flags it, correctly: the effect runs after a render that already had
+ * the data, so the assignment schedules a second render for a value that was
+ * derivable during the first. Four pages did this, so the fix is one hook
+ * rather than four copies of the same effect.
+ *
+ * The list is passed in rather than fetched here so the hook stays a pure
+ * derivation. Folding `useLinkedStudents()` into this hook reads better but
+ * breaks the pages' tests, which mock `useLinkedStudents` and rely on the
+ * page — not this hook — calling it: an internal call does not go through the
+ * mocked module export, so the mock is bypassed and the real request runs.
+ *
+ * The resolution rule is unchanged from the effect it replaces:
+ *
+ *   - an explicit choice always wins, so clicking a different child sticks;
+ *   - with nothing chosen, the first linked child is shown, which is what
+ *     makes the single-child case work;
+ *   - a chosen id that is no longer in the list (the child left, or a fresh
+ *     list arrived) falls back to the first child instead of rendering an
+ *     empty record.
+ *
+ * Returning a derived value rather than storing one also removes a race the
+ * effect had: between the list arriving and the effect running, the pages
+ * rendered with an empty selection.
+ */
+export function useSelectedChild(linked: LinkedStudent[]) {
+  const [chosenId, setChosenId] = useState<string>("")
+
+  const selectedChildId = useMemo(() => {
+    const stillLinked = linked.some((child) => child.id === chosenId)
+    if (chosenId && stillLinked) return chosenId
+    return linked[0]?.id ?? ""
+  }, [linked, chosenId])
+
+  const child = useMemo(
+    () => linked.find((candidate) => candidate.id === selectedChildId),
+    [linked, selectedChildId]
+  )
+
+  return { selectedChildId, setSelectedChildId: setChosenId, child }
 }
 
 /* -------------------------------------------------------------------------- */

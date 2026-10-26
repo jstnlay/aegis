@@ -129,8 +129,8 @@ function UploadCard({
         <CardDescription>
           CSV or XLSX. The server detects the real type from the file&apos;s
           contents rather than its extension. A small file finishes before you
-          get the response; a large one keeps running in the background and
-          the history below refreshes itself until it is done.
+          get the response; a large one keeps running in the background and the
+          history below refreshes itself until it is done.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">

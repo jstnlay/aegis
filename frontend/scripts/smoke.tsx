@@ -105,7 +105,11 @@ check(shellHtml, "AEGIS", "AppShell renders the brand")
  * items are not in the server-rendered markup. This assertion used to look for
  * "Sign out" and could never pass.
  */
-check(shellHtml, 'aria-label="Account menu"', "AppShell renders the account menu")
+check(
+  shellHtml,
+  'aria-label="Account menu"',
+  "AppShell renders the account menu"
+)
 
 /* ------------------------------------------------------------------ */
 /* Role-aware navigation configuration                                 */

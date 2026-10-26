@@ -33,7 +33,12 @@ vi.mock("@/features/auth/AuthContext", () => ({
   }),
 }))
 
-vi.mock("@/features/parent/api", () => ({
+vi.mock("@/features/parent/api", async (importOriginal) => ({
+  // Partial mock: `useLinkedStudents` is stubbed because it is the network
+  // call, while `useSelectedChild` stays real so these tests exercise the
+  // child-resolution rule (explicit choice wins, otherwise the first linked
+  // child) instead of a second stub that could disagree with it.
+  ...(await importOriginal<typeof import("@/features/parent/api")>()),
   useLinkedStudents: vi.fn(),
 }))
 
