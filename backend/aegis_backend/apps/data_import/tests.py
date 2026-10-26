@@ -1404,9 +1404,14 @@ class XlsxUploadApiTest(XlsxImportApiBase):
         )
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
         job = ImportJob.objects.get(pk=resp.data["id"])
-        self.assertEqual(job.error_log, [])
         record = ImportRecord.objects.get(job=job, row_number=1)
         self.assertEqual(record.data, {"x": "1"})
+        # The named sheet is the one read, so the file is not rejected for
+        # having two worksheets.  It still fails header validation, because
+        # "x" is not a grade column, and the job now says so (TC-FAC-12/14).
+        codes = [entry["code"] for entry in job.error_log]
+        self.assertNotIn(ImportErrorCode.MULTIPLE_WORKSHEETS, codes)
+        self.assertEqual(codes, [ImportErrorCode.MISSING_REQUIRED_COLUMN])
 
     def test_worksheet_position_imported(self):
         self._auth(self.admin_user)
@@ -1418,8 +1423,11 @@ class XlsxUploadApiTest(XlsxImportApiBase):
             sheet="2",
         )
         job = ImportJob.objects.get(pk=resp.data["id"])
-        self.assertEqual(job.error_log, [])
         self.assertTrue(ImportRecord.objects.filter(job=job).exists())
+        # Read by position, so the two-sheet file is not the rejection.
+        codes = [entry["code"] for entry in job.error_log]
+        self.assertNotIn(ImportErrorCode.MULTIPLE_WORKSHEETS, codes)
+        self.assertEqual(codes, [ImportErrorCode.MISSING_REQUIRED_COLUMN])
 
     def test_unknown_sheet_rejected_on_upload(self):
         self._auth(self.admin_user)

@@ -282,6 +282,23 @@ class GradeModelTest(AcademicsTestBase):
         with self.assertRaises(ValidationError):
             g.full_clean()
 
+    def test_score_validation_covers_both_bounds(self):
+        """
+        TC-FAC-10 / FR-010 at the model layer, so the rule holds for every
+        writer - the API, the importer and the shell - not only one endpoint.
+        """
+        for score in (Decimal("-0.01"), Decimal("100.01")):
+            with self.subTest(score=score):
+                g = Grade(
+                    student=self.student_profile,
+                    subject_assignment=self.sa_math,
+                    grading_period=self.gp1, score=score,
+                    encoded_by=self.faculty_profile,
+                    status=Grade.StatusChoices.DRAFT,
+                )
+                with self.assertRaises(ValidationError):
+                    g.full_clean()
+
     def test_unique_together(self):
         with self.assertRaises(ValidationError):
             Grade.objects.create(
@@ -589,6 +606,78 @@ class GradeEncodeActionTest(AcademicsTestBase):
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_encode_grade_out_of_range_scores_are_refused_with_a_reason(self):
+        """
+        TC-FAC-10 / FR-010: an out-of-range grade is refused and the caller is
+        told which field and which range.  The boundary values 0 and 100 are
+        valid; only what falls outside them is rejected.
+        """
+        for score in ("150.00", "-5.00", "100.01"):
+            with self.subTest(score=score):
+                response = self.client.post(
+                    "/api/v1/academics/grades/encode/",
+                    {
+                        "student": str(self.student_profile.id),
+                        "subject_assignment": str(self.sa_math.id),
+                        "grading_period": str(self.gp2.id),
+                        "score": score,
+                    },
+                    format="json",
+                )
+                self.assertEqual(
+                    response.status_code, status.HTTP_400_BAD_REQUEST
+                )
+                body = response.json()
+                details = body["error"]["details"]
+                self.assertIn("score", details)
+                self.assertIn("between 0 and 100", details["score"][0])
+                # The invalid grade was not persisted.
+                self.assertFalse(
+                    Grade.objects.filter(
+                        student=self.student_profile,
+                        grading_period=self.gp2,
+                    ).exists()
+                )
+
+    def test_encode_grade_boundary_scores_are_accepted(self):
+        """0 and 100 are inside the range, so they must save."""
+        for score in ("0.00", "100.00"):
+            with self.subTest(score=score):
+                Grade.objects.filter(
+                    student=self.student_profile, grading_period=self.gp2
+                ).delete()
+                response = self.client.post(
+                    "/api/v1/academics/grades/encode/",
+                    {
+                        "student": str(self.student_profile.id),
+                        "subject_assignment": str(self.sa_math.id),
+                        "grading_period": str(self.gp2.id),
+                        "score": score,
+                    },
+                    format="json",
+                )
+                self.assertEqual(
+                    response.status_code, status.HTTP_201_CREATED, response.content
+                )
+
+    def test_encode_grade_non_numeric_score_is_refused(self):
+        """
+        TC-FAC-10 also names an "invalid" value.  A non-numeric score must be a
+        field error, not a 500.
+        """
+        response = self.client.post(
+            "/api/v1/academics/grades/encode/",
+            {
+                "student": str(self.student_profile.id),
+                "subject_assignment": str(self.sa_math.id),
+                "grading_period": str(self.gp2.id),
+                "score": "ninety",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("score", response.json()["error"]["details"])
 
     def test_encode_grade_student_not_found(self):
         import uuid
