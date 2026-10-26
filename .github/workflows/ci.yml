@@ -1,0 +1,99 @@
+# Continuous integration for AEGIS.
+#
+# Runs on every push and pull request. Nothing here needs a service: the
+# backend suite uses config.settings.test, which is in-memory SQLite, and the
+# frontend suite runs in jsdom. No PostgreSQL, no Redis, no Strapi.
+#
+# The backend job calls `scripts/run_tests.py` rather than `manage.py test`
+# directly. That script pins DJANGO_SETTINGS_MODULE before Django starts, so
+# the run cannot silently fall back to development settings - which would
+# throttle login at 15/min per IP and fail the suite in a way that reads as an
+# audit-write defect rather than a configuration mistake. See
+# docs/PH11_QA_TEST_LOG_REMEDIATION_CYCLE_3.md section 11.1.
+
+name: CI
+
+on:
+  push:
+    branches: ["master", "cycle-3-remediation"]
+  pull_request:
+
+# A newer push supersedes an in-flight run for the same ref.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (Django)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    env:
+      # config/settings/base.py reads this with no default (python-decouple),
+      # so the suite cannot even import without it. A throwaway value is
+      # correct here: the test settings never sign a real token or serve a
+      # request, and the value must not be a real secret.
+      DJANGO_SECRET_KEY: ci-only-not-a-real-secret-key
+      # The script also sets this; declared here so the job is readable on its
+      # own and so any direct manage.py call in this file is equally safe.
+      DJANGO_SETTINGS_MODULE: config.settings.test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          # Matches the documented project baseline, "Python: 3.14.0" in
+          # docs/PH9.0_DISCOVERY_REPORT.md, which is also the version the
+          # dependency set has actually been exercised on. Keep this in step
+          # with that document rather than with whatever is newest on the
+          # runner image.
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: backend/requirements/*.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements/development.txt
+
+      - name: Django system checks
+        run: python aegis_backend/manage.py check
+
+      - name: Tests
+        run: python scripts/run_tests.py -v 2
+
+  frontend:
+    name: Frontend (React)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # `npm run lint` and `npm run format:check` are NOT gated here yet.
+      # Both fail on master for files this work never touches (4 react-hooks
+      # errors and 26 unformatted files under src/features/parent/), so
+      # wiring them in would open a permanently red build - which teaches
+      # people to ignore CI. Fix the existing findings, then add the two
+      # steps; nothing else has to change.
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
