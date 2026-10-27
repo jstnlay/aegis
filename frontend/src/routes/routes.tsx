@@ -1,19 +1,9 @@
+import { lazy, type ComponentType } from "react"
 import { Navigate, type RouteObject } from "react-router-dom"
 
 import { AppShell } from "@/components/layout/AppShell"
 import { ProtectedRoute } from "@/features/auth/ProtectedRoute"
 import { RequireRole } from "@/features/auth/RequireRole"
-import { AcademicsPage } from "@/features/academics/AcademicsPage"
-import { AttendancePage } from "@/features/attendance/AttendancePage"
-import { AssessmentsPage } from "@/features/guidance/AssessmentsPage"
-import { ConsultationsPage } from "@/features/guidance/ConsultationsPage"
-import { InterventionsPage } from "@/features/guidance/InterventionsPage"
-import { RiskAlertsPage } from "@/features/guidance/RiskAlertsPage"
-import { StudentProfilePage } from "@/features/guidance/StudentProfilePage"
-import { StudentsPage } from "@/features/guidance/StudentsPage"
-import { NotificationsPage } from "@/features/notifications/NotificationsPage"
-import { ReportsPage } from "@/features/reports/ReportsPage"
-import { AccountSettingsPage } from "@/features/settings/AccountSettingsPage"
 import { AcceptInvitationPage } from "@/routes/pages/AcceptInvitationPage"
 import { ChangePasswordPage } from "@/routes/pages/ChangePasswordPage"
 import { ForgotPasswordPage } from "@/routes/pages/ForgotPasswordPage"
@@ -33,28 +23,158 @@ import {
   RoleDashboardRedirect,
   RoleLandingPage,
 } from "@/routes/pages/RoleLandingPage"
-import { StudentAssessmentsPage } from "@/features/student/StudentAssessmentsPage"
-import { StudentDashboard } from "@/features/student/StudentDashboard"
-import { StudentSchedulePage } from "@/features/student/StudentSchedulePage"
-import { ParentDashboard } from "@/features/parent/ParentDashboard"
-import { ParentAcademicsPage } from "@/features/parent/ParentAcademicsPage"
-import { ParentAssessmentsPage } from "@/features/parent/ParentAssessmentsPage"
-import { ParentSupportRoute } from "@/features/parent/ParentSupportRoute"
-import { FacultyAdvisoryPage } from "@/features/faculty/FacultyAdvisoryPage"
-import { FacultyAssessmentsPage } from "@/features/faculty/FacultyAssessmentsPage"
-import { FacultyDashboard } from "@/features/faculty/FacultyDashboard"
-import { FacultyImportPage } from "@/features/faculty/FacultyImportPage"
-import { GuidanceDashboard } from "@/features/guidance/GuidanceDashboard"
-import { AdminDashboard } from "@/features/admin/AdminDashboard"
-import { AdminAcademicsPage } from "@/features/admin/AdminAcademicsPage"
-import { AdminAnalyticsPage } from "@/features/admin/AdminAnalyticsPage"
-import { AdminAttendancePage } from "@/features/admin/AdminAttendancePage"
-import { AdminAuditPage } from "@/features/admin/AdminAuditPage"
-import { AdminCmsPage } from "@/features/admin/AdminCmsPage"
-import { AdminDataPage } from "@/features/admin/AdminDataPage"
-import { AdminGradesPage } from "@/features/admin/AdminGradesPage"
-import { AdminUsersPage } from "@/features/admin/AdminUsersPage"
-import { AdminSettingsPage } from "@/features/admin/AdminSettingsPage"
+
+/**
+ * Lazily load a named page export.
+ *
+ * The public pages stay eager: they are the first paint for a signed-out
+ * visitor. Everything behind `/app` is split per route, because the five role
+ * surfaces and their chart libraries were a single 1.5 MB entry chunk that a
+ * parent on a phone downloaded in full before seeing their own dashboard.
+ * `Suspense` in `AppShell` shows the content skeleton while a chunk arrives.
+ *
+ * The second type parameter makes the export name compiler-checked: passing a
+ * name the module does not export is a type error, not a blank route.
+ */
+function lazyPage<T extends Record<string, ComponentType>, K extends keyof T>(
+  loader: () => Promise<T>,
+  name: K
+) {
+  return lazy(async () => ({ default: (await loader())[name] }))
+}
+
+const AcademicsPage = lazyPage(
+  () => import("@/features/academics/AcademicsPage"),
+  "AcademicsPage"
+)
+const AttendancePage = lazyPage(
+  () => import("@/features/attendance/AttendancePage"),
+  "AttendancePage"
+)
+const AssessmentsPage = lazyPage(
+  () => import("@/features/guidance/AssessmentsPage"),
+  "AssessmentsPage"
+)
+const ConsultationsPage = lazyPage(
+  () => import("@/features/guidance/ConsultationsPage"),
+  "ConsultationsPage"
+)
+const InterventionsPage = lazyPage(
+  () => import("@/features/guidance/InterventionsPage"),
+  "InterventionsPage"
+)
+const RiskAlertsPage = lazyPage(
+  () => import("@/features/guidance/RiskAlertsPage"),
+  "RiskAlertsPage"
+)
+const StudentProfilePage = lazyPage(
+  () => import("@/features/guidance/StudentProfilePage"),
+  "StudentProfilePage"
+)
+const StudentsPage = lazyPage(
+  () => import("@/features/guidance/StudentsPage"),
+  "StudentsPage"
+)
+const NotificationsPage = lazyPage(
+  () => import("@/features/notifications/NotificationsPage"),
+  "NotificationsPage"
+)
+const ReportsPage = lazyPage(
+  () => import("@/features/reports/ReportsPage"),
+  "ReportsPage"
+)
+const AccountSettingsPage = lazyPage(
+  () => import("@/features/settings/AccountSettingsPage"),
+  "AccountSettingsPage"
+)
+const StudentAssessmentsPage = lazyPage(
+  () => import("@/features/student/StudentAssessmentsPage"),
+  "StudentAssessmentsPage"
+)
+const StudentDashboard = lazyPage(
+  () => import("@/features/student/StudentDashboard"),
+  "StudentDashboard"
+)
+const StudentSchedulePage = lazyPage(
+  () => import("@/features/student/StudentSchedulePage"),
+  "StudentSchedulePage"
+)
+const ParentDashboard = lazyPage(
+  () => import("@/features/parent/ParentDashboard"),
+  "ParentDashboard"
+)
+const ParentAcademicsPage = lazyPage(
+  () => import("@/features/parent/ParentAcademicsPage"),
+  "ParentAcademicsPage"
+)
+const ParentAssessmentsPage = lazyPage(
+  () => import("@/features/parent/ParentAssessmentsPage"),
+  "ParentAssessmentsPage"
+)
+const ParentSupportRoute = lazyPage(
+  () => import("@/features/parent/ParentSupportRoute"),
+  "ParentSupportRoute"
+)
+const FacultyAdvisoryPage = lazyPage(
+  () => import("@/features/faculty/FacultyAdvisoryPage"),
+  "FacultyAdvisoryPage"
+)
+const FacultyAssessmentsPage = lazyPage(
+  () => import("@/features/faculty/FacultyAssessmentsPage"),
+  "FacultyAssessmentsPage"
+)
+const FacultyDashboard = lazyPage(
+  () => import("@/features/faculty/FacultyDashboard"),
+  "FacultyDashboard"
+)
+const FacultyImportPage = lazyPage(
+  () => import("@/features/faculty/FacultyImportPage"),
+  "FacultyImportPage"
+)
+const GuidanceDashboard = lazyPage(
+  () => import("@/features/guidance/GuidanceDashboard"),
+  "GuidanceDashboard"
+)
+const AdminDashboard = lazyPage(
+  () => import("@/features/admin/AdminDashboard"),
+  "AdminDashboard"
+)
+const AdminAcademicsPage = lazyPage(
+  () => import("@/features/admin/AdminAcademicsPage"),
+  "AdminAcademicsPage"
+)
+const AdminAnalyticsPage = lazyPage(
+  () => import("@/features/admin/AdminAnalyticsPage"),
+  "AdminAnalyticsPage"
+)
+const AdminAttendancePage = lazyPage(
+  () => import("@/features/admin/AdminAttendancePage"),
+  "AdminAttendancePage"
+)
+const AdminAuditPage = lazyPage(
+  () => import("@/features/admin/AdminAuditPage"),
+  "AdminAuditPage"
+)
+const AdminCmsPage = lazyPage(
+  () => import("@/features/admin/AdminCmsPage"),
+  "AdminCmsPage"
+)
+const AdminDataPage = lazyPage(
+  () => import("@/features/admin/AdminDataPage"),
+  "AdminDataPage"
+)
+const AdminGradesPage = lazyPage(
+  () => import("@/features/admin/AdminGradesPage"),
+  "AdminGradesPage"
+)
+const AdminUsersPage = lazyPage(
+  () => import("@/features/admin/AdminUsersPage"),
+  "AdminUsersPage"
+)
+const AdminSettingsPage = lazyPage(
+  () => import("@/features/admin/AdminSettingsPage"),
+  "AdminSettingsPage"
+)
 
 export const appRoutes: RouteObject[] = [
   { path: "/", element: <LandingPage /> },

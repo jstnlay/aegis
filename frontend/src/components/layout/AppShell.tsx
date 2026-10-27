@@ -1,9 +1,10 @@
 import { Bot } from "lucide-react"
-import { useEffect, useRef, useState } from "react"
+import { Suspense, useEffect, useRef, useState } from "react"
 import { Outlet, useLocation } from "react-router-dom"
 
 import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { Header } from "@/components/layout/Header"
+import { PageLoading } from "@/components/layout/LoadingScreen"
 import { Sidebar } from "@/components/layout/Sidebar"
 import { SkipLink } from "@/components/layout/SkipLink"
 import { ChatbotPanel } from "@/features/chatbot/ChatbotPanel"
@@ -133,7 +134,14 @@ export function AppShell() {
           />
           <div className="relative mx-auto w-full max-w-6xl px-4 py-6 lg:px-6">
             <ErrorBoundary resetKeys={[location.pathname]}>
-              <Outlet />
+              {/*
+                Route chunks are lazy (see `routes.tsx`). The boundary sits
+                outside Suspense so a chunk that fails to download is caught as
+                a load error with Retry, instead of suspending forever.
+              */}
+              <Suspense fallback={<PageLoading />}>
+                <Outlet />
+              </Suspense>
             </ErrorBoundary>
           </div>
         </main>

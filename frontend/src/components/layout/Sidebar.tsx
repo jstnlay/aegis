@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils"
 
 function Brand() {
   return (
-    <div className="flex items-center gap-2.5 px-4 py-4">
+    <div className="flex shrink-0 items-center gap-2.5 px-4 py-4">
       {/* A round disc rather than a rounded square: the seal art itself has an
           alpha channel, so on the brand-maroon rail it reads as the circular
           badge the reference shows instead of an unstyled white tile. */}
@@ -209,15 +209,22 @@ export function Sidebar({
         aria-label="Primary"
         data-state={open ? "open" : "closed"}
         className={cn(
-          "flex w-64 flex-col border-r border-sidebar-border bg-sidebar transition-transform duration-normal ease-out motion-reduce:transition-none max-lg:fixed max-lg:inset-y-0 max-lg:left-0 max-lg:-translate-x-full lg:static lg:translate-x-0",
+          /*
+           * Desktop: the rail is pinned for the full viewport and scrolls its
+           * own navigation, so a long module page never takes the main menu
+           * off screen (Cycle-3 TC-SYS-12). Mobile keeps the off-canvas drawer.
+           */
+          "flex w-64 flex-col border-r border-sidebar-border bg-sidebar transition-transform duration-normal ease-out motion-reduce:transition-none max-lg:fixed max-lg:inset-y-0 max-lg:left-0 max-lg:-translate-x-full lg:sticky lg:top-0 lg:h-svh lg:translate-x-0",
           open && "max-lg:translate-x-0"
         )}
       >
         <Brand />
 
+        {/* `min-h-0` lets this column shrink inside the pinned rail, so the
+            nav is the part that scrolls rather than the whole sidebar. */}
         <nav
           id={PRIMARY_NAV_ID}
-          className="flex-1 overflow-y-auto px-2 py-2"
+          className="min-h-0 flex-1 overflow-y-auto px-2 py-2"
           aria-label="Main"
           inert={inertWhenOffCanvas}
         >
@@ -228,7 +235,7 @@ export function Sidebar({
           </ul>
         </nav>
 
-        <div className="border-t border-sidebar-border p-3">
+        <div className="shrink-0 border-t border-sidebar-border p-3">
           <p className="px-1 text-xs text-sidebar-foreground/70">AEGIS</p>
         </div>
       </aside>

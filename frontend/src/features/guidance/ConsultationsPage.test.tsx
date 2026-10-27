@@ -461,6 +461,129 @@ describe("ConsultationsPage", () => {
     expect(submit).toBeEnabled()
   })
 
+  it("refuses a session dated in the future and names the reason (TC-GUI-13)", async () => {
+    mockedPost.mockResolvedValue({ data: makeConsultation() } as never)
+
+    renderPage()
+    await screen.findByText("Ana Reyes")
+
+    fireEvent.click(screen.getByRole("button", { name: /new consultation/i }))
+    const dialog = await screen.findByRole("dialog")
+
+    await openSelect(within(dialog).getByRole("combobox", { name: /student/i }))
+    fireEvent.click(await screen.findByRole("option", { name: /Ana Reyes/ }))
+
+    /*
+     * A date one day ahead cannot collide with the recorded sessions, and the
+     * rejected value is a valid date the backend would have accepted — the
+     * Cycle-3 log's point was that nothing stopped it.
+     */
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000)
+    const tomorrowIso = [
+      tomorrow.getFullYear(),
+      String(tomorrow.getMonth() + 1).padStart(2, "0"),
+      String(tomorrow.getDate()).padStart(2, "0"),
+    ].join("-")
+
+    fireEvent.change(within(dialog).getByLabelText("Session date"), {
+      target: { value: tomorrowIso },
+    })
+    fireEvent.change(within(dialog).getByLabelText(/session time/i), {
+      target: { value: "10:15" },
+    })
+    fireEvent.change(within(dialog).getByLabelText(/session notes/i), {
+      target: { value: "Notes." },
+    })
+
+    // The message is not shown before the first submit attempt.
+    expect(
+      within(dialog).queryByText(/cannot be in the future/i)
+    ).not.toBeInTheDocument()
+
+    /*
+     * The submit is disabled while the pair is in the future, and a disabled
+     * button fires no click, so the guard cannot be driven past the render that
+     * exposes it. What is proven here is therefore the submitted payload: the
+     * invalid pair never reaches the API.
+     */
+    const submit = within(dialog).getByRole("button", {
+      name: "Create consultation",
+    })
+    expect(submit).toBeDisabled()
+    fireEvent.click(submit)
+    expect(mockedPost).not.toHaveBeenCalled()
+  })
+
+  it("refuses a next session earlier than the session itself (TC-GUI-13)", async () => {
+    mockedPost.mockResolvedValue({ data: makeConsultation() } as never)
+
+    renderPage()
+    await screen.findByText("Ana Reyes")
+
+    fireEvent.click(screen.getByRole("button", { name: /new consultation/i }))
+    const dialog = await screen.findByRole("dialog")
+
+    await openSelect(within(dialog).getByRole("combobox", { name: /student/i }))
+    fireEvent.click(await screen.findByRole("option", { name: /Ana Reyes/ }))
+
+    fireEvent.change(within(dialog).getByLabelText("Session date"), {
+      target: { value: "2025-03-04" },
+    })
+    fireEvent.change(within(dialog).getByLabelText(/session time/i), {
+      target: { value: "10:15" },
+    })
+    fireEvent.change(within(dialog).getByLabelText(/session notes/i), {
+      target: { value: "Notes." },
+    })
+    fireEvent.change(within(dialog).getByLabelText(/next session date/i), {
+      target: { value: "2025-03-03" },
+    })
+
+    expect(
+      within(dialog).getByRole("button", { name: "Create consultation" })
+    ).toBeDisabled()
+    expect(mockedPost).not.toHaveBeenCalled()
+  })
+
+  it("still accepts a backdated session, the normal case (TC-GUI-13)", async () => {
+    mockedPost.mockResolvedValue({ data: makeConsultation() } as never)
+
+    renderPage()
+    await screen.findByText("Ana Reyes")
+
+    fireEvent.click(screen.getByRole("button", { name: /new consultation/i }))
+    const dialog = await screen.findByRole("dialog")
+
+    await openSelect(within(dialog).getByRole("combobox", { name: /student/i }))
+    fireEvent.click(await screen.findByRole("option", { name: /Ana Reyes/ }))
+
+    fireEvent.change(within(dialog).getByLabelText("Session date"), {
+      target: { value: "2024-01-15" },
+    })
+    fireEvent.change(within(dialog).getByLabelText(/session time/i), {
+      target: { value: "10:15" },
+    })
+    fireEvent.change(within(dialog).getByLabelText(/session notes/i), {
+      target: { value: "Late entry after the break." },
+    })
+
+    const submit = within(dialog).getByRole("button", {
+      name: "Create consultation",
+    })
+    expect(submit).toBeEnabled()
+
+    fireEvent.click(submit)
+    await waitFor(() => {
+      expect(mockedPost).toHaveBeenCalledWith(
+        "/guidance/consultations/",
+        expect.objectContaining({
+          session_date: "2024-01-15",
+          session_time: "10:15",
+        })
+      )
+    })
+  })
+
   it("patches status and case-management fields without touching session identity", async () => {
     mockedPatch.mockResolvedValue({
       data: makeConsultation({ status: "completed" }),

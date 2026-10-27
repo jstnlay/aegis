@@ -177,7 +177,7 @@ export function Field({
         step={step}
         required={required}
         aria-required={required || undefined}
-        aria-invalid={error ? true : undefined}
+        aria-invalid={error ? "true" : undefined}
         aria-describedby={describedBy(error ? errorId : null, hintId)}
         onChange={(event) => onChange(event.target.value)}
       />
@@ -238,7 +238,7 @@ export function ChoiceField({
         <SelectTrigger
           id={id}
           aria-required={required || undefined}
-          aria-invalid={error ? true : undefined}
+          aria-invalid={error ? "true" : undefined}
           aria-describedby={describedBy(error ? errorId : null, hintId)}
         >
           <SelectValue placeholder={`Select ${label.toLowerCase()}`} />

@@ -78,6 +78,14 @@ function makeUser(role: Role): User {
   }
 }
 
+/**
+ * Route bodies are lazy chunks (see `routes.tsx`). The first visit to a module
+ * imports its chunk, and under the full parallel suite that transform can take
+ * longer than Testing Library's one-second default — which turned a route test
+ * into a load-order flake. The assertion is unchanged, only the wait.
+ */
+const LAZY_ROUTE_WAIT = { timeout: 5000 } as const
+
 function renderAt(path: string) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -157,7 +165,9 @@ describe("PH11.7 domain routes", () => {
       authState.user = makeUser(role)
       renderAt(path)
 
-      expect(await screen.findByText(marker)).toBeInTheDocument()
+      expect(
+        await screen.findByText(marker, undefined, LAZY_ROUTE_WAIT)
+      ).toBeInTheDocument()
       expect(document.body.textContent?.trim().length ?? 0).toBeGreaterThan(0)
     }
   )
@@ -263,7 +273,9 @@ describe("PH11.7 domain routes", () => {
         role === "student"
           ? /Grades appear here once they are finalized/i
           : /Encode a grade/i
-      expect(await screen.findByText(marker)).toBeInTheDocument()
+      expect(
+        await screen.findByText(marker, undefined, LAZY_ROUTE_WAIT)
+      ).toBeInTheDocument()
       expect(
         screen.queryByText(/administered from the Administration section/i)
       ).not.toBeInTheDocument()
@@ -449,7 +461,9 @@ describe("PH11.8 guidance routes", () => {
       authState.user = makeUser("admin")
       renderAt(path)
 
-      expect(await screen.findByText(marker)).toBeInTheDocument()
+      expect(
+        await screen.findByText(marker, undefined, LAZY_ROUTE_WAIT)
+      ).toBeInTheDocument()
     }
   )
 
@@ -486,7 +500,11 @@ describe("PH11.8 guidance routes", () => {
     renderAt("/app/admin/analytics")
 
     expect(
-      await screen.findByText(/No individual student record is shown/i)
+      await screen.findByText(
+        /No individual student record is shown/i,
+        undefined,
+        LAZY_ROUTE_WAIT
+      )
     ).toBeInTheDocument()
     // The low-performer card this screen used to carry is gone, so neither its
     // heading nor the student-count phrasing it introduced may reappear.
@@ -507,7 +525,9 @@ describe("PH11.8 guidance routes", () => {
     authState.user = makeUser("admin")
     renderAt(path as string)
 
-    expect(await screen.findByText(marker as RegExp)).toBeInTheDocument()
+    expect(
+      await screen.findByText(marker as RegExp, undefined, LAZY_ROUTE_WAIT)
+    ).toBeInTheDocument()
   })
 
   it("shows no unavailable-operations card on the users screen", async () => {
@@ -571,7 +591,9 @@ describe("PH11.8 guidance routes", () => {
       authState.user = makeUser("parent")
       renderAt(path)
 
-      expect(await screen.findByText(marker)).toBeInTheDocument()
+      expect(
+        await screen.findByText(marker, undefined, LAZY_ROUTE_WAIT)
+      ).toBeInTheDocument()
     }
   )
 

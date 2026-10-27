@@ -251,11 +251,72 @@ function NewConsultationDialog({
   const [notes, setNotes] = useState("")
   const [priority, setPriority] = useState<ConsultationPriority>("medium")
   const [nextSessionDate, setNextSessionDate] = useState("")
+  /*
+   * Errors stay hidden until the first submit attempt: showing "cannot be in
+   * the future" the moment a date is typed would fire before the time field is
+   * filled and before the reader has said they are done.
+   */
+  const [attempted, setAttempted] = useState(false)
 
   const roster = rosterQuery.data ?? []
   // `validate_session_notes` rejects a blank value, so the form mirrors that
   // instead of letting the server 400 on an avoidable field.
   const notesBlank = notes.trim().length === 0
+
+  /*
+   * A consultation documents a session that already happened, so a future
+   * date/time is not a valid record. Past dates are valid and must stay valid:
+   * counselors enter sessions after the fact. (Cycle-3 TC-GUI-13 reported the
+   * missing notice, not a limit on backdating.)
+   *
+   * "Now" is sampled once, when the reader submits: `Date.now()` in a render
+   * body is impure, and a message that appeared as the clock moved would be
+   * worse than one shown on the attempt that failed.
+   */
+  function futureSessionMessage(at: Date | null, now: number): string | null {
+    if (!at || Number.isNaN(at.getTime()) || at.getTime() <= now) {
+      return null
+    }
+    return "Session date and time cannot be in the future."
+  }
+
+  const sessionAt =
+    sessionDate && sessionTime
+      ? new Date(`${sessionDate}T${sessionTime}`)
+      : null
+  const [submittedAt, setSubmittedAt] = useState<number | null>(null)
+  /*
+   * Two readings of the same rule, deliberately:
+   *
+   * - `futureSessionBlocked` is independent of `attempted` and is what disables
+   *   the submit. A future pair must not become submittable merely because the
+   *   reader has not pressed the button yet, and a disabled button cannot be
+   *   pressed to discover the rule.
+   * - `futureSessionError` is the message, shown only after an attempt.
+   */
+  const [now] = useState(() => new Date().getTime())
+  const futureSessionError =
+    attempted && submittedAt !== null
+      ? futureSessionMessage(sessionAt, submittedAt)
+      : null
+  const futureSessionBlocked =
+    futureSessionMessage(sessionAt, submittedAt ?? now) !== null
+
+  /*
+   * ISO `YYYY-MM-DD` sorts correctly as text, so no Date is needed. Equal dates
+   * are allowed: a follow-up later the same day is unusual but not impossible.
+   *
+   * `nextBeforeSession` is the ungated form that disables the submit;
+   * `nextBeforeSessionError` is the same rule as a message, shown only after an
+   * attempt.
+   */
+  const nextBeforeSession = Boolean(
+    sessionDate && nextSessionDate && nextSessionDate < sessionDate
+  )
+  const nextBeforeSessionError =
+    attempted && nextBeforeSession
+      ? "Next session cannot be before the session date."
+      : null
 
   function toggleConcern(category: ConcernCategory) {
     setConcerns((current) =>
@@ -268,6 +329,16 @@ function NewConsultationDialog({
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!studentId || !sessionDate || !sessionTime || notesBlank) return
+    setAttempted(true)
+    /*
+     * The attempt is stamped so the render compares against the moment the
+     * reader pressed the button; `Date.now()` in a render body is rejected by
+     * the hooks rules, and reading it here costs one reading per attempt.
+     */
+    const submittedAtMs = new Date().getTime()
+    setSubmittedAt(submittedAtMs)
+    if (futureSessionMessage(sessionAt, submittedAtMs)) return
+    if (nextBeforeSession) return
     try {
       await create.mutateAsync({
         student: studentId,
@@ -286,6 +357,7 @@ function NewConsultationDialog({
       setNotes("")
       setNextSessionDate("")
       setOpen(false)
+      setAttempted(false)
       onSaved("Consultation recorded. The sessions list has been refreshed.")
     } catch {
       // Surfaced from `create.isError` below; a failed create keeps the dialog
@@ -294,7 +366,13 @@ function NewConsultationDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next)
+        if (!next) setAttempted(false)
+      }}
+    >
       <DialogTrigger asChild>
         <Button>New consultation</Button>
       </DialogTrigger>
@@ -350,11 +428,11 @@ function NewConsultationDialog({
 
           <div className="grid gap-3 sm:grid-cols-2">
             {/*
-              `Field` rather than a hand-rolled label+`Input` pair: the session
-              date is fully controlled, mandatory, and has no error state, which
-              is exactly the shape `Field` was extracted for. It renders the
-              asterisk outside the label and sets `aria-required` itself, so the
-              accessible name stays the field name.
+              `Field` rather than a hand-rolled label+`Input` pair: it renders
+              the asterisk outside the label and sets `aria-required` itself, so
+              the accessible name stays the field name. It also owns the error
+              wiring — `aria-invalid` plus `aria-describedby` on the control —
+              which the future-date rule needs.
             */}
             <Field
               label="Session date"
@@ -363,12 +441,15 @@ function NewConsultationDialog({
               required
               value={sessionDate}
               onChange={setSessionDate}
+              error={attempted ? futureSessionError : null}
             />
             {/*
               The session time stays hand-rolled: `Field` accepts only
               "text" | "date" | "number", and a `type="time"` control must not be
               silently downgraded to a text input. Marked the same way by hand —
-              asterisk outside the label, `aria-required` on the control.
+              asterisk outside the label, `aria-required` on the control — and
+              hand-wired to the same error node the date field is described by,
+              because the future-date rule is a property of the pair.
             */}
             <div className="space-y-1.5">
               <div className="flex items-center gap-1">
@@ -381,11 +462,35 @@ function NewConsultationDialog({
                 id="consultation-time"
                 type="time"
                 aria-required="true"
+                aria-invalid={
+                  attempted && futureSessionError ? "true" : undefined
+                }
+                aria-describedby={
+                  attempted && futureSessionError
+                    ? "consultation-date-error"
+                    : undefined
+                }
                 value={sessionTime}
                 onChange={(event) => setSessionTime(event.target.value)}
               />
             </div>
           </div>
+
+          {/*
+            The pair shares one error, so it is written once, under the row. The
+            node keeps `Field`'s derived id (`consultation-date-error`) so both
+            controls describe themselves by the message that already exists
+            rather than by a second copy of it.
+          */}
+          {attempted && futureSessionError ? (
+            <p
+              className="text-xs text-destructive"
+              data-testid="future-session-error"
+            >
+              A future session time is not accepted. Correct the date or time
+              above.
+            </p>
+          ) : null}
 
           <div className="space-y-1.5">
             <Label htmlFor="consultation-type">Session type</Label>
@@ -462,8 +567,25 @@ function NewConsultationDialog({
                 type="date"
                 value={nextSessionDate}
                 onChange={(event) => setNextSessionDate(event.target.value)}
+                aria-invalid={
+                  attempted && nextBeforeSessionError ? "true" : undefined
+                }
+                aria-describedby={
+                  attempted && nextBeforeSessionError
+                    ? "consultation-next-error"
+                    : undefined
+                }
               />
-              <p className="text-xs text-muted-foreground">Optional.</p>
+              {attempted && nextBeforeSessionError ? (
+                <p
+                  id="consultation-next-error"
+                  className="text-xs text-destructive"
+                >
+                  {nextBeforeSessionError}
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">Optional.</p>
+              )}
             </div>
           </div>
 
@@ -487,6 +609,8 @@ function NewConsultationDialog({
                 !sessionDate ||
                 !sessionTime ||
                 notesBlank ||
+                futureSessionBlocked ||
+                nextBeforeSession ||
                 roster.length === 0
               }
             >
