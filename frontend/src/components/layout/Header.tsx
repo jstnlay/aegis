@@ -1,10 +1,17 @@
 import { Bell, LogOut, Menu, Settings } from "lucide-react"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { Link, useLocation } from "react-router-dom"
 
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/features/auth/AuthContext"
-import { useUnreadCount } from "@/features/notifications/api"
+import {
+  NOTIFICATION_TYPE_LABELS,
+  resolveNotificationHref,
+  sortNotifications,
+  useMarkNotificationRead,
+  useUnreadNotifications,
+  type Notification,
+} from "@/features/notifications/api"
 import { getPageTitle } from "@/lib/navigation"
 import { ROLE_LABELS, userDisplayName } from "@/lib/roles"
 
@@ -29,10 +36,58 @@ import { ROLE_LABELS, userDisplayName } from "@/lib/roles"
  */
 export const PRIMARY_NAV_ID = "primary-navigation"
 
+/**
+ * The title, body and provenance of one notification.
+ *
+ * Shared by the bell menu and the inbox rows so the same alert reads
+ * identically in both places; the inbox adds its own status and action cells
+ * around it rather than a second copy of this text.
+ */
+export function NotificationSummary({
+  notification,
+}: {
+  notification: Notification
+}) {
+  return (
+    <span className="block">
+      <span
+        className={
+          notification.is_read
+            ? "block text-sm text-muted-foreground"
+            : "block text-sm font-medium text-foreground"
+        }
+      >
+        {notification.title}
+      </span>
+      <span className="block text-sm text-muted-foreground">
+        {notification.message}
+      </span>
+      <span className="block text-xs text-muted-foreground">
+        {NOTIFICATION_TYPE_LABELS[notification.notification_type]}
+        {notification.sender_full_name
+          ? ` · from ${notification.sender_full_name}`
+          : ""}{" "}
+        · {new Date(notification.created_at).toLocaleString()}
+      </span>
+    </span>
+  )
+}
+
 function UserChip() {
   const { user, logout } = useAuth()
-  const unread = useUnreadCount()
+  const unread = useUnreadNotifications()
+  const unreadCount = unread.data?.length ?? 0
+  const markRead = useMarkNotificationRead()
+  const role = user?.role ?? "student"
   const [menuOpen, setMenuOpen] = useState(false)
+  /*
+   * The bell opens a menu of unread notifications rather than jumping straight
+   * to the inbox (Cycle-3 TC-STU-08: a notification should open in full where
+   * it is read). Selecting one marks it read and, where the notification names
+   * a screen this role can actually open, follows it.
+   */
+  const [bellOpen, setBellOpen] = useState(false)
+  const bellRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const name = userDisplayName(user)
   const initials = name
@@ -60,27 +115,109 @@ function UserChip() {
     }
   }, [menuOpen])
 
+  /*
+   * Same dismissal contract as the account menu: click outside or Escape. Kept
+   * as its own effect because the two panels have independent open state and a
+   * shared one would close the wrong panel when focus moved between them.
+   */
+  useEffect(() => {
+    if (!bellOpen) return
+    function onPointerDown(event: PointerEvent) {
+      if (bellRef.current && !bellRef.current.contains(event.target as Node)) {
+        setBellOpen(false)
+      }
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setBellOpen(false)
+    }
+    document.addEventListener("pointerdown", onPointerDown)
+    document.addEventListener("keydown", onKeyDown)
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown)
+      document.removeEventListener("keydown", onKeyDown)
+    }
+  }, [bellOpen])
+
+  const unreadNotifications = useMemo(
+    () => sortNotifications(unread.data ?? []),
+    [unread.data]
+  )
+
   return (
     <div className="flex items-center gap-1">
-      <Button
-        variant="ghost"
-        size="icon"
-        asChild
-        aria-label={
-          unread > 0 ? `Notifications, ${unread} unread` : "Notifications"
-        }
-        className="relative text-muted-foreground"
-      >
-        <Link to="/app/notifications">
+      <div ref={bellRef} className="relative">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setBellOpen((open) => !open)}
+          aria-label={
+            unreadCount > 0
+              ? `Notifications, ${unreadCount} unread`
+              : "Notifications"
+          }
+          aria-expanded={bellOpen}
+          aria-haspopup="menu"
+          className="relative text-muted-foreground"
+        >
           <Bell aria-hidden="true" />
-          {unread > 0 && (
+          {unreadCount > 0 && (
             <span
               aria-hidden="true"
               className="absolute top-1 right-1 size-2 rounded-full bg-destructive"
             />
           )}
-        </Link>
-      </Button>
+        </Button>
+
+        {bellOpen && (
+          <div
+            role="menu"
+            aria-label="Unread notifications"
+            className="absolute right-0 z-50 mt-2 max-h-96 w-80 overflow-y-auto rounded-md border border-border bg-popover py-1 shadow-md"
+          >
+            {unreadNotifications.length === 0 ? (
+              <p className="px-3 py-2 text-sm text-muted-foreground">
+                No unread notifications.
+              </p>
+            ) : (
+              unreadNotifications.map((notification) => {
+                const href = resolveNotificationHref(notification.link, role)
+                return (
+                  <button
+                    key={notification.id}
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      markRead.mutate(notification.id)
+                      setBellOpen(false)
+                    }}
+                    className="block w-full px-3 py-2 text-left hover:bg-accent"
+                  >
+                    <NotificationSummary notification={notification} />
+                    {href ? (
+                      <Link
+                        to={href}
+                        className="mt-1 inline-block text-xs font-medium text-primary underline"
+                      >
+                        Open the related page
+                      </Link>
+                    ) : null}
+                  </button>
+                )
+              })
+            )}
+            <div className="border-t border-border">
+              <Link
+                to="/app/notifications"
+                role="menuitem"
+                onClick={() => setBellOpen(false)}
+                className="block px-3 py-2 text-sm font-medium hover:bg-accent"
+              >
+                Open the inbox
+              </Link>
+            </div>
+          </div>
+        )}
+      </div>
 
       <div ref={menuRef} className="relative">
         <button

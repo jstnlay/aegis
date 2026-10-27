@@ -9,6 +9,7 @@ import {
 } from "@/components/feedback/Feedback"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { NotificationSummary } from "@/components/layout/Header"
 import {
   Card,
   CardContent,
@@ -71,12 +72,6 @@ type ReadFilter = (typeof READ_FILTERS)[number]["value"]
 const ALL_TYPES = "all" as const
 type TypeFilter = typeof ALL_TYPES | NotificationType
 
-function formatTimestamp(value: string): string {
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) return value
-  return parsed.toLocaleString()
-}
-
 function NotificationRow({
   notification,
   href,
@@ -91,27 +86,7 @@ function NotificationRow({
   return (
     <TableRow data-read={notification.is_read}>
       <TableCell className="align-top">
-        <div className="flex flex-col gap-1">
-          <span
-            className={
-              notification.is_read
-                ? "text-sm text-muted-foreground"
-                : "text-sm font-medium text-foreground"
-            }
-          >
-            {notification.title}
-          </span>
-          <span className="text-sm text-muted-foreground">
-            {notification.message}
-          </span>
-          <span className="text-xs text-muted-foreground">
-            {NOTIFICATION_TYPE_LABELS[notification.notification_type]}
-            {notification.sender_full_name
-              ? ` · from ${notification.sender_full_name}`
-              : ""}{" "}
-            · {formatTimestamp(notification.created_at)}
-          </span>
-        </div>
+        <NotificationSummary notification={notification} />
       </TableCell>
       <TableCell className="align-top">
         {notification.is_read ? (
