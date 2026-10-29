@@ -59,6 +59,18 @@ are formulas that point at the form's `INPUT DATA` sheet, so the reader takes
 them from the summary sheet and ignores a summary whose level is not a grade
 4-10 (the unfilled template caches a `0` there).
 
+**The form's own `Final Grade` is not the app's average.** Each `TERM n SUMMARY`
+sheet computes its `Final Grade` column with
+`ROUND((K+L+M+N+O+S)/6,0)`: that averages only Filipino, English, Mathematics,
+Science, AP and MAPEH's `P E H` column, and leaves out GMRC/VE, EPP/TLE and
+MAPEH's `M A`. The shipped template's `FINAL GRADES` sheet is also wrong — its
+`THIRD TERM` column looks up `TERM 2 SUMMARY`. The importer reads the
+learning-area grades and never that column, and the app averages all eight areas,
+which is DepEd's rule (a quarter grade is the average of the learner's learning
+areas, and MAPEH is the average of its components). The number the app reports
+for a student therefore will **not** equal the `Final Grade` this template
+prints, and that is intended — the formula is the template's, not the app's.
+
 **Attendance workbook.** The school header lives on the `COVER` sheet
 (`B2` section, `B4` school year, `B5` grade level, `B6` month); the month grid is
 on `SF2-JHS`. The form marks the exceptions only — `X` absent, `L` or `T`
