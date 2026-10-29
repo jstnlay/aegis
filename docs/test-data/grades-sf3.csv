@@ -1,0 +1,201 @@
+student_id,section,subject_code,grading_period,score,letter_grade,remarks
+AEGIS-QA-S0026,Grade 8 - Bonifacio,FIL-8,Term 3,91.06,A,Outstanding
+AEGIS-QA-S0026,Grade 8 - Bonifacio,ENG-8,Term 3,90.67,A,Outstanding
+AEGIS-QA-S0026,Grade 8 - Bonifacio,MATH-8,Term 3,88.97,B+,Very Satisfactory
+AEGIS-QA-S0026,Grade 8 - Bonifacio,AP-8,Term 3,92.03,A,Outstanding
+AEGIS-QA-S0026,Grade 8 - Bonifacio,SCI-8,Term 3,91.04,A,Outstanding
+AEGIS-QA-S0026,Grade 8 - Bonifacio,TLE-8,Term 3,87.82,B+,Very Satisfactory
+AEGIS-QA-S0026,Grade 8 - Bonifacio,MAPEH-8,Term 3,89.15,B+,Very Satisfactory
+AEGIS-QA-S0026,Grade 8 - Bonifacio,ESP-8,Term 3,96.36,A,Outstanding
+AEGIS-QA-S0027,Grade 8 - Bonifacio,FIL-8,Term 3,76.25,C+,Fairly Satisfactory
+AEGIS-QA-S0027,Grade 8 - Bonifacio,ENG-8,Term 3,72.02,C,Fairly Satisfactory
+AEGIS-QA-S0027,Grade 8 - Bonifacio,MATH-8,Term 3,81.67,B,Satisfactory
+AEGIS-QA-S0027,Grade 8 - Bonifacio,AP-8,Term 3,75.52,C+,Fairly Satisfactory
+AEGIS-QA-S0027,Grade 8 - Bonifacio,SCI-8,Term 3,75.68,C+,Fairly Satisfactory
+AEGIS-QA-S0027,Grade 8 - Bonifacio,TLE-8,Term 3,80.86,B,Satisfactory
+AEGIS-QA-S0027,Grade 8 - Bonifacio,MAPEH-8,Term 3,77.92,C+,Fairly Satisfactory
+AEGIS-QA-S0027,Grade 8 - Bonifacio,ESP-8,Term 3,71.95,C,Fairly Satisfactory
+AEGIS-QA-S0028,Grade 8 - Bonifacio,FIL-8,Term 3,63.44,F,Failed
+AEGIS-QA-S0028,Grade 8 - Bonifacio,ENG-8,Term 3,67.6,D,Fairly Satisfactory
+AEGIS-QA-S0028,Grade 8 - Bonifacio,MATH-8,Term 3,61.64,F,Failed
+AEGIS-QA-S0028,Grade 8 - Bonifacio,AP-8,Term 3,59.47,F,Failed
+AEGIS-QA-S0028,Grade 8 - Bonifacio,SCI-8,Term 3,63.84,F,Failed
+AEGIS-QA-S0028,Grade 8 - Bonifacio,TLE-8,Term 3,69.51,D,Fairly Satisfactory
+AEGIS-QA-S0028,Grade 8 - Bonifacio,MAPEH-8,Term 3,68.22,D,Fairly Satisfactory
+AEGIS-QA-S0028,Grade 8 - Bonifacio,ESP-8,Term 3,66.22,D,Fairly Satisfactory
+AEGIS-QA-S0029,Grade 8 - Bonifacio,FIL-8,Term 3,92.07,A,Outstanding
+AEGIS-QA-S0029,Grade 8 - Bonifacio,ENG-8,Term 3,89.91,B+,Very Satisfactory
+AEGIS-QA-S0029,Grade 8 - Bonifacio,MATH-8,Term 3,92.48,A,Outstanding
+AEGIS-QA-S0029,Grade 8 - Bonifacio,AP-8,Term 3,90.08,A,Outstanding
+AEGIS-QA-S0029,Grade 8 - Bonifacio,SCI-8,Term 3,88.75,B+,Very Satisfactory
+AEGIS-QA-S0029,Grade 8 - Bonifacio,TLE-8,Term 3,82.11,B,Satisfactory
+AEGIS-QA-S0029,Grade 8 - Bonifacio,MAPEH-8,Term 3,92.84,A,Outstanding
+AEGIS-QA-S0029,Grade 8 - Bonifacio,ESP-8,Term 3,88.2,B+,Very Satisfactory
+AEGIS-QA-S0030,Grade 8 - Bonifacio,FIL-8,Term 3,75.63,C+,Fairly Satisfactory
+AEGIS-QA-S0030,Grade 8 - Bonifacio,ENG-8,Term 3,80.18,B,Satisfactory
+AEGIS-QA-S0030,Grade 8 - Bonifacio,MATH-8,Term 3,78,C+,Fairly Satisfactory
+AEGIS-QA-S0030,Grade 8 - Bonifacio,AP-8,Term 3,83.67,B,Satisfactory
+AEGIS-QA-S0030,Grade 8 - Bonifacio,SCI-8,Term 3,75.99,C+,Fairly Satisfactory
+AEGIS-QA-S0030,Grade 8 - Bonifacio,TLE-8,Term 3,75.94,C+,Fairly Satisfactory
+AEGIS-QA-S0030,Grade 8 - Bonifacio,MAPEH-8,Term 3,77.67,C+,Fairly Satisfactory
+AEGIS-QA-S0030,Grade 8 - Bonifacio,ESP-8,Term 3,79.92,C+,Fairly Satisfactory
+AEGIS-QA-S0031,Grade 8 - Bonifacio,FIL-8,Term 3,59.4,F,Failed
+AEGIS-QA-S0031,Grade 8 - Bonifacio,ENG-8,Term 3,56.14,F,Failed
+AEGIS-QA-S0031,Grade 8 - Bonifacio,MATH-8,Term 3,66.99,D,Fairly Satisfactory
+AEGIS-QA-S0031,Grade 8 - Bonifacio,AP-8,Term 3,60.87,F,Failed
+AEGIS-QA-S0031,Grade 8 - Bonifacio,SCI-8,Term 3,63.49,F,Failed
+AEGIS-QA-S0031,Grade 8 - Bonifacio,TLE-8,Term 3,64.05,F,Failed
+AEGIS-QA-S0031,Grade 8 - Bonifacio,MAPEH-8,Term 3,62.51,F,Failed
+AEGIS-QA-S0031,Grade 8 - Bonifacio,ESP-8,Term 3,59.57,F,Failed
+AEGIS-QA-S0032,Grade 8 - Bonifacio,FIL-8,Term 3,88.86,B+,Very Satisfactory
+AEGIS-QA-S0032,Grade 8 - Bonifacio,ENG-8,Term 3,89.9,B+,Very Satisfactory
+AEGIS-QA-S0032,Grade 8 - Bonifacio,MATH-8,Term 3,91.75,A,Outstanding
+AEGIS-QA-S0032,Grade 8 - Bonifacio,AP-8,Term 3,90.05,A,Outstanding
+AEGIS-QA-S0032,Grade 8 - Bonifacio,SCI-8,Term 3,86.86,B+,Very Satisfactory
+AEGIS-QA-S0032,Grade 8 - Bonifacio,TLE-8,Term 3,92.24,A,Outstanding
+AEGIS-QA-S0032,Grade 8 - Bonifacio,MAPEH-8,Term 3,93.03,A,Outstanding
+AEGIS-QA-S0032,Grade 8 - Bonifacio,ESP-8,Term 3,90.39,A,Outstanding
+AEGIS-QA-S0033,Grade 8 - Bonifacio,FIL-8,Term 3,78.99,C+,Fairly Satisfactory
+AEGIS-QA-S0033,Grade 8 - Bonifacio,ENG-8,Term 3,72.67,C,Fairly Satisfactory
+AEGIS-QA-S0033,Grade 8 - Bonifacio,MATH-8,Term 3,74.17,C,Fairly Satisfactory
+AEGIS-QA-S0033,Grade 8 - Bonifacio,AP-8,Term 3,80.27,B,Satisfactory
+AEGIS-QA-S0033,Grade 8 - Bonifacio,SCI-8,Term 3,77.35,C+,Fairly Satisfactory
+AEGIS-QA-S0033,Grade 8 - Bonifacio,TLE-8,Term 3,72.81,C,Fairly Satisfactory
+AEGIS-QA-S0033,Grade 8 - Bonifacio,MAPEH-8,Term 3,86.15,B+,Very Satisfactory
+AEGIS-QA-S0033,Grade 8 - Bonifacio,ESP-8,Term 3,73.21,C,Fairly Satisfactory
+AEGIS-QA-S0034,Grade 8 - Bonifacio,FIL-8,Term 3,69.65,D,Fairly Satisfactory
+AEGIS-QA-S0034,Grade 8 - Bonifacio,ENG-8,Term 3,57.22,F,Failed
+AEGIS-QA-S0034,Grade 8 - Bonifacio,MATH-8,Term 3,53.06,F,Failed
+AEGIS-QA-S0034,Grade 8 - Bonifacio,AP-8,Term 3,62.49,F,Failed
+AEGIS-QA-S0034,Grade 8 - Bonifacio,SCI-8,Term 3,59.93,F,Failed
+AEGIS-QA-S0034,Grade 8 - Bonifacio,TLE-8,Term 3,68.93,D,Fairly Satisfactory
+AEGIS-QA-S0034,Grade 8 - Bonifacio,MAPEH-8,Term 3,65.52,D,Fairly Satisfactory
+AEGIS-QA-S0034,Grade 8 - Bonifacio,ESP-8,Term 3,65.5,D,Fairly Satisfactory
+AEGIS-QA-S0035,Grade 8 - Bonifacio,FIL-8,Term 3,91.16,A,Outstanding
+AEGIS-QA-S0035,Grade 8 - Bonifacio,ENG-8,Term 3,91.39,A,Outstanding
+AEGIS-QA-S0035,Grade 8 - Bonifacio,MATH-8,Term 3,95.06,A,Outstanding
+AEGIS-QA-S0035,Grade 8 - Bonifacio,AP-8,Term 3,89.58,B+,Very Satisfactory
+AEGIS-QA-S0035,Grade 8 - Bonifacio,SCI-8,Term 3,89.45,B+,Very Satisfactory
+AEGIS-QA-S0035,Grade 8 - Bonifacio,TLE-8,Term 3,87.56,B+,Very Satisfactory
+AEGIS-QA-S0035,Grade 8 - Bonifacio,MAPEH-8,Term 3,88.17,B+,Very Satisfactory
+AEGIS-QA-S0035,Grade 8 - Bonifacio,ESP-8,Term 3,88.25,B+,Very Satisfactory
+AEGIS-QA-S0036,Grade 8 - Bonifacio,FIL-8,Term 3,76.24,C+,Fairly Satisfactory
+AEGIS-QA-S0036,Grade 8 - Bonifacio,ENG-8,Term 3,78.64,C+,Fairly Satisfactory
+AEGIS-QA-S0036,Grade 8 - Bonifacio,MATH-8,Term 3,77.03,C+,Fairly Satisfactory
+AEGIS-QA-S0036,Grade 8 - Bonifacio,AP-8,Term 3,76.34,C+,Fairly Satisfactory
+AEGIS-QA-S0036,Grade 8 - Bonifacio,SCI-8,Term 3,75.87,C+,Fairly Satisfactory
+AEGIS-QA-S0036,Grade 8 - Bonifacio,TLE-8,Term 3,72.13,C,Fairly Satisfactory
+AEGIS-QA-S0036,Grade 8 - Bonifacio,MAPEH-8,Term 3,72.41,C,Fairly Satisfactory
+AEGIS-QA-S0036,Grade 8 - Bonifacio,ESP-8,Term 3,79.77,C+,Fairly Satisfactory
+AEGIS-QA-S0037,Grade 8 - Bonifacio,FIL-8,Term 3,68.1,D,Fairly Satisfactory
+AEGIS-QA-S0037,Grade 8 - Bonifacio,ENG-8,Term 3,67.12,D,Fairly Satisfactory
+AEGIS-QA-S0037,Grade 8 - Bonifacio,MATH-8,Term 3,60.08,F,Failed
+AEGIS-QA-S0037,Grade 8 - Bonifacio,AP-8,Term 3,56.72,F,Failed
+AEGIS-QA-S0037,Grade 8 - Bonifacio,SCI-8,Term 3,66.32,D,Fairly Satisfactory
+AEGIS-QA-S0037,Grade 8 - Bonifacio,TLE-8,Term 3,64.73,F,Failed
+AEGIS-QA-S0037,Grade 8 - Bonifacio,MAPEH-8,Term 3,69.94,D,Fairly Satisfactory
+AEGIS-QA-S0037,Grade 8 - Bonifacio,ESP-8,Term 3,61.72,F,Failed
+AEGIS-QA-S0038,Grade 8 - Bonifacio,FIL-8,Term 3,89.18,B+,Very Satisfactory
+AEGIS-QA-S0038,Grade 8 - Bonifacio,ENG-8,Term 3,88.15,B+,Very Satisfactory
+AEGIS-QA-S0038,Grade 8 - Bonifacio,MATH-8,Term 3,90.24,A,Outstanding
+AEGIS-QA-S0038,Grade 8 - Bonifacio,AP-8,Term 3,90.37,A,Outstanding
+AEGIS-QA-S0038,Grade 8 - Bonifacio,SCI-8,Term 3,88.85,B+,Very Satisfactory
+AEGIS-QA-S0038,Grade 8 - Bonifacio,TLE-8,Term 3,91.21,A,Outstanding
+AEGIS-QA-S0038,Grade 8 - Bonifacio,MAPEH-8,Term 3,90.44,A,Outstanding
+AEGIS-QA-S0038,Grade 8 - Bonifacio,ESP-8,Term 3,87.86,B+,Very Satisfactory
+AEGIS-QA-S0039,Grade 8 - Bonifacio,FIL-8,Term 3,72.7,C,Fairly Satisfactory
+AEGIS-QA-S0039,Grade 8 - Bonifacio,ENG-8,Term 3,74.88,C,Fairly Satisfactory
+AEGIS-QA-S0039,Grade 8 - Bonifacio,MATH-8,Term 3,74.76,C,Fairly Satisfactory
+AEGIS-QA-S0039,Grade 8 - Bonifacio,AP-8,Term 3,74.2,C,Fairly Satisfactory
+AEGIS-QA-S0039,Grade 8 - Bonifacio,SCI-8,Term 3,75.81,C+,Fairly Satisfactory
+AEGIS-QA-S0039,Grade 8 - Bonifacio,TLE-8,Term 3,76.52,C+,Fairly Satisfactory
+AEGIS-QA-S0039,Grade 8 - Bonifacio,MAPEH-8,Term 3,80.32,B,Satisfactory
+AEGIS-QA-S0039,Grade 8 - Bonifacio,ESP-8,Term 3,72.64,C,Fairly Satisfactory
+AEGIS-QA-S0040,Grade 8 - Bonifacio,FIL-8,Term 3,64.96,F,Failed
+AEGIS-QA-S0040,Grade 8 - Bonifacio,ENG-8,Term 3,58.5,F,Failed
+AEGIS-QA-S0040,Grade 8 - Bonifacio,MATH-8,Term 3,61.57,F,Failed
+AEGIS-QA-S0040,Grade 8 - Bonifacio,AP-8,Term 3,69.12,D,Fairly Satisfactory
+AEGIS-QA-S0040,Grade 8 - Bonifacio,SCI-8,Term 3,64.11,F,Failed
+AEGIS-QA-S0040,Grade 8 - Bonifacio,TLE-8,Term 3,59.53,F,Failed
+AEGIS-QA-S0040,Grade 8 - Bonifacio,MAPEH-8,Term 3,63.13,F,Failed
+AEGIS-QA-S0040,Grade 8 - Bonifacio,ESP-8,Term 3,57.93,F,Failed
+AEGIS-QA-S0041,Grade 8 - Bonifacio,FIL-8,Term 3,95.92,A,Outstanding
+AEGIS-QA-S0041,Grade 8 - Bonifacio,ENG-8,Term 3,95.27,A,Outstanding
+AEGIS-QA-S0041,Grade 8 - Bonifacio,MATH-8,Term 3,87.05,B+,Very Satisfactory
+AEGIS-QA-S0041,Grade 8 - Bonifacio,AP-8,Term 3,84.79,B,Satisfactory
+AEGIS-QA-S0041,Grade 8 - Bonifacio,SCI-8,Term 3,90.83,A,Outstanding
+AEGIS-QA-S0041,Grade 8 - Bonifacio,TLE-8,Term 3,94.64,A,Outstanding
+AEGIS-QA-S0041,Grade 8 - Bonifacio,MAPEH-8,Term 3,91.85,A,Outstanding
+AEGIS-QA-S0041,Grade 8 - Bonifacio,ESP-8,Term 3,90.91,A,Outstanding
+AEGIS-QA-S0042,Grade 8 - Bonifacio,FIL-8,Term 3,78.26,C+,Fairly Satisfactory
+AEGIS-QA-S0042,Grade 8 - Bonifacio,ENG-8,Term 3,79.16,C+,Fairly Satisfactory
+AEGIS-QA-S0042,Grade 8 - Bonifacio,MATH-8,Term 3,74,C,Fairly Satisfactory
+AEGIS-QA-S0042,Grade 8 - Bonifacio,AP-8,Term 3,79.46,C+,Fairly Satisfactory
+AEGIS-QA-S0042,Grade 8 - Bonifacio,SCI-8,Term 3,70.71,C,Fairly Satisfactory
+AEGIS-QA-S0042,Grade 8 - Bonifacio,TLE-8,Term 3,81.84,B,Satisfactory
+AEGIS-QA-S0042,Grade 8 - Bonifacio,MAPEH-8,Term 3,77.77,C+,Fairly Satisfactory
+AEGIS-QA-S0042,Grade 8 - Bonifacio,ESP-8,Term 3,73.42,C,Fairly Satisfactory
+AEGIS-QA-S0043,Grade 8 - Bonifacio,FIL-8,Term 3,64.98,F,Failed
+AEGIS-QA-S0043,Grade 8 - Bonifacio,ENG-8,Term 3,62.29,F,Failed
+AEGIS-QA-S0043,Grade 8 - Bonifacio,MATH-8,Term 3,60.18,F,Failed
+AEGIS-QA-S0043,Grade 8 - Bonifacio,AP-8,Term 3,59.59,F,Failed
+AEGIS-QA-S0043,Grade 8 - Bonifacio,SCI-8,Term 3,56.96,F,Failed
+AEGIS-QA-S0043,Grade 8 - Bonifacio,TLE-8,Term 3,66.78,D,Fairly Satisfactory
+AEGIS-QA-S0043,Grade 8 - Bonifacio,MAPEH-8,Term 3,58.63,F,Failed
+AEGIS-QA-S0043,Grade 8 - Bonifacio,ESP-8,Term 3,67.07,D,Fairly Satisfactory
+AEGIS-QA-S0044,Grade 8 - Bonifacio,FIL-8,Term 3,86.92,B+,Very Satisfactory
+AEGIS-QA-S0044,Grade 8 - Bonifacio,ENG-8,Term 3,90.24,A,Outstanding
+AEGIS-QA-S0044,Grade 8 - Bonifacio,MATH-8,Term 3,85.72,B+,Very Satisfactory
+AEGIS-QA-S0044,Grade 8 - Bonifacio,AP-8,Term 3,87.62,B+,Very Satisfactory
+AEGIS-QA-S0044,Grade 8 - Bonifacio,SCI-8,Term 3,89.14,B+,Very Satisfactory
+AEGIS-QA-S0044,Grade 8 - Bonifacio,TLE-8,Term 3,89.04,B+,Very Satisfactory
+AEGIS-QA-S0044,Grade 8 - Bonifacio,MAPEH-8,Term 3,89.45,B+,Very Satisfactory
+AEGIS-QA-S0044,Grade 8 - Bonifacio,ESP-8,Term 3,94.7,A,Outstanding
+AEGIS-QA-S0045,Grade 8 - Bonifacio,FIL-8,Term 3,74.1,C,Fairly Satisfactory
+AEGIS-QA-S0045,Grade 8 - Bonifacio,ENG-8,Term 3,84.84,B,Satisfactory
+AEGIS-QA-S0045,Grade 8 - Bonifacio,MATH-8,Term 3,76.09,C+,Fairly Satisfactory
+AEGIS-QA-S0045,Grade 8 - Bonifacio,AP-8,Term 3,75.75,C+,Fairly Satisfactory
+AEGIS-QA-S0045,Grade 8 - Bonifacio,SCI-8,Term 3,79.55,C+,Fairly Satisfactory
+AEGIS-QA-S0045,Grade 8 - Bonifacio,TLE-8,Term 3,76.39,C+,Fairly Satisfactory
+AEGIS-QA-S0045,Grade 8 - Bonifacio,MAPEH-8,Term 3,83.13,B,Satisfactory
+AEGIS-QA-S0045,Grade 8 - Bonifacio,ESP-8,Term 3,79,C+,Fairly Satisfactory
+AEGIS-QA-S0046,Grade 8 - Bonifacio,FIL-8,Term 3,62.85,F,Failed
+AEGIS-QA-S0046,Grade 8 - Bonifacio,ENG-8,Term 3,65.82,D,Fairly Satisfactory
+AEGIS-QA-S0046,Grade 8 - Bonifacio,MATH-8,Term 3,64.85,F,Failed
+AEGIS-QA-S0046,Grade 8 - Bonifacio,AP-8,Term 3,61.8,F,Failed
+AEGIS-QA-S0046,Grade 8 - Bonifacio,SCI-8,Term 3,61.73,F,Failed
+AEGIS-QA-S0046,Grade 8 - Bonifacio,TLE-8,Term 3,64.43,F,Failed
+AEGIS-QA-S0046,Grade 8 - Bonifacio,MAPEH-8,Term 3,68.28,D,Fairly Satisfactory
+AEGIS-QA-S0046,Grade 8 - Bonifacio,ESP-8,Term 3,66.06,D,Fairly Satisfactory
+AEGIS-QA-S0047,Grade 8 - Bonifacio,FIL-8,Term 3,90.87,A,Outstanding
+AEGIS-QA-S0047,Grade 8 - Bonifacio,ENG-8,Term 3,91.69,A,Outstanding
+AEGIS-QA-S0047,Grade 8 - Bonifacio,MATH-8,Term 3,88.45,B+,Very Satisfactory
+AEGIS-QA-S0047,Grade 8 - Bonifacio,AP-8,Term 3,90.93,A,Outstanding
+AEGIS-QA-S0047,Grade 8 - Bonifacio,SCI-8,Term 3,81.42,B,Satisfactory
+AEGIS-QA-S0047,Grade 8 - Bonifacio,TLE-8,Term 3,93.13,A,Outstanding
+AEGIS-QA-S0047,Grade 8 - Bonifacio,MAPEH-8,Term 3,93.36,A,Outstanding
+AEGIS-QA-S0047,Grade 8 - Bonifacio,ESP-8,Term 3,92.65,A,Outstanding
+AEGIS-QA-S0048,Grade 8 - Bonifacio,FIL-8,Term 3,78.5,C+,Fairly Satisfactory
+AEGIS-QA-S0048,Grade 8 - Bonifacio,ENG-8,Term 3,78.7,C+,Fairly Satisfactory
+AEGIS-QA-S0048,Grade 8 - Bonifacio,MATH-8,Term 3,81.73,B,Satisfactory
+AEGIS-QA-S0048,Grade 8 - Bonifacio,AP-8,Term 3,74.77,C,Fairly Satisfactory
+AEGIS-QA-S0048,Grade 8 - Bonifacio,SCI-8,Term 3,73.77,C,Fairly Satisfactory
+AEGIS-QA-S0048,Grade 8 - Bonifacio,TLE-8,Term 3,79.7,C+,Fairly Satisfactory
+AEGIS-QA-S0048,Grade 8 - Bonifacio,MAPEH-8,Term 3,79.83,C+,Fairly Satisfactory
+AEGIS-QA-S0048,Grade 8 - Bonifacio,ESP-8,Term 3,72.58,C,Fairly Satisfactory
+AEGIS-QA-S0049,Grade 8 - Bonifacio,FIL-8,Term 3,63.77,F,Failed
+AEGIS-QA-S0049,Grade 8 - Bonifacio,ENG-8,Term 3,64.62,F,Failed
+AEGIS-QA-S0049,Grade 8 - Bonifacio,MATH-8,Term 3,56.04,F,Failed
+AEGIS-QA-S0049,Grade 8 - Bonifacio,AP-8,Term 3,62.33,F,Failed
+AEGIS-QA-S0049,Grade 8 - Bonifacio,SCI-8,Term 3,60.06,F,Failed
+AEGIS-QA-S0049,Grade 8 - Bonifacio,TLE-8,Term 3,60.03,F,Failed
+AEGIS-QA-S0049,Grade 8 - Bonifacio,MAPEH-8,Term 3,61.44,F,Failed
+AEGIS-QA-S0049,Grade 8 - Bonifacio,ESP-8,Term 3,58.34,F,Failed
+AEGIS-QA-S0050,Grade 8 - Bonifacio,FIL-8,Term 3,90.25,A,Outstanding
+AEGIS-QA-S0050,Grade 8 - Bonifacio,ENG-8,Term 3,83.87,B,Satisfactory
+AEGIS-QA-S0050,Grade 8 - Bonifacio,MATH-8,Term 3,92.1,A,Outstanding
+AEGIS-QA-S0050,Grade 8 - Bonifacio,AP-8,Term 3,89.71,B+,Very Satisfactory
+AEGIS-QA-S0050,Grade 8 - Bonifacio,SCI-8,Term 3,93.68,A,Outstanding
+AEGIS-QA-S0050,Grade 8 - Bonifacio,TLE-8,Term 3,93.02,A,Outstanding
+AEGIS-QA-S0050,Grade 8 - Bonifacio,MAPEH-8,Term 3,89.32,B+,Very Satisfactory
+AEGIS-QA-S0050,Grade 8 - Bonifacio,ESP-8,Term 3,90.38,A,Outstanding

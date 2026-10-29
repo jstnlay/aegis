@@ -1,3 +1,7 @@
+import { readFileSync } from "node:fs"
+import path from "node:path"
+import { fileURLToPath } from "node:url"
+
 import {
   fireEvent,
   render,
@@ -518,5 +522,136 @@ describe("RiskAlertsPage", () => {
       expect(screen.getByText("Ana Reyes")).toBeInTheDocument()
       expect(screen.queryByText("Ben Cruz")).not.toBeInTheDocument()
     })
+  })
+})
+
+/**
+ * The alert queue driven by the shipped `docs/test-data/grades-sf3.csv`.
+ *
+ * The other tests here hand-build alerts. This block instead reads the dataset
+ * the import pipeline ingests, derives each learner's term average from it,
+ * flags the ones below the passing mark, and feeds the resulting algorithm
+ * alerts into the page. That proves the queue renders and filters what the
+ * dataset actually produces, not what a fixture was told to produce.
+ *
+ * Factor shape is the real `ai_engine` one: an object with `feature`,
+ * `value`, `threshold` and `direction`. The queue must label it, not print
+ * `[object Object]`, and the risk-level filter must narrow to it.
+ */
+describe("RiskAlertsPage — imported dataset", () => {
+  const PASSING_MARK = 75
+
+  /** Read the shipped grades CSV and compute each learner's term average. */
+  function termAveragesFromDataset(): Map<string, number> {
+    const csvPath = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "../../../../docs/test-data/grades-sf3.csv"
+    )
+    const rows = readFileSync(csvPath, "utf8")
+      .trim()
+      .split("\n")
+      .slice(1) // header
+      .map((line) => line.split(","))
+    const totals = new Map<string, { sum: number; n: number }>()
+    // columns: student_id, section, subject_code, grading_period, score, ...
+    for (const cols of rows) {
+      const studentId = cols[0]
+      const score = Number(cols[4])
+      const entry = totals.get(studentId) ?? { sum: 0, n: 0 }
+      entry.sum += score
+      entry.n += 1
+      totals.set(studentId, entry)
+    }
+    const averages = new Map<string, number>()
+    for (const [studentId, { sum, n }] of totals) {
+      averages.set(studentId, sum / n)
+    }
+    return averages
+  }
+
+  /** The flagged cohort, as algorithm alerts the queue would receive. */
+  function alertsFromDataset(): RiskAlert[] {
+    const averages = termAveragesFromDataset()
+    return [...averages.entries()]
+      .filter(([, average]) => average < PASSING_MARK)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([studentId, average], index) =>
+        makeAlert({
+          id: `ra-${studentId}`,
+          student: `sp-${studentId}`,
+          student_name: `Learner ${studentId.slice(-5)}`,
+          risk_level: average < 70 ? "high" : "moderate",
+          source: "algorithm",
+          status: "active",
+          risk_factors: [
+            {
+              feature: "current_term_grade_average",
+              threshold: PASSING_MARK,
+              value: Number(average.toFixed(2)),
+              direction: "below",
+            },
+          ],
+          generated_at: `2026-09-0${(index % 9) + 1}T00:00:00Z`,
+        })
+      )
+  }
+
+  beforeEach(() => {
+    mockedFetchAllPages.mockImplementation(async (url: string) => {
+      if (url.includes("/academics/enrollments/")) {
+        return { count: 0, results: [] }
+      }
+      const datasetAlerts = alertsFromDataset()
+      return { count: datasetAlerts.length, results: datasetAlerts }
+    })
+  })
+
+  it("queues an alert for every at-risk learner in the dataset", async () => {
+    const expected = alertsFromDataset()
+    // The generator's at-risk band is roughly a third of the roster.
+    expect(expected.length).toBeGreaterThanOrEqual(5)
+
+    renderPage()
+
+    await screen.findByText(expected[0].student_name)
+    expect(
+      screen.getByText(
+        new RegExp(`Showing ${expected.length} of ${expected.length}`)
+      )
+    ).toBeInTheDocument()
+  })
+
+  it("prints the why-flagged factor rather than [object Object]", async () => {
+    const { container } = renderPage()
+    const expected = alertsFromDataset()[0]
+
+    await screen.findByText(expected.student_name)
+
+    const row = rowFor(expected.student_name)
+    expect(within(row).getByText(/current_term_grade_average/)).toBeInTheDocument()
+    expect(container.textContent).not.toContain("[object Object]")
+  })
+
+  it("filters the dataset alerts by risk level", async () => {
+    const expected = alertsFromDataset()
+    const highs = expected.filter((alert) => alert.risk_level === "high")
+    expect(highs.length).toBeGreaterThan(0)
+
+    renderPage()
+    await screen.findByText(expected[0].student_name)
+
+    await openSelect(screen.getByLabelText("Risk level"))
+    fireEvent.click(await screen.findByRole("option", { name: "High" }))
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          new RegExp(`Showing ${highs.length} of ${expected.length}`)
+        )
+      ).toBeInTheDocument()
+    })
+    // Every flagged learner in this dataset averages below 70, so none is
+    // left outside the "High" filter — the count is the whole flagged set.
+    expect(highs.length).toBe(expected.length)
   })
 })

@@ -99,6 +99,7 @@ from apps.assessments.models import (
     AssessmentResult,
 )
 from apps.attendance.models import AttendanceRecord
+from apps.cms.models import LearningItem
 from apps.guidance.models import (
     BehavioralNote,
     ConsultationRecord,
@@ -208,6 +209,28 @@ ATTENDANCE_WEEKS = 3
 #: Attendance mix for the synthetic roster.
 ATTENDANCE_PRESENT_CUTOFF = 0.82
 ATTENDANCE_LATE_CUTOFF = 0.90
+
+# ---------------------------------------------------------------------------
+# Declared recommendation pool
+#
+# The content-based resolver matches a student's academic need against
+# recommendable LearningItems (APPROVED + ACTIVE). Without a pool the
+# recommendations endpoint answers every student with an empty list, which is
+# indistinguishable from "nothing to suggest". These items give each core area
+# something to offer; they are declarative titles, not imported content.
+# ---------------------------------------------------------------------------
+
+#: (topic, difficulty, tags) applied to every learning area.
+LEARNING_ITEM_TEMPLATES = (
+    ("Remedial practice set", 1, ("remedial", "practice")),
+    ("Concept review module", 2, ("review", "concept")),
+    ("Guided study activity", 2, ("study_activity",)),
+)
+
+#: Items are declared for these subject codes only, so the pool stays small and
+#: the report stays readable. Every seeded grade level gets its own copy, keyed
+#: by the level-suffixed subject code.
+LEARNING_ITEM_AREA_CODES = tuple(code for code, _name in LEARNING_AREAS)
 
 # ---------------------------------------------------------------------------
 # Synthetic name / address pools
@@ -691,6 +714,7 @@ class Command(BaseCommand):
             self._seed_attendance(students, staff)
             self._seed_guidance(students, profiles, staff)
             self._seed_assessments(qa_users, profiles, students, sections, grading_periods)
+            self._seed_learning_items(subjects, grade_levels)
 
         self._report()
 
@@ -741,6 +765,38 @@ class Command(BaseCommand):
                     {"name": name, "grade_level": grade_level},
                 )
         return subjects
+
+    def _seed_learning_items(self, subjects, grade_levels):
+        """
+        Declare the recommendation pool the content-based resolver draws from.
+
+        Keyed on (title, subject) so re-running reuses rather than duplicates,
+        and every item is APPROVED + ACTIVE so ``is_recommendation_eligible``
+        admits it. Without this the recommendations endpoint answers every
+        student with an empty list.
+        """
+        for (level_number, code), subject in subjects.items():
+            if code not in LEARNING_ITEM_AREA_CODES:
+                continue
+            for topic, difficulty, tags in LEARNING_ITEM_TEMPLATES:
+                self._get_or_create(
+                    LearningItem,
+                    "LearningItem",
+                    {"title": f"{topic} — {subject.name}", "subject": subject},
+                    {
+                        "item_type": LearningItem.ItemType.LEARNING_RESOURCE,
+                        "description": (
+                            f"{topic} for {subject.name} "
+                            f"({grade_levels[level_number].name})."
+                        ),
+                        "topic": topic,
+                        "grade_level": grade_levels[level_number],
+                        "tags": list(tags),
+                        "difficulty": difficulty,
+                        "lifecycle_status": LearningItem.LifecycleStatus.APPROVED,
+                        "is_active": True,
+                    },
+                )
 
     def _seed_grading_periods(self, academic_year):
         """

@@ -5,6 +5,48 @@ TC-ADM-04 (attendance), TC-ADM-05 (guidance records), TC-ADM-18 (malformed
 file). Faculty uploads, TC-FAC-13 to TC-FAC-16, use the same two attendance
 files and the same grades file through the faculty page.
 
+## DepEd SF2 / grades datasets
+
+`attendance-sf2.csv` and `grades-sf3.csv` are fuller datasets derived from the
+two DepEd templates in this folder (`SF2 JUNIOR HS.xlsm` for attendance, the
+`UPDATED [Grades 2-10] 3Term E-Class Record …` workbook for grades). They cover
+one whole section — Grade 8 Bonifacio, 25 learners, students `AEGIS-QA-S0026`
+to `S0050` — and are shaped so the pipeline has something to find:
+
+- **grades-sf3.csv** — 200 rows (25 learners × 8 core subjects, Term 3). The
+  roster is split into three bands round-robin, so about 8 learners sit below
+  the passing mark. Term 3 is the open term, so re-uploading updates in place
+  instead of hitting the finalized-grade lock.
+- **grades-sf3-terms-1-2.csv** — 400 rows (25 learners × 8 subjects × Term 1
+  and Term 2). Uploaded *after* the Term 3 file as a second batch, it is what
+  gives the historical trend more than one point to plot.
+- **attendance-sf2.csv** — 125 rows (25 learners × 5 school days in the week of
+  2026-09-07, inside Term 1). The weak band carries more absences and tardies.
+
+> **Grade source (sanctioned substitute).** The grade files are named
+> `grades-sf3*.csv` for continuity with the objective, but the source is the
+> **E-Class Record workbook** above (its `TERM 1/2/3` and `FINAL GRADES`
+> sheets). There is **no DepEd "SF3" workbook in this repository** — SF3 is the
+> Learner's Progress Report Card, a different form. The project owner accepted
+> the E-Class Record as the grade source; this note records that decision. If a
+> real SF3 ever lands in the folder, add it as its own template with its own
+> shape check and writer branch (`generate_datasets.py`), and a new output —
+> do not repoint these filenames.
+
+Both files use the same school-key forms the importers already resolve
+(`Grade 8 - Bonifacio`, `ENG-8`, `Term 3`). They regenerate deterministically:
+
+```powershell
+python docs/test-data/generate_datasets.py
+```
+
+Run that only when a template changes; the committed CSVs are the source the
+test suite reads. `apps/data_import/tests_datasets_pipeline.py` imports them
+through the real API and proves the five capabilities (ingestion, at-risk run,
+read-back, recommendations, batch history, and the two-batch trend);
+`apps/data_import/tests_shipped_files.py` covers the smaller manual-QA files
+below.
+
 ## No setup needed
 
 The files name records the way a school does: `section` is

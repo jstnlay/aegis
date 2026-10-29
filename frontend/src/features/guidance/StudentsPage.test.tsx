@@ -1,3 +1,7 @@
+import { readFileSync } from "node:fs"
+import path from "node:path"
+import { fileURLToPath } from "node:url"
+
 import {
   fireEvent,
   render,
@@ -281,5 +285,138 @@ describe("StudentsPage", () => {
 
     const alert = await screen.findByRole("alert")
     expect(alert).toHaveTextContent("boom")
+  })
+})
+
+/**
+ * The imported SF2/SF3 dataset, rendered on the directory.
+ *
+ * Every other test here feeds the page a hand-typed fixture. This one reads the
+ * shipped `docs/test-data/grades-sf3.csv` — the file the import pipeline
+ * ingests — derives each learner's term average from it, and renders the same
+ * rows the server would build from those grades. That ties the UI evidence to
+ * the actual dataset rather than to a fixture that could drift away from it.
+ *
+ * The dataset splits the Grade 8 Bonifacio roster into three bands round-robin;
+ * the "at-risk" band's term average sits below the passing mark, so those
+ * learners must render with an at-risk badge and be reachable by the activity
+ * filter, the search box and the profile link.
+ */
+describe("StudentsPage — imported dataset", () => {
+  const PASSING_MARK = 75
+
+  /** Read the shipped grades CSV and compute each learner's term average. */
+  function termAveragesFromDataset(): Map<string, number> {
+    const csvPath = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "../../../../docs/test-data/grades-sf3.csv"
+    )
+    const rows = readFileSync(csvPath, "utf8")
+      .trim()
+      .split("\n")
+      .slice(1) // header
+      .map((line) => line.split(","))
+    const totals = new Map<string, { sum: number; n: number }>()
+    // columns: student_id, section, subject_code, grading_period, score, ...
+    for (const cols of rows) {
+      const studentId = cols[0]
+      const score = Number(cols[4])
+      const entry = totals.get(studentId) ?? { sum: 0, n: 0 }
+      entry.sum += score
+      entry.n += 1
+      totals.set(studentId, entry)
+    }
+    const averages = new Map<string, number>()
+    for (const [studentId, { sum, n }] of totals) {
+      averages.set(studentId, sum / n)
+    }
+    return averages
+  }
+
+  function directoryRowsFromDataset() {
+    const averages = termAveragesFromDataset()
+    return [...averages.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([studentId, average], index) => {
+        const atRisk = average < PASSING_MARK
+        return student({
+          id: `sp-${studentId}`,
+          name: `Learner ${studentId.slice(-5)}`,
+          code: studentId,
+          atRiskLevel: atRisk ? (average < 70 ? "high" : "moderate") : null,
+          openAlertCount: atRisk ? 1 : 0,
+          // The directory is "students with guidance activity"; a flagged
+          // learner has an alert, an unflagged one only a consultation.
+          consultationCount: atRisk ? 1 : 1,
+          interventionCount: atRisk ? 1 : 0,
+          resultCount: 0,
+          latestActivity: `2026-09-0${(index % 9) + 1}`,
+        })
+      })
+  }
+
+  it("renders every learner in the dataset", async () => {
+    const rows = directoryRowsFromDataset()
+    stub(rows)
+    renderPage()
+
+    // 25 learners in the file.
+    expect(rows).toHaveLength(25)
+    expect(await screen.findByText(/Showing 25 of 25/)).toBeInTheDocument()
+  })
+
+  it("shows the at-risk learners the dataset actually contains", async () => {
+    const rows = directoryRowsFromDataset()
+    stub(rows)
+    renderPage()
+
+    const atRisk = rows.filter((row) => row.atRiskLevel !== null)
+    // The generator's at-risk band is roughly a third of the roster.
+    expect(atRisk.length).toBeGreaterThanOrEqual(5)
+
+    // Wait for the loaded header (not the pre-fetch "0 of 0" one).
+    const headerCount = await screen.findByText(
+      new RegExp(`${atRisk.length} at risk`)
+    )
+    expect(headerCount).toBeInTheDocument()
+
+    // At least one at-risk row renders with its badge.
+    const firstFlagged = atRisk[0]
+    const row = screen.getByText(firstFlagged.name).closest("tr") as HTMLElement
+    expect(row).toHaveAttribute("data-at-risk", "true")
+  })
+
+  it("filters the dataset to the learners with open risk alerts", async () => {
+    stub(directoryRowsFromDataset())
+    renderPage()
+    await screen.findByText(/Showing 25 of 25/)
+
+    await openSelect(screen.getByLabelText("Activity type"))
+    fireEvent.click(
+      await screen.findByRole("option", { name: "Open risk alerts" })
+    )
+
+    // A dataset learner with no open alert drops out of the filtered view.
+    await waitFor(() =>
+      expect(screen.queryByText("Learner S0026")).toBeNull()
+    )
+  })
+
+  it("selects a dataset learner by student code", async () => {
+    stub(directoryRowsFromDataset())
+    renderPage()
+    await screen.findByText(/Showing 25 of 25/)
+
+    fireEvent.change(screen.getByLabelText("Search"), {
+      target: { value: "AEGIS-QA-S0046" },
+    })
+
+    await waitFor(() =>
+      expect(screen.queryByText("Learner S0026")).toBeNull()
+    )
+    const name = screen.getByText("Learner S0046")
+    const row = name.closest("tr") as HTMLElement
+    const link = row.querySelector("a") as HTMLAnchorElement
+    expect(link).toHaveAttribute("href", "/app/students/sp-AEGIS-QA-S0046")
   })
 })
