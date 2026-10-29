@@ -47,8 +47,11 @@ Run it only when a template changes; the generated CSVs are committed.
 from __future__ import annotations
 
 import csv
+import io
 import random
-from datetime import date, timedelta
+import re
+import zipfile
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import openpyxl
@@ -126,6 +129,42 @@ SF9_LEARNING_AREAS = {
 SF9_LEARNING_AREA_ROW = 12
 SF9_LEARNING_AREA_FIRST_COL = 11
 
+#: Base subject code -> the column its grade belongs in on that band.  Derived
+#: from ``SF9_LEARNING_AREAS`` so the writer and the check cannot disagree.
+SF9_AREA_COLUMNS = {
+    base: SF9_LEARNING_AREA_FIRST_COL + offset
+    for offset, base in enumerate(SF9_LEARNING_AREAS.values())
+}
+#: First learner row and the name column on a summary sheet.
+SF9_FIRST_LEARNER_ROW = 15
+SF9_NAME_COL = 3
+#: The summary sheets carry GRADE LEVEL and SECTION here; both are formulas
+#: pointing at the input sheet, so the generator writes plain values.
+SF9_GRADE_LEVEL_CELL = (9, 7)
+SF9_SECTION_CELL = (10, 7)
+
+#: Filled DepEd workbooks -- the files a person uploads.  One workbook is one
+#: section: SF9's summary sheet and SF2's month grid each hold a single class.
+SF9_WORKBOOK_NAME = "grades-sf9-{slug}.xlsx"
+SF9_EARLIER_WORKBOOK_NAME = "grades-sf9-terms-1-2-{slug}.xlsx"
+SF2_WORKBOOK_NAME = "attendance-sf2-{slug}.xlsm"
+
+#: SF2's school header lives on its own COVER sheet.
+SF2_COVER_ROWS = (
+    ("school_name", "B1", "AEGIS QA National High School"),
+    ("section", "B2", None),
+    ("school_id", "B3", "123456"),
+    ("school_year", "B4", SCHOOL_YEAR),
+    ("grade_level", "B5", None),
+    ("month", "B6", None),
+    ("adviser", "B7", "EUNICE FERNANDEZ"),
+)
+SF2_FIRST_LEARNER_ROW = 8
+SF2_NAME_COL = 2
+SF2_FIRST_DAY_COL = 5
+SF2_LAST_DAY_COL = 29
+SF2_DAY_NUMBER_ROW = 6
+
 #: One completed term's worth of attendance.  SF2 is a monthly form; the files
 #: carry one school week per learner across a term-closing week, which is a
 #: legal, in-the-past window (nothing here is in the future).
@@ -186,6 +225,37 @@ def _subject_code(area_code: str, level_number: int) -> str:
 
 def _rand(seed_key: str) -> random.Random:
     return random.Random(f"aegis-datasets::{seed_key}")
+
+
+def _learner_scores(level_number: int, index: int, term: str, seed_prefix: str) -> dict:
+    """
+    One learner's score per learning area for one term.
+
+    Insertion order follows ``LEARNING_AREAS`` and the RNG draws happen in that
+    same order, so the flat CSV and the filled workbook carry identical values.
+    """
+    _, mean, spread, _ = band_for(index)
+    rng = _rand(f"{seed_prefix}::{level_number}::{index}")
+    return {
+        area_code: max(0.0, min(100.0, round(rng.gauss(mean, spread), 2)))
+        for area_code, _name in LEARNING_AREAS
+    }
+
+
+def _learner_attendance(level_number: int, index: int) -> list:
+    """One learner's status for each school day of the recorded week."""
+    _, _, _, present_prob = band_for(index)
+    rng = _rand(f"attendance::{level_number}::{index}")
+    statuses = []
+    for _ in range(ATTENDANCE_WEEKDAYS):
+        draw = rng.random()
+        if draw < present_prob:
+            statuses.append("present")
+        elif draw < present_prob + 0.10:
+            statuses.append("late")
+        else:
+            statuses.append("absent")
+    return statuses
 
 
 # ---------------------------------------------------------------------------
@@ -290,18 +360,9 @@ def write_attendance() -> int:
     for first_index, level_number, section_name in SECTIONS:
         section = _section_key(level_number, section_name)
         for index in range(STUDENTS_PER_SECTION):
-            _, _, _, present_prob = band_for(index)
-            rng = _rand(f"attendance::{level_number}::{index}")
             student = _student_code(first_index, index)
-            for day_offset in range(ATTENDANCE_WEEKDAYS):
+            for day_offset, status in enumerate(_learner_attendance(level_number, index)):
                 day = ATTENDANCE_MONTH + timedelta(days=day_offset)
-                draw = rng.random()
-                if draw < present_prob:
-                    status = "present"
-                elif draw < present_prob + 0.10:
-                    status = "late"
-                else:
-                    status = "absent"
                 rows.append(
                     {
                         "student_id": student,
@@ -381,12 +442,9 @@ def _grade_rows(term: str, seed_prefix: str) -> list[dict]:
     for first_index, level_number, section_name in SECTIONS:
         section = _section_key(level_number, section_name)
         for index in range(STUDENTS_PER_SECTION):
-            _, mean, spread, _ = band_for(index)
-            rng = _rand(f"{seed_prefix}::{level_number}::{index}")
             student = _student_code(first_index, index)
-            for area_code, _name in LEARNING_AREAS:
-                score = rng.gauss(mean, spread)
-                score = max(0.0, min(100.0, round(score, 2)))
+            scores = _learner_scores(level_number, index, term, seed_prefix)
+            for area_code, score in scores.items():
                 letter, remark = _descriptor(score)
                 rows.append(
                     {
@@ -435,17 +493,206 @@ def _write_csv(path: Path, headers: tuple, rows: list[dict]) -> None:
         writer.writerows(rows)
 
 
+# ---------------------------------------------------------------------------
+# Filled DepEd workbooks
+#
+# The CSVs above are the flat intermediate the automated tests read.  These
+# writers fill a copy of each shipped template instead, so a person can import
+# a file that looks like the form the school actually fills in.
+# ``apps/data_import/deped_forms.py`` reads them back.
+# ---------------------------------------------------------------------------
+
+#: Pinned so regenerating a workbook is byte-identical run to run.
+_FIXED_TIMESTAMP = datetime(2026, 9, 1, 0, 0, 0)
+
+#: SF2 mark per importer status.  The form marks the exceptions only.
+_SF2_MARK_BY_STATUS = {"present": "", "late": "L", "absent": "X"}
+
+
+def _stamp(workbook) -> None:
+    workbook.properties.created = _FIXED_TIMESTAMP
+    workbook.properties.modified = _FIXED_TIMESTAMP
+
+
+def _finalize_workbook(path: Path) -> None:
+    """
+    Pin the clock openpyxl stamps into a saved workbook.
+
+    ``openpyxl`` writes the current time into every ZIP entry and into
+    ``docProps/core.xml``'s ``dcterms:modified``, so two runs of this script
+    would otherwise produce different bytes for identical content.  Rewriting
+    the archive with a fixed timestamp keeps the committed workbooks
+    reproducible.  Nothing inside a sheet is touched.
+    """
+    buffer = io.BytesIO()
+    modified = _FIXED_TIMESTAMP.strftime("%Y-%m-%dT%H:%M:%SZ").encode()
+    with zipfile.ZipFile(path) as source:
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as target:
+            for item in source.infolist():
+                data = source.read(item.filename)
+                if item.filename == "docProps/core.xml":
+                    data = re.sub(
+                        rb"<dcterms:modified[^>]*>[^<]*</dcterms:modified>",
+                        b'<dcterms:modified xsi:type="dcterms:W3CDTF">'
+                        + modified
+                        + b"</dcterms:modified>",
+                        data,
+                    )
+                item.date_time = (1980, 1, 1, 0, 0, 0)
+                target.writestr(item, data)
+    path.write_bytes(buffer.getvalue())
+
+
+def _section_for_level(level_number: int) -> tuple[int, str]:
+    """(first roster index, section name) for a grade level in ``SECTIONS``."""
+    for first_index, level, section_name in SECTIONS:
+        if level == level_number:
+            return first_index, section_name
+    raise KeyError(f"no section for grade level {level_number}")
+
+
+def _workbook_path(name_template: str, section_name: str) -> Path:
+    return HERE / name_template.format(slug=section_name.lower())
+
+
+def _clear_sf9_learner_rows(worksheet) -> None:
+    """
+    Blank the learner area before writing.
+
+    The shipped SF9 carries three sample learners (rows 15-17) with grades in
+    them.  Left in place they would survive into the first rows of a filled
+    form -- the reader would then average a sample score with a real one.
+    """
+    columns = (SF9_NAME_COL, *range(SF9_LEARNING_AREA_FIRST_COL, SF9_LEARNING_AREA_FIRST_COL + 9))
+    for index in range(STUDENTS_PER_SECTION):
+        row = SF9_FIRST_LEARNER_ROW + index
+        for column in columns:
+            worksheet.cell(row=row, column=column).value = None
+
+
+def write_sf9_workbook(path: Path, level_number: int, term_seeds: dict) -> int:
+    """
+    Fill a copy of the SF9 template for one section.
+
+    ``term_seeds`` maps a grading-period name (``Term 3``) to the seed prefix
+    its scores were drawn with.  Each term names its own ``TERM n SUMMARY``
+    sheet; the learner rows and the learning-area columns are the ones
+    ``deped_forms.read_sf9`` reads.
+    """
+    first_index, section_name = _section_for_level(level_number)
+    workbook = openpyxl.load_workbook(HERE / SF9_TEMPLATE)
+    written = 0
+    try:
+        for term, seed_prefix in term_seeds.items():
+            worksheet = workbook[f"{term.upper()} SUMMARY"]
+            worksheet.cell(
+                row=SF9_GRADE_LEVEL_CELL[0], column=SF9_GRADE_LEVEL_CELL[1]
+            ).value = level_number
+            worksheet.cell(
+                row=SF9_SECTION_CELL[0], column=SF9_SECTION_CELL[1]
+            ).value = section_name
+            _clear_sf9_learner_rows(worksheet)
+            for index in range(STUDENTS_PER_SECTION):
+                row = SF9_FIRST_LEARNER_ROW + index
+                worksheet.cell(
+                    row=row, column=SF9_NAME_COL
+                ).value = _student_code(first_index, index)
+                for base, score in _learner_scores(
+                    level_number, index, term, seed_prefix
+                ).items():
+                    worksheet.cell(
+                        row=row, column=SF9_AREA_COLUMNS[base]
+                    ).value = score
+                    written += 1
+        _stamp(workbook)
+        workbook.save(path)
+        _finalize_workbook(path)
+    finally:
+        workbook.close()
+    return written
+
+
+def write_sf2_workbook(path: Path, level_number: int) -> int:
+    """
+    Fill a copy of the SF2 template for one section's recorded week.
+
+    The school header goes on ``COVER`` (the sheet the form reads it from), the
+    day numbers on the date row, and each learner's marks in the day columns.
+    """
+    first_index, section_name = _section_for_level(level_number)
+    workbook = openpyxl.load_workbook(HERE / SF2_TEMPLATE, keep_vba=True)
+    written = 0
+    try:
+        cover = workbook["COVER"]
+        for key, cell, value in SF2_COVER_ROWS:
+            if value is None:
+                value = {
+                    "section": section_name,
+                    "grade_level": level_number,
+                    "month": ATTENDANCE_MONTH.strftime("%B"),
+                }[key]
+            cover[cell] = value
+
+        sheet = workbook["SF2-JHS"]
+        # The shipped form carries a placeholder day number in every column.
+        # Clear the slots this month does not use, or the reader would import
+        # the same day once per column.
+        for column in range(SF2_FIRST_DAY_COL, SF2_LAST_DAY_COL + 1):
+            offset = column - SF2_FIRST_DAY_COL
+            sheet.cell(row=SF2_DAY_NUMBER_ROW, column=column).value = (
+                ATTENDANCE_MONTH.day + offset if offset < ATTENDANCE_WEEKDAYS else None
+            )
+
+        for index in range(STUDENTS_PER_SECTION):
+            row = SF2_FIRST_LEARNER_ROW + index
+            sheet.cell(
+                row=row, column=SF2_NAME_COL
+            ).value = _student_code(first_index, index)
+            for offset, status in enumerate(_learner_attendance(level_number, index)):
+                sheet.cell(
+                    row=row, column=SF2_FIRST_DAY_COL + offset
+                ).value = _SF2_MARK_BY_STATUS[status]
+                written += 1
+        _stamp(workbook)
+        workbook.save(path)
+        _finalize_workbook(path)
+    finally:
+        workbook.close()
+    return written
+
+
 def main() -> None:
     _check_sf2_template()
     _check_sf9_template()
     _check_subject_mapping()
     _check_learner_count()
+
     attendance_rows = write_attendance()
     grade_rows = write_grades()
     earlier_rows = write_earlier_grades()
     print(f"{ATTENDANCE_OUT.name}: {attendance_rows} rows")
     print(f"{GRADES_OUT.name}: {grade_rows} rows")
     print(f"{GRADES_EARLIER_OUT.name}: {earlier_rows} rows")
+
+    for _first_index, level_number, section_name in SECTIONS:
+        grades_path = _workbook_path(SF9_WORKBOOK_NAME, section_name)
+        earlier_path = _workbook_path(SF9_EARLIER_WORKBOOK_NAME, section_name)
+        attendance_path = _workbook_path(SF2_WORKBOOK_NAME, section_name)
+        grades = write_sf9_workbook(
+            grades_path, level_number, {GRADING_PERIOD: f"grades::{GRADING_PERIOD}"}
+        )
+        earlier = write_sf9_workbook(
+            earlier_path,
+            level_number,
+            {term: f"grades::{term}" for term in EARLIER_TERMS},
+        )
+        attendance = write_sf2_workbook(attendance_path, level_number)
+        print(
+            f"{grades_path.name}: {grades} grades | "
+            f"{earlier_path.name}: {earlier} earlier-term grades | "
+            f"{attendance_path.name}: {attendance} attendance marks"
+        )
+
     print(f"learners: {LEARNER_COUNT} across {len(SECTIONS)} sections")
 
 

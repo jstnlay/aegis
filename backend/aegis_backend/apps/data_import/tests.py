@@ -47,7 +47,8 @@ class FileTypeConstantsTest(SimpleTestCase):
         )
 
     def test_allowed_extensions_match_file_types(self):
-        self.assertEqual(ALLOWED_EXTENSIONS, {".csv", ".xlsx"})
+        # ``.xlsm`` is the macro-enabled spelling of the same XLSX file type.
+        self.assertEqual(ALLOWED_EXTENSIONS, {".csv", ".xlsx", ".xlsm"})
 
     def test_legacy_xls_is_not_supported(self):
         # XLSX-ONLY decision confirmed with project owner.

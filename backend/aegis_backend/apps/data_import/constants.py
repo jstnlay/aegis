@@ -34,8 +34,10 @@ class FileType:
     ALL = frozenset((CSV, XLSX))
 
 
-#: Canonical file extensions for uploaded import files (lowercase).
-ALLOWED_EXTENSIONS = frozenset({".csv", ".xlsx"})
+#: Canonical file extensions for uploaded import files (lowercase).  ``.xlsm``
+#: is the same Office Open XML container as ``.xlsx`` with macros allowed, which
+#: the DepEd SF2 form ships as; the parser reads it with macros disabled.
+ALLOWED_EXTENSIONS = frozenset({".csv", ".xlsx", ".xlsm"})
 
 
 # ---------------------------------------------------------------------------

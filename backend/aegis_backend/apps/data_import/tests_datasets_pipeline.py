@@ -1,12 +1,16 @@
 """
-End-to-end proof that the SF2/SF9-derived datasets drive all five capabilities.
+End-to-end proof that the DepEd SF2/SF9 workbooks drive all five capabilities.
 
-The files ``attendance-sf2.csv`` and ``grades-sf9.csv`` are generated from the
-DepEd SF2 and SF9 templates by ``docs/test-data/generate_datasets.py`` and
-committed.  This test imports them through the real HTTP API against a freshly
-seeded school and then exercises each capability the dataset must feed:
+The files ``attendance-sf2-<section>.xlsm``, ``grades-sf9-<section>.xlsx`` and
+``grades-sf9-terms-1-2-<section>.xlsx`` are filled copies of the real DepEd
+templates, produced by ``docs/test-data/generate_datasets.py`` and committed.
+They are uploaded *as the templates they are* -- multi-sheet, header on no fixed
+row, one workbook per section -- and translated by ``deped_forms`` into the flat
+rows the importer validates.  This test therefore proves the template path, not
+a CSV side door, against a freshly seeded school, and then exercises each
+capability the dataset must feed:
 
-1. Batch ingestion   -- both files import in one request, 0 failed rows.
+1. Batch ingestion   -- every section's workbook imports, 0 failed rows.
 2. At-risk run       -- the risk engine scores the imported cohort.
 3. Management/UI     -- the imported records are readable through the API a
                         dashboard reads.
@@ -37,8 +41,17 @@ from apps.guidance.models import RiskAlert, RiskScore
 
 DATA = Path(__file__).resolve().parents[4] / "docs" / "test-data"
 
-ATTENDANCE_FILE = "attendance-sf2.csv"
-GRADES_FILE = "grades-sf9.csv"
+#: One filled workbook is one section (SF9's summary band and SF2's month grid
+#: each hold a single class), so a dataset spans two uploads per import type.
+SECTION_SLUGS = ("bonifacio", "mabini")
+ATTENDANCE_FILE = "attendance-sf2-{slug}.xlsm"
+GRADES_FILE = "grades-sf9-{slug}.xlsx"
+EARLIER_TERMS_FILE = "grades-sf9-terms-1-2-{slug}.xlsx"
+
+_XLSX_CONTENT_TYPE = (
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
+_XLSM_CONTENT_TYPE = "application/vnd.ms-excel.sheet.macroEnabled.12"
 
 #: Rows the generator writes, asserted here so a template change that silently
 #: drops rows is caught.  50 learners: 250 attendance rows (50 x 5 days) and
@@ -46,6 +59,17 @@ GRADES_FILE = "grades-sf9.csv"
 EXPECTED_LEARNERS = 50
 EXPECTED_ATTENDANCE_ROWS = 250
 EXPECTED_GRADE_ROWS = 400
+
+
+def _content_type(name):
+    """The MIME type of a shipped dataset; the view sniffs ZIP magic anyway."""
+    return _XLSM_CONTENT_TYPE if name.endswith(".xlsm") else _XLSX_CONTENT_TYPE
+
+
+def _totals(jobs):
+    """``(processed, errors)`` summed over a dataset's per-section jobs."""
+    return (sum(job.processed_rows for job in jobs), sum(job.error_rows for job in jobs))
+
 
 
 class DatasetPipelineTest(TestCase):
@@ -66,12 +90,13 @@ class DatasetPipelineTest(TestCase):
 
     def _upload(self, name, import_type, deadline_seconds=30):
         """
-        Upload a shipped file and let the request finish the job.
+        Upload one shipped workbook and let the request finish the job.
 
         ``IMPORT_SYNC_ROW_LIMIT`` is lifted only for the duration of the POST.
-        The attendance file is now 250 rows and the grade file 400, both above
-        the 200-row limit, so the production path would queue them to the
-        in-process worker pool.  That worker runs on its own connection, and a
+        A section's grade workbook is 200 rows and its attendance workbook 125,
+        and the two-section grade total is 400, so the grade files exceed the
+        200-row limit and the production path would queue them to the in-process
+        worker pool.  That worker runs on its own connection, and a
         ``TestCase``'s open transaction makes SQLite deadlock it ("database
         table is locked").  The real queued path is covered by
         ``BackgroundImportTest`` in ``apps/data_import/tests.py``; what this
@@ -83,7 +108,7 @@ class DatasetPipelineTest(TestCase):
         path = DATA / name
         self.assertTrue(path.exists(), f"missing shipped dataset {name}")
         upload = SimpleUploadedFile(
-            name, path.read_bytes(), content_type="text/csv"
+            name, path.read_bytes(), content_type=_content_type(name)
         )
         with mock.patch.object(views_module, "IMPORT_SYNC_ROW_LIMIT", 10_000):
             resp = self.client.post(
@@ -101,23 +126,30 @@ class DatasetPipelineTest(TestCase):
             job.refresh_from_db()
         return job
 
+    def _upload_dataset(self, template, import_type):
+        """Upload the whole dataset: one filled workbook per section."""
+        return [
+            self._upload(template.format(slug=slug), import_type)
+            for slug in SECTION_SLUGS
+        ]
+
     # ------------------------------------------------------------------ #
     # 1. Batch processing & ingestion
     # ------------------------------------------------------------------ #
 
     def test_both_datasets_ingest_cleanly(self):
-        attendance = self._upload(ATTENDANCE_FILE, "attendance")
+        attendance = self._upload_dataset(ATTENDANCE_FILE, "attendance")
         self.assertEqual(
-            (attendance.processed_rows, attendance.error_rows),
+            _totals(attendance),
             (EXPECTED_ATTENDANCE_ROWS, 0),
-            attendance.error_log,
+            [job.error_log for job in attendance],
         )
 
-        grades = self._upload(GRADES_FILE, "grades")
+        grades = self._upload_dataset(GRADES_FILE, "grades")
         self.assertEqual(
-            (grades.processed_rows, grades.error_rows),
+            _totals(grades),
             (EXPECTED_GRADE_ROWS, 0),
-            grades.error_log,
+            [job.error_log for job in grades],
         )
 
     def test_ingestion_completes_without_lag(self):
@@ -139,12 +171,13 @@ class DatasetPipelineTest(TestCase):
         number rather than just a boolean.
         """
         started = time.monotonic()
-        attendance = self._upload(ATTENDANCE_FILE, "attendance")
-        grades = self._upload(GRADES_FILE, "grades")
+        attendance = self._upload_dataset(ATTENDANCE_FILE, "attendance")
+        grades = self._upload_dataset(GRADES_FILE, "grades")
         elapsed = time.monotonic() - started
 
-        self.assertEqual(attendance.status, JobStatus.COMPLETED)
-        self.assertEqual(grades.status, JobStatus.COMPLETED)
+        self.assertTrue(
+            all(job.status == JobStatus.COMPLETED for job in attendance + grades)
+        )
 
         rows = EXPECTED_ATTENDANCE_ROWS + EXPECTED_GRADE_ROWS
         per_row_ms = (elapsed / rows) * 1000
@@ -171,8 +204,8 @@ class DatasetPipelineTest(TestCase):
         risk computation flags the weak cohort and stores a RiskScore for every
         student with computable data.
         """
-        self._upload(ATTENDANCE_FILE, "attendance")
-        self._upload(GRADES_FILE, "grades")
+        self._upload_dataset(ATTENDANCE_FILE, "attendance")
+        self._upload_dataset(GRADES_FILE, "grades")
 
         # The importer writes grades as DRAFT (a signed grade is locked); the
         # feature engine reads finalized grades only, so finalize the imported
@@ -207,8 +240,8 @@ class DatasetPipelineTest(TestCase):
         """
         from apps.accounts.models import StudentProfile
 
-        self._upload(ATTENDANCE_FILE, "attendance")
-        self._upload(GRADES_FILE, "grades")
+        self._upload_dataset(ATTENDANCE_FILE, "attendance")
+        self._upload_dataset(GRADES_FILE, "grades")
         Grade.objects.filter(
             grading_period__name="Term 3", status=Grade.StatusChoices.DRAFT
         ).update(status=Grade.StatusChoices.FINALIZED)
@@ -257,7 +290,7 @@ class DatasetPipelineTest(TestCase):
     def test_imported_records_are_readable_via_api(self):
         """A dashboard reads back exactly what was imported."""
         before = Grade.objects.filter(grading_period__name="Term 3").count()
-        self._upload(GRADES_FILE, "grades")
+        self._upload_dataset(GRADES_FILE, "grades")
         after = Grade.objects.filter(grading_period__name="Term 3").count()
         self.assertEqual(after - before, EXPECTED_GRADE_ROWS)
 
@@ -301,8 +334,8 @@ class DatasetPipelineTest(TestCase):
         Content-based recommendations work off the imported grades/attendance
         alone, so a student below the passing mark receives a non-empty list.
         """
-        self._upload(ATTENDANCE_FILE, "attendance")
-        self._upload(GRADES_FILE, "grades")
+        self._upload_dataset(ATTENDANCE_FILE, "attendance")
+        self._upload_dataset(GRADES_FILE, "grades")
 
         from apps.accounts.models import StudentProfile
 
@@ -324,8 +357,8 @@ class DatasetPipelineTest(TestCase):
 
     def test_batch_history_is_retained(self):
         """Each import leaves an auditable ImportJob row."""
-        self._upload(ATTENDANCE_FILE, "attendance")
-        self._upload(GRADES_FILE, "grades")
+        self._upload_dataset(ATTENDANCE_FILE, "attendance")
+        self._upload_dataset(GRADES_FILE, "grades")
 
         jobs = ImportJob.objects.filter(
             import_type__in=("attendance", "grades"),
@@ -342,17 +375,15 @@ class DatasetTrendTest(TransactionTestCase):
 
     ``TransactionTestCase`` on purpose, exactly like ``BackgroundImportTest``:
     the records two batches leave behind must be really committed, and a plain
-    ``TestCase`` would roll them back.  ``grades-sf9-terms-1-2.csv`` is 800 rows,
-    above ``IMPORT_SYNC_ROW_LIMIT``, but ``_upload_inline`` lifts that limit for
-    the duration of the POST, so the import runs on this test's own connection
-    rather than deadlocking a worker on SQLite's write lock.
+    ``TestCase`` would roll them back.  A section's earlier-terms workbook is
+    400 rows, above ``IMPORT_SYNC_ROW_LIMIT``, but ``_upload_inline`` lifts that
+    limit for the duration of the POST, so the import runs on this test's own
+    connection rather than deadlocking a worker on SQLite's write lock.
 
     The seed commands run per test rather than in ``setUpTestData`` because
     ``TransactionTestCase`` truncates between tests and has no class-level data
     hook.  This class holds one test, so the cost is paid once.
     """
-
-    EARLIER_TERMS_FILE = "grades-sf9-terms-1-2.csv"
 
     def setUp(self):
         with mock.patch.dict(os.environ, {"QA_SHARED_PASSWORD": "Tmp-Qa-Pass-1"}):
@@ -366,7 +397,7 @@ class DatasetTrendTest(TransactionTestCase):
         path = DATA / name
         self.assertTrue(path.exists(), f"missing shipped dataset {name}")
         upload = SimpleUploadedFile(
-            name, path.read_bytes(), content_type="text/csv"
+            name, path.read_bytes(), content_type=_content_type(name)
         )
         resp = self.client.post(
             "/api/v1/data-import/jobs/",
@@ -383,9 +414,9 @@ class DatasetTrendTest(TransactionTestCase):
             job.refresh_from_db()
         return job
 
-    def _upload_inline(self, name, import_type):
+    def _upload_inline(self, template, import_type):
         """
-        Upload a file and let the request finish the job.
+        Upload a dataset and let each request finish its job.
 
         ``IMPORT_SYNC_ROW_LIMIT`` is lifted only for the duration of the POST,
         so the import runs on the test's own connection.  The background pool
@@ -397,7 +428,10 @@ class DatasetTrendTest(TransactionTestCase):
         from apps.data_import import views as views_module
 
         with mock.patch.object(views_module, "IMPORT_SYNC_ROW_LIMIT", 10_000):
-            return self._upload(name, import_type)
+            return [
+                self._upload(template.format(slug=slug), import_type)
+                for slug in SECTION_SLUGS
+            ]
 
     def test_student_trend_is_tracked_across_two_batch_runs(self):
         """
@@ -440,7 +474,7 @@ class DatasetTrendTest(TransactionTestCase):
         before_by_period = {p["period_id"]: p["average"] for p in before_periods}
 
         # Run 2: earlier terms for the same roster, so the trend gains history.
-        self._upload_inline(self.EARLIER_TERMS_FILE, "grades")
+        self._upload_inline(EARLIER_TERMS_FILE, "grades")
         Grade.objects.filter(
             grading_period__name__in=("Term 1", "Term 2"),
             status=Grade.StatusChoices.DRAFT,
