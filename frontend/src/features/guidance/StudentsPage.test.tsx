@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs"
-import path from "node:path"
+import * as path from "node:path"
 import { fileURLToPath } from "node:url"
 
 import {
@@ -321,6 +321,7 @@ describe("StudentsPage — imported dataset", () => {
     // columns: student_id, section, subject_code, grading_period, score, ...
     for (const cols of rows) {
       const studentId = cols[0]
+      if (!studentId) continue
       const score = Number(cols[4])
       const entry = totals.get(studentId) ?? { sum: 0, n: 0 }
       entry.sum += score
@@ -382,7 +383,7 @@ describe("StudentsPage — imported dataset", () => {
     expect(headerCount).toBeInTheDocument()
 
     // At least one at-risk row renders with its badge.
-    const firstFlagged = atRisk[0]
+    const firstFlagged = atRisk[0]!
     const row = screen.getByText(firstFlagged.name).closest("tr") as HTMLElement
     expect(row).toHaveAttribute("data-at-risk", "true")
   })

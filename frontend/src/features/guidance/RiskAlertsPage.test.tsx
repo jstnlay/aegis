@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs"
-import path from "node:path"
+import * as path from "node:path"
 import { fileURLToPath } from "node:url"
 
 import {
@@ -556,6 +556,7 @@ describe("RiskAlertsPage — imported dataset", () => {
     // columns: student_id, section, subject_code, grading_period, score, ...
     for (const cols of rows) {
       const studentId = cols[0]
+      if (!studentId) continue
       const score = Number(cols[4])
       const entry = totals.get(studentId) ?? { sum: 0, n: 0 }
       entry.sum += score
@@ -581,7 +582,7 @@ describe("RiskAlertsPage — imported dataset", () => {
           student: `sp-${studentId}`,
           student_name: `Learner ${studentId.slice(-5)}`,
           risk_level: average < 70 ? "high" : "moderate",
-          source: "algorithm",
+          source: "decision_tree",
           status: "active",
           risk_factors: [
             {
@@ -613,7 +614,7 @@ describe("RiskAlertsPage — imported dataset", () => {
 
     renderPage()
 
-    await screen.findByText(expected[0].student_name)
+    await screen.findByText(expected[0]!.student_name)
     expect(
       screen.getByText(
         new RegExp(`Showing ${expected.length} of ${expected.length}`)
@@ -623,7 +624,7 @@ describe("RiskAlertsPage — imported dataset", () => {
 
   it("prints the why-flagged factor rather than [object Object]", async () => {
     const { container } = renderPage()
-    const expected = alertsFromDataset()[0]
+    const expected = alertsFromDataset()[0]!
 
     await screen.findByText(expected.student_name)
 
@@ -638,7 +639,7 @@ describe("RiskAlertsPage — imported dataset", () => {
     expect(highs.length).toBeGreaterThan(0)
 
     renderPage()
-    await screen.findByText(expected[0].student_name)
+    await screen.findByText(expected[0]!.student_name)
 
     await openSelect(screen.getByLabelText("Risk level"))
     fireEvent.click(await screen.findByRole("option", { name: "High" }))
