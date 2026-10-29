@@ -526,7 +526,7 @@ describe("RiskAlertsPage", () => {
 })
 
 /**
- * The alert queue driven by the shipped `docs/test-data/grades-sf3.csv`.
+ * The alert queue driven by the shipped `docs/test-data/grades-sf9.csv`.
  *
  * The other tests here hand-build alerts. This block instead reads the dataset
  * the import pipeline ingests, derives each learner's term average from it,
@@ -545,7 +545,7 @@ describe("RiskAlertsPage — imported dataset", () => {
   function termAveragesFromDataset(): Map<string, number> {
     const csvPath = path.resolve(
       path.dirname(fileURLToPath(import.meta.url)),
-      "../../../../docs/test-data/grades-sf3.csv"
+      "../../../../docs/test-data/grades-sf9.csv"
     )
     const rows = readFileSync(csvPath, "utf8")
       .trim()

@@ -5,33 +5,47 @@ TC-ADM-04 (attendance), TC-ADM-05 (guidance records), TC-ADM-18 (malformed
 file). Faculty uploads, TC-FAC-13 to TC-FAC-16, use the same two attendance
 files and the same grades file through the faculty page.
 
-## DepEd SF2 / grades datasets
+## DepEd SF2 / SF9 datasets
 
-`attendance-sf2.csv` and `grades-sf3.csv` are fuller datasets derived from the
-two DepEd templates in this folder (`SF2 JUNIOR HS.xlsm` for attendance, the
-`UPDATED [Grades 2-10] 3Term E-Class Record …` workbook for grades). They cover
-one whole section — Grade 8 Bonifacio, 25 learners, students `AEGIS-QA-S0026`
-to `S0050` — and are shaped so the pipeline has something to find:
+`attendance-sf2.csv` and `grades-sf9.csv` are fuller datasets derived from the
+two DepEd forms in this folder:
 
-- **grades-sf3.csv** — 200 rows (25 learners × 8 core subjects, Term 3). The
-  roster is split into three bands round-robin, so about 8 learners sit below
-  the passing mark. Term 3 is the open term, so re-uploading updates in place
-  instead of hitting the finalized-grade lock.
-- **grades-sf3-terms-1-2.csv** — 400 rows (25 learners × 8 subjects × Term 1
-  and Term 2). Uploaded *after* the Term 3 file as a second batch, it is what
-  gives the historical trend more than one point to plot.
-- **attendance-sf2.csv** — 125 rows (25 learners × 5 school days in the week of
+| Template | Form | Produces |
+| --- | --- | --- |
+| `SF2 JUNIOR HS.xlsm` | School Form 2 — daily attendance | `attendance-sf2.csv` |
+| `G4-10  School Form 9 (SY 26-27).xlsx` | School Form 9 — Learner's Progress Report Card (formerly Form 138) | `grades-sf9.csv`, `grades-sf9-terms-1-2.csv` |
+
+They cover **two whole sections — 50 learners**: Grade 8 Bonifacio, students
+`AEGIS-QA-S0026` to `S0050`, and Grade 9 Mabini, `S0051` to `S0075`. They are
+shaped so the pipeline has something to find:
+
+- **grades-sf9.csv** — 400 rows (50 learners × SF9's 8 learning areas, Term 3).
+  Each section's roster is split into three bands round-robin, so about 16
+  learners sit below the passing mark. Term 3 is the open term, so re-uploading
+  updates in place instead of hitting the finalized-grade lock.
+- **grades-sf9-terms-1-2.csv** — 800 rows (50 learners × 8 learning areas ×
+  Term 1 and Term 2). Uploaded *after* the Term 3 file as a second batch, it is
+  what gives the historical trend more than one point to plot.
+- **attendance-sf2.csv** — 250 rows (50 learners × 5 school days in the week of
   2026-09-07, inside Term 1). The weak band carries more absences and tardies.
 
-> **Grade source (sanctioned substitute).** The grade files are named
-> `grades-sf3*.csv` for continuity with the objective, but the source is the
-> **E-Class Record workbook** above (its `TERM 1/2/3` and `FINAL GRADES`
-> sheets). There is **no DepEd "SF3" workbook in this repository** — SF3 is the
-> Learner's Progress Report Card, a different form. The project owner accepted
-> the E-Class Record as the grade source; this note records that decision. If a
-> real SF3 ever lands in the folder, add it as its own template with its own
-> shape check and writer branch (`generate_datasets.py`), and a new output —
-> do not repoint these filenames.
+**How SF9 is read.** The generator opens the workbook and asserts, before
+writing anything, that the `TERM 1/2/3 SUMMARY`, `FINAL GRADES` and
+`SF9 - GRADE 4-10` sheets exist and that each summary's learning-area band
+(row 12, from column K) is exactly:
+
+```
+Filipino  English  Mathematics  Science  AP  GMRC/VE  EPP/TLE  MAPEH
+```
+
+Those are mapped to the subject codes the seeded school uses (`FIL`, `ENG`,
+`MATH`, `SCI`, `AP`, `ESP`, `TLE`, `MAPEH` — `GMRC/VE` is the current name for
+what the seed calls Edukasyon sa Pagpapakatao; `EPP/TLE` is TLE). The seed
+suffixes each code with the grade level — `FIL-8` for Grade 8, `FIL-9` for
+Grade 9 — so both sections' grades resolve to real subjects. If DepEd revises
+the form, the check fails loudly instead of writing grades against the wrong
+columns. The same contract applies to SF2: its metadata rows and `M T W TH F`
+day band are asserted first.
 
 Both files use the same school-key forms the importers already resolve
 (`Grade 8 - Bonifacio`, `ENG-8`, `Term 3`). They regenerate deterministically:
@@ -43,9 +57,9 @@ python docs/test-data/generate_datasets.py
 Run that only when a template changes; the committed CSVs are the source the
 test suite reads. `apps/data_import/tests_datasets_pipeline.py` imports them
 through the real API and proves the five capabilities (ingestion, at-risk run,
-read-back, recommendations, batch history, and the two-batch trend);
-`apps/data_import/tests_shipped_files.py` covers the smaller manual-QA files
-below.
+read-back, recommendations, batch history, the two-batch academic trend, and a
+per-student risk series over time); `apps/data_import/tests_shipped_files.py`
+covers the smaller manual-QA files below.
 
 ## No setup needed
 
@@ -99,9 +113,11 @@ role or password.
 A file with more than 200 rows is not finished while the upload page waits.
 The upload returns immediately and the job keeps running on the server; the
 job list on the page refreshes itself until the status is completed, failed or
-partial. The files above are all small, so they finish before the response.
-If a job ever stays "processing" after a redeploy or a restart, just upload the
-same file again: re-uploading is safe, and it corrects the same records.
+partial. The manual-QA files below are all small and finish before the
+response, but the SF2/SF9 datasets above do not: attendance is 250 rows and
+grades 400, so both are finished by the worker pool. If a job ever stays
+"processing" after a redeploy or a restart, just upload the same file again:
+re-uploading is safe, and it corrects the same records.
 
 ## What each malformed row proves
 

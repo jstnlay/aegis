@@ -289,18 +289,19 @@ describe("StudentsPage", () => {
 })
 
 /**
- * The imported SF2/SF3 dataset, rendered on the directory.
+ * The imported SF2/SF9 dataset, rendered on the directory.
  *
  * Every other test here feeds the page a hand-typed fixture. This one reads the
- * shipped `docs/test-data/grades-sf3.csv` — the file the import pipeline
+ * shipped `docs/test-data/grades-sf9.csv` — the file the import pipeline
  * ingests — derives each learner's term average from it, and renders the same
  * rows the server would build from those grades. That ties the UI evidence to
  * the actual dataset rather than to a fixture that could drift away from it.
  *
- * The dataset splits the Grade 8 Bonifacio roster into three bands round-robin;
- * the "at-risk" band's term average sits below the passing mark, so those
- * learners must render with an at-risk badge and be reachable by the activity
- * filter, the search box and the profile link.
+ * The dataset covers two sections (Grade 8 Bonifacio and Grade 9 Mabini) and
+ * splits each roster into three bands round-robin; the "at-risk" band's term
+ * average sits below the passing mark, so those learners must render with an
+ * at-risk badge and be reachable by the activity filter, the search box and the
+ * profile link.
  */
 describe("StudentsPage — imported dataset", () => {
   const PASSING_MARK = 75
@@ -309,7 +310,7 @@ describe("StudentsPage — imported dataset", () => {
   function termAveragesFromDataset(): Map<string, number> {
     const csvPath = path.resolve(
       path.dirname(fileURLToPath(import.meta.url)),
-      "../../../../docs/test-data/grades-sf3.csv"
+      "../../../../docs/test-data/grades-sf9.csv"
     )
     const rows = readFileSync(csvPath, "utf8")
       .trim()
@@ -360,9 +361,9 @@ describe("StudentsPage — imported dataset", () => {
     stub(rows)
     renderPage()
 
-    // 25 learners in the file.
-    expect(rows).toHaveLength(25)
-    expect(await screen.findByText(/Showing 25 of 25/)).toBeInTheDocument()
+    // 50 learners in the file: two sections of 25.
+    expect(rows).toHaveLength(50)
+    expect(await screen.findByText(/Showing 50 of 50/)).toBeInTheDocument()
   })
 
   it("shows the at-risk learners the dataset actually contains", async () => {
@@ -389,7 +390,7 @@ describe("StudentsPage — imported dataset", () => {
   it("filters the dataset to the learners with open risk alerts", async () => {
     stub(directoryRowsFromDataset())
     renderPage()
-    await screen.findByText(/Showing 25 of 25/)
+    await screen.findByText(/Showing 50 of 50/)
 
     await openSelect(screen.getByLabelText("Activity type"))
     fireEvent.click(
@@ -405,7 +406,7 @@ describe("StudentsPage — imported dataset", () => {
   it("selects a dataset learner by student code", async () => {
     stub(directoryRowsFromDataset())
     renderPage()
-    await screen.findByText(/Showing 25 of 25/)
+    await screen.findByText(/Showing 50 of 50/)
 
     fireEvent.change(screen.getByLabelText("Search"), {
       target: { value: "AEGIS-QA-S0046" },

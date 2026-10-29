@@ -1,10 +1,10 @@
 """
-End-to-end proof that the SF2/SF3-derived datasets drive all five capabilities.
+End-to-end proof that the SF2/SF9-derived datasets drive all five capabilities.
 
-The files ``attendance-sf2.csv`` and ``grades-sf3.csv`` are generated from the
-DepEd templates by ``docs/test-data/generate_datasets.py`` and committed.  This
-test imports them through the real HTTP API against a freshly seeded school and
-then exercises each capability the dataset must feed:
+The files ``attendance-sf2.csv`` and ``grades-sf9.csv`` are generated from the
+DepEd SF2 and SF9 templates by ``docs/test-data/generate_datasets.py`` and
+committed.  This test imports them through the real HTTP API against a freshly
+seeded school and then exercises each capability the dataset must feed:
 
 1. Batch ingestion   -- both files import in one request, 0 failed rows.
 2. At-risk run       -- the risk engine scores the imported cohort.
@@ -38,12 +38,14 @@ from apps.guidance.models import RiskAlert, RiskScore
 DATA = Path(__file__).resolve().parents[4] / "docs" / "test-data"
 
 ATTENDANCE_FILE = "attendance-sf2.csv"
-GRADES_FILE = "grades-sf3.csv"
+GRADES_FILE = "grades-sf9.csv"
 
 #: Rows the generator writes, asserted here so a template change that silently
-#: drops rows is caught.
-EXPECTED_ATTENDANCE_ROWS = 125
-EXPECTED_GRADE_ROWS = 200
+#: drops rows is caught.  50 learners: 250 attendance rows (50 x 5 days) and
+#: 400 grade rows (50 x 8 SF9 learning areas).
+EXPECTED_LEARNERS = 50
+EXPECTED_ATTENDANCE_ROWS = 250
+EXPECTED_GRADE_ROWS = 400
 
 
 class DatasetPipelineTest(TestCase):
@@ -63,27 +65,40 @@ class DatasetPipelineTest(TestCase):
     # ------------------------------------------------------------------ #
 
     def _upload(self, name, import_type, deadline_seconds=30):
+        """
+        Upload a shipped file and let the request finish the job.
+
+        ``IMPORT_SYNC_ROW_LIMIT`` is lifted only for the duration of the POST.
+        The attendance file is now 250 rows and the grade file 400, both above
+        the 200-row limit, so the production path would queue them to the
+        in-process worker pool.  That worker runs on its own connection, and a
+        ``TestCase``'s open transaction makes SQLite deadlock it ("database
+        table is locked").  The real queued path is covered by
+        ``BackgroundImportTest`` in ``apps/data_import/tests.py``; what this
+        class proves is what the imported rows leave behind, so the inline path
+        is the honest one to drive here.
+        """
+        from apps.data_import import views as views_module
+
         path = DATA / name
         self.assertTrue(path.exists(), f"missing shipped dataset {name}")
         upload = SimpleUploadedFile(
             name, path.read_bytes(), content_type="text/csv"
         )
-        resp = self.client.post(
-            "/api/v1/data-import/jobs/",
-            {"file": upload, "import_type": import_type},
-            format="multipart",
-        )
+        with mock.patch.object(views_module, "IMPORT_SYNC_ROW_LIMIT", 10_000):
+            resp = self.client.post(
+                "/api/v1/data-import/jobs/",
+                {"file": upload, "import_type": import_type},
+                format="multipart",
+            )
         self.assertEqual(resp.status_code, 201, resp.data)
 
         job = ImportJob.objects.get(pk=resp.data["id"])
-        # A file over ``IMPORT_SYNC_ROW_LIMIT`` is dispatched to the in-process
-        # worker pool and runs on a separate connection, so the poll has to
-        # re-read the row instead of trusting a cached in-memory copy.
         deadline = time.monotonic() + deadline_seconds
         while job.status in (JobStatus.PENDING, JobStatus.PROCESSING):
             self.assertLess(time.monotonic(), deadline, "job never finished")
             time.sleep(0.05)
-            job = ImportJob.objects.get(pk=resp.data["id"])
+            job.refresh_from_db()
         return job
 
     # ------------------------------------------------------------------ #
@@ -107,43 +122,43 @@ class DatasetPipelineTest(TestCase):
 
     def test_ingestion_completes_without_lag(self):
         """
-        The dataset ingests in one request, well inside the sync row limit.
+        The dataset ingests at a rate that rules out lag.
 
-        "Without performance lag" is a claim about the shipped file, so it is
-        measured against the shipped file: both files land in a single request
-        each (no background queue, which only starts above
-        ``IMPORT_SYNC_ROW_LIMIT``) and the whole ingest finishes under the
-        budget below.  The budget is deliberately loose — it catches a
-        regression that turns per-file work into per-row round trips, not
-        machine-to-machine variance.
+        "Without performance lag" is measured, not assumed.  Two bounds on the
+        650-row pair (250 attendance + 400 grades), both taken through the same
+        request path the other tests use:
+
+        1. **Wall clock.**  The pair finishes well under a minute.
+        2. **Per-row rate.**  The bound that actually catches lag: the importer
+           is documented at ~25 queries per row (``runner.py``), so a healthy
+           row costs single-digit milliseconds.  A per-row ceiling of 50 ms
+           fails on any regression that turns a batch write back into a
+           per-row round trip, while tolerating machine variance.
+
+        The measured rate is in the failure message, so a regression reports the
+        number rather than just a boolean.
         """
-        from apps.data_import.constants import IMPORT_SYNC_ROW_LIMIT
-
-        self.assertLessEqual(
-            EXPECTED_ATTENDANCE_ROWS,
-            IMPORT_SYNC_ROW_LIMIT,
-            "the attendance dataset is now large enough to be queued",
-        )
-        self.assertLessEqual(
-            EXPECTED_GRADE_ROWS,
-            IMPORT_SYNC_ROW_LIMIT,
-            "the grades dataset is now large enough to be queued",
-        )
-
         started = time.monotonic()
         attendance = self._upload(ATTENDANCE_FILE, "attendance")
         grades = self._upload(GRADES_FILE, "grades")
         elapsed = time.monotonic() - started
 
-        # A queued job would report PROCESSING here; a lagged ingest would take
-        # far longer than the budget.  Both are caught by this pair of asserts.
         self.assertEqual(attendance.status, JobStatus.COMPLETED)
         self.assertEqual(grades.status, JobStatus.COMPLETED)
+
+        rows = EXPECTED_ATTENDANCE_ROWS + EXPECTED_GRADE_ROWS
+        per_row_ms = (elapsed / rows) * 1000
+
         self.assertLess(
             elapsed,
-            30.0,
-            f"ingesting {EXPECTED_ATTENDANCE_ROWS + EXPECTED_GRADE_ROWS} rows "
-            f"took {elapsed:.1f}s",
+            60.0,
+            f"ingesting {rows} rows took {elapsed:.1f}s ({per_row_ms:.1f} ms/row)",
+        )
+        self.assertLess(
+            per_row_ms,
+            50.0,
+            f"ingest ran at {per_row_ms:.1f} ms/row over {rows} rows — "
+            "that is per-row round-trip behaviour, not a batch write",
         )
 
     # ------------------------------------------------------------------ #
@@ -246,6 +261,23 @@ class DatasetPipelineTest(TestCase):
         after = Grade.objects.filter(grading_period__name="Term 3").count()
         self.assertEqual(after - before, EXPECTED_GRADE_ROWS)
 
+        # The objective asks for at least 50 student samples, so assert the
+        # imported cohort is that wide rather than trusting the row count.
+        imported_learners = (
+            Grade.objects.filter(
+                grading_period__name="Term 3",
+                student__student_id__startswith="AEGIS-QA-",
+            )
+            .values("student_id")
+            .distinct()
+            .count()
+        )
+        self.assertGreaterEqual(
+            imported_learners,
+            EXPECTED_LEARNERS,
+            f"the dataset covers only {imported_learners} learners",
+        )
+
         imported = Grade.objects.filter(
             grading_period__name="Term 3",
             student__student_id="AEGIS-QA-S0026",
@@ -309,18 +341,18 @@ class DatasetTrendTest(TransactionTestCase):
     Historical tracking across two batch runs, on the dataset.
 
     ``TransactionTestCase`` on purpose, exactly like ``BackgroundImportTest``:
-    ``grades-sf3-terms-1-2.csv`` is 400 rows, above ``IMPORT_SYNC_ROW_LIMIT``,
-    so the upload is queued to the worker pool and runs on its own connection.
-    The job row has to be really committed for that worker to see it, and the
-    test's own transaction must not hold the SQLite write lock while the worker
-    writes — which is what a plain ``TestCase`` would do, deadlocking the poll.
+    the records two batches leave behind must be really committed, and a plain
+    ``TestCase`` would roll them back.  ``grades-sf9-terms-1-2.csv`` is 800 rows,
+    above ``IMPORT_SYNC_ROW_LIMIT``, but ``_upload_inline`` lifts that limit for
+    the duration of the POST, so the import runs on this test's own connection
+    rather than deadlocking a worker on SQLite's write lock.
 
     The seed commands run per test rather than in ``setUpTestData`` because
     ``TransactionTestCase`` truncates between tests and has no class-level data
     hook.  This class holds one test, so the cost is paid once.
     """
 
-    EARLIER_TERMS_FILE = "grades-sf3-terms-1-2.csv"
+    EARLIER_TERMS_FILE = "grades-sf9-terms-1-2.csv"
 
     def setUp(self):
         with mock.patch.dict(os.environ, {"QA_SHARED_PASSWORD": "Tmp-Qa-Pass-1"}):
