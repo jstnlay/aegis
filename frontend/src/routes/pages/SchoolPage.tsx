@@ -1,12 +1,17 @@
-import { ArrowLeft, ArrowRight } from "lucide-react"
+import { useLayoutEffect } from "react"
+import { ArrowLeft, BookOpen, Target } from "lucide-react"
 import { Link } from "react-router-dom"
 
 import { PublicFooter } from "@/components/brand/PublicFooter"
 import { SchoolHeader } from "@/components/brand/SchoolHeader"
 import { Reveal } from "@/components/layout/Reveal"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ABOUT_TEXT, MISSION_TEXT, VISION_TEXT } from "@/lib/school-content"
+import "./school-page.css"
+
+const ABOUT_PARAGRAPHS = ABOUT_TEXT.split(
+  /(?=On their 1st year|His Care Christian Institute of Tanauan|His Care Christian Institute of Santa Maria)/
+)
 
 /**
  * "Read more" destination from the landing page - the school's background
@@ -19,89 +24,81 @@ import { ABOUT_TEXT, MISSION_TEXT, VISION_TEXT } from "@/lib/school-content"
  * rather than invented.
  */
 export function SchoolPage() {
+  useLayoutEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" })
+  }, [])
+
   return (
-    <div className="min-h-svh bg-background">
-      <SchoolHeader>
-        <Button
-          asChild
-          size="sm"
-          className="transition-all hover:-translate-y-0.5 hover:shadow-sm"
+    <div className="school-background-page min-h-svh">
+      <SchoolHeader brandPosition="end">
+        <Link
+          to="/"
+          aria-label="Back to the landing page"
+          className="school-background-back"
         >
-          <Link to="/login">
-            Sign in <ArrowRight aria-hidden="true" className="size-4" />
-          </Link>
+          <ArrowLeft aria-hidden="true" className="size-4" />
+          <span>Back to the landing page</span>
+        </Link>
+        <Button asChild size="lg" className="school-background-sign-in">
+          <Link to="/login">Sign in</Link>
         </Button>
       </SchoolHeader>
 
-      <main className="mx-auto w-full max-w-6xl space-y-8 px-4 py-12 md:space-y-12 lg:px-6">
+      <main className="school-background-main">
         <Reveal>
-          <div className="space-y-3">
-            <Link
-              to="/"
-              className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <ArrowLeft aria-hidden="true" className="size-4" />
-              Back to the landing page
-            </Link>
-            <h1 className="text-balance text-3xl font-bold tracking-tight text-primary sm:text-4xl">
-              School background
-            </h1>
+          <div className="school-background-title">
+            <h1>School background</h1>
           </div>
         </Reveal>
 
         <Reveal>
           <section
             aria-labelledby="school-about"
-            className="space-y-4 scroll-mt-20"
+            className="school-background-about"
           >
-            <h2
-              id="school-about"
-              className="text-balance text-2xl font-semibold tracking-tight text-primary"
-            >
-              About the school
-            </h2>
-            <p className="max-w-prose text-sm leading-relaxed text-pretty text-muted-foreground">
-              {ABOUT_TEXT}
-            </p>
+            <h2 id="school-about">About the school</h2>
+            <div className="school-background-copy" lang="en">
+              {ABOUT_PARAGRAPHS.map((paragraph) => (
+                <p key={paragraph}>{paragraph.trim()}</p>
+              ))}
+            </div>
           </section>
         </Reveal>
 
         <Reveal>
           <section
             aria-labelledby="school-mission-vision"
-            className="space-y-4 rounded-2xl border border-border/70 bg-muted/50 p-6 md:p-8"
+            className="school-background-beliefs"
           >
-            <h2
-              id="school-mission-vision"
-              className="text-balance text-2xl font-semibold tracking-tight text-primary"
-            >
-              Mission &amp; vision
-            </h2>
-            <div className="grid gap-4 md:grid-cols-2">
-              <Card className="h-full transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:ring-primary/20">
-                <CardHeader>
-                  <CardTitle className="text-base text-primary">
-                    Mission
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm whitespace-pre-line leading-relaxed text-muted-foreground">
-                    {MISSION_TEXT}
-                  </p>
-                </CardContent>
-              </Card>
-              <Card className="h-full transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:ring-primary/20">
-                <CardHeader>
-                  <CardTitle className="text-base text-primary">
-                    Vision
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm leading-relaxed text-muted-foreground">
-                    {VISION_TEXT}
-                  </p>
-                </CardContent>
-              </Card>
+            <h2 id="school-mission-vision">Mission &amp; vision</h2>
+            <div className="school-background-belief-grid">
+              <article
+                className="school-background-belief"
+                aria-labelledby="school-mission"
+              >
+                <div className="school-background-belief-heading">
+                  <BookOpen aria-hidden="true" />
+                  <h3 id="school-mission">Mission</h3>
+                </div>
+                <p
+                  className="school-background-copy school-background-mission"
+                  lang="en"
+                >
+                  {MISSION_TEXT}
+                </p>
+              </article>
+              <article
+                className="school-background-belief"
+                aria-labelledby="school-vision"
+              >
+                <div className="school-background-belief-heading">
+                  <Target aria-hidden="true" />
+                  <h3 id="school-vision">Vision</h3>
+                </div>
+                <p className="school-background-copy" lang="en">
+                  {VISION_TEXT}
+                </p>
+              </article>
             </div>
           </section>
         </Reveal>

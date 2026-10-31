@@ -1,11 +1,16 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, useSyncExternalStore } from "react"
 import { Menu, X } from "lucide-react"
-import { Link } from "react-router-dom"
+import { Link, NavLink, useLocation } from "react-router-dom"
+
+function subscribeToHash(callback: () => void) {
+  window.addEventListener("hashchange", callback)
+  return () => window.removeEventListener("hashchange", callback)
+}
 
 const DESKTOP_LINK =
-  "text-muted-foreground transition-colors hover:text-foreground"
+  "public-nav-link rounded-sm text-muted-foreground transition-colors hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
 const MOBILE_LINK =
-  "block rounded-md px-3 py-2 text-sm transition-colors hover:bg-muted hover:text-foreground"
+  "public-nav-link block rounded-md px-3 py-2 text-sm transition-colors hover:bg-muted hover:text-primary focus-visible:outline-2 focus-visible:outline-ring"
 
 function NavLinks({
   className,
@@ -14,24 +19,55 @@ function NavLinks({
   className: string
   onNavigate?: () => void
 }) {
+  const { pathname } = useLocation()
+  const hash = useSyncExternalStore(
+    subscribeToHash,
+    () => window.location.hash,
+    () => ""
+  )
   return (
     <>
-      <Link to="/" onClick={onNavigate} className={className}>
+      <Link
+        to="/"
+        aria-current={pathname === "/" && !hash ? "page" : undefined}
+        onClick={onNavigate}
+        className={className}
+      >
         Home
       </Link>
-      <a href="#about" onClick={onNavigate} className={className}>
+      <NavLink to="/school" onClick={onNavigate} className={className}>
         About
-      </a>
-      <a href="#announcements" onClick={onNavigate} className={className}>
+      </NavLink>
+      <a
+        href="#announcements"
+        aria-current={hash === "#announcements" ? "location" : undefined}
+        onClick={onNavigate}
+        className={className}
+      >
         Announcements
       </a>
-      <a href="#resources" onClick={onNavigate} className={className}>
+      <a
+        href="#resources"
+        aria-current={hash === "#resources" ? "location" : undefined}
+        onClick={onNavigate}
+        className={className}
+      >
         Resources
       </a>
-      <a href="#faq" onClick={onNavigate} className={className}>
+      <a
+        href="#faq"
+        aria-current={hash === "#faq" ? "location" : undefined}
+        onClick={onNavigate}
+        className={className}
+      >
         FAQ
       </a>
-      <a href="#contact" onClick={onNavigate} className={className}>
+      <a
+        href="#contact"
+        aria-current={hash === "#contact" ? "location" : undefined}
+        onClick={onNavigate}
+        className={className}
+      >
         Contact
       </a>
     </>
@@ -82,6 +118,7 @@ export function PublicNav() {
       <button
         type="button"
         aria-expanded={open}
+        aria-controls="public-nav-menu"
         aria-label="Menu"
         onClick={() => setOpen((value) => !value)}
         className="inline-flex size-8 items-center justify-center rounded-sm border border-border text-foreground transition-colors outline-none hover:bg-muted focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring lg:hidden"

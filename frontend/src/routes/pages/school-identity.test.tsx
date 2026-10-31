@@ -5,12 +5,7 @@ import { describe, expect, it, vi } from "vitest"
 
 import indexHtml from "../../../index.html?raw"
 
-import {
-  ABOUT_EXCERPT,
-  CONTACT,
-  MISSION_TEXT,
-  SCHOOL_NAME,
-} from "@/lib/school-content"
+import { CONTACT, MISSION_TEXT, SCHOOL_NAME } from "@/lib/school-content"
 import { LandingPage } from "@/routes/pages/LandingPage"
 import { NotFoundPage } from "@/routes/pages/NotFoundPage"
 import { SchoolPage } from "@/routes/pages/SchoolPage"
@@ -31,7 +26,7 @@ function renderPage(page: ReactNode, path: string) {
 }
 
 describe("landing school identity", () => {
-  it("leads with the school name and seal over the cover-photo backdrop", () => {
+  it("leads with the school name, seal and supplied campus photo", () => {
     const { container } = renderPage(<LandingPage />, "/")
 
     const heading = screen.getByRole("heading", {
@@ -41,17 +36,20 @@ describe("landing school identity", () => {
     expect(heading).toBeInTheDocument()
 
     expect(
-      screen.getByAltText("His Care Christian Institute seal")
+      within(screen.getByRole("banner")).getByAltText(
+        "His Care Christian Institute seal"
+      )
     ).toBeInTheDocument()
 
-    // The campus photo is the hero backdrop now; the old side-by-side
-    // banner <img> is intentionally gone (blank slot). The photo sits on a
-    // child element rather than an inline style on the section, so the
-    // phone layout can drop it — an inline style outranks a utility class.
+    // Campus photography belongs in the responsive hero, rather than
+    // displaying the entire information poster as an extra banner.
     const hero = container.querySelector(
       'section[aria-labelledby="landing-hero"]'
     )
-    expect(hero?.querySelector('[style*="/cover-photo.png"]')).not.toBeNull()
+    expect(hero?.querySelector('img[src="/front%20bg.png"]')).not.toBeNull()
+    expect(hero).toHaveTextContent(
+      "serving students from Nursery to Grade 12 (Senior High School) in Batangas."
+    )
     expect(
       screen.queryByRole("img", { name: /banner: DepEd authorization/ })
     ).not.toBeInTheDocument()
@@ -66,33 +64,39 @@ describe("landing school identity", () => {
 
     expect(screen.getByRole("heading", { name: "Mission" })).toBeInTheDocument()
     expect(screen.getByRole("heading", { name: "Vision" })).toBeInTheDocument()
-    // The numbered Mission breaks from the design are preserved as lines
-    // (rendered with whitespace-pre-line); getByText only normalizes the DOM
-    // side, so collapse the matcher the same way before comparing.
-    expect(
-      screen.getByText(MISSION_TEXT.replace(/\s+/g, " "))
-    ).toBeInTheDocument()
-    expect(screen.getByText(ABOUT_EXCERPT)).toBeInTheDocument()
-  })
-
-  it("points both Read more links at the school page", () => {
-    renderPage(<LandingPage />, "/")
-
-    const readMore = screen.getAllByRole("link", { name: /Read more/ })
-    expect(readMore.length).toBeGreaterThanOrEqual(2)
-    for (const link of readMore) {
-      expect(link).toHaveAttribute("href", "/school")
+    // Number badges change the presentation while retaining every sentence.
+    for (const line of MISSION_TEXT.split("\n")) {
+      expect(
+        screen.getByText(line.replace(/^\d+\.\s*/, ""))
+      ).toBeInTheDocument()
     }
   })
 
-  it("lists the draft contact details without inventing a phone number", () => {
+  it("points the hero Read more link at the school page", () => {
+    renderPage(<LandingPage />, "/")
+
+    expect(screen.getByRole("link", { name: /Read more/ })).toHaveAttribute(
+      "href",
+      "/school"
+    )
+  })
+
+  it("lists the supplied school contact channels with working links", () => {
     renderPage(<LandingPage />, "/")
 
     expect(screen.getByText(CONTACT.address)).toBeInTheDocument()
     expect(screen.getByText(CONTACT.schoolId)).toBeInTheDocument()
     const mail = screen.getByRole("link", { name: CONTACT.email })
     expect(mail).toHaveAttribute("href", `mailto:${CONTACT.email}`)
-    expect(screen.queryByText(/phone/i)).not.toBeInTheDocument()
+    expect(screen.getByRole("link", { name: CONTACT.phone })).toHaveAttribute(
+      "href",
+      "tel:09463781119"
+    )
+    expect(screen.getByText(CONTACT.messengerName)).toBeInTheDocument()
+    const facebook = screen.getByRole("link", { name: "Facebook" })
+    expect(facebook).toHaveAttribute("href", CONTACT.facebookUrl)
+    expect(facebook).toHaveAttribute("target", "_blank")
+    expect(facebook).toHaveAttribute("rel", "noopener noreferrer")
   })
 
   it("plays the hero entrance on the first visit of a session only", () => {
@@ -152,7 +156,7 @@ describe("landing navigation on a phone", () => {
     expect(panel).not.toBeNull()
     expect(within(panel!).getByRole("link", { name: "About" })).toHaveAttribute(
       "href",
-      "#about"
+      "/school"
     )
 
     fireEvent.click(within(panel!).getByRole("link", { name: "About" }))
