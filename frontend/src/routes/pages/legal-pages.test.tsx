@@ -113,11 +113,9 @@ describe("public footer", () => {
       "href",
       "/terms"
     )
-    // The storage notice links to the policy as well, so both must resolve.
-    const cookies = screen.getAllByRole("link", { name: "Cookie Policy" })
-    expect(cookies.length).toBeGreaterThanOrEqual(1)
-    for (const link of cookies) {
-      expect(link).toHaveAttribute("href", "/cookies")
-    }
+    expect(screen.getByRole("link", { name: "Cookie Policy" })).toHaveAttribute(
+      "href",
+      "/cookies"
+    )
   })
 })

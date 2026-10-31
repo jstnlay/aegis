@@ -1,16 +1,87 @@
-import type { ReactNode } from "react"
+import {
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react"
 import { Link } from "react-router-dom"
 
 import { SchoolLockup } from "@/components/brand/SchoolLockup"
+import "./public-school.css"
 
-export function SchoolHeader({ children }: { children: ReactNode }) {
+function subscribeToScroll(callback: () => void) {
+  window.addEventListener("scroll", callback, { passive: true })
+  return () => window.removeEventListener("scroll", callback)
+}
+
+function isHeaderScrolled() {
+  return window.scrollY > 24
+}
+
+function getServerSnapshot() {
+  return false
+}
+
+export function SchoolHeader({
+  children,
+  brandPosition = "start",
+}: {
+  children: ReactNode
+  brandPosition?: "start" | "end"
+}) {
+  const header = useRef<HTMLElement>(null)
+  const [hidden, setHidden] = useState(false)
+  const scrolled = useSyncExternalStore(
+    subscribeToScroll,
+    isHeaderScrolled,
+    getServerSnapshot
+  )
+
+  useEffect(() => {
+    let previousY = Math.max(0, window.scrollY)
+
+    function onScroll() {
+      const currentY = Math.max(0, window.scrollY)
+      if (currentY === previousY) return
+
+      const scrollingDown = currentY > previousY
+      previousY = currentY
+      const usingNavigation = header.current?.querySelector(
+        ':focus-visible, [aria-controls="public-nav-menu"][aria-expanded="true"]'
+      )
+
+      setHidden(currentY > 24 && scrollingDown && !usingNavigation)
+    }
+
+    window.addEventListener("scroll", onScroll, { passive: true })
+    return () => window.removeEventListener("scroll", onScroll)
+  }, [])
+
+  const brand = (
+    <Link
+      to="/"
+      aria-label="His Care Christian Institute — home"
+      className="school-header-brand min-w-0 rounded-md border-0 shadow-none outline-none"
+    >
+      <SchoolLockup />
+    </Link>
+  )
+
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur-md">
-      <div className="mx-auto flex min-h-16 w-full max-w-6xl items-center justify-between gap-3 px-4 py-2 lg:px-6">
-        <Link to="/" aria-label="His Care Christian Institute — home">
-          <SchoolLockup />
-        </Link>
-        <div className="flex shrink-0 items-center gap-3">{children}</div>
+    <header
+      ref={header}
+      className="school-header sticky top-0 z-40"
+      data-scrolled={scrolled}
+      data-hidden={scrolled && hidden}
+      onFocusCapture={() => setHidden(false)}
+    >
+      <div className="school-header-inner">
+        {brandPosition === "start" && brand}
+        <div className="school-header-actions flex shrink-0 items-center gap-4">
+          {children}
+        </div>
+        {brandPosition === "end" && brand}
       </div>
     </header>
   )
