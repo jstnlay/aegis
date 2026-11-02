@@ -629,7 +629,9 @@ describe("RiskAlertsPage — imported dataset", () => {
     await screen.findByText(expected.student_name)
 
     const row = rowFor(expected.student_name)
-    expect(within(row).getByText(/current_term_grade_average/)).toBeInTheDocument()
+    expect(
+      within(row).getByText(/current_term_grade_average/)
+    ).toBeInTheDocument()
     expect(container.textContent).not.toContain("[object Object]")
   })
 

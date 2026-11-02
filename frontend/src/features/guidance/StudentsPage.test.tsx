@@ -399,9 +399,7 @@ describe("StudentsPage — imported dataset", () => {
     )
 
     // A dataset learner with no open alert drops out of the filtered view.
-    await waitFor(() =>
-      expect(screen.queryByText("Learner S0026")).toBeNull()
-    )
+    await waitFor(() => expect(screen.queryByText("Learner S0026")).toBeNull())
   })
 
   it("selects a dataset learner by student code", async () => {
@@ -413,9 +411,7 @@ describe("StudentsPage — imported dataset", () => {
       target: { value: "AEGIS-QA-S0046" },
     })
 
-    await waitFor(() =>
-      expect(screen.queryByText("Learner S0026")).toBeNull()
-    )
+    await waitFor(() => expect(screen.queryByText("Learner S0026")).toBeNull())
     const name = screen.getByText("Learner S0046")
     const row = name.closest("tr") as HTMLElement
     const link = row.querySelector("a") as HTMLAnchorElement
