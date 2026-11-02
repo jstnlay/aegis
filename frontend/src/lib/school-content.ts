@@ -67,15 +67,14 @@ export const VISION_TEXT =
   "transforming students in becoming lifelong learners, in fulfillment " +
   "of a God-given purpose."
 
-/**
- * Contact details — DRAFT, taken from the supplied banner reference
- * (school ID, address, e-mail as printed there). The phone number is
- * deliberately absent: no real number has been provided, and inventing one
- * would ship false contact data.
- */
+/** Campus details from the school banner; contact channels supplied by the school. */
 export const CONTACT = {
   address:
     "Sec. 8 Blue Isle Subd., Barangay Santa Maria, Sto. Tomas, Batangas, Inc.",
   schoolId: "423566",
-  email: "hiscarestamariaregistrar@gmail.com",
+  email: "hiscarechristiantanauan1@gmail.com",
+  phone: "0946 378 1119",
+  messengerName:
+    "His Care Christian Institute of Santa Maria, Sto. Tomas Batangas Inc.",
+  facebookUrl: "https://www.facebook.com/hiscarestamariastotomas/",
 } as const

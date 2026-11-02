@@ -11,13 +11,15 @@ import { cn } from "@/lib/utils"
 export function SchoolLockup({ className }: { className?: string }) {
   return (
     <span className={cn("flex min-w-0 items-center", className)}>
-      <img
-        src="/hcci-logo.png"
-        alt="His Care Christian Institute seal"
-        width={381}
-        height={377}
-        className="relative z-10 size-11 shrink-0 rounded-full"
-      />
+      <span className="school-logo-seal relative z-10 inline-flex size-11 shrink-0">
+        <img
+          src="/hcci-logo.png"
+          alt="His Care Christian Institute seal"
+          width={381}
+          height={377}
+          className="size-full rounded-full"
+        />
+      </span>
       <span className="-ml-3 min-w-0 rounded-md bg-primary py-1.5 pr-3 pl-5 text-primary-foreground">
         <span className="block truncate text-[13px] leading-tight font-bold sm:text-sm">
           {SCHOOL_NAME}

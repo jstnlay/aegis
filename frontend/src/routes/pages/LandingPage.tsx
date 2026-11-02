@@ -1,26 +1,39 @@
-import { useEffect, useState } from "react"
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react"
 import { Link } from "react-router-dom"
 import {
-  ArrowRight,
+  ArrowUpRight,
   BookOpen,
   CalendarCheck,
   ChevronDown,
-  HeartHandshake,
+  CircleHelp,
+  FileText,
+  Globe,
+  HandHeart,
+  Mail,
+  MapPin,
+  Megaphone,
+  MessageCircle,
+  Phone,
+  RotateCw,
+  School,
+  Target,
+  type LucideIcon,
 } from "lucide-react"
 
 import { PublicFooter } from "@/components/brand/PublicFooter"
+import { FeaturedAnnouncement } from "@/components/brand/FeaturedAnnouncement"
+import { HomepageBackground } from "@/components/brand/HomepageBackground"
 import { PublicNav } from "@/components/brand/PublicNav"
 import { SchoolHeader } from "@/components/brand/SchoolHeader"
 import { Reveal } from "@/components/layout/Reveal"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   ANNOUNCEMENT_TYPE_LABELS,
@@ -30,9 +43,7 @@ import {
   usePublicAnnouncements,
   usePublicResources,
 } from "@/features/cms/public-api"
-import { normalizeApiError } from "@/lib/error"
 import {
-  ABOUT_EXCERPT,
   CONTACT,
   MISSION_TEXT,
   SCHOOL_CAMPUS_LINE,
@@ -40,12 +51,16 @@ import {
   VISION_TEXT,
 } from "@/lib/school-content"
 import { cn } from "@/lib/utils"
+import "./landing-page.css"
 
 /** Hero entrance runs on the first landing visit of a session, not every one. */
 const HERO_SEEN_KEY = "aegis:hero-entrance-seen"
 
-const SECTION_TITLE =
-  "text-sm font-semibold uppercase tracking-[0.18em] text-primary"
+const SECTION_TITLE = "landing-section-title"
+
+const [MISSION_INTRO, ...MISSION_POINTS] = MISSION_TEXT.split("\n")
+const [CONTACT_EMAIL_NAME, CONTACT_EMAIL_DOMAIN] = CONTACT.email.split("@")
+const CONTACT_FACEBOOK_PAGE = new URL(CONTACT.facebookUrl)
 
 function useHeroEntrance() {
   const [animate] = useState(() => {
@@ -69,229 +84,258 @@ function useHeroEntrance() {
   return animate
 }
 
-/**
- * Public landing page - reachable by everyone, no sign-in.
- *
- * School identity first (lockup, cover-photo hero backdrop, About/Mission/Vision from
- * the school's own copy in `@/lib/school-content`), then the AEGIS product
- * sections: portal highlights, FAQ and the school CMS feed. The CMS sections
- * read the anonymous public endpoints; when Strapi is down they say the
- * content service is unavailable rather than pretending there is nothing to
- * show.
- */
-export function LandingPage() {
-  const animateHero = useHeroEntrance()
+function subscribeToMissionScroll(callback: () => void) {
+  window.addEventListener("scroll", callback, { passive: true })
+  return () => window.removeEventListener("scroll", callback)
+}
+
+function isMissionTitleEmphasized() {
+  return window.scrollY > 0
+}
+
+function getMissionTitleServerSnapshot() {
+  return false
+}
+
+function MissionVisionTitle() {
+  const emphasized = useSyncExternalStore(
+    subscribeToMissionScroll,
+    isMissionTitleEmphasized,
+    getMissionTitleServerSnapshot
+  )
 
   return (
-    <div className="min-h-svh bg-background">
+    <h2
+      id="landing-mission-vision"
+      className={`${SECTION_TITLE} landing-section-title--centered landing-mission-title`}
+      data-emphasized={emphasized}
+    >
+      Mission &amp; Vision
+    </h2>
+  )
+}
+
+/** Public school homepage; CMS feeds continue to use the anonymous API. */
+export function LandingPage() {
+  const animateHero = useHeroEntrance()
+  return (
+    <div className="school-homepage min-h-svh">
+      <HomepageBackground />
       <SchoolHeader>
         <PublicNav />
-        <Button
-          asChild
-          size="sm"
-          className="transition-all hover:-translate-y-0.5 hover:shadow-sm"
-        >
-          <Link to="/login">
-            Sign in <ArrowRight aria-hidden="true" className="size-4" />
-          </Link>
+        <Button asChild size="sm" className="landing-sign-in">
+          <Link to="/login">Sign in</Link>
         </Button>
       </SchoolHeader>
-
-      <main className="mx-auto w-full max-w-6xl space-y-12 px-4 py-12 md:space-y-16 lg:px-6">
-        <section
-          aria-labelledby="landing-hero"
-          className="relative min-h-[20rem] overflow-hidden rounded-2xl border border-border bg-background shadow-sm"
-        >
-          {/* Solid light veil on the left where the copy sits, opening to the
-                bare campus photo on the right, per the school's reference.
-                Below `md` the photo is dropped and the veil is opaque: at
-                phone width the headline sat on top of the campus signage and
-                neither could be read. The photo is a child element, not an
-                inline background on the section, so the phone layout can
-                switch it off — an inline style outranks a utility class. */}
-          <div
-            aria-hidden="true"
-            className="absolute inset-0 hidden bg-cover bg-center md:block"
-            style={{ backgroundImage: "url(/cover-photo.png)" }}
-          />
-          <div
-            aria-hidden="true"
-            className="absolute inset-0 hidden bg-gradient-to-r from-background via-background/95 to-background/70 md:block"
-          />
-          <div
-            aria-hidden="true"
-            className="absolute inset-0 bg-background md:hidden"
-          />
+      <main className="landing-main">
+        <section aria-labelledby="landing-hero" className="landing-hero">
+          <div className="landing-hero__media">
+            <img
+              src="/front%20bg.png"
+              alt="Entrance gate of His Care Christian Institute"
+              className="landing-hero__photo"
+              decoding="async"
+            />
+            <div className="landing-hero__blend" aria-hidden="true" />
+          </div>
           <div
             className={cn(
-              "relative z-10 flex min-h-[20rem] max-w-xl flex-col justify-center p-6 md:p-10",
+              "landing-hero__copy",
               animateHero &&
                 "motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-4 motion-safe:fill-mode-both motion-safe:duration-700"
             )}
           >
-            <h1
-              id="landing-hero"
-              className="text-balance text-3xl font-bold tracking-tight text-primary sm:text-4xl"
-            >
-              {SCHOOL_NAME}
+            <h1 id="landing-hero">
+              <span className="block">{SCHOOL_NAME.slice(0, 8)}</span>{" "}
+              <span className="block">{SCHOOL_NAME.slice(9)}</span>
             </h1>
-            <p className="mt-1 font-medium">{SCHOOL_CAMPUS_LINE}</p>
-            <p className="mt-4 max-w-prose text-sm leading-relaxed text-pretty text-muted-foreground">
-              {/* Verbatim from the supplied landing-page reference, keeping
-                    its emphasis on the school name and founding year. */}
-              <strong className="text-foreground">
-                His Care Christian Institute
-              </strong>{" "}
-              was founded in{" "}
-              <strong className="text-foreground">April 2007</strong> by Leila
-              D. Paragoso and Clemente T. Paragoso. From a small preschool, it
-              has grown into a school serving students from Nursery to Grade 10
-              in Batangas.
+            <p className="landing-hero__campus">{SCHOOL_CAMPUS_LINE}</p>
+            <p className="landing-hero__intro">
+              <strong>His Care Christian Institute</strong> was founded in{" "}
+              <strong>April 2007</strong> by Leila D. Paragoso and Clemente T.
+              Paragoso. From a small preschool, it has grown into a school
+              serving students from Nursery to Grade 12 (Senior High School) in
+              Batangas.
             </p>
-            <div className="mt-5 flex flex-wrap items-center gap-3">
-              <Button
-                asChild
-                className="transition-all hover:-translate-y-0.5 hover:shadow-md"
-              >
-                <Link to="/school">
-                  Read more <ArrowRight aria-hidden="true" className="size-4" />
-                </Link>
-              </Button>
-            </div>
+            <Button asChild size="sm" className="landing-hero__read-more">
+              <Link to="/school">Read more</Link>
+            </Button>
           </div>
         </section>
-
-        <Reveal>
-          <section
-            id="about"
-            aria-labelledby="landing-about"
-            className="space-y-4 scroll-mt-20"
-          >
-            <h2 id="landing-about" className={SECTION_TITLE}>
-              About the school
-            </h2>
-            <p className="max-w-prose text-sm leading-relaxed text-pretty text-muted-foreground">
-              {ABOUT_EXCERPT}
-            </p>
-            <Button
-              asChild
-              variant="outline"
-              size="sm"
-              className="transition-all hover:-translate-y-0.5 hover:shadow-sm"
-            >
-              <Link to="/school">
-                Read more <ArrowRight aria-hidden="true" className="size-4" />
-              </Link>
-            </Button>
-          </section>
-        </Reveal>
-
-        <Reveal>
-          <section
-            aria-labelledby="landing-mission-vision"
-            className="space-y-4 rounded-2xl border border-border/70 bg-muted/50 p-6 md:p-8"
-          >
-            <h2 id="landing-mission-vision" className={SECTION_TITLE}>
-              Mission &amp; vision
-            </h2>
-            <div className="grid gap-4 md:grid-cols-2">
-              <Card className="h-full transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:ring-primary/20">
-                <CardHeader>
-                  <CardTitle className="text-base text-primary">
-                    Mission
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm whitespace-pre-line leading-relaxed text-muted-foreground">
-                    {MISSION_TEXT}
-                  </p>
-                </CardContent>
-              </Card>
-              <Card className="h-full transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:ring-primary/20">
-                <CardHeader>
-                  <CardTitle className="text-base text-primary">
-                    Vision
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm leading-relaxed text-muted-foreground">
-                    {VISION_TEXT}
-                  </p>
-                </CardContent>
-              </Card>
+        <div className="landing-feeds">
+          <AnnouncementsSection />
+        </div>
+        <section
+          aria-labelledby="landing-mission-vision"
+          className="landing-section"
+        >
+          <MissionVisionTitle />
+          <Reveal>
+            <div className="landing-beliefs">
+              <article
+                className="landing-belief"
+                aria-labelledby="landing-mission"
+              >
+                <div className="landing-card-heading">
+                  <IconCircle icon={BookOpen} />
+                  <h3 id="landing-mission">Mission</h3>
+                </div>
+                <h4 className="landing-mission-intro">{MISSION_INTRO}</h4>
+                <ol className="landing-mission-points">
+                  {MISSION_POINTS.map((point, index) => (
+                    <li key={point}>
+                      <span
+                        className="landing-mission-number"
+                        aria-hidden="true"
+                      >
+                        {index + 1}
+                      </span>
+                      <p>{point.replace(/^\d+\.\s*/, "")}</p>
+                    </li>
+                  ))}
+                </ol>
+              </article>
+              <article
+                className="landing-belief landing-vision"
+                aria-labelledby="landing-vision"
+              >
+                <div className="landing-card-heading">
+                  <IconCircle icon={Target} />
+                  <h3 id="landing-vision">Vision</h3>
+                </div>
+                <p className="landing-vision-copy">{VISION_TEXT}</p>
+                <div className="landing-vision-lines" aria-hidden="true">
+                  <span />
+                  <span />
+                  <span />
+                </div>
+              </article>
             </div>
-          </section>
-        </Reveal>
-
+          </Reveal>
+        </section>
         <Reveal>
           <PortalHighlights />
         </Reveal>
-        <Reveal>
-          <AnnouncementsSection />
-        </Reveal>
-        <Reveal>
+        <div className="landing-feeds">
           <ResourcesSection />
-        </Reveal>
+        </div>
         <Reveal>
           <FaqSection />
         </Reveal>
-
-        <Reveal>
+        <Reveal className="landing-contact-reveal">
           <section
             id="contact"
             aria-labelledby="landing-contact"
-            className="space-y-4 rounded-2xl border border-border/70 bg-primary/5 p-6 scroll-mt-20 md:p-8"
+            className="landing-section landing-contact"
           >
-            <h2 id="landing-contact" className={SECTION_TITLE}>
-              Contact
-            </h2>
-            <div className="grid gap-4 sm:grid-cols-3">
-              <Card className="h-full transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:ring-primary/20">
-                <CardHeader>
-                  <CardTitle className="text-base text-primary">
-                    Address
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm leading-relaxed text-muted-foreground">
-                    {CONTACT.address}
-                  </p>
-                </CardContent>
-              </Card>
-              <Card className="h-full transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:ring-primary/20">
-                <CardHeader>
-                  <CardTitle className="text-base text-primary">
-                    School ID
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm leading-relaxed text-muted-foreground">
-                    {CONTACT.schoolId}
-                  </p>
-                </CardContent>
-              </Card>
-              <Card className="h-full transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:ring-primary/20">
-                <CardHeader>
-                  <CardTitle className="text-base text-primary">
-                    Email Address
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <a
-                    href={`mailto:${CONTACT.email}`}
-                    className="break-all text-sm underline transition-colors hover:text-primary"
-                  >
-                    {CONTACT.email}
-                  </a>
-                </CardContent>
-              </Card>
+            <div className="landing-card landing-contact-panel landing-glass">
+              <div className="landing-contact-heading">
+                <h2
+                  id="landing-contact"
+                  className={`${SECTION_TITLE} landing-contact-title`}
+                >
+                  <Phone
+                    aria-hidden="true"
+                    className="size-5 shrink-0"
+                    strokeWidth={1.7}
+                  />
+                  Contact
+                </h2>
+                <p className="landing-contact-intro">
+                  Visit our campus, call, email, or connect with us on social
+                  media for school inquiries.
+                </p>
+              </div>
+              <div className="landing-contact-campus">
+                <div className="landing-contact-row">
+                  <IconCircle icon={MapPin} />
+                  <div>
+                    <h3>Address</h3>
+                    <p>{CONTACT.address}</p>
+                    <div className="landing-contact-school-id">
+                      <School aria-hidden="true" className="size-4" />
+                      <span>School ID</span>
+                      <strong>{CONTACT.schoolId}</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="landing-contact-channels">
+                <div className="landing-contact-row">
+                  <IconCircle icon={Phone} />
+                  <div>
+                    <h3>Phone</h3>
+                    <a
+                      href={`tel:${CONTACT.phone.replace(/\s/g, "")}`}
+                      className="landing-contact-number"
+                    >
+                      {CONTACT.phone}
+                    </a>
+                  </div>
+                </div>
+                <a
+                  href={`mailto:${CONTACT.email}`}
+                  aria-label={CONTACT.email}
+                  className="landing-contact-channel"
+                >
+                  <IconCircle icon={Mail} />
+                  <div className="landing-contact-channel-copy">
+                    <h3>Email Address</h3>
+                    <p>
+                      {CONTACT_EMAIL_NAME}@<wbr />
+                      {CONTACT_EMAIL_DOMAIN}
+                    </p>
+                  </div>
+                  <ArrowUpRight
+                    aria-hidden="true"
+                    className="landing-contact-link-arrow size-5"
+                  />
+                </a>
+              </div>
+              <div className="landing-contact-channels">
+                <div className="landing-contact-channel">
+                  <IconCircle icon={MessageCircle} />
+                  <div className="landing-contact-channel-copy">
+                    <h3>Messenger</h3>
+                    <p>{CONTACT.messengerName}</p>
+                  </div>
+                </div>
+                <a
+                  href={CONTACT.facebookUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Facebook"
+                  className="landing-contact-channel"
+                >
+                  <IconCircle icon={Globe} />
+                  <div className="landing-contact-channel-copy">
+                    <h3>Facebook</h3>
+                    <p>
+                      {CONTACT_FACEBOOK_PAGE.hostname.replace(/^www\./, "")}/
+                      <wbr />
+                      {CONTACT_FACEBOOK_PAGE.pathname.replace(/^\//, "")}
+                    </p>
+                  </div>
+                  <ArrowUpRight
+                    aria-hidden="true"
+                    className="landing-contact-link-arrow size-5"
+                  />
+                </a>
+              </div>
             </div>
           </section>
         </Reveal>
       </main>
-
       <PublicFooter />
     </div>
+  )
+}
+
+function IconCircle({ icon: Icon }: { icon: LucideIcon }) {
+  return (
+    <span className="landing-icon">
+      <Icon aria-hidden="true" strokeWidth={1.7} />
+    </span>
   )
 }
 
@@ -308,7 +352,7 @@ const PORTAL_HIGHLIGHTS = [
     body: "Daily records taken by faculty, with per-section summaries for students, parents and administrators.",
   },
   {
-    icon: HeartHandshake,
+    icon: HandHeart,
     title: "Guidance",
     body: "Counseling sessions, intervention plans and wellness assessments handled by the guidance office.",
   },
@@ -316,41 +360,37 @@ const PORTAL_HIGHLIGHTS = [
 
 function PortalHighlights() {
   return (
-    <section aria-labelledby="landing-portal" className="space-y-4">
+    <section
+      aria-labelledby="landing-portal"
+      className="landing-section landing-offers"
+    >
       <h2 id="landing-portal" className={SECTION_TITLE}>
-        What AEGIS offers
+        What AEGIS Offers
       </h2>
-      <div className="grid gap-4 md:grid-cols-3">
-        {PORTAL_HIGHLIGHTS.map(({ icon: Icon, title, body }) => (
-          <Card
+      <div className="landing-features">
+        {PORTAL_HIGHLIGHTS.map(({ icon: Icon, title, body }, index) => (
+          <article
             key={title}
-            className="h-full transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:ring-primary/20"
+            className={cn(
+              "landing-feature",
+              index % 2 === 0 && "landing-glass"
+            )}
           >
-            <CardHeader>
-              <span className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                <Icon aria-hidden="true" className="size-5" />
-              </span>
-              <CardTitle className="mt-1 text-base text-primary">
-                {title}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm leading-relaxed text-pretty text-muted-foreground">
-                {body}
-              </p>
-            </CardContent>
-          </Card>
+            <span className="landing-feature-art" aria-hidden="true">
+              <Icon strokeWidth={1.3} />
+            </span>
+            <span className="landing-feature-number" aria-hidden="true">
+              {index + 1}
+            </span>
+            <h3>{title}</h3>
+            <p>{body}</p>
+          </article>
         ))}
       </div>
     </section>
   )
 }
 
-/**
- * Announcement type chip colour, reusing the existing badge variants so the
- * four types are told apart at a glance: an alert reads as a warning, an
- * academic notice carries the school maroon.
- */
 const ANNOUNCEMENT_TYPE_BADGE = {
   alert: "destructive",
   academic: "default",
@@ -358,71 +398,108 @@ const ANNOUNCEMENT_TYPE_BADGE = {
   news: "outline",
 } as const
 
+function FeedState({
+  message,
+  retry,
+  fetching,
+  variant = "default",
+}: {
+  message: string
+  retry?: () => void
+  fetching?: boolean
+  variant?: "default" | "outline"
+}) {
+  return (
+    <div className="landing-feed-state" role={retry ? "alert" : "status"}>
+      <div className="landing-feed-art" aria-hidden="true">
+        <span className="landing-feed-paper">
+          <span />
+          <span />
+          <span />
+          <span />
+        </span>
+      </div>
+      <div className="landing-feed-message">
+        <p className="font-medium text-foreground">{message}</p>
+        <p className="text-muted-foreground">
+          {retry
+            ? "Please try again later."
+            : "Check back for new school updates."}
+        </p>
+        {retry ? (
+          <Button onClick={retry} disabled={fetching} variant={variant}>
+            {fetching ? "Retrying…" : "Retry"}
+            <RotateCw
+              aria-hidden="true"
+              className={cn("size-4", fetching && "motion-safe:animate-spin")}
+            />
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+function FeedLoading({ label }: { label: string }) {
+  return (
+    <div className="landing-feed-loading" role="status" aria-label={label}>
+      <Skeleton className="mx-auto h-4 w-3/4" />
+      <Skeleton className="mx-auto h-4 w-1/2" />
+      <span className="sr-only">{label}</span>
+    </div>
+  )
+}
+
 function AnnouncementsSection() {
   const query = usePublicAnnouncements()
   const items = query.data ?? []
-
   return (
     <section
       id="announcements"
       aria-labelledby="landing-announcements"
-      className="space-y-4 scroll-mt-20"
+      className="landing-section landing-card landing-feed-panel landing-feed-announcements"
     >
-      <h2 id="landing-announcements" className={SECTION_TITLE}>
-        Announcements
-      </h2>
-      {query.isLoading ? (
-        <div className="space-y-2">
-          <Skeleton className="h-16 w-full" />
-          <Skeleton className="h-16 w-full" />
-        </div>
-      ) : query.isError ? (
-        <Card>
-          <CardContent className="pt-6">
-            <p
-              className="text-sm leading-relaxed text-muted-foreground"
-              role="alert"
-            >
-              The content service is temporarily unavailable (
-              {normalizeApiError(query.error).message}). Please try again later.
-            </p>
-          </CardContent>
-        </Card>
-      ) : items.length === 0 ? (
-        <p className="text-sm leading-relaxed text-muted-foreground">
-          No announcements have been published yet.
-        </p>
-      ) : (
-        <ul className="grid gap-4 md:grid-cols-2">
-          {items.map((item) => (
-            <li key={item.document_id}>
-              <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:ring-primary/20">
-                <CardHeader>
-                  <CardTitle className="text-base break-words text-primary">
-                    {item.title}
-                  </CardTitle>
-                  <CardAction>
-                    <Badge
-                      variant={ANNOUNCEMENT_TYPE_BADGE[item.announcement_type]}
-                    >
-                      {ANNOUNCEMENT_TYPE_LABELS[item.announcement_type] ??
-                        item.announcement_type}
-                    </Badge>
-                  </CardAction>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <p className="text-sm leading-relaxed whitespace-pre-line">
-                    {item.content}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Published {new Date(item.published_at).toLocaleDateString()}
-                  </p>
-                </CardContent>
-              </Card>
-            </li>
-          ))}
-        </ul>
-      )}
+      <div className="landing-feed-heading">
+        <span className="landing-announcement-signal" aria-hidden="true">
+          <Megaphone strokeWidth={1.6} />
+        </span>
+        <h2 id="landing-announcements" className="landing-feed-title">
+          Announcements
+        </h2>
+      </div>
+      <FeaturedAnnouncement />
+      <div className="landing-announcement-updates">
+        {query.isLoading ? (
+          <FeedLoading label="Loading announcements" />
+        ) : items.length > 0 ? (
+          <ul className="landing-feed-list">
+            {items.map((item) => (
+              <li key={item.document_id} className="landing-feed-item">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <h3>{item.title}</h3>
+                  <Badge
+                    variant={ANNOUNCEMENT_TYPE_BADGE[item.announcement_type]}
+                  >
+                    {ANNOUNCEMENT_TYPE_LABELS[item.announcement_type] ??
+                      item.announcement_type}
+                  </Badge>
+                </div>
+                <p className="whitespace-pre-line">{item.content}</p>
+                <p className="text-xs text-muted-foreground">
+                  Published{" "}
+                  <time dateTime={item.published_at}>
+                    {new Date(item.published_at).toLocaleDateString()}
+                  </time>
+                </p>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="landing-announcement-end" role="status">
+            That&apos;s all for now. Check back for more school announcements.
+          </p>
+        )}
+      </div>
     </section>
   )
 }
@@ -430,55 +507,43 @@ function AnnouncementsSection() {
 function ResourcesSection() {
   const query = usePublicResources()
   const items = query.data ?? []
-
   return (
     <section
       id="resources"
       aria-labelledby="landing-resources"
-      className="space-y-4 scroll-mt-20"
+      className="landing-section landing-card landing-feed-panel landing-feed-resources"
     >
-      <h2 id="landing-resources" className={SECTION_TITLE}>
-        Resources
-      </h2>
+      <div className="landing-feed-heading">
+        <IconCircle icon={FileText} />
+        <h2 id="landing-resources" className="landing-feed-title">
+          Resources
+        </h2>
+      </div>
       {query.isLoading ? (
-        <div className="space-y-2">
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
-        </div>
+        <FeedLoading label="Loading resources" />
       ) : query.isError ? (
-        <Card>
-          <CardContent className="pt-6">
-            <p
-              className="text-sm leading-relaxed text-muted-foreground"
-              role="alert"
-            >
-              The content service is temporarily unavailable (
-              {normalizeApiError(query.error).message}). Please try again later.
-            </p>
-          </CardContent>
-        </Card>
+        <FeedState
+          variant="outline"
+          message="Resources are temporarily unavailable."
+          retry={() => {
+            void query.refetch()
+          }}
+          fetching={query.isFetching}
+        />
       ) : items.length === 0 ? (
-        <p className="text-sm leading-relaxed text-muted-foreground">
-          No resources have been published yet.
-        </p>
+        <FeedState message="No resources have been published yet." />
       ) : (
-        <ul className="space-y-2">
+        <ul className="landing-feed-list">
           {items.map((item) => (
-            <li
-              key={item.document_id}
-              className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-card p-3.5 transition-colors duration-200 hover:border-primary/40 hover:bg-muted/40"
-            >
-              <div className="min-w-0">
-                <p className="truncate font-medium">{item.title}</p>
-                {item.description ? (
-                  <p className="truncate text-xs text-muted-foreground">
-                    {item.description}
-                  </p>
-                ) : null}
+            <li key={item.document_id} className="landing-feed-item">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <h3>{item.title}</h3>
+                <Badge variant="secondary">
+                  {RESOURCE_TYPE_LABELS[item.resource_type] ??
+                    item.resource_type}
+                </Badge>
               </div>
-              <Badge variant="secondary" className="shrink-0">
-                {RESOURCE_TYPE_LABELS[item.resource_type] ?? item.resource_type}
-              </Badge>
+              {item.description ? <p>{item.description}</p> : null}
             </li>
           ))}
         </ul>
@@ -507,33 +572,126 @@ const FAQS = [
 ]
 
 function FaqSection() {
+  const [open, setOpen] = useState<number | null>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+
+  useLayoutEffect(() => {
+    const list = listRef.current
+    const stage = list?.parentElement
+    if (!list || !stage) return
+
+    const rows = Array.from(
+      list.querySelectorAll<HTMLElement>(".landing-faq-item")
+    )
+    const headings = Array.from(list.querySelectorAll<HTMLElement>("h3"))
+    const answers = Array.from(
+      list.querySelectorAll<HTMLElement>(".landing-faq-answer p")
+    )
+
+    // Reserve the tallest single answer, even while every answer is collapsed.
+    const reserveAnswerSpace = () => {
+      const questionHeight = headings.reduce(
+        (height, heading) => height + heading.getBoundingClientRect().height,
+        0
+      )
+      const dividerHeight = rows.reduce(
+        (height, row) =>
+          height + (parseFloat(getComputedStyle(row).borderTopWidth) || 0),
+        0
+      )
+      const listStyle = getComputedStyle(list)
+      const borderHeight =
+        (parseFloat(listStyle.borderTopWidth) || 0) +
+        (parseFloat(listStyle.borderBottomWidth) || 0)
+      const answerHeight = Math.max(
+        0,
+        ...answers.map((answer) => answer.getBoundingClientRect().height)
+      )
+      stage.style.setProperty(
+        "--landing-faq-reserved-height",
+        `${Math.ceil(questionHeight + dividerHeight + borderHeight + answerHeight)}px`
+      )
+    }
+
+    reserveAnswerSpace()
+    const observer =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(reserveAnswerSpace)
+        : null
+    for (const element of [...headings, ...answers]) observer?.observe(element)
+    window.addEventListener("resize", reserveAnswerSpace)
+
+    return () => {
+      observer?.disconnect()
+      window.removeEventListener("resize", reserveAnswerSpace)
+    }
+  }, [])
+
   return (
     <section
       id="faq"
       aria-labelledby="landing-faq"
-      className="space-y-4 scroll-mt-20"
+      className="landing-section landing-faq"
     >
-      <h2 id="landing-faq" className={SECTION_TITLE}>
-        Frequently asked questions
-      </h2>
-      <div className="space-y-2">
-        {FAQS.map((faq) => (
-          <details
-            key={faq.q}
-            className="group rounded-lg border border-border bg-card transition-colors duration-200 hover:border-primary/40"
-          >
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium [&::-webkit-details-marker]:hidden">
-              {faq.q}
-              <ChevronDown
-                aria-hidden="true"
-                className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180"
-              />
-            </summary>
-            <p className="px-4 pb-4 text-sm leading-relaxed text-muted-foreground">
-              {faq.a}
-            </p>
-          </details>
-        ))}
+      <div className="landing-faq-layout">
+        <div className="landing-faq-intro">
+          <div className="landing-faq-heading">
+            <IconCircle icon={CircleHelp} />
+            <h2 id="landing-faq">Frequently asked questions</h2>
+          </div>
+          <p>
+            Find answers about signing in, grades, counseling, and school
+            updates.
+          </p>
+          <Button asChild size="sm">
+            <a href="#contact">
+              Contact the school
+              <ArrowUpRight aria-hidden="true" className="size-4" />
+            </a>
+          </Button>
+        </div>
+        <div className="landing-faq-stage">
+          <div ref={listRef} className="landing-faq-list landing-glass">
+            {FAQS.map((faq, index) => (
+              <div
+                key={faq.q}
+                className="landing-faq-item"
+                data-open={open === index}
+              >
+                <h3>
+                  <button
+                    type="button"
+                    id={`landing-question-${index}`}
+                    aria-expanded={open === index}
+                    aria-controls={`landing-answer-${index}`}
+                    onClick={() => setOpen(open === index ? null : index)}
+                  >
+                    <span className="landing-faq-number" aria-hidden="true">
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                    <span className="landing-faq-question">{faq.q}</span>
+                    <ChevronDown
+                      aria-hidden="true"
+                      className="size-5 shrink-0"
+                    />
+                  </button>
+                </h3>
+                <div
+                  id={`landing-answer-${index}`}
+                  role="region"
+                  aria-labelledby={`landing-question-${index}`}
+                  aria-hidden={open !== index}
+                  inert={open !== index}
+                  className="landing-faq-answer"
+                >
+                  <div>
+                    <p>{faq.a}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </section>
   )
