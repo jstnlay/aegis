@@ -1,0 +1,74 @@
+.school-brand-background {
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(
+      ellipse 70% 18% at 100% 20%,
+      color-mix(in srgb, var(--primary) 4%, transparent),
+      transparent 75%
+    ),
+    radial-gradient(
+      ellipse 75% 20% at 0% 55%,
+      color-mix(in srgb, var(--primary) 3%, transparent),
+      transparent 75%
+    ),
+    radial-gradient(
+      ellipse 60% 18% at 100% 88%,
+      color-mix(in srgb, var(--primary) 4%, transparent),
+      transparent 75%
+    ),
+    linear-gradient(
+      160deg,
+      color-mix(in srgb, var(--primary) 2%, var(--background)),
+      color-mix(in srgb, var(--primary) 3%, var(--background)) 48%,
+      color-mix(in srgb, var(--primary) 2%, var(--background))
+    );
+  /* Keep the artwork's scale independent of accordion/content height. */
+  background-size: 100% var(--landing-background-height);
+  background-repeat: repeat-y;
+}
+/* One flowing composition, with a fixed coordinate system so expanding
+   content cannot stretch or reposition the background artwork. */
+.landing-background-art {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: clip;
+  pointer-events: none;
+}
+.landing-background-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: var(--landing-background-height);
+  overflow: visible;
+  pointer-events: none;
+}
+.landing-background-canvas path {
+  vector-effect: non-scaling-stroke;
+}
+.landing-background-field--rose {
+  fill: color-mix(in srgb, var(--color-maroon-400) 24%, transparent);
+}
+.landing-background-field--maroon {
+  fill: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+.landing-background-contours {
+  fill: none;
+  stroke: color-mix(in srgb, var(--primary) 22%, transparent);
+  stroke-width: 1;
+  stroke-linecap: round;
+}
+.landing-background-accents {
+  fill: color-mix(in srgb, var(--primary) 64%, transparent);
+}
+
+@media (max-width: 767px) {
+  .landing-background-canvas {
+    opacity: 0.85;
+  }
+  .landing-background-accents {
+    display: none;
+  }
+}

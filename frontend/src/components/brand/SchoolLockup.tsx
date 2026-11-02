@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils"
  */
 export function SchoolLockup({ className }: { className?: string }) {
   return (
-    <span className={cn("flex min-w-0 items-center", className)}>
+    <span className={cn("school-lockup flex min-w-0 items-center", className)}>
       <span className="school-logo-seal relative z-10 inline-flex size-11 shrink-0">
         <img
           src="/hcci-logo.png"
@@ -20,11 +20,11 @@ export function SchoolLockup({ className }: { className?: string }) {
           className="size-full rounded-full"
         />
       </span>
-      <span className="-ml-3 min-w-0 rounded-md bg-primary py-1.5 pr-3 pl-5 text-primary-foreground">
-        <span className="block truncate text-[13px] leading-tight font-bold sm:text-sm">
+      <span className="school-lockup-banner -ml-3 min-w-0 rounded-md bg-primary py-1.5 pr-3 pl-5 text-primary-foreground">
+        <span className="school-lockup-name block truncate text-[13px] leading-tight font-bold sm:text-sm">
           {SCHOOL_NAME}
         </span>
-        <span className="block truncate text-[10px] leading-tight opacity-90 sm:text-xs">
+        <span className="school-lockup-campus block truncate text-[10px] leading-tight opacity-90 sm:text-xs">
           {SCHOOL_CAMPUS_LINE}
         </span>
       </span>

@@ -103,8 +103,8 @@ beforeEach(() => {
 })
 
 const ROLE_CASES: ReadonlyArray<{ role: Role; heading: RegExp }> = [
-  { role: "student", heading: /Student Dashboard/i },
-  { role: "parent", heading: /Parent Portal/i },
+  { role: "student", heading: /Welcome back/i },
+  { role: "parent", heading: /Your family portal/i },
   { role: "faculty", heading: /Faculty Dashboard/i },
   { role: "guidance", heading: /Welcome back/i },
   { role: "admin", heading: /Administration Panel/i },
@@ -183,7 +183,7 @@ describe("PH11.7 domain routes", () => {
     ).toBeInTheDocument()
     expect(screen.queryByText(/Take attendance/i)).not.toBeInTheDocument()
     expect(
-      screen.queryByRole("heading", { name: /Parent Portal/i })
+      screen.queryByRole("heading", { name: /Your family portal/i })
     ).not.toBeInTheDocument()
   })
 
@@ -319,20 +319,22 @@ describe("no page describes implemented functionality as future work", () => {
     expect(sidebar.textContent ?? "").not.toMatch(/PH\d/)
   })
 
-  it("the sidebar does not duplicate nav labels as body text", async () => {
+  it("navigation labels repeated in the page body are actionable links", async () => {
     authState.user = makeUser("student")
     renderAt("/app/dashboard")
 
-    await screen.findByRole("heading", { name: /Student Dashboard/i })
+    await screen.findByRole("heading", { name: /Welcome back/i })
 
-    // Every sidebar link must resolve to exactly one element with that
-    // accessible name; a second one means the page repeats the navigation.
+    // Dashboard quick links may share navigation labels. Plain duplicate
+    // labels must not masquerade as links that a reader could activate.
     const sidebar = screen.getByRole("complementary", { name: /primary/i })
     const main = document.getElementById("main-content")
     for (const link of within(sidebar).getAllByRole("link")) {
       const name = link.textContent?.trim()
       if (!name) continue
-      expect(within(main as HTMLElement).queryByText(name)).toBeNull()
+      for (const label of within(main as HTMLElement).queryAllByText(name)) {
+        expect(label.closest("a")).not.toBeNull()
+      }
     }
   })
 })
@@ -423,7 +425,7 @@ describe("PH11.8 guidance routes", () => {
   const ADMIN_ROUTES: ReadonlyArray<{ path: string; marker: RegExp }> = [
     {
       path: "/app/admin/academics",
-      marker: /Administrators have full create and delete/i,
+      marker: /Organize school years, classes and teaching assignments/i,
     },
     {
       path: "/app/admin/grades",

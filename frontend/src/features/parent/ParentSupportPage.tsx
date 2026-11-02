@@ -37,6 +37,7 @@ import {
 } from "@/features/parent/api"
 import { useDataTablePagination } from "@/components/ui/data-table-pagination"
 import { riskFactorLabel } from "@/lib/risk-factor"
+import { ParentStudentContext } from "./ParentStudentContext"
 import {
   consultationStatusBadgeClass,
   riskLevelBadgeClass,
@@ -90,31 +91,36 @@ export function ParentSupportPage({ child }: SupportProps) {
   )
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-1">
+    <div className="parent-support-record space-y-6">
+      <div className="parent-page-heading flex flex-col gap-1">
         <div className="flex items-center gap-3">
           <ShieldAlert
             className="size-5 text-muted-foreground"
             aria-hidden="true"
           />
           <h2 className="text-2xl font-bold text-foreground">
-            {child.student_name}&apos;s Student Support
+            Student Support
           </h2>
         </div>
         <p className="text-sm text-muted-foreground">
-          A read-only record of the Guidance Office&apos;s involvement with{" "}
-          {child.student_name}. Alerts and sessions are recorded and updated by
-          the counselor, not by you.
+          School-recorded alerts, counselling sessions and teacher notes.
+          Contact the school if you need clarification about a record.
         </p>
       </div>
+
+      <ParentStudentContext child={child} />
 
       <Card>
         <CardHeader>
           <CardTitle>Risk alerts</CardTitle>
           <CardDescription>
-            {openAlerts.length > 0
-              ? `${openAlerts.length} open alert${openAlerts.length === 1 ? "" : "s"}.`
-              : "No open risk alerts."}{" "}
+            {alertsQuery.isLoading
+              ? "Loading alerts."
+              : alertsQuery.isError
+                ? "Alerts could not be loaded."
+                : openAlerts.length > 0
+                  ? `${openAlerts.length} open alert${openAlerts.length === 1 ? "" : "s"}.`
+                  : "No open risk alerts."}{" "}
             Resolved alerts remain listed below as history.
           </CardDescription>
         </CardHeader>
@@ -155,7 +161,7 @@ export function ParentSupportPage({ child }: SupportProps) {
         <CardHeader>
           <CardTitle>Behavioural notes</CardTitle>
           <CardDescription>
-            Notes recorded by class teachers. These are immutable once written.
+            Notes recorded by your child’s class teachers.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -180,6 +186,7 @@ const alertColumns: readonly DataTableColumn<ParentRiskAlert>[] = [
     header: "Risk level",
     cell: (alert) => (
       <Badge
+        status={alert.risk_level}
         variant="secondary"
         className={riskLevelBadgeClass(alert.risk_level)}
         data-risk-level={alert.risk_level}
@@ -192,7 +199,11 @@ const alertColumns: readonly DataTableColumn<ParentRiskAlert>[] = [
     key: "status",
     header: "Status",
     cell: (alert) => (
-      <Badge variant="outline" data-alert-status={alert.status}>
+      <Badge
+        status={alert.status === "active" ? "open" : alert.status}
+        variant="outline"
+        data-alert-status={alert.status}
+      >
         {ALERT_STATUS_LABELS[alert.status as AlertStatus] ?? alert.status}
       </Badge>
     ),
@@ -303,6 +314,7 @@ const consultationColumns: readonly DataTableColumn<ParentConsultation>[] = [
     header: "Status",
     cell: (row) => (
       <Badge
+        status={row.status}
         variant="outline"
         className={consultationStatusBadgeClass(row.status)}
       >
@@ -413,7 +425,7 @@ function BehavioralNoteList({
       {notes.map((note) => (
         <li key={note.id} className="rounded-md border border-border p-3">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="outline">
+            <Badge status={note.note_type} variant="outline">
               {BEHAVIORAL_NOTE_TYPE_LABELS[
                 note.note_type as BehavioralNoteType
               ] ?? note.note_type}

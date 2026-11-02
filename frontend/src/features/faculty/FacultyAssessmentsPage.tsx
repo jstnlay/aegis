@@ -565,7 +565,9 @@ function ResultsForAssessment({
               <TableRow key={studentId}>
                 <TableCell>{row.student_name}</TableCell>
                 <TableCell>
-                  <Badge variant="outline">{row.status}</Badge>
+                  <Badge status={row.status} variant="outline">
+                    {row.status}
+                  </Badge>
                 </TableCell>
                 {/* An ungraded or absent score renders as an em dash, never a
                     fabricated zero. */}
@@ -633,7 +635,7 @@ export function FacultyAssessmentsPage() {
   const isFiltered = status !== "all" || search.trim().length > 0
 
   return (
-    <div className="space-y-6">
+    <div className="faculty-page space-y-6">
       <PageHeading />
 
       <Card>
@@ -712,6 +714,7 @@ export function FacultyAssessmentsPage() {
                       <h3 className="font-semibold">{assessment.title}</h3>
                       <Badge variant="secondary">Academic</Badge>
                       <Badge
+                        status={assessment.is_published ? "published" : "draft"}
                         variant="outline"
                         data-published={
                           assessment.is_published ? "true" : "false"

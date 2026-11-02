@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react"
+import { MemoryRouter } from "react-router-dom"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { StudentDashboard } from "./StudentDashboard"
@@ -43,7 +44,9 @@ const queryClient = new QueryClient({
 
 function renderWithClient(ui: React.ReactElement) {
   return render(
-    <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
+    <MemoryRouter>
+      <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
+    </MemoryRouter>
   )
 }
 
@@ -75,6 +78,21 @@ describe("StudentDashboard", () => {
     } as unknown as ReturnType<typeof useStudentDashboardData>)
 
     renderWithClient(<StudentDashboard />)
+    expect(screen.getByRole("link", { name: "Your grades" })).toHaveAttribute(
+      "href",
+      "/app/academics"
+    )
+    expect(screen.getByRole("link", { name: "Attendance" })).toHaveAttribute(
+      "href",
+      "/app/attendance"
+    )
+    expect(
+      screen.getByRole("link", { name: "Class schedule" })
+    ).toHaveAttribute("href", "/app/schedule")
+    expect(screen.getByRole("link", { name: "Assessments" })).toHaveAttribute(
+      "href",
+      "/app/student/assessments"
+    )
     // PH11.11: scoped to the heading. The tile now renders the phrase twice — its
     // `CardTitle` and the visually-hidden label inside the loading `role="status"`
     // region — so a bare `getByText` is genuinely ambiguous. Matching the heading

@@ -1,0 +1,19 @@
+@media (max-width: 767px) {
+  .school-legal-page .school-header-inner {
+    flex-wrap: nowrap;
+  }
+  .school-legal-page .school-header-actions {
+    min-width: 0;
+    margin-left: 0;
+  }
+  .school-legal-page .school-header-actions svg {
+    flex-shrink: 0;
+  }
+  .school-legal-page .school-header-brand {
+    flex: 0 0 auto;
+    width: auto;
+  }
+  .school-legal-page .school-header-brand > span > span:last-child {
+    display: none;
+  }
+}

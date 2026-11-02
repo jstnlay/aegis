@@ -1,0 +1,692 @@
+/* A compact public homepage on phones; desktop keeps its existing composition. */
+@media (max-width: 767px) {
+  .school-homepage {
+    --landing-background-height: 4400px;
+    --mobile-section-title: 20px;
+    --mobile-card-title: 17px;
+    --mobile-copy: 13px;
+
+    .school-header-inner {
+      position: relative;
+      min-height: 68px;
+      padding: 10px 16px;
+      flex-wrap: nowrap;
+      gap: 10px;
+    }
+    .school-header-brand {
+      flex: 1;
+      width: auto;
+      min-width: 0;
+    }
+    .school-lockup {
+      gap: 8px;
+    }
+    .school-header-brand .school-logo-seal {
+      width: 36px;
+      height: 36px;
+    }
+    .school-lockup-banner {
+      margin-left: 0;
+      padding: 0;
+      background: transparent;
+      color: var(--primary);
+    }
+    .school-header-brand .school-lockup-name {
+      overflow: visible;
+      font-size: 11px;
+      line-height: 1.25;
+      letter-spacing: -0.025em;
+      white-space: normal;
+    }
+    .school-header-brand .school-lockup-campus {
+      margin-top: 3px;
+      font-size: 9px;
+      line-height: 1.3;
+      color: var(--muted-foreground);
+      white-space: normal;
+    }
+    .school-header-actions {
+      flex-shrink: 0;
+      gap: 6px;
+      margin-left: 0;
+    }
+    .school-header .landing-sign-in {
+      min-width: 0;
+      min-height: 44px;
+      padding-inline: 12px;
+      font-size: 12px;
+      box-shadow: none;
+    }
+    .public-nav-wrapper {
+      position: static;
+      order: 2;
+    }
+    button[aria-controls="public-nav-menu"] {
+      width: 44px;
+      height: 44px;
+      padding: 0;
+      border-color: var(--border);
+      border-radius: 9px;
+    }
+    #public-nav-menu {
+      top: calc(100% - 2px);
+      right: 12px;
+      left: 12px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      width: auto;
+      max-height: calc(100svh - 88px);
+      overflow-y: auto;
+      gap: 4px;
+      margin-top: 0;
+      padding: 8px;
+      border-radius: 12px;
+      box-shadow: 0 12px 32px
+        color-mix(in srgb, var(--foreground) 12%, transparent);
+    }
+    #public-nav-menu a {
+      display: flex;
+      align-items: center;
+      min-height: 44px;
+      font-size: 13px;
+    }
+    #public-nav-menu a[aria-current] {
+      color: var(--primary);
+      background: color-mix(in srgb, var(--primary) 6%, var(--card));
+    }
+
+    .landing-main {
+      --landing-section-space: 24px;
+      --landing-heading-space: 16px;
+      padding: 16px 16px 0;
+    }
+    .landing-section {
+      scroll-margin-top: 84px;
+    }
+    .landing-hero {
+      display: flex;
+      flex-direction: row;
+      min-height: 0;
+      border-radius: 16px;
+      border-color: color-mix(in srgb, var(--foreground) 8%, var(--card));
+      box-shadow: 0 6px 24px color-mix(in srgb, var(--primary) 5%, transparent);
+    }
+    .landing-hero__media {
+      position: absolute;
+      inset: 0;
+      height: 100%;
+    }
+    .landing-hero__photo {
+      inset: 0;
+      width: 100%;
+      object-position: right center;
+    }
+    .landing-hero__blend {
+      /* Keep the desktop photo-and-copy composition readable on narrow screens. */
+      background:
+        linear-gradient(
+          90deg,
+          var(--card),
+          color-mix(in srgb, var(--card) 96%, transparent) 28%,
+          color-mix(in srgb, var(--card) 86%, transparent) 58%,
+          color-mix(in srgb, var(--card) 64%, transparent)
+        ),
+        linear-gradient(
+          120deg,
+          color-mix(in srgb, var(--hero-photo-tint) 20%, transparent),
+          color-mix(in srgb, var(--hero-photo-tint) 65%, transparent)
+        );
+    }
+    .landing-hero__copy {
+      width: 100%;
+      padding: 20px;
+    }
+    .landing-hero h1 {
+      max-width: 100%;
+      font-size: clamp(24px, 5.8vw, 30px);
+      line-height: 1.15;
+      letter-spacing: -0.03em;
+    }
+    .landing-hero__campus {
+      margin-block: 8px 18px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--primary);
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--primary);
+    }
+    .landing-hero__intro {
+      max-width: 440px;
+      font-size: 13px;
+      font-style: italic;
+      line-height: 1.65;
+      color: var(--primary);
+    }
+    .landing-hero__read-more {
+      margin-top: 18px;
+      font-size: 12px;
+    }
+    .landing-section-title,
+    .landing-offers > .landing-section-title {
+      font-size: var(--mobile-section-title);
+      line-height: 1.3;
+      gap: 12px;
+    }
+    .landing-section-title--centered {
+      width: 100%;
+    }
+    .landing-section-title--centered::before,
+    .landing-section-title--centered::after {
+      flex-basis: 28px;
+    }
+    .landing-feeds {
+      gap: 20px;
+    }
+    .landing-icon {
+      width: 38px;
+      height: 38px;
+    }
+    .landing-icon svg {
+      width: 20px;
+      height: 20px;
+    }
+    .landing-card {
+      border-radius: 14px;
+    }
+    .landing-feed-announcements > .landing-feed-heading {
+      padding: 10px 14px;
+      gap: 10px;
+    }
+    .landing-feed-heading .landing-icon {
+      width: 30px;
+      height: 30px;
+    }
+    .landing-feed-heading .landing-icon svg {
+      width: 20px;
+      height: 20px;
+    }
+    .landing-feed-title,
+    .landing-feed-announcements .landing-feed-title {
+      font-size: var(--mobile-section-title);
+      letter-spacing: -0.02em;
+    }
+    .landing-announcement-signal {
+      width: 32px;
+      height: 32px;
+      border-radius: 9px;
+    }
+    .landing-announcement-signal > svg {
+      width: 20px;
+      height: 20px;
+    }
+    .landing-event {
+      gap: 12px;
+      padding: 14px;
+    }
+    .landing-event-media {
+      padding: 0;
+      border: 0;
+      background: transparent;
+    }
+    .landing-event-poster img {
+      border-radius: 9px;
+    }
+    .landing-event-media .landing-event-closing {
+      padding: 12px 0 0;
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 1.65;
+    }
+    .landing-event-copy {
+      gap: 10px;
+    }
+    .landing-event-copy h3 {
+      font-size: 21px;
+      line-height: 1.25;
+    }
+    .landing-event-copy p {
+      font-size: 13px;
+      line-height: 1.7;
+    }
+    .landing-event-label {
+      padding: 5px 8px;
+      font-size: 10px;
+    }
+    .landing-event-inquiry {
+      gap: 8px;
+      padding: 10px;
+      border-radius: 0 8px 8px 0;
+    }
+    .landing-event-inquiry > svg {
+      width: 17px;
+      height: 17px;
+    }
+    .landing-announcement-updates .landing-announcement-end {
+      padding: 10px 14px;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+    .landing-beliefs {
+      /* Keep waves shallow and text clear as the mobile content grows. */
+      -webkit-mask:
+        url("/contact-top-wave-mask.svg") top / 100% 32px no-repeat,
+        linear-gradient(white, white) center / 100% calc(100% - 62px) no-repeat,
+        url("/mission-vision-bottom-wave-mask.svg") bottom / 100% 32px no-repeat;
+      mask:
+        url("/contact-top-wave-mask.svg") top / 100% 32px no-repeat,
+        linear-gradient(white, white) center / 100% calc(100% - 62px) no-repeat,
+        url("/mission-vision-bottom-wave-mask.svg") bottom / 100% 32px no-repeat;
+      padding-block: 32px;
+    }
+    .landing-belief {
+      padding: 14px 8px;
+    }
+    .landing-beliefs h3 {
+      font-size: var(--mobile-section-title);
+    }
+    .landing-beliefs .landing-card-heading {
+      margin-bottom: 14px;
+      gap: 10px;
+    }
+    .landing-belief .landing-icon {
+      width: 30px;
+      height: 30px;
+    }
+    .landing-belief .landing-icon svg {
+      width: 22px;
+      height: 22px;
+    }
+    .landing-beliefs :is(p, .landing-mission-intro, .landing-vision-copy) {
+      font-size: var(--mobile-copy);
+      line-height: 1.65;
+      text-align: left;
+    }
+    .landing-beliefs .landing-mission-intro {
+      margin-bottom: 12px;
+    }
+    .landing-beliefs .landing-mission-points {
+      gap: 12px;
+    }
+    .landing-mission-points li {
+      grid-template-columns: 22px minmax(0, 1fr);
+      gap: 10px;
+    }
+    .landing-mission-number {
+      width: 22px;
+      height: 22px;
+      font-size: 11px;
+    }
+    .landing-beliefs .landing-vision {
+      min-height: 0;
+    }
+    .landing-vision-lines {
+      display: none;
+    }
+    .landing-offers {
+      margin-block-start: 8px;
+      gap: 18px;
+    }
+    .landing-features {
+      gap: 10px;
+    }
+    .landing-feature {
+      grid-template-columns: 28px 28px minmax(0, 1fr);
+      align-content: center;
+      column-gap: 10px;
+      row-gap: 0;
+      min-height: 64px;
+      padding: 12px 14px;
+      border-radius: 13px;
+    }
+    .landing-feature-number {
+      align-self: center;
+      grid-row: 1;
+      font-size: 22px;
+      line-height: 1;
+    }
+    .landing-feature-art {
+      grid-column: 2;
+      grid-row: 1;
+      align-self: center;
+      width: 28px;
+      height: 28px;
+    }
+    .landing-feature-art svg {
+      width: 19px;
+      height: 19px;
+    }
+    .landing-feature-art::after {
+      width: 7px;
+      height: 7px;
+    }
+    .landing-feature h3 {
+      grid-column: 3;
+      grid-row: 1;
+      align-self: center;
+      margin: 0;
+      font-size: 16px;
+    }
+    .landing-feature-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      width: 100%;
+      min-height: 32px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+    .landing-feature-toggle::after {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto;
+      height: 64px;
+    }
+    .landing-feature-toggle:focus-visible {
+      outline: 2px solid currentColor;
+      outline-offset: 4px;
+      border-radius: 3px;
+    }
+    .landing-feature-toggle svg {
+      transition: transform 160ms ease;
+    }
+    .landing-feature-toggle[aria-expanded="true"] svg {
+      transform: rotate(180deg);
+    }
+    .landing-feature p {
+      grid-column: 1 / -1;
+      grid-row: 2;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+      font-size: var(--mobile-copy);
+      line-height: 1.6;
+    }
+    .landing-feed-panel:not(.landing-feed-announcements) {
+      padding: 14px;
+    }
+    .landing-feed-resources > .landing-feed-heading {
+      padding-bottom: 10px;
+    }
+    .landing-feed-state {
+      min-height: 0;
+      grid-template-columns: 54px minmax(0, 1fr);
+      align-items: center;
+      gap: 12px;
+      padding-block: 12px 0;
+    }
+    .landing-feed-loading {
+      min-height: 0;
+      gap: 12px;
+      padding: 12px 0 0;
+    }
+    .landing-feed-item {
+      padding-block: 16px;
+      gap: 8px;
+    }
+    .landing-feed-item p {
+      font-size: var(--mobile-copy);
+      line-height: 1.6;
+    }
+    .landing-feed-state button {
+      font-size: 12px;
+    }
+    .landing-feed-art {
+      width: 54px;
+      height: 60px;
+    }
+    .landing-feed-paper {
+      width: 42px;
+      height: 58px;
+      padding: 12px 7px;
+      gap: 6px;
+    }
+    .landing-feed-message p {
+      font-size: 13px;
+      line-height: 1.65;
+    }
+    .landing-faq-layout {
+      gap: 14px;
+    }
+    .landing-faq-intro {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      max-width: none;
+      align-items: center;
+      gap: 6px;
+      padding: 0 8px;
+      border-radius: 14px;
+      text-align: center;
+    }
+    .landing-faq-heading {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: center;
+      max-width: 100%;
+      gap: 8px;
+      margin-bottom: 0;
+    }
+    .landing-faq-heading > .landing-icon {
+      flex-shrink: 0;
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+    }
+    .landing-faq-heading > .landing-icon svg {
+      width: 17px;
+      height: 17px;
+    }
+    .landing-faq-intro h2 {
+      font-size: 18px;
+      line-height: 1.35;
+    }
+    .landing-faq-intro p {
+      max-width: 320px;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .landing-faq-intro [data-slot="button"] {
+      justify-content: center;
+      width: fit-content;
+      height: auto;
+      min-height: 28px;
+      margin-top: 2px;
+      padding: 2px 10px;
+      border: 1px solid color-mix(in srgb, var(--primary) 16%, transparent);
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--primary) 5%, var(--card));
+      color: var(--primary);
+      box-shadow: none;
+      font-size: 12px;
+      text-underline-offset: 3px;
+    }
+    .landing-faq-intro [data-slot="button"]:hover {
+      background: transparent;
+      color: var(--primary);
+      box-shadow: none;
+      text-decoration: underline;
+      translate: none;
+    }
+    .landing-faq-stage {
+      /* On phones the accordion grows with its answer; no empty answer slot. */
+      min-height: 0;
+    }
+    .landing-faq-item button {
+      min-height: 48px;
+      gap: 8px;
+      padding: 10px 12px;
+    }
+    .landing-faq-question {
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .landing-faq-answer p {
+      padding: 0 14px 12px 38px;
+      font-size: 13px;
+      line-height: 1.7;
+    }
+    .landing-contact {
+      margin-top: 0;
+    }
+    .landing-contact-panel.landing-glass {
+      grid-template-columns: minmax(0, 1fr);
+      padding: 36px 16px 12px;
+      border-radius: 0;
+      gap: 0;
+    }
+    .landing-contact-heading {
+      align-items: flex-start;
+      gap: 8px;
+    }
+    .landing-contact-panel .landing-contact-title {
+      font-size: var(--mobile-section-title);
+    }
+    .landing-contact-panel .landing-contact-intro {
+      display: none;
+    }
+    .landing-contact-row h3,
+    .landing-contact-channel h3 {
+      font-size: 13px;
+    }
+    .landing-contact-number {
+      font-size: 15px;
+    }
+    .landing-contact-panel
+      :is(.landing-contact-campus, .landing-contact-channel)
+      p {
+      font-size: 13px;
+      line-height: 1.7;
+    }
+    .landing-contact-channels > .landing-contact-row,
+    .landing-contact-channel {
+      padding-block: 8px;
+    }
+    .landing-contact-campus {
+      grid-column: 1 / -1;
+      padding-block: 0;
+    }
+    .landing-contact-channels {
+      display: contents;
+    }
+    .landing-contact-campus > .landing-contact-row,
+    .landing-contact-channels > .landing-contact-row,
+    .landing-contact-channels > .landing-contact-channel {
+      position: relative;
+      display: grid;
+      grid-template-columns: 20px 64px minmax(0, 1fr) 12px;
+      align-items: center;
+      gap: 4px 8px;
+      min-height: 44px;
+      padding: 10px 0;
+      border-top: 1px solid var(--contact-divider);
+    }
+    .landing-contact-channels
+      :is(.landing-contact-row > div, .landing-contact-channel-copy),
+    .landing-contact-campus .landing-contact-row > div {
+      display: contents;
+    }
+    .landing-contact-channels h3,
+    .landing-contact-campus h3 {
+      grid-column: 2;
+      grid-row: 1;
+      margin: 0;
+      padding-top: 0;
+      font-size: 12px;
+    }
+    .landing-contact-channels :is(p, .landing-contact-number),
+    .landing-contact-address {
+      grid-column: 3;
+      grid-row: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .landing-contact-channels wbr {
+      display: none;
+    }
+    .landing-contact-channels .landing-contact-link-arrow,
+    .landing-contact-campus .landing-contact-link-arrow {
+      grid-column: 4;
+      grid-row: 1;
+      position: static;
+      width: 12px;
+      height: 12px;
+      margin: 0;
+    }
+    .landing-contact-channels .landing-icon,
+    .landing-contact-campus .landing-icon {
+      grid-column: 1;
+      grid-row: 1;
+      width: 20px;
+      height: 20px;
+      border: 0;
+      background: transparent;
+    }
+    .landing-contact-channels .landing-icon svg,
+    .landing-contact-campus .landing-icon svg {
+      width: 17px;
+      height: 17px;
+    }
+    .landing-contact-campus .landing-contact-row {
+      border-top: 0;
+    }
+    .landing-contact-campus .landing-contact-school-id {
+      grid-column: 3 / -1;
+      grid-row: 2;
+      gap: 4px;
+      margin-top: 0;
+      padding: 1px 5px;
+      font-size: 10px;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .school-homepage .landing-feature-toggle svg {
+    transition: none;
+  }
+}
+
+@media (max-width: 374px) {
+  .school-homepage .school-lockup-campus {
+    display: none;
+  }
+}
+
+@media (max-width: 359px) {
+  .school-homepage {
+    .school-header-inner {
+      padding-inline: 12px;
+      gap: 8px;
+    }
+    .school-lockup {
+      gap: 6px;
+    }
+    .school-header-brand .school-logo-seal {
+      width: 32px;
+      height: 32px;
+    }
+    .school-header-brand .school-lockup-name {
+      font-size: 10px;
+    }
+    .school-lockup-campus {
+      display: none;
+    }
+    .school-header .landing-sign-in {
+      padding-inline: 10px;
+    }
+    .landing-hero__copy {
+      padding-inline: 18px;
+    }
+  }
+}

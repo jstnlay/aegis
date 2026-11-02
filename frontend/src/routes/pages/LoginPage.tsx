@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { Link, Navigate } from "react-router-dom"
-import { Loader2 } from "lucide-react"
+import { ArrowLeft, Eye, EyeOff, Loader2 } from "lucide-react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -25,6 +25,9 @@ import { Label } from "@/components/ui/label"
 import { useAuth } from "@/features/auth/AuthContext"
 import { normalizeApiError } from "@/lib/error"
 import { SCHOOL_NAME } from "@/lib/school-content"
+import { HomepageBackground } from "@/components/brand/HomepageBackground"
+import { LoginLegalPolicies } from "./LoginLegalPolicies"
+import "./login-page.css"
 
 const loginSchema = z.object({
   email: z
@@ -54,6 +57,7 @@ export function LoginPage() {
     login,
   } = useAuth()
   const [serverError, setServerError] = useState<string | null>(null)
+  const [showPassword, setShowPassword] = useState(false)
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -87,32 +91,41 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-svh items-center justify-center bg-background px-4 py-10">
-      <Card className="w-full max-w-md">
-        <CardHeader className="gap-2 text-center">
-          <div className="mx-auto size-14 overflow-hidden rounded-md border border-border">
-            <img
-              src="/hcci-logo.png"
-              alt={SCHOOL_NAME}
-              className="size-full object-cover"
-            />
-          </div>
-          <h1 className="text-xl font-bold text-foreground">
-            Sign in to AEGIS
-          </h1>
-          <CardDescription>
-            Academic Governance and Intervention System
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Form {...form}>
-            <form
-              onSubmit={(e) => void form.handleSubmit(onSubmit)(e)}
-              className="space-y-4"
-              noValidate
-              aria-busy={isSubmitting}
-            >
-              {/*
+    <div className="school-login-page school-brand-background">
+      <HomepageBackground />
+      <Link
+        to="/"
+        className="school-login-home"
+        aria-label="Back to landing page"
+        title="Back to landing page"
+      >
+        <ArrowLeft aria-hidden="true" />
+      </Link>
+      <div className="school-login-visual" aria-hidden="true" />
+      <main className="school-login-main" aria-labelledby="login-title">
+        <Card className="school-login-card">
+          <CardHeader className="school-login-heading text-center">
+            <div className="school-login-seal">
+              <img
+                src="/hcci-logo.png"
+                alt={SCHOOL_NAME}
+                className="size-full object-cover"
+              />
+            </div>
+            <h1 id="login-title">Sign in to AEGIS</h1>
+            <CardDescription>
+              Academic Governance and Intervention System
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Form {...form}>
+              <form
+                onSubmit={(e) => void form.handleSubmit(onSubmit)(e)}
+                className="space-y-4"
+                noValidate
+                aria-busy={isSubmitting}
+              >
+                {/*
                 PH11.11. `sessionExpired` is the explanation for arriving here
                 without having signed out. `role="status"`, not `alert`: nothing
                 failed because of a mistake, and the reader should not be
@@ -136,156 +149,158 @@ export function LoginPage() {
                 Saying only "your session has ended" would leave them thinking
                 they had been idle too long.
               */}
-              {sessionExpired ? (
-                <p
-                  role="status"
-                  className="rounded-sm border border-border bg-muted/60 px-3 py-2 text-sm text-muted-foreground"
-                >
-                  {sessionEndedBy === "other-account"
-                    ? "A different account signed in on this browser, so this session ended. Sign in again to continue."
-                    : "Your session has ended. Please sign in again to continue."}
-                </p>
-              ) : null}
+                {sessionExpired ? (
+                  <p
+                    role="status"
+                    className="rounded-sm border border-border bg-muted/60 px-3 py-2 text-sm text-muted-foreground"
+                  >
+                    {sessionEndedBy === "other-account"
+                      ? "A different account signed in on this browser, so this session ended. Sign in again to continue."
+                      : "Your session has ended. Please sign in again to continue."}
+                  </p>
+                ) : null}
 
-              {serverError ? (
-                <div
-                  role="alert"
-                  className="rounded-sm border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-                >
-                  {serverError}
-                </div>
-              ) : null}
+                {serverError ? (
+                  <div
+                    role="alert"
+                    className="rounded-sm border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive"
+                  >
+                    {serverError}
+                  </div>
+                ) : null}
 
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        type="email"
-                        placeholder="you@school.edu"
-                        autoComplete="email"
-                        inputMode="email"
-                        disabled={isSubmitting}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Password</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        type="password"
-                        placeholder="Enter your password"
-                        autoComplete="current-password"
-                        disabled={isSubmitting}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <div className="flex items-center justify-between gap-3">
                 <FormField
                   control={form.control}
-                  name="rememberMe"
+                  name="email"
                   render={({ field }) => (
                     <FormItem>
-                      <div className="flex items-center gap-2">
-                        <input
-                          id="remember-me"
-                          type="checkbox"
-                          checked={field.value}
-                          onChange={(event) =>
-                            field.onChange(event.target.checked)
-                          }
-                          onBlur={field.onBlur}
+                      <FormLabel>Email</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          type="email"
+                          placeholder="you@school.edu"
+                          autoComplete="email"
+                          inputMode="email"
                           disabled={isSubmitting}
-                          className="size-4 shrink-0 rounded border-border accent-maroon-600"
                         />
-                        <Label
-                          htmlFor="remember-me"
-                          className="text-sm font-normal text-muted-foreground"
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Password</FormLabel>
+                      <div className="school-login-password">
+                        <FormControl>
+                          <Input
+                            {...field}
+                            type={showPassword ? "text" : "password"}
+                            placeholder="Enter your password"
+                            autoComplete="current-password"
+                            autoCapitalize="none"
+                            autoCorrect="off"
+                            spellCheck={false}
+                            disabled={isSubmitting}
+                          />
+                        </FormControl>
+                        <button
+                          type="button"
+                          className="school-login-password-toggle"
+                          aria-label={
+                            showPassword ? "Hide password" : "Show password"
+                          }
+                          title={
+                            showPassword ? "Hide password" : "Show password"
+                          }
+                          disabled={isSubmitting}
+                          onClick={() => setShowPassword((visible) => !visible)}
                         >
-                          Remember me
-                        </Label>
+                          {showPassword ? (
+                            <EyeOff aria-hidden="true" />
+                          ) : (
+                            <Eye aria-hidden="true" />
+                          )}
+                        </button>
                       </div>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
 
-                {/* Document element 4, "Forgot Password" link. */}
-                <Link
-                  to="/forgot-password"
-                  className="text-sm underline underline-offset-4 transition-colors hover:text-foreground"
+                <div className="flex items-center justify-between gap-3">
+                  <FormField
+                    control={form.control}
+                    name="rememberMe"
+                    render={({ field }) => (
+                      <FormItem>
+                        <div className="flex items-center gap-2">
+                          <input
+                            id="remember-me"
+                            type="checkbox"
+                            checked={field.value}
+                            onChange={(event) =>
+                              field.onChange(event.target.checked)
+                            }
+                            onBlur={field.onBlur}
+                            disabled={isSubmitting}
+                            className="size-4 shrink-0 rounded border-border accent-maroon-600"
+                          />
+                          <Label
+                            htmlFor="remember-me"
+                            className="text-sm font-normal text-muted-foreground"
+                          >
+                            Remember me
+                          </Label>
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Document element 4, "Forgot Password" link. */}
+                  <Link
+                    to="/forgot-password"
+                    className="text-sm underline underline-offset-4 transition-colors hover:text-foreground"
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
+
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={isSubmitting}
                 >
-                  Forgot password?
-                </Link>
-              </div>
-
-              <Button type="submit" className="w-full" disabled={isSubmitting}>
-                {isSubmitting ? (
-                  <>
-                    <Loader2
-                      className="size-4 animate-spin"
-                      aria-hidden="true"
-                    />
-                    Signing in...
-                  </>
-                ) : (
-                  "Sign in"
-                )}
-              </Button>
-
+                  {isSubmitting ? (
+                    <>
+                      <Loader2
+                        className="size-4 animate-spin"
+                        aria-hidden="true"
+                      />
+                      Signing in...
+                    </>
+                  ) : (
+                    "Sign in"
+                  )}
+                </Button>
+              </form>
+            </Form>
+            <div className="school-login-support">
               {/* Document element 6, "Sign Up" link. */}
-              <p className="text-center text-sm">
-                New student?{" "}
-                <Link
-                  to="/register"
-                  className="underline underline-offset-4 transition-colors hover:text-foreground"
-                >
-                  Request an account
-                </Link>
+              <p className="school-login-register">
+                New student? <Link to="/register">Request an account</Link>
               </p>
-            </form>
-          </Form>
-          {/*
-            Consent line. Short on purpose: the portal holds no non-essential
-            storage and charges no fee, so there is nothing else to agree to
-            here. The two links open the full text.
-          */}
-          <p className="mt-4 text-center text-xs leading-relaxed text-muted-foreground">
-            By signing in you agree to the{" "}
-            <Link
-              to="/terms"
-              className="underline underline-offset-4 transition-colors hover:text-foreground"
-            >
-              Terms of Use
-            </Link>{" "}
-            and acknowledge the{" "}
-            <Link
-              to="/privacy"
-              className="underline underline-offset-4 transition-colors hover:text-foreground"
-            >
-              Privacy Policy
-            </Link>
-            .
-          </p>
-        </CardContent>
-      </Card>
+              <LoginLegalPolicies />
+            </div>
+          </CardContent>
+        </Card>
+      </main>
     </div>
   )
 }

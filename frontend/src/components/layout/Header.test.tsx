@@ -1,4 +1,5 @@
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -7,7 +8,7 @@ import {
 } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { MemoryRouter } from "react-router-dom"
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { Header } from "@/components/layout/Header"
 import type { Notification } from "@/features/notifications/api"
@@ -26,11 +27,13 @@ import type { Role, User } from "@/types/auth"
  * read, and the inbox is still one click away at the foot of the menu.
  */
 
+const mockLogout = vi.hoisted(() => vi.fn<() => Promise<void>>())
+
 vi.mock("@/features/auth/AuthContext", () => ({
   useAuth: () => ({
     status: "authenticated",
     user: currentUser,
-    logout: vi.fn(),
+    logout: mockLogout,
   }),
 }))
 
@@ -95,10 +98,126 @@ function renderHeader(role: Role = "student") {
 }
 
 beforeEach(() => {
+  mockLogout.mockReset()
+  mockLogout.mockResolvedValue(undefined)
   mockedFetchAllPages.mockReset()
   mockedFetchAllPages.mockResolvedValue({ count: 0, results: [] })
   mockedPost.mockReset()
   mockedPost.mockResolvedValue({ data: { success: true } } as never)
+})
+
+afterEach(() => vi.restoreAllMocks())
+
+describe.each(["admin", "guidance", "student", "parent"] as const)(
+  "%s header scrolling",
+  (role) => {
+    function controlScroll() {
+      const scrollY = vi.spyOn(window, "scrollY", "get").mockReturnValue(0)
+      return (y: number) => {
+        scrollY.mockReturnValue(y)
+        fireEvent.scroll(window)
+      }
+    }
+
+    it("hides on downward scrolling, ignores jitter and reveals on upward scrolling or at the top", () => {
+      const scroll = controlScroll()
+      renderHeader(role)
+      const header = screen.getByRole("banner")
+      scroll(20)
+      expect(header).toHaveAttribute("data-hidden", "false")
+      scroll(150)
+      expect(header).toHaveAttribute("data-hidden", "true")
+      scroll(149)
+      expect(header).toHaveAttribute("data-hidden", "true")
+      scroll(130)
+      expect(header).toHaveAttribute("data-hidden", "false")
+      scroll(200)
+      expect(header).toHaveAttribute("data-hidden", "true")
+      scroll(0)
+      expect(header).toHaveAttribute("data-hidden", "false")
+    })
+
+    it("reveals for keyboard focus and stays visible while the account menu is open", () => {
+      const scroll = controlScroll()
+      renderHeader(role)
+      const header = screen.getByRole("banner")
+      scroll(150)
+      expect(header).toHaveAttribute("data-hidden", "true")
+      const account = screen.getByRole("button", { name: "Account menu" })
+      fireEvent.focus(account)
+      expect(header).toHaveAttribute("data-hidden", "false")
+      fireEvent.click(account)
+      scroll(300)
+      expect(header).toHaveAttribute("data-hidden", "false")
+      expect(screen.getByRole("menuitem", { name: "Sign out" })).toBeVisible()
+    })
+
+    it("keeps other roles' headers visible", () => {
+      const scroll = controlScroll()
+      renderHeader("faculty")
+      scroll(200)
+      expect(screen.getByRole("banner")).toHaveAttribute("data-hidden", "false")
+    })
+  }
+)
+
+describe("sign-out confirmation", () => {
+  async function openConfirmation() {
+    fireEvent.click(screen.getByRole("button", { name: "Account menu" }))
+    fireEvent.click(screen.getByRole("menuitem", { name: "Sign out" }))
+    return screen.findByRole("alertdialog", { name: "Sign out of AEGIS?" })
+  }
+
+  it.each(["Cancel", "Escape"])(
+    "keeps the session active when the user chooses %s",
+    async (dismissal) => {
+      renderHeader("admin")
+      const dialog = await openConfirmation()
+      const cancel = within(dialog).getByRole("button", { name: "Cancel" })
+      await waitFor(() => expect(cancel).toHaveFocus())
+      expect(mockLogout).not.toHaveBeenCalled()
+
+      if (dismissal === "Cancel") fireEvent.click(cancel)
+      else fireEvent.keyDown(dialog, { key: "Escape" })
+
+      await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull())
+      expect(mockLogout).not.toHaveBeenCalled()
+      await waitFor(() =>
+        expect(
+          screen.getByRole("button", { name: "Account menu" })
+        ).toHaveFocus()
+      )
+    }
+  )
+
+  it("signs out only after confirmation and prevents repeated requests while pending", async () => {
+    let finishLogout!: () => void
+    mockLogout.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        finishLogout = resolve
+      })
+    )
+    renderHeader()
+    const dialog = await openConfirmation()
+    expect(mockLogout).not.toHaveBeenCalled()
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Sign out" }))
+    const pendingButton = within(dialog).getByRole("button", {
+      name: "Signing out…",
+    })
+    expect(pendingButton).toBeDisabled()
+    expect(
+      within(dialog).getByRole("button", { name: "Cancel" })
+    ).toBeDisabled()
+    expect(mockLogout).toHaveBeenCalledTimes(1)
+    fireEvent.click(pendingButton)
+    fireEvent.keyDown(dialog, { key: "Escape" })
+    expect(dialog).toBeInTheDocument()
+    expect(mockLogout).toHaveBeenCalledTimes(1)
+
+    await act(async () => finishLogout())
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull())
+  })
 })
 
 describe("header bell (TC-STU-08)", () => {

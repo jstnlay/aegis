@@ -1,0 +1,269 @@
+.school-login-page {
+  --login-background-image: url("/completer%20login.jpg");
+  --login-photo-tint: color-mix(in srgb, var(--primary) 68%, transparent);
+  --landing-background-height: max(100svh, 1800px);
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
+  grid-template-rows: minmax(0, 1fr);
+  height: 100svh;
+}
+.school-login-page .landing-background-field--rose > path:first-child,
+.school-login-page .landing-background-contours > path:first-child {
+  transform: translate(240px, -180px);
+}
+.school-login-home {
+  position: absolute;
+  top: 16px;
+  left: clamp(16px, 2vw, 32px);
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  color: white;
+}
+.school-login-home svg {
+  width: 20px;
+  height: 20px;
+  filter: drop-shadow(0 1px 2px #00000040);
+}
+.school-login-home:hover {
+  background: #ffffff1f;
+}
+.school-login-home:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+.school-login-visual {
+  min-width: 0;
+  background-color: color-mix(in srgb, var(--primary) 75%, var(--card));
+  background-image:
+    linear-gradient(var(--login-photo-tint), var(--login-photo-tint)),
+    var(--login-background-image);
+  background-size: cover;
+  background-position: 75% center;
+  background-repeat: no-repeat;
+  -webkit-mask: url("/login-photo-wave-mask.svg") center / 100% 100% no-repeat;
+  mask: url("/login-photo-wave-mask.svg") center / 100% 100% no-repeat;
+}
+.school-login-main {
+  display: flex;
+  align-items: safe center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+  padding: clamp(16px, 4svh, 48px) clamp(28px, 4vw, 64px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.school-login-card[data-slot="card"] {
+  width: 100%;
+  max-width: 400px;
+  gap: 28px;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.school-login-card > [data-slot="card-header"],
+.school-login-card > [data-slot="card-content"] {
+  padding: 0;
+}
+.school-login-heading {
+  justify-items: center;
+  gap: 10px;
+}
+.school-login-seal {
+  width: 72px;
+  height: 72px;
+  margin-bottom: 8px;
+}
+.school-login-seal img {
+  border-radius: 50%;
+}
+.school-login-heading h1 {
+  color: var(--primary);
+  font-family: "Trebuchet MS", "Inter Variable", sans-serif;
+  font-size: clamp(28px, 2.5vw, 34px);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+.school-login-heading [data-slot="card-description"] {
+  max-width: 310px;
+  font-size: 14px;
+  line-height: 1.65;
+}
+.school-login-card [data-slot="form-label"] {
+  font-size: 14px;
+  font-weight: 600;
+}
+.school-login-card [data-slot="input"] {
+  height: 46px;
+  border-radius: 8px;
+  background: var(--card);
+}
+.school-login-card [data-slot="input"]:not([aria-invalid="true"]) {
+  border-color: color-mix(in srgb, var(--primary) 20%, var(--card));
+}
+.school-login-password {
+  position: relative;
+}
+.school-login-password [data-slot="input"] {
+  padding-right: 48px;
+}
+.school-login-password input::-ms-reveal {
+  display: none;
+}
+.school-login-password-toggle {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+.school-login-password-toggle svg {
+  width: 18px;
+  height: 18px;
+}
+.school-login-password-toggle:hover {
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 6%, var(--card));
+}
+.school-login-password-toggle:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+.school-login-password-toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.school-login-card [data-slot="button"] {
+  height: 46px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.school-login-support {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid color-mix(in srgb, var(--primary) 12%, var(--card));
+}
+.school-login-register {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.6;
+  text-align: center;
+}
+.school-login-register a {
+  font-weight: 600;
+  text-decoration: underline;
+  white-space: nowrap;
+}
+.school-login-card a {
+  color: var(--primary);
+  text-underline-offset: 4px;
+}
+.school-login-card a:hover {
+  color: color-mix(in srgb, var(--primary) 80%, black);
+}
+.school-login-card a:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 4px;
+  border-radius: 2px;
+}
+@media (max-width: 1023px) {
+  .school-login-page {
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  }
+}
+@media (max-width: 767px) {
+  .school-login-home {
+    top: 8px;
+    left: 12px;
+  }
+  .school-login-page {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: clamp(64px, 14svh, 120px) minmax(0, 1fr);
+  }
+  .school-login-visual {
+    -webkit-mask: none;
+    mask: none;
+    border-radius: 0 0 45% 10% / 0 0 24px 12px;
+  }
+  .school-login-main {
+    align-items: flex-start;
+    padding: clamp(16px, 3svh, 28px) 24px clamp(20px, 4svh, 40px);
+  }
+  .school-login-card[data-slot="card"] {
+    gap: 24px;
+  }
+  .school-login-seal {
+    width: 60px;
+    height: 60px;
+    margin-bottom: 4px;
+  }
+}
+@media (max-width: 359px) {
+  .school-login-main {
+    padding-inline: 20px;
+  }
+  .school-login-page {
+    grid-template-rows: clamp(48px, 12svh, 88px) minmax(0, 1fr);
+  }
+}
+@media (max-height: 740px) {
+  .school-login-card[data-slot="card"] {
+    gap: 20px;
+  }
+  .school-login-heading {
+    gap: 8px;
+  }
+  .school-login-seal {
+    width: 60px;
+    height: 60px;
+    margin-bottom: 4px;
+  }
+}
+@media (max-width: 767px) and (max-height: 740px) {
+  .school-login-page {
+    grid-template-rows: clamp(48px, 8svh, 60px) minmax(0, 1fr);
+  }
+  .school-login-main {
+    padding-block: 16px;
+  }
+}
+@media (max-width: 767px) and (max-height: 620px) {
+  .school-login-home {
+    background: var(--primary);
+  }
+  .school-login-home:hover {
+    background: color-mix(in srgb, var(--primary) 90%, black);
+  }
+  .school-login-home:focus-visible {
+    outline-color: var(--ring);
+  }
+  .school-login-page {
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .school-login-visual {
+    display: none;
+  }
+  .school-login-card[data-slot="card"] {
+    gap: 16px;
+  }
+  .school-login-seal {
+    width: 56px;
+    height: 56px;
+  }
+}

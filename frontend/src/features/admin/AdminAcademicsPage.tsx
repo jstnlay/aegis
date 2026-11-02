@@ -1,7 +1,21 @@
 import { ChoiceField, Field } from "@/components/ui/form-field"
 import { Tabs, type TabItem } from "@/components/ui/tabs"
-import { BookOpen } from "lucide-react"
-import { useState } from "react"
+import {
+  BookOpen,
+  CalendarDays,
+  ClipboardList,
+  GraduationCap,
+  Layers3,
+  Loader2,
+  Plus,
+  School,
+  Table2,
+  Trash2,
+  UserRoundPlus,
+  UsersRound,
+  type LucideIcon,
+} from "lucide-react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -33,6 +47,7 @@ import {
   type SubjectAssignment,
 } from "@/features/admin/api"
 import { getFieldErrors, normalizeApiError } from "@/lib/error"
+import "./admin-academics.css"
 
 /**
  * Academic structure administration.
@@ -67,6 +82,35 @@ type Tab =
 
 export function AdminAcademicsPage() {
   const [tab, setTab] = useState<Tab>("sections")
+  const pageRef = useRef<HTMLDivElement>(null)
+
+  // Keep the selected category visible in the narrow-screen tab strip without
+  // moving the page or changing the form's scroll position.
+  useEffect(() => {
+    const strip =
+      pageRef.current?.querySelector<HTMLElement>('[role="tablist"]')
+    if (!strip) return
+
+    const revealSelectedTab = () => {
+      const selected = strip.querySelector<HTMLElement>(
+        '[aria-selected="true"]'
+      )
+      if (!selected) return
+      const bounds = strip.getBoundingClientRect()
+      const selectedBounds = selected.getBoundingClientRect()
+      if (selectedBounds.left < bounds.left + 6) {
+        strip.scrollLeft += selectedBounds.left - bounds.left - 6
+      } else if (selectedBounds.right > bounds.right - 6) {
+        strip.scrollLeft += selectedBounds.right - bounds.right + 6
+      }
+    }
+
+    revealSelectedTab()
+    if (typeof ResizeObserver === "undefined") return
+    const observer = new ResizeObserver(revealSelectedTab)
+    observer.observe(strip)
+    return () => observer.disconnect()
+  }, [tab])
 
   /*
     PH11.12: id, label and content are declared once. PH11.11 introduced the
@@ -80,41 +124,67 @@ export function AdminAcademicsPage() {
     {
       id: "academic-years",
       label: "Academic years",
+      icon: <CalendarDays className="size-4" />,
       content: <AcademicYearsCard />,
     },
-    { id: "grade-levels", label: "Grade levels", content: <GradeLevelsCard /> },
-    { id: "sections", label: "Sections", content: <SectionsCard /> },
-    { id: "subjects", label: "Subjects", content: <SubjectsCard /> },
+    {
+      id: "grade-levels",
+      label: "Grade levels",
+      icon: <GraduationCap className="size-4" />,
+      content: <GradeLevelsCard />,
+    },
+    {
+      id: "sections",
+      label: "Sections",
+      icon: <School className="size-4" />,
+      content: <SectionsCard />,
+    },
+    {
+      id: "subjects",
+      label: "Subjects",
+      icon: <BookOpen className="size-4" />,
+      content: <SubjectsCard />,
+    },
     {
       id: "assignments",
       label: "Subject assignments",
+      icon: <UsersRound className="size-4" />,
       content: <SubjectAssignmentsCard />,
     },
     {
       id: "grading-periods",
       label: "Grading periods",
+      icon: <ClipboardList className="size-4" />,
       content: <GradingPeriodsCard />,
     },
-    { id: "enrollments", label: "Enrollments", content: <EnrollmentsCard /> },
+    {
+      id: "enrollments",
+      label: "Enrollments",
+      icon: <UserRoundPlus className="size-4" />,
+      content: <EnrollmentsCard />,
+    },
   ]
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-1">
-        <div className="flex items-center gap-3">
-          <BookOpen
-            className="size-5 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <h2 className="text-2xl font-bold text-foreground">
-            Academic Structure
-          </h2>
+    <div className="admin-academics" ref={pageRef}>
+      <div className="academic-page-intro">
+        <div className="academic-page-heading">
+          <span className="academic-page-icon" aria-hidden="true">
+            <BookOpen />
+          </span>
+          <div>
+            <p className="academic-page-eyebrow">School administration</p>
+            <h2>Academic Structure</h2>
+            <p className="academic-page-description">
+              Organize school years, classes and teaching assignments in one
+              place.
+            </p>
+          </div>
         </div>
-        <p className="text-sm text-muted-foreground">
-          The academic year, grade levels, sections, subjects, subject
-          assignments, grading periods and enrollments. Administrators have full
-          create and delete on all of these.
-        </p>
+        <span className="academic-area-count">
+          <Layers3 aria-hidden="true" />
+          {tabs.length} setup areas
+        </span>
       </div>
 
       {/* PH11.11: shared `Tabs` — adds `aria-controls`, a real `tabpanel`, and
@@ -127,6 +197,84 @@ export function AdminAcademicsPage() {
         items={tabs}
       />
     </div>
+  )
+}
+
+function AcademicCardHeader({
+  title,
+  description,
+  icon: Icon,
+}: {
+  title: string
+  description: string
+  icon: LucideIcon
+}) {
+  return (
+    <CardHeader className="academic-card-heading">
+      <span className="academic-card-icon" aria-hidden="true">
+        <Icon />
+      </span>
+      <div>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </div>
+    </CardHeader>
+  )
+}
+
+function AcademicFormActions({
+  label,
+  pending,
+  disabled,
+}: {
+  label: string
+  pending: boolean
+  disabled: boolean
+}) {
+  return (
+    <div className="academic-form-actions">
+      <p>
+        <span aria-hidden="true">*</span> Required fields
+      </p>
+      <Button type="submit" disabled={disabled}>
+        {pending ? (
+          <>
+            <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+            Saving…
+          </>
+        ) : (
+          <>
+            <Plus className="size-4" aria-hidden="true" />
+            {label}
+          </>
+        )}
+      </Button>
+    </div>
+  )
+}
+
+function AcademicRecords({
+  label,
+  count,
+  children,
+}: {
+  label: string
+  count?: number
+  children: ReactNode
+}) {
+  return (
+    <section className="academic-records" aria-label={`${label} records`}>
+      <div className="academic-records-heading">
+        <h3>
+          <Table2 aria-hidden="true" />
+          Existing {label.toLowerCase()}
+        </h3>
+        {count !== undefined ? (
+          <span className="academic-record-count">{count} total</span>
+        ) : null}
+      </div>
+      {children}
+    </section>
   )
 }
 
@@ -173,6 +321,7 @@ function DeleteButton({
       onClick={onDelete}
       aria-label={`Delete ${subject}`}
     >
+      <Trash2 className="size-3.5" aria-hidden="true" />
       Delete
     </Button>
   )
@@ -192,7 +341,11 @@ function AcademicYearsCard() {
       cell: (row) => (
         <div className="flex items-center gap-2">
           <span className="font-medium">{row.name}</span>
-          {row.is_current ? <Badge variant="secondary">Current</Badge> : null}
+          {row.is_current ? (
+            <Badge status={"current"} variant="secondary">
+              Current
+            </Badge>
+          ) : null}
         </div>
       ),
     },
@@ -220,16 +373,14 @@ function AcademicYearsCard() {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Academic years</CardTitle>
-        <CardDescription>
-          Only one year may be current — `AcademicYearSerializer` rejects a
-          second with a field-level validation error.
-        </CardDescription>
-      </CardHeader>
+      <AcademicCardHeader
+        title="Academic years"
+        icon={CalendarDays}
+        description="Manage school-year dates. Only one academic year can be current."
+      />
       <CardContent className="space-y-4">
         <form
-          className="space-y-3"
+          className="academic-create-form"
           onSubmit={(event) => {
             event.preventDefault()
             if (!canSubmit) return
@@ -246,7 +397,14 @@ function AcademicYearsCard() {
             )
           }}
         >
-          <div className="grid gap-3 sm:grid-cols-3">
+          <h3 className="academic-form-title">
+            <Plus aria-hidden="true" />
+            New academic year
+          </h3>
+          <div
+            className="academic-form-fields grid gap-3 sm:grid-cols-3"
+            data-columns="3"
+          >
             <Field
               label="Name"
               id="new-year-name"
@@ -276,21 +434,28 @@ function AcademicYearsCard() {
             />
           </div>
           <CreateError error={create.error} fieldErrors={fieldErrors} />
-          <Button type="submit" disabled={!canSubmit || create.isPending}>
-            {create.isPending ? "Saving…" : "Create academic year"}
-          </Button>
+          <AcademicFormActions
+            label="Create academic year"
+            pending={create.isPending}
+            disabled={!canSubmit || create.isPending}
+          />
         </form>
 
-        <DataTable
-          caption="Academic years"
-          columns={columns}
-          rows={list.data ?? []}
-          rowKey={(row) => row.id}
-          isLoading={list.isLoading}
-          error={list.isError ? normalizeApiError(list.error).message : null}
-          loadingLabel="Loading academic years"
-          emptyMessage="No academic years have been created."
-        />
+        <AcademicRecords
+          label="Academic years"
+          count={list.isSuccess ? (list.data ?? []).length : undefined}
+        >
+          <DataTable
+            caption="Academic years"
+            columns={columns}
+            rows={list.data ?? []}
+            rowKey={(row) => row.id}
+            isLoading={list.isLoading}
+            error={list.isError ? normalizeApiError(list.error).message : null}
+            loadingLabel="Loading academic years"
+            emptyMessage="No academic years have been created."
+          />
+        </AcademicRecords>
       </CardContent>
     </Card>
   )
@@ -328,15 +493,14 @@ function GradeLevelsCard() {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Grade levels</CardTitle>
-        <CardDescription>
-          Every section, subject and academic record resolves to one of these.
-        </CardDescription>
-      </CardHeader>
+      <AcademicCardHeader
+        title="Grade levels"
+        icon={GraduationCap}
+        description="Define the grade levels used across classes and academic records."
+      />
       <CardContent className="space-y-4">
         <form
-          className="space-y-3"
+          className="academic-create-form"
           onSubmit={(event) => {
             event.preventDefault()
             if (!canSubmit) return
@@ -349,7 +513,14 @@ function GradeLevelsCard() {
             )
           }}
         >
-          <div className="grid gap-3 sm:grid-cols-2">
+          <h3 className="academic-form-title">
+            <Plus aria-hidden="true" />
+            New grade level
+          </h3>
+          <div
+            className="academic-form-fields grid gap-3 sm:grid-cols-2"
+            data-columns="2"
+          >
             <Field
               label="Name"
               id="new-level-name"
@@ -371,21 +542,28 @@ function GradeLevelsCard() {
             />
           </div>
           <CreateError error={create.error} fieldErrors={fieldErrors} />
-          <Button type="submit" disabled={!canSubmit || create.isPending}>
-            {create.isPending ? "Saving…" : "Create grade level"}
-          </Button>
+          <AcademicFormActions
+            label="Create grade level"
+            pending={create.isPending}
+            disabled={!canSubmit || create.isPending}
+          />
         </form>
 
-        <DataTable
-          caption="Grade levels"
-          columns={columns}
-          rows={list.data ?? []}
-          rowKey={(row) => row.id}
-          isLoading={list.isLoading}
-          error={list.isError ? normalizeApiError(list.error).message : null}
-          loadingLabel="Loading grade levels"
-          emptyMessage="No grade levels have been created."
-        />
+        <AcademicRecords
+          label="Grade levels"
+          count={list.isSuccess ? (list.data ?? []).length : undefined}
+        >
+          <DataTable
+            caption="Grade levels"
+            columns={columns}
+            rows={list.data ?? []}
+            rowKey={(row) => row.id}
+            isLoading={list.isLoading}
+            error={list.isError ? normalizeApiError(list.error).message : null}
+            loadingLabel="Loading grade levels"
+            emptyMessage="No grade levels have been created."
+          />
+        </AcademicRecords>
       </CardContent>
     </Card>
   )
@@ -454,15 +632,14 @@ function SectionsCard() {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Sections</CardTitle>
-        <CardDescription>
-          A section belongs to one grade level within one academic year.
-        </CardDescription>
-      </CardHeader>
+      <AcademicCardHeader
+        title="Sections"
+        icon={School}
+        description="Organize class sections by grade level, school year and adviser."
+      />
       <CardContent className="space-y-4">
         <form
-          className="space-y-3"
+          className="academic-create-form"
           onSubmit={(event) => {
             event.preventDefault()
             if (!canSubmit) return
@@ -485,7 +662,14 @@ function SectionsCard() {
             )
           }}
         >
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <h3 className="academic-form-title">
+            <Plus aria-hidden="true" />
+            New section
+          </h3>
+          <div
+            className="academic-form-fields grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+            data-columns="4"
+          >
             <Field
               label="Name"
               id="new-section-name"
@@ -537,21 +721,28 @@ function SectionsCard() {
             />
           </div>
           <CreateError error={create.error} fieldErrors={fieldErrors} />
-          <Button type="submit" disabled={!canSubmit || create.isPending}>
-            {create.isPending ? "Saving…" : "Create section"}
-          </Button>
+          <AcademicFormActions
+            label="Create section"
+            pending={create.isPending}
+            disabled={!canSubmit || create.isPending}
+          />
         </form>
 
-        <DataTable
-          caption="Sections"
-          columns={columns}
-          rows={list.data ?? []}
-          rowKey={(row) => row.id}
-          isLoading={list.isLoading}
-          error={list.isError ? normalizeApiError(list.error).message : null}
-          loadingLabel="Loading sections"
-          emptyMessage="No sections have been created."
-        />
+        <AcademicRecords
+          label="Sections"
+          count={list.isSuccess ? (list.data ?? []).length : undefined}
+        >
+          <DataTable
+            caption="Sections"
+            columns={columns}
+            rows={list.data ?? []}
+            rowKey={(row) => row.id}
+            isLoading={list.isLoading}
+            error={list.isError ? normalizeApiError(list.error).message : null}
+            loadingLabel="Loading sections"
+            emptyMessage="No sections have been created."
+          />
+        </AcademicRecords>
       </CardContent>
     </Card>
   )
@@ -576,7 +767,7 @@ function SubjectsCard() {
     {
       key: "code",
       header: "Code",
-      cell: (row) => <span className="text-sm">{row.code}</span>,
+      cell: (row) => <span className="academic-code">{row.code}</span>,
     },
     {
       key: "grade_level",
@@ -598,15 +789,14 @@ function SubjectsCard() {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Subjects</CardTitle>
-        <CardDescription>
-          `Subject.code` is globally unique across the whole school.
-        </CardDescription>
-      </CardHeader>
+      <AcademicCardHeader
+        title="Subjects"
+        icon={BookOpen}
+        description="Manage subjects and their unique school-wide codes."
+      />
       <CardContent className="space-y-4">
         <form
-          className="space-y-3"
+          className="academic-create-form"
           onSubmit={(event) => {
             event.preventDefault()
             if (!canSubmit) return
@@ -623,7 +813,14 @@ function SubjectsCard() {
             )
           }}
         >
-          <div className="grid gap-3 sm:grid-cols-3">
+          <h3 className="academic-form-title">
+            <Plus aria-hidden="true" />
+            New subject
+          </h3>
+          <div
+            className="academic-form-fields grid gap-3 sm:grid-cols-3"
+            data-columns="3"
+          >
             <Field
               label="Name"
               id="new-subject-name"
@@ -656,21 +853,28 @@ function SubjectsCard() {
             />
           </div>
           <CreateError error={create.error} fieldErrors={fieldErrors} />
-          <Button type="submit" disabled={!canSubmit || create.isPending}>
-            {create.isPending ? "Saving…" : "Create subject"}
-          </Button>
+          <AcademicFormActions
+            label="Create subject"
+            pending={create.isPending}
+            disabled={!canSubmit || create.isPending}
+          />
         </form>
 
-        <DataTable
-          caption="Subjects"
-          columns={columns}
-          rows={list.data ?? []}
-          rowKey={(row) => row.id}
-          isLoading={list.isLoading}
-          error={list.isError ? normalizeApiError(list.error).message : null}
-          loadingLabel="Loading subjects"
-          emptyMessage="No subjects have been created."
-        />
+        <AcademicRecords
+          label="Subjects"
+          count={list.isSuccess ? (list.data ?? []).length : undefined}
+        >
+          <DataTable
+            caption="Subjects"
+            columns={columns}
+            rows={list.data ?? []}
+            rowKey={(row) => row.id}
+            isLoading={list.isLoading}
+            error={list.isError ? normalizeApiError(list.error).message : null}
+            loadingLabel="Loading subjects"
+            emptyMessage="No subjects have been created."
+          />
+        </AcademicRecords>
       </CardContent>
     </Card>
   )
@@ -744,16 +948,14 @@ function SubjectAssignmentsCard() {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Subject assignments</CardTitle>
-        <CardDescription>
-          Which subject is taught to which section. This is what scopes a
-          faculty member&apos;s grade-encoding and attendance-write access.
-        </CardDescription>
-      </CardHeader>
+      <AcademicCardHeader
+        title="Subject assignments"
+        icon={UsersRound}
+        description="Connect each subject and section with its assigned teacher."
+      />
       <CardContent className="space-y-4">
         <form
-          className="space-y-3"
+          className="academic-create-form"
           onSubmit={(event) => {
             event.preventDefault()
             if (!canSubmit) return
@@ -776,7 +978,14 @@ function SubjectAssignmentsCard() {
             )
           }}
         >
-          <div className="grid gap-3 sm:grid-cols-3">
+          <h3 className="academic-form-title">
+            <Plus aria-hidden="true" />
+            New teaching assignment
+          </h3>
+          <div
+            className="academic-form-fields grid gap-3 sm:grid-cols-3"
+            data-columns="4"
+          >
             <ChoiceField
               label="Subject"
               id="new-assignment-subject"
@@ -834,21 +1043,28 @@ function SubjectAssignmentsCard() {
             />
           </div>
           <CreateError error={create.error} fieldErrors={fieldErrors} />
-          <Button type="submit" disabled={!canSubmit || create.isPending}>
-            {create.isPending ? "Saving…" : "Create assignment"}
-          </Button>
+          <AcademicFormActions
+            label="Create assignment"
+            pending={create.isPending}
+            disabled={!canSubmit || create.isPending}
+          />
         </form>
 
-        <DataTable
-          caption="Subject assignments"
-          columns={columns}
-          rows={list.data ?? []}
-          rowKey={(row) => row.id}
-          isLoading={list.isLoading}
-          error={list.isError ? normalizeApiError(list.error).message : null}
-          loadingLabel="Loading subject assignments"
-          emptyMessage="No subject assignments have been created."
-        />
+        <AcademicRecords
+          label="Subject assignments"
+          count={list.isSuccess ? (list.data ?? []).length : undefined}
+        >
+          <DataTable
+            caption="Subject assignments"
+            columns={columns}
+            rows={list.data ?? []}
+            rowKey={(row) => row.id}
+            isLoading={list.isLoading}
+            error={list.isError ? normalizeApiError(list.error).message : null}
+            loadingLabel="Loading subject assignments"
+            emptyMessage="No subject assignments have been created."
+          />
+        </AcademicRecords>
       </CardContent>
     </Card>
   )
@@ -908,17 +1124,14 @@ function GradingPeriodsCard() {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Grading periods</CardTitle>
-        <CardDescription>
-          A term or quarter. Both dates must sit inside the academic year, and
-          the end must fall after the start — the serializer rejects anything
-          else with a field-level error.
-        </CardDescription>
-      </CardHeader>
+      <AcademicCardHeader
+        title="Grading periods"
+        icon={ClipboardList}
+        description="Set up terms or quarters within the selected academic year."
+      />
       <CardContent className="space-y-4">
         <form
-          className="space-y-3"
+          className="academic-create-form"
           onSubmit={(event) => {
             event.preventDefault()
             if (!canSubmit) return
@@ -943,7 +1156,14 @@ function GradingPeriodsCard() {
             )
           }}
         >
-          <div className="grid gap-3 sm:grid-cols-5">
+          <h3 className="academic-form-title">
+            <Plus aria-hidden="true" />
+            New grading period
+          </h3>
+          <div
+            className="academic-form-fields grid gap-3 sm:grid-cols-5"
+            data-columns="5"
+          >
             <Field
               label="Name"
               id="new-period-name"
@@ -995,21 +1215,28 @@ function GradingPeriodsCard() {
             />
           </div>
           <CreateError error={create.error} fieldErrors={fieldErrors} />
-          <Button type="submit" disabled={!canSubmit || create.isPending}>
-            {create.isPending ? "Saving…" : "Create grading period"}
-          </Button>
+          <AcademicFormActions
+            label="Create grading period"
+            pending={create.isPending}
+            disabled={!canSubmit || create.isPending}
+          />
         </form>
 
-        <DataTable
-          caption="Grading periods"
-          columns={columns}
-          rows={list.data ?? []}
-          rowKey={(row) => row.id}
-          isLoading={list.isLoading}
-          error={list.isError ? normalizeApiError(list.error).message : null}
-          loadingLabel="Loading grading periods"
-          emptyMessage="No grading periods have been created."
-        />
+        <AcademicRecords
+          label="Grading periods"
+          count={list.isSuccess ? (list.data ?? []).length : undefined}
+        >
+          <DataTable
+            caption="Grading periods"
+            columns={columns}
+            rows={list.data ?? []}
+            rowKey={(row) => row.id}
+            isLoading={list.isLoading}
+            error={list.isError ? normalizeApiError(list.error).message : null}
+            loadingLabel="Loading grading periods"
+            emptyMessage="No grading periods have been created."
+          />
+        </AcademicRecords>
       </CardContent>
     </Card>
   )
@@ -1098,7 +1325,11 @@ function EnrollmentsCard() {
       key: "status",
       header: "Status",
       cell: (row) => (
-        <Badge variant="outline" data-enrollment-active={String(row.is_active)}>
+        <Badge
+          status={row.is_active ? "active" : "inactive"}
+          variant="outline"
+          data-enrollment-active={String(row.is_active)}
+        >
           {row.is_active ? "Active" : "Inactive"}
         </Badge>
       ),
@@ -1118,23 +1349,21 @@ function EnrollmentsCard() {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Enrollments</CardTitle>
-        <CardDescription>
-          Enrolment is what scopes a student to a section, and through it to
-          grades, attendance and guidance visibility.
-        </CardDescription>
-      </CardHeader>
+      <AcademicCardHeader
+        title="Enrollments"
+        icon={UserRoundPlus}
+        description="Manage student enrollment in sections for each academic year."
+      />
       <CardContent className="space-y-4">
         {list.data && list.data.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No enrollments exist yet. Import a student roster first — the
-            administrator API has no endpoint that lists unenrolled students.
+            No enrollments exist yet. Import a student roster first to make
+            students available here.
           </p>
         ) : null}
 
         <form
-          className="space-y-3"
+          className="academic-create-form"
           onSubmit={(event) => {
             event.preventDefault()
             if (!canSubmit) return
@@ -1158,7 +1387,14 @@ function EnrollmentsCard() {
             )
           }}
         >
-          <div className="grid gap-3 sm:grid-cols-4">
+          <h3 className="academic-form-title">
+            <Plus aria-hidden="true" />
+            New enrollment
+          </h3>
+          <div
+            className="academic-form-fields grid gap-3 sm:grid-cols-4"
+            data-columns="4"
+          >
             <ChoiceField
               label="Student"
               id="new-enrollment-student"
@@ -1204,24 +1440,31 @@ function EnrollmentsCard() {
             />
           </div>
           <CreateError error={create.error} fieldErrors={fieldErrors} />
-          <Button type="submit" disabled={!canSubmit || create.isPending}>
-            {create.isPending ? "Saving…" : "Create enrollment"}
-          </Button>
+          <AcademicFormActions
+            label="Create enrollment"
+            pending={create.isPending}
+            disabled={!canSubmit || create.isPending}
+          />
         </form>
 
-        <DataTable
-          caption="Enrollments"
-          columns={columns}
-          rows={pageRows}
-          rowKey={(row) => row.id}
-          isLoading={list.isLoading}
-          error={list.isError ? normalizeApiError(list.error).message : null}
-          loadingLabel="Loading enrollments"
-          emptyMessage="No enrollments have been recorded."
-          pagination={pagination}
-          pageSizeOptions={PAGE_SIZE_OPTIONS}
-          onPageSizeChange={setPageSize}
-        />
+        <AcademicRecords
+          label="Enrollments"
+          count={list.isSuccess ? (list.data ?? []).length : undefined}
+        >
+          <DataTable
+            caption="Enrollments"
+            columns={columns}
+            rows={pageRows}
+            rowKey={(row) => row.id}
+            isLoading={list.isLoading}
+            error={list.isError ? normalizeApiError(list.error).message : null}
+            loadingLabel="Loading enrollments"
+            emptyMessage="No enrollments have been recorded."
+            pagination={pagination}
+            pageSizeOptions={PAGE_SIZE_OPTIONS}
+            onPageSizeChange={setPageSize}
+          />
+        </AcademicRecords>
       </CardContent>
     </Card>
   )

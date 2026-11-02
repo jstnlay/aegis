@@ -1,3 +1,5 @@
+import "./homepage-background.css"
+
 /** Decorative school-brand artwork on a fixed canvas, independent of content height. */
 export function HomepageBackground() {
   return (

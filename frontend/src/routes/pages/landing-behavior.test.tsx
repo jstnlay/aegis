@@ -29,6 +29,67 @@ beforeEach(() => {
 })
 
 describe("homepage interactions", () => {
+  it("expands one offer on mobile and shows all descriptions on desktop", () => {
+    const originalWidth = window.innerWidth
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 390,
+    })
+    const view = render(page())
+    try {
+      const academics = screen.getByRole("article", { name: "Academics" })
+      const attendance = screen.getByRole("article", { name: "Attendance" })
+      const academicButton = within(academics).getByRole("button", {
+        name: "Academics",
+      })
+      expect(academicButton).toHaveAttribute("aria-expanded", "false")
+      expect(academicButton).toHaveAttribute(
+        "aria-controls",
+        academics.querySelector("p")!.id
+      )
+      expect(academics.querySelector("p")).not.toBeVisible()
+      academicButton.focus()
+      fireEvent.click(academicButton)
+      expect(academicButton).toHaveFocus()
+      expect(academicButton).toHaveAttribute("aria-expanded", "true")
+      expect(academics.querySelector("p")).toBeVisible()
+
+      fireEvent.click(
+        within(attendance).getByRole("button", { name: "Attendance" })
+      )
+      expect(academicButton).toHaveAttribute("aria-expanded", "false")
+      expect(academics.querySelector("p")).not.toBeVisible()
+      expect(attendance.querySelector("p")).toBeVisible()
+
+      Object.defineProperty(window, "innerWidth", {
+        configurable: true,
+        value: 1280,
+      })
+      fireEvent(window, new Event("resize"))
+      expect(within(academics).queryByRole("button")).not.toBeInTheDocument()
+      expect(academics.querySelector("p")).toBeVisible()
+      expect(attendance.querySelector("p")).toBeVisible()
+
+      Object.defineProperty(window, "innerWidth", {
+        configurable: true,
+        value: 390,
+      })
+      fireEvent(window, new Event("resize"))
+      const attendanceButton = within(attendance).getByRole("button", {
+        name: "Attendance",
+      })
+      expect(attendanceButton).toHaveAttribute("aria-expanded", "true")
+      fireEvent.click(attendanceButton)
+      expect(attendance.querySelector("p")).not.toBeVisible()
+    } finally {
+      view.unmount()
+      Object.defineProperty(window, "innerWidth", {
+        configurable: true,
+        value: originalWidth,
+      })
+    }
+  })
+
   it("keeps the event and closing note visible when the announcement feed fails", () => {
     const announcements = {
       ...empty(),

@@ -137,8 +137,20 @@ export function ReportsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-1">
+    <div
+      className={
+        user.role === "parent"
+          ? "parent-page parent-reports space-y-6"
+          : "space-y-6"
+      }
+    >
+      <div
+        className={
+          user.role === "parent"
+            ? "parent-page-heading flex flex-col gap-1"
+            : "flex flex-col gap-1"
+        }
+      >
         <div className="flex items-center gap-3">
           <FileDown
             className="size-5 text-muted-foreground"
@@ -147,8 +159,9 @@ export function ReportsPage() {
           <h2 className="text-2xl font-bold text-foreground">Reports</h2>
         </div>
         <p className="text-sm text-muted-foreground">
-          File downloads compiled for your role. Each file contains only what
-          you are authorized to see.
+          {user.role === "parent"
+            ? "Download grade and attendance records for the children linked to your account."
+            : "File downloads compiled for your role. Each file contains only what you are authorized to see."}
         </p>
       </div>
 

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { Link, useLocation } from "react-router-dom"
 
 import { Button } from "@/components/ui/button"
+import { SignOutDialog } from "@/components/layout/SignOutDialog"
 import { useAuth } from "@/features/auth/AuthContext"
 import {
   NOTIFICATION_TYPE_LABELS,
@@ -74,12 +75,14 @@ export function NotificationSummary({
 }
 
 function UserChip() {
-  const { user, logout } = useAuth()
+  const { user } = useAuth()
   const unread = useUnreadNotifications()
   const unreadCount = unread.data?.length ?? 0
   const markRead = useMarkNotificationRead()
   const role = user?.role ?? "student"
   const [menuOpen, setMenuOpen] = useState(false)
+  const [signOutOpen, setSignOutOpen] = useState(false)
+  const accountButtonRef = useRef<HTMLButtonElement>(null)
   /*
    * The bell opens a menu of unread notifications rather than jumping straight
    * to the inbox (Cycle-3 TC-STU-08: a notification should open in full where
@@ -221,6 +224,7 @@ function UserChip() {
 
       <div ref={menuRef} className="relative">
         <button
+          ref={accountButtonRef}
           type="button"
           onClick={() => setMenuOpen((open) => !open)}
           aria-expanded={menuOpen}
@@ -272,7 +276,8 @@ function UserChip() {
               role="menuitem"
               onClick={() => {
                 setMenuOpen(false)
-                void logout()
+                setBellOpen(false)
+                setSignOutOpen(true)
               }}
               className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-accent"
             >
@@ -282,6 +287,11 @@ function UserChip() {
           </div>
         )}
       </div>
+      <SignOutDialog
+        open={signOutOpen}
+        onOpenChange={setSignOutOpen}
+        returnFocusRef={accountButtonRef}
+      />
     </div>
   )
 }
@@ -290,6 +300,7 @@ export function Header({
   onMenuClick,
   menuOpen = false,
   menuButtonRef,
+  brandContainerRef,
 }: {
   onMenuClick: () => void
   /** Whether the mobile navigation drawer is currently open. */
@@ -299,12 +310,62 @@ export function Header({
    * drawer closes. See the focus-restoration effect there.
    */
   menuButtonRef?: React.Ref<HTMLButtonElement>
+  brandContainerRef?: React.Ref<HTMLDivElement>
 }) {
+  const { user } = useAuth()
   const location = useLocation()
   const pageTitle = getPageTitle(location.pathname)
+  const headerRef = useRef<HTMLElement>(null)
+  const [scrollState, setScrollState] = useState({
+    pathname: location.pathname,
+    hidden: false,
+  })
+  const schoolTheme =
+    user?.role === "admin" ||
+    user?.role === "guidance" ||
+    user?.role === "student" ||
+    user?.role === "parent" ||
+    user?.role === "faculty"
+  const hidden =
+    schoolTheme &&
+    !menuOpen &&
+    scrollState.pathname === location.pathname &&
+    scrollState.hidden
+
+  useEffect(() => {
+    if (!schoolTheme) return
+    let previousY = Math.max(0, window.scrollY)
+
+    function onScroll() {
+      const currentY = Math.max(0, window.scrollY)
+      if (currentY > 24 && Math.abs(currentY - previousY) < 4) return
+      const scrollingDown = currentY > previousY
+      previousY = currentY
+      const usingHeader = headerRef.current?.querySelector(
+        ':focus-visible, [aria-haspopup="menu"][aria-expanded="true"]'
+      )
+      setScrollState({
+        pathname: location.pathname,
+        hidden: currentY > 24 && scrollingDown && !usingHeader,
+      })
+    }
+
+    window.addEventListener("scroll", onScroll, { passive: true })
+    return () => window.removeEventListener("scroll", onScroll)
+  }, [schoolTheme, location.pathname])
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-background px-4 lg:px-6">
+    <header
+      ref={headerRef}
+      data-hidden={hidden}
+      onFocusCapture={() =>
+        setScrollState({ pathname: location.pathname, hidden: false })
+      }
+      className="app-header sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-background px-4 lg:px-6"
+    >
+      {schoolTheme ? (
+        <div className="app-header-brand-host" ref={brandContainerRef} />
+      ) : null}
       {/*
         PH11.11: `aria-expanded` and `aria-controls` were added. The control
         opened and closed the drawer but reported no state, so a screen-reader

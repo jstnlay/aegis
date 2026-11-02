@@ -143,6 +143,7 @@ function AnnouncementsCard() {
       header: "Priority",
       cell: (row) => (
         <Badge
+          status={row.priority}
           variant={row.priority === "urgent" ? "destructive" : "outline"}
           data-announcement-priority={row.priority}
         >

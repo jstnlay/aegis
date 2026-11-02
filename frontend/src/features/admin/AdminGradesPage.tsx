@@ -139,7 +139,11 @@ export function AdminGradesPage() {
       key: "status",
       header: "Status",
       cell: (grade) => (
-        <Badge variant="outline" data-grade-status={grade.status}>
+        <Badge
+          status={grade.status}
+          variant="outline"
+          data-grade-status={grade.status}
+        >
           {GRADE_STATUS_LABELS[grade.status] ?? grade.status}
         </Badge>
       ),

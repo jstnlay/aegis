@@ -1,6 +1,7 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from "axios"
 
 import { tokenStorage } from "@/lib/auth-storage"
+import { rewriteProxiedApiUrl } from "@/lib/api-proxy"
 import { hydrateBlobError, normalizeApiError } from "@/lib/error"
 
 /**
@@ -52,6 +53,11 @@ export const apiClient = axios.create({
 })
 
 apiClient.interceptors.request.use((config) => {
+  config.url = rewriteProxiedApiUrl(
+    config.url,
+    API_BASE_URL,
+    import.meta.env.VITE_API_UPSTREAM_URL
+  )
   if (!isPublicPath(config.url)) {
     Object.assign(config.headers, authHeader())
   }

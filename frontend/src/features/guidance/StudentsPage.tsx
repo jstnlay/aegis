@@ -46,7 +46,7 @@ const PAGE_SIZE_OPTIONS = [25, 50, 100] as const
 
 function PageHeading() {
   return (
-    <div className="flex flex-col gap-1">
+    <div className="guidance-page-heading flex flex-col gap-1">
       <div className="flex items-center gap-3">
         <Users className="size-5 text-muted-foreground" aria-hidden="true" />
         <h2 className="text-2xl font-bold text-foreground">Students</h2>
@@ -72,6 +72,7 @@ function AtRiskBadge({ level }: { level: RiskLevel | null }) {
   if (!level) return null
   return (
     <Badge
+      status={level}
       variant="secondary"
       className={riskLevelBadgeClass(level)}
       data-at-risk-level={level}
@@ -202,7 +203,7 @@ export function StudentsPage() {
   )
 
   return (
-    <div className="space-y-6">
+    <div className="guidance-page space-y-6">
       <PageHeading />
 
       <Card>
@@ -217,7 +218,7 @@ export function StudentsPage() {
         </CardHeader>
 
         <CardContent className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="guidance-filter-bar grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="students-activity">Activity type</Label>
               <Select

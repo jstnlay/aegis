@@ -77,7 +77,7 @@ export function FacultyImportPage() {
   const [sheet, setSheet] = useState("")
 
   return (
-    <div className="space-y-6">
+    <div className="faculty-page space-y-6">
       <div className="flex flex-col gap-1">
         <div className="flex items-center gap-3">
           <Upload className="size-5 text-muted-foreground" aria-hidden="true" />
@@ -238,7 +238,10 @@ function HistoryCard() {
       key: "status",
       header: "Status",
       cell: (job) => (
-        <Badge variant={STATUS_VARIANT[job.status] ?? "outline"}>
+        <Badge
+          status={job.status}
+          variant={STATUS_VARIANT[job.status] ?? "outline"}
+        >
           {job.status}
         </Badge>
       ),

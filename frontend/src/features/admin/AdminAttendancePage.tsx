@@ -427,7 +427,11 @@ function RecordsTable({
       key: "status",
       header: "Status",
       cell: (record) => (
-        <Badge variant="outline" data-attendance-status={record.status}>
+        <Badge
+          status={record.status}
+          variant="outline"
+          data-attendance-status={record.status}
+        >
           {STATUS_LABELS[record.status] ?? record.status}
         </Badge>
       ),

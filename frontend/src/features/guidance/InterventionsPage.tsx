@@ -71,7 +71,7 @@ function PageHeading({
   description: string
 }) {
   return (
-    <div className="flex flex-col gap-3">
+    <div className="guidance-page-heading flex flex-col gap-3">
       <div className="flex items-center gap-3">
         <ClipboardList
           className="size-5 text-muted-foreground"
@@ -87,6 +87,7 @@ function PageHeading({
 function InterventionStatusBadge({ status }: { status: InterventionStatus }) {
   return (
     <Badge
+      status={status === "active" ? "ongoing" : status}
       variant="outline"
       className={consultationStatusBadgeClass(
         status === "active"
@@ -104,7 +105,7 @@ function InterventionStatusBadge({ status }: { status: InterventionStatus }) {
 
 function StepStatusBadge({ status }: { status: InterventionStepStatus }) {
   return (
-    <Badge variant="secondary" data-step-status={status}>
+    <Badge status={status} variant="secondary" data-step-status={status}>
       {INTERVENTION_STEP_STATUS_LABELS[status]}
     </Badge>
   )
@@ -988,7 +989,7 @@ export function InterventionsPage() {
   )
 
   return (
-    <div className="space-y-6">
+    <div className="guidance-page space-y-6">
       <PageHeading
         title="Interventions"
         description="Intervention plans you own, with their steps and progress notes. The server returns only plans assigned to you."
@@ -1014,7 +1015,7 @@ export function InterventionsPage() {
             onChange={setStatus}
           />
 
-          <div className="space-y-1.5">
+          <div className="guidance-filter-bar space-y-1.5">
             <Label htmlFor="intervention-search">Search</Label>
             <Input
               id="intervention-search"

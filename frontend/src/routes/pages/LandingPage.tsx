@@ -52,6 +52,7 @@ import {
 } from "@/lib/school-content"
 import { cn } from "@/lib/utils"
 import "./landing-page.css"
+import "./landing-mobile.css"
 
 /** Hero entrance runs on the first landing visit of a session, not every one. */
 const HERO_SEEN_KEY = "aegis:hero-entrance-seen"
@@ -119,7 +120,7 @@ function MissionVisionTitle() {
 export function LandingPage() {
   const animateHero = useHeroEntrance()
   return (
-    <div className="school-homepage min-h-svh">
+    <div className="school-homepage school-brand-background min-h-svh">
       <HomepageBackground />
       <SchoolHeader>
         <PublicNav />
@@ -251,13 +252,26 @@ export function LandingPage() {
                   <IconCircle icon={MapPin} />
                   <div>
                     <h3>Address</h3>
-                    <p>{CONTACT.address}</p>
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(CONTACT.address)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`View address: ${CONTACT.address}`}
+                      title={CONTACT.address}
+                      className="landing-contact-address"
+                    >
+                      {CONTACT.address}
+                    </a>
                     <div className="landing-contact-school-id">
                       <School aria-hidden="true" className="size-4" />
                       <span>School ID</span>
                       <strong>{CONTACT.schoolId}</strong>
                     </div>
                   </div>
+                  <ArrowUpRight
+                    aria-hidden="true"
+                    className="landing-contact-link-arrow size-5"
+                  />
                 </div>
               </div>
               <div className="landing-contact-channels">
@@ -268,6 +282,7 @@ export function LandingPage() {
                     <a
                       href={`tel:${CONTACT.phone.replace(/\s/g, "")}`}
                       className="landing-contact-number"
+                      title={CONTACT.phone}
                     >
                       {CONTACT.phone}
                     </a>
@@ -276,11 +291,12 @@ export function LandingPage() {
                 <a
                   href={`mailto:${CONTACT.email}`}
                   aria-label={CONTACT.email}
+                  title={CONTACT.email}
                   className="landing-contact-channel"
                 >
                   <IconCircle icon={Mail} />
                   <div className="landing-contact-channel-copy">
-                    <h3>Email Address</h3>
+                    <h3>Email</h3>
                     <p>
                       {CONTACT_EMAIL_NAME}@<wbr />
                       {CONTACT_EMAIL_DOMAIN}
@@ -293,18 +309,30 @@ export function LandingPage() {
                 </a>
               </div>
               <div className="landing-contact-channels">
-                <div className="landing-contact-channel">
+                <a
+                  href={`https://m.me/${CONTACT_FACEBOOK_PAGE.pathname.replace(/^\/|\/$/g, "")}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`Messenger: ${CONTACT.messengerName}`}
+                  title={CONTACT.messengerName}
+                  className="landing-contact-channel"
+                >
                   <IconCircle icon={MessageCircle} />
                   <div className="landing-contact-channel-copy">
                     <h3>Messenger</h3>
                     <p>{CONTACT.messengerName}</p>
                   </div>
-                </div>
+                  <ArrowUpRight
+                    aria-hidden="true"
+                    className="landing-contact-link-arrow size-5"
+                  />
+                </a>
                 <a
                   href={CONTACT.facebookUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label="Facebook"
+                  title={CONTACT.facebookUrl}
                   className="landing-contact-channel"
                 >
                   <IconCircle icon={Globe} />
@@ -358,7 +386,29 @@ const PORTAL_HIGHLIGHTS = [
   },
 ] as const
 
+function subscribeToOffersViewport(callback: () => void) {
+  window.addEventListener("resize", callback)
+  return () => window.removeEventListener("resize", callback)
+}
+
+function isOffersMobile() {
+  return (
+    window.matchMedia?.("(max-width: 767px)").matches ?? window.innerWidth < 768
+  )
+}
+
+function getOffersServerSnapshot() {
+  return false
+}
+
 function PortalHighlights() {
+  const mobile = useSyncExternalStore(
+    subscribeToOffersViewport,
+    isOffersMobile,
+    getOffersServerSnapshot
+  )
+  const [open, setOpen] = useState<number | null>(null)
+
   return (
     <section
       aria-labelledby="landing-portal"
@@ -371,6 +421,7 @@ function PortalHighlights() {
         {PORTAL_HIGHLIGHTS.map(({ icon: Icon, title, body }, index) => (
           <article
             key={title}
+            aria-labelledby={`landing-offer-title-${index}`}
             className={cn(
               "landing-feature",
               index % 2 === 0 && "landing-glass"
@@ -382,8 +433,28 @@ function PortalHighlights() {
             <span className="landing-feature-number" aria-hidden="true">
               {index + 1}
             </span>
-            <h3>{title}</h3>
-            <p>{body}</p>
+            <h3 id={`landing-offer-title-${index}`}>
+              {mobile ? (
+                <button
+                  type="button"
+                  className="landing-feature-toggle"
+                  aria-expanded={open === index}
+                  aria-controls={`landing-offer-body-${index}`}
+                  onClick={() => setOpen(open === index ? null : index)}
+                >
+                  {title}
+                  <ChevronDown aria-hidden="true" className="size-4 shrink-0" />
+                </button>
+              ) : (
+                title
+              )}
+            </h3>
+            <p
+              id={`landing-offer-body-${index}`}
+              hidden={mobile && open !== index}
+            >
+              {body}
+            </p>
           </article>
         ))}
       </div>

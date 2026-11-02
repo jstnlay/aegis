@@ -1,4 +1,4 @@
-import { ClipboardCheck } from "lucide-react"
+import { ChevronDown, ClipboardCheck } from "lucide-react"
 import { useState } from "react"
 
 import { Badge } from "@/components/ui/badge"
@@ -12,13 +12,6 @@ import {
 } from "@/components/ui/card"
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table"
 import { useDataTablePagination } from "@/components/ui/data-table-pagination"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { useAuth } from "@/features/auth/AuthContext"
 import {
   useAssessmentDetail,
@@ -30,6 +23,11 @@ import {
   type ParentAssessmentResult,
 } from "@/features/parent/api"
 import { formatCount, formatPercent } from "@/lib/metric-format"
+import { ParentChildSelect } from "./ParentChildSelect"
+import {
+  ParentSelectionPrompt,
+  ParentStudentContext,
+} from "./ParentStudentContext"
 
 /**
  * Parent's view of the assessments assigned to their children and the results
@@ -70,18 +68,19 @@ export function ParentAssessmentsPage() {
   const linkedQuery = useLinkedStudents()
   const linked = linkedQuery.data ?? []
 
-  // A parent with one child lands on that child's record; see useSelectedChild.
   const { selectedChildId, setSelectedChildId, child } =
     useSelectedChild(linked)
 
-  const assessmentsQuery = useParentAssessments(linkedQuery.isSuccess)
+  const assessmentsQuery = useParentAssessments(
+    linkedQuery.isSuccess && Boolean(child)
+  )
   const resultsQuery = useChildResults(selectedChildId || null)
 
   if (!user) return null
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-1">
+    <div className="parent-page parent-assessments space-y-6">
+      <div className="parent-page-heading flex flex-col gap-1">
         <div className="flex items-center gap-3">
           <ClipboardCheck
             className="size-5 text-muted-foreground"
@@ -95,70 +94,71 @@ export function ParentAssessmentsPage() {
         </p>
       </div>
 
-      <div className="space-y-1.5">
-        <label
-          htmlFor="parent-assessments-child"
-          className="text-sm font-medium"
-        >
-          Results for
-        </label>
-        <Select value={selectedChildId} onValueChange={setSelectedChildId}>
-          <SelectTrigger id="parent-assessments-child">
-            <SelectValue placeholder="Select a student to see their results" />
-          </SelectTrigger>
-          <SelectContent>
-            {linked.map((student) => (
-              <SelectItem key={student.id} value={student.id}>
-                {student.student_name} — {student.section_name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      <ParentChildSelect
+        id="parent-assessments-child"
+        linked={linked}
+        selectedId={selectedChildId}
+        onSelect={setSelectedChildId}
+        isLoading={linkedQuery.isLoading}
+        error={linkedQuery.isError}
+      />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Published assessments</CardTitle>
-          <CardDescription>
-            Assessments targeted at your children. Expand one to read its
-            questions.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <AssessmentList
-            assessments={assessmentsQuery.data ?? []}
-            isLoading={assessmentsQuery.isLoading || linkedQuery.isLoading}
-            error={
-              assessmentsQuery.isError
-                ? "Unable to load assessments. Please try again."
-                : null
-            }
-            expandedId={expandedId}
-            onToggle={(id) => setExpandedId((cur) => (cur === id ? null : id))}
-          />
-        </CardContent>
-      </Card>
-
-      {child ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Results</CardTitle>
-            <CardDescription>
-              Results submitted by {child.student_name}.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ResultTable
-              results={resultsQuery.data ?? []}
-              isLoading={resultsQuery.isLoading}
-              error={
-                resultsQuery.isError
-                  ? "Unable to load results. Please try again."
-                  : null
-              }
-            />
-          </CardContent>
-        </Card>
+      {!linkedQuery.isLoading && !linkedQuery.isError && child ? (
+        <>
+          <section
+            className="parent-result-record"
+            aria-label={`Assessment results for ${child.student_name}`}
+          >
+            <ParentStudentContext child={child} />
+            <Card>
+              <CardHeader>
+                <CardTitle>Results for {child.student_name}</CardTitle>
+                <CardDescription>
+                  Submitted assessment results for the selected student.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResultTable
+                  results={resultsQuery.data ?? []}
+                  isLoading={resultsQuery.isLoading}
+                  error={
+                    resultsQuery.isError
+                      ? "Unable to load results. Please try again."
+                      : null
+                  }
+                />
+              </CardContent>
+            </Card>
+          </section>
+          <Card>
+            <CardHeader>
+              <CardTitle>Family assessments</CardTitle>
+              <CardDescription>
+                This list covers all your linked children. Open an assessment to
+                review its questions and assigned class or student.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <AssessmentList
+                assessments={assessmentsQuery.data ?? []}
+                isLoading={assessmentsQuery.isLoading || linkedQuery.isLoading}
+                error={
+                  assessmentsQuery.isError
+                    ? "Unable to load assessments. Please try again."
+                    : null
+                }
+                expandedId={expandedId}
+                onToggle={(id) =>
+                  setExpandedId((cur) => (cur === id ? null : id))
+                }
+              />
+            </CardContent>
+          </Card>
+        </>
+      ) : !linkedQuery.isLoading &&
+        !linkedQuery.isError &&
+        linked.length > 0 ? (
+        <ParentSelectionPrompt />
       ) : null}
     </div>
   )
@@ -207,13 +207,13 @@ function AssessmentList({
   }
 
   return (
-    <ul className="space-y-2">
+    <ul className="parent-assessment-list space-y-2">
       {assessments.map((assessment) => {
         const isExpanded = expandedId === assessment.id
         return (
           <li
             key={assessment.id}
-            className="rounded-md border border-border"
+            className="parent-assessment-item rounded-md border border-border"
             data-assessment-id={assessment.id}
           >
             <button
@@ -222,6 +222,10 @@ function AssessmentList({
               onClick={() => onToggle(assessment.id)}
               className="flex w-full flex-wrap items-center justify-between gap-2 p-3 text-left"
             >
+              <ChevronDown
+                className="parent-assessment-chevron"
+                aria-hidden="true"
+              />
               <span className="min-w-0">
                 <span className="block font-medium">{assessment.title}</span>
                 <span className="block text-xs text-muted-foreground">
@@ -343,7 +347,11 @@ function ResultTable({
       key: "status",
       header: "Status",
       cell: (result) => (
-        <Badge variant="outline" data-result-status={result.status}>
+        <Badge
+          status={result.status}
+          variant="outline"
+          data-result-status={result.status}
+        >
           {result.status}
         </Badge>
       ),

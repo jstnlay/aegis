@@ -129,7 +129,11 @@ export function AdminUsersPage() {
       key: "status",
       header: "Status",
       cell: (user) => (
-        <Badge variant="outline" data-user-active={String(user.is_active)}>
+        <Badge
+          status={user.is_active ? "active" : "inactive"}
+          variant="outline"
+          data-user-active={String(user.is_active)}
+        >
           {user.is_active ? "Active" : "Inactive"}
         </Badge>
       ),
@@ -420,6 +424,9 @@ function PendingParentInvitationsCard() {
                     ? ` · for ${invitation.student_name}`
                     : ""}
                 </p>
+                <Badge status={invitation.status} className="my-1 capitalize">
+                  {invitation.status.replaceAll("_", " ")}
+                </Badge>
                 <p className="text-xs text-muted-foreground">
                   {invitation.status === "approved"
                     ? "Invitation sent — waiting for the parent."

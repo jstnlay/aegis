@@ -6,16 +6,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { Label } from "@/components/ui/label"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { useLinkedStudents, useSelectedChild } from "@/features/parent/api"
 import { ParentSupportPage } from "@/features/parent/ParentSupportPage"
+import { ParentChildSelect } from "./ParentChildSelect"
+import { ParentSelectionPrompt } from "./ParentStudentContext"
 
 /**
  * Route-level child selection for the parent support view.
@@ -37,7 +31,6 @@ export function ParentSupportRoute() {
   const linkedQuery = useLinkedStudents()
   const linked = linkedQuery.data ?? []
 
-  // A parent with one child lands on that child's record; see useSelectedChild.
   const { selectedChildId, setSelectedChildId, child } =
     useSelectedChild(linked)
 
@@ -67,41 +60,18 @@ export function ParentSupportRoute() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-1.5">
-        {/*
-          `Label` rather than a bare `<label className="text-sm font-medium">`.
-          The raw element rendered the system label at the browser's default size
-          and weight, so this one control looked different from every other field
-          label in the app — the shared primitive is what makes it consistent.
-        */}
-        <Label htmlFor="parent-support-child">Student</Label>
-        <Select value={selectedChildId} onValueChange={setSelectedChildId}>
-          <SelectTrigger id="parent-support-child">
-            <SelectValue placeholder="Select a student" />
-          </SelectTrigger>
-          <SelectContent>
-            {linked.map((student) => (
-              <SelectItem key={student.id} value={student.id}>
-                {student.student_name} — {student.section_name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+    <div className="parent-page parent-support space-y-6">
+      <ParentChildSelect
+        id="parent-support-child"
+        linked={linked}
+        selectedId={selectedChildId}
+        onSelect={setSelectedChildId}
+      />
 
       {child ? (
-        <ParentSupportPage child={child} />
+        <ParentSupportPage key={child.id} child={child} />
       ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle>No student selected</CardTitle>
-            <CardDescription>
-              Choose a linked student above to see the Guidance Office record.
-            </CardDescription>
-          </CardHeader>
-          <CardContent />
-        </Card>
+        <ParentSelectionPrompt />
       )}
     </div>
   )

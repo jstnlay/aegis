@@ -1,17 +1,18 @@
 import { useState } from "react"
 import { Link } from "react-router-dom"
-import { Loader2, MailCheck } from "lucide-react"
+import {
+  ArrowRight,
+  Clock3,
+  KeyRound,
+  Loader2,
+  MailCheck,
+  Mail,
+} from "lucide-react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 
 import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-} from "@/components/ui/card"
 import {
   Form,
   FormControl,
@@ -23,6 +24,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { forgotPasswordRequest } from "@/features/auth/api"
 import { normalizeApiError } from "@/lib/error"
+import { PasswordRecoveryLayout } from "./PasswordRecoveryLayout"
 
 const forgotSchema = z.object({
   email: z
@@ -67,110 +69,97 @@ export function ForgotPasswordPage() {
 
   if (sent) {
     return (
-      <div
-        role="status"
-        className="flex min-h-svh items-center justify-center bg-background px-4 py-10"
+      <PasswordRecoveryLayout
+        title="Check your inbox"
+        description="If an account exists for that address, a password reset link is on its way. The link stops working in 30 minutes and can only be used once."
+        icon={MailCheck}
+        step={2}
+        success
       >
-        <Card className="w-full max-w-md">
-          <CardHeader className="gap-2 text-center">
-            <div className="mx-auto flex size-12 items-center justify-center rounded-md bg-primary text-primary-foreground">
-              <MailCheck className="size-6" aria-hidden="true" />
-            </div>
-            <h1 className="text-xl font-bold text-foreground">
-              Check your inbox
-            </h1>
-            <CardDescription>
-              If an account exists for that address, a password reset link is on
-              its way. The link stops working in 30 minutes and can only be used
-              once.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button asChild variant="outline" className="w-full">
-              <Link to="/login">Back to sign in</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
+        <div className="school-recovery-note">
+          <Mail aria-hidden="true" />
+          <p>
+            Can’t find the email? Check your spam or junk folder before
+            requesting another link.
+          </p>
+        </div>
+        <Button asChild variant="outline" className="w-full">
+          <Link to="/login">
+            Back to sign in
+            <ArrowRight aria-hidden="true" />
+          </Link>
+        </Button>
+      </PasswordRecoveryLayout>
     )
   }
 
   return (
-    <div className="flex min-h-svh items-center justify-center bg-background px-4 py-10">
-      <Card className="w-full max-w-md">
-        <CardHeader className="gap-2 text-center">
-          <h1 className="text-xl font-bold text-foreground">
-            Reset your password
-          </h1>
-          <CardDescription>
-            Enter the address you sign in with and we will send a link to choose
-            a new password.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Form {...form}>
-            <form
-              onSubmit={(e) => void form.handleSubmit(onSubmit)(e)}
-              className="space-y-4"
-              noValidate
-              aria-busy={isSubmitting}
+    <PasswordRecoveryLayout
+      title="Reset your password"
+      description="Enter the address you sign in with and we will send a link to choose a new password."
+      icon={KeyRound}
+      step={1}
+    >
+      <Form {...form}>
+        <form
+          onSubmit={(e) => void form.handleSubmit(onSubmit)(e)}
+          className="school-recovery-form"
+          noValidate
+          aria-busy={isSubmitting}
+        >
+          {serverError ? (
+            <div
+              role="alert"
+              className="rounded-sm border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive"
             >
-              {serverError ? (
-                <div
-                  role="alert"
-                  className="rounded-sm border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-                >
-                  {serverError}
-                </div>
-              ) : null}
+              {serverError}
+            </div>
+          ) : null}
 
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        type="email"
-                        placeholder="you@school.edu"
-                        autoComplete="email"
-                        inputMode="email"
-                        disabled={isSubmitting}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          <FormField
+            control={form.control}
+            name="email"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Email</FormLabel>
+                <FormControl>
+                  <Input
+                    {...field}
+                    type="email"
+                    placeholder="you@school.edu"
+                    autoComplete="email"
+                    inputMode="email"
+                    disabled={isSubmitting}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-              <Button type="submit" className="w-full" disabled={isSubmitting}>
-                {isSubmitting ? (
-                  <>
-                    <Loader2
-                      className="size-4 animate-spin"
-                      aria-hidden="true"
-                    />
-                    Sending...
-                  </>
-                ) : (
-                  "Send reset link"
-                )}
-              </Button>
+          <Button type="submit" className="w-full" disabled={isSubmitting}>
+            {isSubmitting ? (
+              <>
+                <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                Sending...
+              </>
+            ) : (
+              <>
+                Send reset link
+                <ArrowRight aria-hidden="true" />
+              </>
+            )}
+          </Button>
 
-              <p className="text-center text-sm">
-                <Link
-                  to="/login"
-                  className="underline underline-offset-4 transition-colors hover:text-foreground"
-                >
-                  Back to sign in
-                </Link>
-              </p>
-            </form>
-          </Form>
-        </CardContent>
-      </Card>
-    </div>
+          <div className="school-recovery-note">
+            <Clock3 aria-hidden="true" />
+            <p>
+              Your reset link is valid for <strong>30 minutes</strong> and can
+              be used once.
+            </p>
+          </div>
+        </form>
+      </Form>
+    </PasswordRecoveryLayout>
   )
 }

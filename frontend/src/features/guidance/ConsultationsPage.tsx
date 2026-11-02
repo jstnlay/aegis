@@ -69,7 +69,7 @@ function PageHeading({
   description: string
 }) {
   return (
-    <div className="flex flex-col gap-1">
+    <div className="guidance-page-heading flex flex-col gap-1">
       <div className="flex items-center gap-3">
         <MessageSquareText
           className="size-5 text-muted-foreground"
@@ -96,6 +96,7 @@ function ErrorNote({ message }: { message: string }) {
 function ConsultationStatusBadge({ status }: { status: ConsultationStatus }) {
   return (
     <Badge
+      status={status}
       variant="outline"
       className={consultationStatusBadgeClass(status)}
       data-consultation-status={status}
@@ -123,6 +124,7 @@ function formatTime(value: string): string {
 function PriorityBadge({ priority }: { priority: ConsultationPriority }) {
   return (
     <Badge
+      status={priority}
       variant="secondary"
       className={riskLevelBadgeClass(priority)}
       data-priority={priority}
@@ -1011,7 +1013,7 @@ export function ConsultationsPage() {
   )
 
   return (
-    <div className="space-y-6">
+    <div className="guidance-page space-y-6">
       <PageHeading
         title="Consultations"
         description="Counseling sessions you have recorded. The server returns only your own consultations."
@@ -1038,7 +1040,7 @@ export function ConsultationsPage() {
             onChange={setStatus}
           />
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="guidance-filter-bar grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <div className="space-y-1.5">
               <Label htmlFor="consultation-filter-priority">Priority</Label>
               <Select

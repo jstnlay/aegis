@@ -1,0 +1,65 @@
+.sign-out-dialog[data-slot="dialog-content"] {
+  width: min(420px, calc(100% - 32px));
+  max-width: 420px;
+  gap: 24px;
+  padding: 28px;
+  border: 1px solid color-mix(in srgb, var(--primary) 16%, var(--card));
+  border-radius: 20px;
+  background: var(--card);
+  box-shadow: 0 24px 80px color-mix(in srgb, var(--primary) 16%, transparent);
+}
+.sign-out-heading[data-slot="dialog-header"] {
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+}
+.sign-out-icon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin-bottom: 4px;
+  border: 1px solid color-mix(in srgb, var(--primary) 12%, var(--card));
+  border-radius: 18px;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 7%, var(--card));
+}
+.sign-out-icon svg {
+  width: 26px;
+  height: 26px;
+}
+.sign-out-heading [data-slot="dialog-title"] {
+  color: var(--primary);
+  font-family: "Trebuchet MS", "Inter Variable", sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+}
+.sign-out-heading [data-slot="dialog-description"] {
+  max-width: 310px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.sign-out-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.sign-out-actions button {
+  min-height: 42px;
+  border-radius: 9px;
+  cursor: pointer;
+}
+.sign-out-actions button:disabled {
+  cursor: wait;
+}
+@media (max-width: 359px) {
+  .sign-out-dialog[data-slot="dialog-content"] {
+    gap: 20px;
+    padding: 24px 20px;
+  }
+  .sign-out-heading [data-slot="dialog-title"] {
+    font-size: 22px;
+  }
+}

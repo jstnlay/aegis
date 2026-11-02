@@ -1,0 +1,1998 @@
+/* Shared school theme for administrator, guidance, student and parent workspaces. */
+.app-sidebar-dock {
+  display: contents;
+}
+.app-header-brand-host {
+  display: none;
+}
+.app-shell:is(
+  [data-role="admin"],
+  [data-role="guidance"],
+  [data-role="student"],
+  [data-role="parent"],
+  [data-role="faculty"]
+) {
+  --admin-canvas: color-mix(in srgb, var(--primary) 5%, var(--card));
+  --border: color-mix(in srgb, var(--foreground) 10%, var(--card));
+  --input: color-mix(in srgb, var(--foreground) 16%, var(--card));
+  --accent: color-mix(in srgb, var(--primary) 7%, var(--card));
+  --sidebar: color-mix(in srgb, var(--primary) 6%, var(--card));
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: color-mix(in srgb, var(--primary) 10%, var(--card));
+  --sidebar-accent-foreground: var(--primary);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
+  background: var(--admin-canvas);
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-sidebar {
+  flex-shrink: 0;
+  background:
+    linear-gradient(
+      165deg,
+      color-mix(in srgb, var(--card) 80%, transparent),
+      transparent 65%
+    ),
+    var(--sidebar);
+  box-shadow:
+    inset -1px 0 color-mix(in srgb, var(--card) 75%, transparent),
+    5px 0 22px color-mix(in srgb, var(--primary) 6%, transparent);
+}
+.app-sidebar-item-icon {
+  display: contents;
+}
+.app-sidebar-current-arrow {
+  display: none;
+}
+.app-sidebar-toggle {
+  position: absolute;
+  top: 20px;
+  right: -14px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--primary);
+  background: var(--card);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--primary) 10%, transparent);
+  cursor: pointer;
+}
+.app-sidebar-toggle svg {
+  width: 16px;
+  height: 16px;
+}
+.app-sidebar-toggle:hover {
+  background: color-mix(in srgb, var(--primary) 6%, var(--card));
+}
+.app-sidebar-toggle:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+@media (max-width: 1023px) {
+  .app-shell .app-sidebar[data-state="open"] > .app-sidebar-brand {
+    padding-right: 68px;
+  }
+  .app-sidebar-toggle--mobile {
+    top: 12px;
+    right: 12px;
+    width: 44px;
+    height: 44px;
+    border: 1px solid #ffffff70;
+    border-radius: 12px;
+    box-shadow:
+      inset 0 1px 0 #ffffff20,
+      0 3px 9px color-mix(in srgb, var(--primary) 20%, transparent);
+    background: var(--primary);
+    color: var(--primary-foreground);
+  }
+  .app-sidebar-toggle--mobile:hover {
+    background: color-mix(in srgb, var(--primary) 88%, black);
+  }
+  .app-sidebar-toggle--mobile:active {
+    box-shadow: inset 0 2px 4px #0000001a;
+  }
+  .app-sidebar-toggle--mobile svg {
+    width: 22px;
+    height: 22px;
+    stroke-width: 2.25;
+  }
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-sidebar-brand {
+  min-height: 68px;
+  gap: 12px;
+  padding: 11px 18px;
+  border-bottom: 1px solid var(--sidebar-border);
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-sidebar-brand
+  p:first-child {
+  color: var(--primary);
+  font-family: "Trebuchet MS", "Inter Variable", sans-serif;
+  font-size: 23px;
+  letter-spacing: -0.025em;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-sidebar-brand
+  p:last-child {
+  margin-top: 3px;
+  font-size: 9px;
+  letter-spacing: 0.035em;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-sidebar
+  nav {
+  padding: 16px 12px;
+  overscroll-behavior-y: contain;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--primary) 14%, transparent)
+    transparent;
+  scrollbar-gutter: stable;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-sidebar
+  nav
+  > ul
+  > li
+  + li {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-sidebar
+  nav
+  > ul
+  > li
+  > p {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 11px;
+  padding-bottom: 10px;
+  color: var(--muted-foreground);
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.12em;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-sidebar
+  nav
+  > ul
+  > li
+  > p::before {
+  content: "";
+  width: 4px;
+  height: 4px;
+  flex-shrink: 0;
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--primary) 50%, var(--card));
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-sidebar
+  nav
+  a {
+  min-height: 42px;
+  gap: 9px;
+  margin-block: 4px;
+  padding-inline: 9px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  font-size: 12.5px;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  transition:
+    background-color 120ms ease-out,
+    border-color 120ms ease-out,
+    box-shadow 120ms ease-out;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-sidebar-item-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: color-mix(in srgb, var(--primary) 60%, var(--foreground));
+  background: color-mix(in srgb, var(--card) 68%, transparent);
+  box-shadow: inset 0 1px color-mix(in srgb, var(--card) 80%, transparent);
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-sidebar
+  nav
+  a:hover:not([aria-current="page"]) {
+  border-color: var(--border);
+  background: color-mix(in srgb, var(--primary) 5%, var(--card));
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-sidebar
+  nav
+  a
+  .app-sidebar-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-sidebar
+  nav
+  a[aria-current="page"] {
+  border-color: color-mix(
+    in srgb,
+    var(--primary-foreground) 18%,
+    var(--primary)
+  );
+  font-weight: 650;
+  background:
+    linear-gradient(120deg, #ffffff0d, transparent 65%), var(--sidebar-primary);
+  box-shadow:
+    inset 0 1px #ffffff26,
+    0 3px 8px color-mix(in srgb, var(--primary) 18%, transparent);
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  a[aria-current="page"]
+  .app-sidebar-item-icon {
+  border-color: #ffffff24;
+  color: inherit;
+  background: #ffffff14;
+  box-shadow: inset 0 1px #ffffff14;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-sidebar-current-arrow {
+  display: block;
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  margin-left: auto;
+  opacity: 0.8;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-sidebar-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 48px;
+  padding: 12px 20px;
+  border-top-color: var(--border);
+  background: color-mix(in srgb, var(--card) 55%, transparent);
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-sidebar-footer
+  p {
+  padding: 0;
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-sidebar-footer
+  > span {
+  color: var(--muted-foreground);
+  font-size: 10px;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-assistant-launcher {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  border: 1px solid #ffffff38;
+  background:
+    linear-gradient(145deg, #ffffff12, transparent 65%), var(--primary);
+  box-shadow:
+    inset 0 1px #ffffff24,
+    0 5px 16px color-mix(in srgb, var(--primary) 24%, transparent);
+  cursor: pointer;
+  transition:
+    transform 160ms ease-out,
+    box-shadow 160ms ease-out;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-assistant-launcher::before {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border: 1px solid var(--border);
+  border-radius: inherit;
+  opacity: 0;
+  transform: scale(0.94);
+  transition:
+    opacity 160ms ease-out,
+    transform 160ms ease-out;
+  pointer-events: none;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-assistant-launcher
+  > .app-assistant-avatar {
+  width: 28px;
+  height: 28px;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-assistant-launcher[aria-expanded="false"]
+  > .app-assistant-avatar {
+  animation: app-assistant-float 8s ease-in-out infinite;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-assistant-launcher:is(:hover, :focus-visible) {
+  opacity: 1;
+  transform: translateY(-3px) scale(1.04);
+  box-shadow:
+    inset 0 1px #ffffff38,
+    0 8px 22px color-mix(in srgb, var(--primary) 30%, transparent);
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-assistant-launcher:is(:hover, :focus-visible)::before {
+  opacity: 1;
+  transform: scale(1);
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-assistant-launcher[aria-expanded="false"]:is(:hover, :focus-visible)
+  > .app-assistant-avatar {
+  animation: app-assistant-greeting 850ms ease-in-out;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-assistant-launcher:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 4px;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-assistant-launcher:active {
+  transform: scale(0.96);
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-assistant-hint {
+  --assistant-hint-shift: 6px;
+  --assistant-hint-scale: 0.96;
+  position: absolute;
+  top: 50%;
+  right: calc(100% + 14px);
+  width: max-content;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--primary);
+  background: var(--card);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--primary) 10%, transparent);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-50%) translateX(var(--assistant-hint-shift))
+    scale(var(--assistant-hint-scale));
+  pointer-events: none;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-assistant-hint::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: -5px;
+  width: 8px;
+  height: 8px;
+  border-top: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  background: var(--card);
+  transform: translateY(-50%) rotate(45deg);
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-assistant-launcher[data-hint-automatic="true"]
+  .app-assistant-hint {
+  animation: app-assistant-hint 30s linear 2s infinite;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-assistant-launcher:is(:hover, :focus-visible)
+  .app-assistant-hint {
+  animation: none;
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(-50%);
+  pointer-events: auto;
+}
+/* Show for about five seconds, then leave the page quiet for the rest of the cycle. */
+@keyframes app-assistant-hint {
+  0%,
+  18%,
+  100% {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateY(-50%) translateX(var(--assistant-hint-shift))
+      scale(var(--assistant-hint-scale));
+  }
+  1%,
+  17% {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translateY(-50%);
+  }
+}
+@keyframes app-assistant-float {
+  0%,
+  36%,
+  100% {
+    transform: translateY(0) rotate(0);
+  }
+  12% {
+    transform: translateY(-3px) rotate(-8deg);
+  }
+  20% {
+    transform: translateY(-3px) rotate(7deg);
+  }
+  28% {
+    transform: translateY(-1px) rotate(-4deg);
+  }
+}
+@keyframes app-assistant-greeting {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  20%,
+  55% {
+    transform: translateY(-3px) rotate(-13deg);
+  }
+  38%,
+  75% {
+    transform: translateY(-2px) rotate(10deg);
+  }
+}
+@media (max-width: 639px) {
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .app-assistant-launcher {
+    width: 52px;
+    height: 52px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .app-assistant-hint {
+    --assistant-hint-shift: 0px;
+    --assistant-hint-scale: 1;
+  }
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .app-assistant-launcher[data-hint-automatic="true"]
+    .app-assistant-hint {
+    animation: none;
+  }
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .app-assistant-launcher,
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .app-assistant-launcher::before,
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .app-assistant-launcher
+    > .app-assistant-avatar,
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .app-assistant-launcher[aria-expanded="false"]
+    > .app-assistant-avatar,
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .app-assistant-launcher[aria-expanded="false"]:is(:hover, :focus-visible)
+    > .app-assistant-avatar {
+    animation: none;
+    transition: none;
+    transform: none;
+  }
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-header {
+  height: 68px;
+  border-bottom-color: var(--border);
+  background: color-mix(in srgb, var(--card) 94%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  transition: transform 200ms ease-out;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-header[data-hidden="true"] {
+  transform: translateY(-100%);
+  pointer-events: none;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-header
+  h1 {
+  font-family: "Trebuchet MS", "Inter Variable", sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  text-transform: none;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-header
+  [aria-label="Account menu"] {
+  gap: 12px;
+  padding: 6px 8px;
+  border-radius: 10px;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-header
+  [role="menu"] {
+  border-radius: 12px;
+  box-shadow: 0 12px 36px color-mix(in srgb, var(--primary) 10%, transparent);
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-main {
+  /* Route changes focus this region; avoid an outline around the entire page. */
+  outline: none;
+  --landing-background-height: 2400px;
+  isolation: isolate;
+  scroll-margin-top: 68px;
+  background:
+    radial-gradient(
+      ellipse 65% 420px at 8% 260px,
+      color-mix(in srgb, var(--primary) 8%, transparent),
+      transparent 75%
+    ),
+    radial-gradient(
+      ellipse 70% 500px at 100% 700px,
+      color-mix(in srgb, var(--primary) 6%, transparent),
+      transparent 75%
+    ),
+    var(--admin-canvas);
+  background-size: 100% 1800px;
+  background-repeat: repeat-y;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .landing-background-art {
+  opacity: 0.55;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .landing-background-canvas {
+  top: -64px;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .landing-background-accents {
+  display: none;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-content {
+  max-width: 1440px;
+  padding-top: 32px;
+  padding-bottom: 48px;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-content
+  h2 {
+  color: var(--primary);
+  font-family: "Trebuchet MS", "Inter Variable", sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-main
+  [data-slot="card"] {
+  --card-spacing: 20px;
+  --admin-glass-surface: color-mix(in srgb, var(--card) 24%, transparent);
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--card) 85%, transparent);
+  border-bottom-color: var(--border);
+  border-radius: 10px;
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--card) 68%, transparent),
+      color-mix(in srgb, var(--card) 12%, transparent) 35%,
+      transparent 60%,
+      color-mix(in srgb, var(--card) 30%, transparent)
+    ),
+    var(--admin-glass-surface);
+  -webkit-backdrop-filter: blur(8px) saturate(120%);
+  backdrop-filter: blur(8px) saturate(120%);
+  box-shadow:
+    inset 0 1px 0 var(--card),
+    inset 1px 0 0 color-mix(in srgb, var(--card) 70%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--card) 45%, transparent),
+    0 12px 28px color-mix(in srgb, var(--primary) 9%, transparent),
+    0 3px 8px color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-main
+  [data-slot="card-title"] {
+  font-weight: 600;
+  line-height: 1.5;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-main
+  [data-slot="button"],
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-main
+  [data-slot="input"],
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-main
+  select,
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-main
+  textarea {
+  border-radius: 8px;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-main
+  [data-slot="button"][data-variant="default"] {
+  box-shadow: 0 2px 5px color-mix(in srgb, var(--primary) 12%, transparent);
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-main
+  [role="tablist"] {
+  width: fit-content;
+  max-width: 100%;
+  padding: 6px;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-main
+  [role="tab"] {
+  min-height: 36px;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-main
+  table
+  thead {
+  background: color-mix(in srgb, var(--primary) 4%, var(--card));
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-main
+  table
+  th {
+  padding-block: 12px;
+  color: var(--foreground);
+  font-weight: 600;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .app-main
+  table
+  td {
+  padding-block: 12px;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .admin-dashboard-heading {
+  gap: 8px;
+  padding-left: 16px;
+  border-left: 3px solid var(--primary);
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .admin-dashboard-heading
+  h2 {
+  font-size: clamp(25px, 2.5vw, 30px);
+  line-height: 1.2;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .admin-dashboard-heading
+  p {
+  max-width: 580px;
+  line-height: 1.7;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .admin-metric-card
+  [data-slot="card-header"] {
+  gap: 10px;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .admin-metric-card
+  [data-slot="card-header"]
+  > svg {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  padding: 8px;
+  border-radius: 10px;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 7%, var(--card));
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .admin-metric-card
+  [data-slot="card-content"]
+  > div {
+  font-size: 30px;
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .admin-metric-card
+  [data-slot="card-content"]
+  > p {
+  margin-top: 8px;
+  line-height: 1.5;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .admin-dashboard-metrics {
+  align-items: stretch;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .admin-dashboard
+  .admin-metric-card {
+  position: relative;
+  border-radius: 8px;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .admin-dashboard
+  .admin-metric-card.admin-metric-card--featured {
+  --admin-glass-surface: color-mix(in srgb, var(--primary) 14%, transparent);
+  border-color: var(--border);
+  border-top-color: var(--card);
+  border-radius: 8px 26px 8px 8px;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .admin-metric-card--featured
+  [data-slot="card-header"]
+  > svg {
+  color: var(--primary);
+  background: color-mix(in srgb, var(--card) 60%, transparent);
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .admin-metric-card--featured
+  [data-slot="card-content"]
+  > div {
+  color: var(--primary);
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .admin-dashboard
+  .admin-metric-card.admin-metric-card--soft {
+  --admin-glass-surface: color-mix(in srgb, var(--primary) 6%, transparent);
+  border-color: var(--border);
+  border-top-color: var(--card);
+  border-radius: 8px 8px 26px 8px;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .admin-metric-card--soft
+  [data-slot="card-content"]
+  > div {
+  color: var(--primary);
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .admin-dashboard-charts {
+  align-items: stretch;
+  gap: 20px;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .admin-dashboard-charts
+  > [data-slot="card"] {
+  border-radius: 8px;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .admin-dashboard-charts
+  > [data-slot="card"]
+  > [data-slot="card-header"] {
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .admin-dashboard
+  .admin-dashboard-table {
+  gap: 0;
+  border-radius: 10px 24px 10px 10px;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .admin-dashboard-table
+  > [data-slot="card-header"] {
+  margin-top: -20px;
+  margin-bottom: 20px;
+  padding-top: 18px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--card) 20%, transparent);
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .admin-grade-summary-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+.admin-grade-summary-heading {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+.admin-grade-summary-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--card) 65%, transparent);
+}
+.admin-grade-summary-icon svg {
+  width: 21px;
+  height: 21px;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .admin-grade-summary-heading
+  [data-slot="card-title"] {
+  font-size: 17px;
+  color: var(--primary);
+}
+.admin-grade-summary-heading [data-slot="card-description"] {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.admin-grade-level-count[data-slot="badge"] {
+  height: 28px;
+  padding-inline: 12px;
+  border-color: var(--border);
+  color: var(--primary);
+  background: color-mix(in srgb, var(--card) 55%, transparent);
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .admin-grade-comparison
+  table {
+  min-width: 0;
+  table-layout: fixed;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .admin-grade-comparison
+  table
+  th {
+  padding: 12px 16px;
+  color: var(--muted-foreground);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: normal;
+  background: color-mix(in srgb, var(--primary) 4%, transparent);
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .admin-grade-comparison
+  table
+  td {
+  padding: 16px;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .admin-grade-comparison
+  table
+  tr {
+  background: transparent;
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .admin-grade-comparison
+  thead
+  tr {
+  background: color-mix(in srgb, var(--card) 35%, transparent);
+}
+.app-shell:is(
+    [data-role="admin"],
+    [data-role="guidance"],
+    [data-role="student"],
+    [data-role="parent"],
+    [data-role="faculty"]
+  )
+  .admin-grade-comparison
+  tbody
+  tr:nth-child(even) {
+  background: color-mix(in srgb, var(--card) 20%, transparent);
+}
+.admin-grade-name-column {
+  width: 32%;
+}
+.admin-grade-average-column {
+  width: 44%;
+}
+.admin-grade-count-column,
+.admin-grade-count-cell {
+  width: 24%;
+  text-align: right;
+}
+.admin-grade-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  white-space: normal;
+}
+.admin-grade-name > span:first-child {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 6%, transparent);
+}
+.admin-grade-name svg {
+  width: 17px;
+  height: 17px;
+}
+.admin-grade-average {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 240px);
+  align-items: center;
+  gap: 16px;
+  color: var(--primary);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.admin-grade-average-track {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--primary) 9%, transparent);
+}
+.admin-grade-average-track > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--primary) 65%, transparent);
+}
+.admin-grade-count {
+  display: inline-block;
+  min-width: 48px;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--card) 40%, transparent);
+  color: var(--muted-foreground);
+  text-align: center;
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+@media (min-width: 1024px) {
+  /* Reserve only the icon rail; expanding navigation overlays the dashboard. */
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .app-sidebar-dock {
+    display: block;
+    position: sticky;
+    top: 68px;
+    z-index: 40;
+    flex: 0 0 72px;
+    width: 72px;
+    height: calc(100svh - 68px);
+    margin-top: 68px;
+  }
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .app-sidebar-dock
+    .app-sidebar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+  }
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .app-header {
+    z-index: 50;
+    width: calc(100% + 72px);
+    margin-left: -72px;
+    padding-left: 0;
+    gap: 24px;
+  }
+  .app-header-brand-host {
+    display: block;
+    flex-shrink: 0;
+    min-width: 72px;
+    height: 68px;
+    /* Counter the bar's slide so the school seal stays above the icon rail. */
+    transition: transform 200ms ease-out;
+  }
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .app-header[data-hidden="true"]
+    .app-header-brand-host {
+    transform: translateY(100%);
+    pointer-events: auto;
+    background: var(--sidebar);
+    box-shadow:
+      inset -1px 0 var(--sidebar-border),
+      inset 0 -1px var(--sidebar-border);
+  }
+  .app-header-brand {
+    position: relative;
+    width: 256px;
+    height: 68px;
+    transition: width 180ms ease-out;
+  }
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .app-header-brand
+    .app-sidebar-brand {
+    height: 68px;
+    border-bottom: 0;
+    padding-block: 12px;
+  }
+  .app-header-brand[data-compact="true"] {
+    width: 72px;
+  }
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .app-header-brand[data-compact="true"]
+    .app-sidebar-brand {
+    justify-content: center;
+    gap: 0;
+    padding-inline: 14px;
+  }
+  .app-header-brand[data-compact="true"] .app-sidebar-brand-copy {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .app-content {
+    padding-inline: 24px;
+  }
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .app-sidebar {
+    transition:
+      width 180ms ease-out,
+      transform 180ms ease-out;
+  }
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .app-sidebar[data-compact="true"] {
+    width: 72px;
+  }
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .app-sidebar[data-compact="true"]
+    .app-sidebar-brand {
+    justify-content: center;
+    gap: 0;
+    padding-inline: 14px;
+  }
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .app-sidebar[data-compact="true"]
+    :is(.app-sidebar-label, .app-sidebar-brand-copy) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .app-sidebar[data-compact="true"]
+    nav
+    > ul
+    > li
+    > p {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .app-sidebar[data-compact="true"]
+    nav
+    > ul
+    > li
+    + li {
+    position: relative;
+    margin-top: 10px;
+    padding-top: 12px;
+    border-top: 0;
+  }
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .app-sidebar[data-compact="true"]
+    nav
+    > ul
+    > li
+    + li::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 12px;
+    left: 12px;
+    height: 1px;
+    background: var(--sidebar-border);
+  }
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .app-sidebar[data-compact="true"]
+    nav {
+    padding: 12px;
+    overflow-x: hidden;
+    scrollbar-width: none;
+    scrollbar-gutter: auto;
+  }
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .app-sidebar[data-compact="true"]
+    nav::-webkit-scrollbar {
+    display: none;
+  }
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .app-sidebar[data-compact="true"]
+    nav
+    a {
+    width: 44px;
+    margin-inline: auto;
+    justify-content: center;
+    gap: 0;
+    padding-inline: 0;
+    border-radius: 10px;
+  }
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .app-sidebar[data-compact="true"]
+    .app-sidebar-item-icon {
+    flex-basis: 28px;
+    border-color: transparent;
+    color: inherit;
+    background: transparent;
+    box-shadow: none;
+  }
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .app-sidebar[data-compact="true"]
+    .app-sidebar-item-icon
+    svg {
+    width: 18px;
+    height: 18px;
+  }
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .app-sidebar[data-compact="true"]
+    .app-sidebar-current-arrow {
+    display: none;
+  }
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .app-sidebar[data-compact="true"]
+    > div:last-child {
+    justify-content: center;
+    padding-inline: 8px;
+    text-align: center;
+  }
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .app-sidebar[data-compact="true"]
+    > div:last-child
+    p {
+    padding-inline: 0;
+    font-size: 10px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .app-header,
+  .app-header-brand-host,
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .app-sidebar,
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .app-sidebar
+    nav
+    a,
+  .app-header-brand {
+    transition: none;
+  }
+}
+@media (max-width: 1023px) {
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .app-sidebar {
+    z-index: 50;
+  }
+}
+@media (max-width: 639px) {
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .admin-grade-summary-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .admin-grade-summary-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+  }
+  .admin-grade-summary-heading {
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .admin-grade-comparison
+    table
+    th,
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .admin-grade-comparison
+    table
+    td {
+    padding: 12px 6px;
+  }
+  .admin-grade-name > span:first-child {
+    display: none;
+  }
+  .admin-grade-name {
+    font-size: 12px;
+  }
+  .admin-grade-average {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 7px;
+    max-width: 100px;
+    font-size: 12px;
+  }
+  .admin-grade-count {
+    min-width: 36px;
+    padding-inline: 6px;
+  }
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .app-header {
+    height: 64px;
+  }
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .app-header
+    h1 {
+    font-size: 20px;
+  }
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .app-content {
+    padding-top: 24px;
+  }
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .app-main
+    [data-slot="card"] {
+    --card-spacing: 16px;
+    border-radius: 10px;
+  }
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .admin-metric-card
+    [data-slot="card-header"] {
+    align-items: flex-start;
+    flex-direction: column-reverse;
+    padding-bottom: 4px;
+  }
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .admin-metric-card
+    [data-slot="card-content"]
+    > div {
+    font-size: 28px;
+  }
+  .app-shell:is(
+      [data-role="admin"],
+      [data-role="guidance"],
+      [data-role="student"],
+      [data-role="parent"],
+      [data-role="faculty"]
+    )
+    .admin-dashboard-table
+    > [data-slot="card-header"] {
+    margin-top: -16px;
+  }
+}

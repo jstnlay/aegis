@@ -514,8 +514,8 @@ describe("StudentProfilePage", () => {
     const badge = await screen.findByText(/At risk \(Moderate\)/)
     expect(badge).toHaveAttribute("data-at-risk-level", "moderate")
     // Moderate must not be painted with the destructive/high treatment.
-    expect(badge.className).toContain("text-warning-foreground")
-    expect(badge.className).not.toContain("text-destructive")
+    expect(badge.className).toContain("text-amber-900")
+    expect(badge.className).not.toContain("text-red-800")
   })
 
   it("does not mark a student at risk when their only moderate/high alert is resolved", async () => {

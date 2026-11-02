@@ -725,7 +725,8 @@ const keys = {
   assessments: ["guidance", "assessments"] as const,
   assessmentResults: ["guidance", "assessment-results"] as const,
   assessmentQuestions: ["guidance", "assessment-questions"] as const,
-  roster: ["guidance", "students"] as const,
+  // Enrollment choices and the activity directory return different shapes.
+  roster: ["guidance", "student-roster"] as const,
   studentGrades: (studentId: string) =>
     ["academics", "grades", "student", studentId] as const,
   studentAttendance: (studentId: string) =>

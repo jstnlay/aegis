@@ -55,6 +55,11 @@ describe("ForgotPasswordPage", () => {
     expect(
       await screen.findByText(/If an account exists for that address/i)
     ).toBeInTheDocument()
+    expect(
+      screen
+        .getByText("Check your inbox", { selector: "li span" })
+        .closest("li")
+    ).toHaveAttribute("aria-current", "step")
   })
 })
 
@@ -76,6 +81,49 @@ describe("ResetPasswordPage", () => {
       new_password: "brandnewpass1",
       confirm_password: "brandnewpass1",
     })
+    expect(
+      await screen.findByRole("heading", { name: "Password reset" })
+    ).toBeInTheDocument()
+    expect(screen.getByRole("link", { name: "Sign in" })).toHaveAttribute(
+      "href",
+      "/login"
+    )
+  })
+
+  it("shows each password independently without changing values or submitting", () => {
+    renderPage(<ResetPasswordPage />, "/reset-password?token=abc123")
+    const password = screen.getByLabelText("New password")
+    const confirmation = screen.getByLabelText("Confirm new password")
+    fireEvent.change(password, { target: { value: "brandnewpass1" } })
+    fireEvent.change(confirmation, { target: { value: "brandnewpass1" } })
+
+    fireEvent.click(screen.getByRole("button", { name: "Show new password" }))
+    expect(password).toHaveAttribute("type", "text")
+    expect(confirmation).toHaveAttribute("type", "password")
+    expect(password).toHaveValue("brandnewpass1")
+    fireEvent.click(screen.getByRole("button", { name: "Hide new password" }))
+    expect(password).toHaveAttribute("type", "password")
+    fireEvent.click(
+      screen.getByRole("button", { name: "Show password confirmation" })
+    )
+    expect(confirmation).toHaveAttribute("type", "text")
+    expect(confirmation).toHaveValue("brandnewpass1")
+    expect(resetPasswordRequest).not.toHaveBeenCalled()
+  })
+
+  it("keeps mismatched passwords on the form instead of sending them", async () => {
+    renderPage(<ResetPasswordPage />, "/reset-password?token=abc123")
+    fireEvent.change(screen.getByLabelText("New password"), {
+      target: { value: "brandnewpass1" },
+    })
+    fireEvent.change(screen.getByLabelText("Confirm new password"), {
+      target: { value: "differentpass1" },
+    })
+    fireEvent.click(screen.getByRole("button", { name: "Set new password" }))
+    expect(
+      await screen.findByText("Passwords do not match.")
+    ).toBeInTheDocument()
+    expect(resetPasswordRequest).not.toHaveBeenCalled()
   })
 
   it("refuses a link with no token", () => {

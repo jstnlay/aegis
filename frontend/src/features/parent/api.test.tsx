@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from "@testing-library/react"
+import { act, renderHook, waitFor } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import type { ReactNode } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
@@ -12,6 +12,7 @@ import {
   useChildRiskAlerts,
   useLinkedStudents,
   useParentAssessments,
+  useSelectedChild,
 } from "@/features/parent/api"
 
 vi.mock("@/lib/pagination", () => ({
@@ -36,6 +37,68 @@ function createWrapper() {
 
 afterEach(() => {
   vi.clearAllMocks()
+})
+
+describe("parent student selection", () => {
+  const children = [
+    {
+      id: "sp-1",
+      student_name: "Ana Cruz",
+      student_id: "S1",
+      section_name: "Grade 7",
+    },
+    {
+      id: "sp-2",
+      student_name: "Luis Cruz",
+      student_id: "S2",
+      section_name: "Grade 9",
+    },
+  ]
+
+  it("waits for an explicit choice, even with one linked student", () => {
+    const { result } = renderHook(
+      () => useSelectedChild(children.slice(0, 1)),
+      { wrapper: createWrapper() }
+    )
+    expect(result.current.selectedChildId).toBe("")
+    expect(result.current.child).toBeUndefined()
+    expect(mockedGet).not.toHaveBeenCalled()
+    expect(mockedFetchAllPages).not.toHaveBeenCalled()
+  })
+
+  it("shares the choice between parent views and rejects unlinked students", async () => {
+    const { result, rerender } = renderHook(
+      ({ roster }) => ({
+        dashboard: useSelectedChild(roster),
+        academics: useSelectedChild(roster),
+      }),
+      { wrapper: createWrapper(), initialProps: { roster: children } }
+    )
+    act(() => result.current.dashboard.setSelectedChildId("sp-2"))
+    await waitFor(() =>
+      expect(result.current.academics.child?.student_name).toBe("Luis Cruz")
+    )
+    act(() => result.current.academics.setSelectedChildId("unlinked-profile"))
+    expect(result.current.dashboard.selectedChildId).toBe("sp-2")
+    rerender({ roster: children.slice(0, 1) })
+    expect(result.current.dashboard.selectedChildId).toBe("")
+    expect(result.current.academics.child).toBeUndefined()
+  })
+
+  it("starts without a student again after the session cache is cleared", () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    )
+    const first = renderHook(() => useSelectedChild(children), { wrapper })
+    act(() => first.result.current.setSelectedChildId("sp-1"))
+    first.unmount()
+    client.clear()
+    const next = renderHook(() => useSelectedChild(children), { wrapper })
+    expect(next.result.current.selectedChildId).toBe("")
+  })
 })
 
 describe("useLinkedStudents", () => {

@@ -33,6 +33,8 @@ import { cn } from "@/lib/utils"
 export interface TabItem<T extends string> {
   id: T
   label: string
+  /** Optional decorative icon; the label remains the accessible tab name. */
+  icon?: ReactNode
   /** The selected tab's content. */
   content: ReactNode
 }
@@ -112,6 +114,7 @@ export function Tabs<T extends string>({
               tabIndex={selected ? 0 : -1}
               onClick={() => onValueChange(item.id)}
             >
+              {item.icon ? <span aria-hidden="true">{item.icon}</span> : null}
               {item.label}
             </Button>
           )

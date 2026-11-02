@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { Link, useSearchParams } from "react-router-dom"
-import { Loader2, MailCheck, UserPlus } from "lucide-react"
+import { Loader2, MailCheck } from "lucide-react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -26,6 +26,9 @@ import {
   verifyRegistrationRequest,
 } from "@/features/auth/api"
 import { normalizeApiError } from "@/lib/error"
+import { SCHOOL_NAME } from "@/lib/school-content"
+import { HomepageBackground } from "@/components/brand/HomepageBackground"
+import "./register-page.css"
 
 const registerSchema = z
   .object({
@@ -116,9 +119,10 @@ export function RegisterPage() {
     return (
       <div
         role="status"
-        className="flex min-h-svh items-center justify-center bg-background px-4 py-10"
+        className="school-register-page school-brand-background"
       >
-        <Card className="w-full max-w-md">
+        <HomepageBackground />
+        <Card className="school-register-card">
           <CardContent className="flex items-center justify-center gap-3 py-10 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" aria-hidden="true" />
             Verifying your request...
@@ -132,9 +136,10 @@ export function RegisterPage() {
     return (
       <div
         role="status"
-        className="flex min-h-svh items-center justify-center bg-background px-4 py-10"
+        className="school-register-page school-brand-background"
       >
-        <Card className="w-full max-w-md">
+        <HomepageBackground />
+        <Card className="school-register-card">
           <CardHeader className="gap-2 text-center">
             <div className="mx-auto flex size-12 items-center justify-center rounded-md bg-success text-success-foreground">
               <MailCheck className="size-6" aria-hidden="true" />
@@ -160,8 +165,9 @@ export function RegisterPage() {
 
   if (verificationState === "failed") {
     return (
-      <div className="flex min-h-svh items-center justify-center bg-background px-4 py-10">
-        <Card className="w-full max-w-md">
+      <div className="school-register-page school-brand-background">
+        <HomepageBackground />
+        <Card className="school-register-card">
           <CardHeader className="gap-2 text-center">
             <h1 className="text-xl font-bold text-foreground">
               This link has expired
@@ -185,9 +191,10 @@ export function RegisterPage() {
     return (
       <div
         role="status"
-        className="flex min-h-svh items-center justify-center bg-background px-4 py-10"
+        className="school-register-page school-brand-background"
       >
-        <Card className="w-full max-w-md">
+        <HomepageBackground />
+        <Card className="school-register-card">
           <CardHeader className="gap-2 text-center">
             <div className="mx-auto flex size-12 items-center justify-center rounded-md bg-primary text-primary-foreground">
               <MailCheck className="size-6" aria-hidden="true" />
@@ -211,11 +218,17 @@ export function RegisterPage() {
   }
 
   return (
-    <div className="flex min-h-svh items-center justify-center bg-background px-4 py-10">
-      <Card className="w-full max-w-md">
+    <div className="school-register-page school-brand-background">
+      <HomepageBackground />
+      <Card className="school-register-card school-register-form-card">
         <CardHeader className="gap-2 text-center">
-          <div className="mx-auto flex size-12 items-center justify-center rounded-md bg-primary text-primary-foreground">
-            <UserPlus className="size-6" aria-hidden="true" />
+          <div className="school-register-seal">
+            <img
+              src="/hcci-logo.png"
+              alt={SCHOOL_NAME}
+              width={56}
+              height={56}
+            />
           </div>
           <h1 className="text-xl font-bold text-foreground">
             Request a student account
@@ -229,7 +242,7 @@ export function RegisterPage() {
           <Form {...form}>
             <form
               onSubmit={(e) => void form.handleSubmit(onSubmit)(e)}
-              className="space-y-4"
+              className="school-register-form"
               noValidate
               aria-busy={isSubmitting}
             >
@@ -300,43 +313,45 @@ export function RegisterPage() {
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Password</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        type="password"
-                        autoComplete="new-password"
-                        disabled={isSubmitting}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <div className="school-register-passwords">
+                <FormField
+                  control={form.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Password</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          type="password"
+                          autoComplete="new-password"
+                          disabled={isSubmitting}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-              <FormField
-                control={form.control}
-                name="confirm_password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Confirm password</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        type="password"
-                        autoComplete="new-password"
-                        disabled={isSubmitting}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                <FormField
+                  control={form.control}
+                  name="confirm_password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Confirm password</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          type="password"
+                          autoComplete="new-password"
+                          disabled={isSubmitting}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
 
               <Button type="submit" className="w-full" disabled={isSubmitting}>
                 {isSubmitting ? (
@@ -352,7 +367,7 @@ export function RegisterPage() {
                 )}
               </Button>
 
-              <p className="text-center text-sm">
+              <p className="school-register-sign-in text-center text-sm">
                 Already have an account?{" "}
                 <Link
                   to="/login"

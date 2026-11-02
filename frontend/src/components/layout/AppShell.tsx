@@ -1,4 +1,4 @@
-import { Bot } from "lucide-react"
+import { Bot, Sparkle, X } from "lucide-react"
 import { Suspense, useEffect, useRef, useState } from "react"
 import { Outlet, useLocation } from "react-router-dom"
 
@@ -8,6 +8,14 @@ import { PageLoading } from "@/components/layout/LoadingScreen"
 import { Sidebar } from "@/components/layout/Sidebar"
 import { SkipLink } from "@/components/layout/SkipLink"
 import { ChatbotPanel } from "@/features/chatbot/ChatbotPanel"
+import { useAuth } from "@/features/auth/AuthContext"
+import { HomepageBackground } from "@/components/brand/HomepageBackground"
+import "./admin-theme.css"
+import "@/features/guidance/guidance-theme.css"
+import "@/features/student/student-theme.css"
+import "@/features/parent/parent-theme.css"
+import "@/features/faculty/faculty-theme.css"
+import "./assistant-motion.css"
 
 /**
  * Shared application shell for all five roles (admin, faculty, guidance,
@@ -21,9 +29,20 @@ import { ChatbotPanel } from "@/features/chatbot/ChatbotPanel"
  * navigating to any other route clears the error without a reload.
  */
 export function AppShell() {
+  const { user } = useAuth()
+  const schoolTheme =
+    user?.role === "admin" ||
+    user?.role === "guidance" ||
+    user?.role === "student" ||
+    user?.role === "parent" ||
+    user?.role === "faculty"
   const location = useLocation()
   const [menuOpen, setMenuOpen] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
+  const [assistantUsed, setAssistantUsed] = useState(false)
+  const [brandContainer, setBrandContainer] = useState<HTMLDivElement | null>(
+    null
+  )
   const [lastPath, setLastPath] = useState(location.pathname)
   const menuButtonRef = useRef<HTMLButtonElement>(null)
   const wasMenuOpen = useRef(false)
@@ -90,13 +109,21 @@ export function AppShell() {
   }, [location.pathname])
 
   return (
-    <div className="flex min-h-svh bg-background">
+    <div
+      className="app-shell flex min-h-svh bg-background"
+      data-role={user?.role}
+    >
       <SkipLink />
 
-      <Sidebar open={menuOpen} onOpenChange={setMenuOpen} />
+      <Sidebar
+        open={menuOpen}
+        onOpenChange={setMenuOpen}
+        brandContainer={brandContainer}
+      />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <Header
+          brandContainerRef={setBrandContainer}
           menuOpen={menuOpen}
           menuButtonRef={menuButtonRef}
           onMenuClick={() => setMenuOpen(true)}
@@ -104,13 +131,12 @@ export function AppShell() {
 
         <main
           id="main-content"
-          className="relative flex-1 scroll-mt-14"
+          className="app-main relative flex-1 scroll-mt-14"
           tabIndex={-1}
         >
           {/*
-            The school banner photo behind every in-shell page's title block,
-            per the reference (dashboard welcome text, `Risk Alerts`,
-            `Consultations`, and the same title area on each module page).
+            The themed workspaces share school-brand artwork beneath their data.
+            Faculty workspaces use a quieter version for class records.
 
             It lives here rather than on any one page so the treatment is the
             same everywhere without per-page copies: one strip, full-bleed
@@ -123,16 +149,22 @@ export function AppShell() {
             already sets its cover photo this way, and the arbitrary-value form
             of a quoted url is a place Tailwind's parser can quietly drop.
           */}
-          <div
-            aria-hidden="true"
-            className="absolute inset-x-0 top-0 h-64 bg-cover bg-center"
-            style={{ backgroundImage: "url(/background.png)" }}
-          />
-          <div
-            aria-hidden="true"
-            className="absolute inset-x-0 top-0 h-64 bg-gradient-to-b from-background/40 via-background/55 to-background"
-          />
-          <div className="relative mx-auto w-full max-w-6xl px-4 py-6 lg:px-6">
+          {schoolTheme ? (
+            <HomepageBackground />
+          ) : (
+            <>
+              <div
+                aria-hidden="true"
+                className="absolute inset-x-0 top-0 h-64 bg-cover bg-center"
+                style={{ backgroundImage: "url(/background.png)" }}
+              />
+              <div
+                aria-hidden="true"
+                className="absolute inset-x-0 top-0 h-64 bg-gradient-to-b from-background/40 via-background/55 to-background"
+              />
+            </>
+          )}
+          <div className="app-content relative mx-auto w-full max-w-6xl px-4 py-6 lg:px-6">
             <ErrorBoundary resetKeys={[location.pathname]}>
               {/*
                 Route chunks are lazy (see `routes.tsx`). The boundary sits
@@ -149,29 +181,50 @@ export function AppShell() {
 
       {/*
         Floating assistant: a circular robot button pinned to the bottom-right
-        on every dashboard. It opens/closes the same ChatbotPanel without
+        on dashboards outside the parent portal. It opens/closes the same ChatbotPanel without
         navigating, and the transcript is still discarded on close.
       */}
-      <div className="fixed right-4 bottom-4 z-50 flex flex-col items-end gap-3">
-        {chatOpen && (
-          <div
-            id="chatbot-panel"
-            className="w-[min(24rem,calc(100vw-2rem))] max-h-[70vh] overflow-y-auto"
+      {user?.role !== "parent" && (
+        <div className="fixed right-4 bottom-4 z-50 flex flex-col items-end gap-3">
+          {chatOpen && (
+            <div
+              id="chatbot-panel"
+              className="app-assistant-panel w-[min(24rem,calc(100vw-2rem))] max-h-[70vh] overflow-y-auto"
+            >
+              <ChatbotPanel
+                open={chatOpen}
+                onClose={() => setChatOpen(false)}
+              />
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              setAssistantUsed(true)
+              setChatOpen((open) => !open)
+            }}
+            data-hint-automatic={!assistantUsed}
+            aria-expanded={chatOpen}
+            aria-controls="chatbot-panel"
+            aria-label={chatOpen ? "Close assistant" : "Open assistant"}
+            className="app-assistant-launcher flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg hover:opacity-90"
           >
-            <ChatbotPanel open={chatOpen} onClose={() => setChatOpen(false)} />
-          </div>
-        )}
-        <button
-          type="button"
-          onClick={() => setChatOpen((open) => !open)}
-          aria-expanded={chatOpen}
-          aria-controls="chatbot-panel"
-          aria-label={chatOpen ? "Close assistant" : "Open assistant"}
-          className="flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg hover:opacity-90"
-        >
-          <Bot aria-hidden="true" className="size-6" />
-        </button>
-      </div>
+            {schoolTheme && !chatOpen ? (
+              <span className="app-assistant-hint" aria-hidden="true">
+                Need help?
+              </span>
+            ) : null}
+            <span className="app-assistant-avatar" aria-hidden="true">
+              <Bot className="app-assistant-robot size-6" />
+              <X className="app-assistant-close size-6" />
+            </span>
+            <span className="app-assistant-sparks" aria-hidden="true">
+              <Sparkle />
+              <Sparkle />
+            </span>
+          </button>
+        </div>
+      )}
     </div>
   )
 }

@@ -14,12 +14,15 @@ import {
   riskFactorSearchText,
   useConsultations,
   useGuidanceStats,
+  useGuidanceStudents,
   useRiskAlerts,
+  useStudentRoster,
   type Consultation,
   type RiskAlert,
   type RiskFactor,
 } from "@/features/guidance/api"
 import { fetchAllPages } from "@/lib/pagination"
+import { apiClient } from "@/lib/api"
 
 vi.mock("@/lib/pagination", () => ({
   fetchAllPages: vi.fn(),
@@ -35,6 +38,62 @@ function createWrapper() {
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   )
 }
+
+describe("guidance student query isolation", () => {
+  it("keeps the enrollment picker and activity directory in separate caches", async () => {
+    mockedFetchAllPages.mockResolvedValueOnce({
+      count: 1,
+      results: [
+        {
+          student: "enrolled-student",
+          student_name: "Enrolled Student",
+          student_id: "HCCI-001",
+          section_name: "Bonifacio",
+          academic_year_name: "SY 2026-2027",
+          is_active: true,
+        },
+      ],
+    })
+    const directory = {
+      students: [
+        {
+          id: "guidance-student",
+          name: "Guidance Student",
+          code: "HCCI-002",
+          latestActivity: "2026-10-26",
+          openAlertCount: 1,
+          atRiskLevel: "high",
+          consultationCount: 0,
+          interventionCount: 0,
+          resultCount: 0,
+        },
+      ],
+    }
+    const get = vi
+      .spyOn(apiClient, "get")
+      .mockResolvedValue({ data: directory })
+    try {
+      const { result } = renderHook(
+        () => ({
+          roster: useStudentRoster(),
+          directory: useGuidanceStudents(),
+        }),
+        { wrapper: createWrapper() }
+      )
+      await waitFor(() => {
+        expect(result.current.roster.isSuccess).toBe(true)
+        expect(result.current.directory.isSuccess).toBe(true)
+      })
+      expect(result.current.roster.data).toEqual([
+        expect.objectContaining({ id: "enrolled-student", code: "HCCI-001" }),
+      ])
+      expect(result.current.directory.data).toEqual(directory)
+      expect(get).toHaveBeenCalledWith("/guidance/students/")
+    } finally {
+      get.mockRestore()
+    }
+  })
+})
 
 function makeAlert(
   overrides: Partial<RiskAlert> &
