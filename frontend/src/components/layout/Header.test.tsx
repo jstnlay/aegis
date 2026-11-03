@@ -152,11 +152,11 @@ describe.each(["admin", "guidance", "student", "parent"] as const)(
       expect(screen.getByRole("menuitem", { name: "Sign out" })).toBeVisible()
     })
 
-    it("keeps other roles' headers visible", () => {
+    it("hides the faculty header like the other school roles", () => {
       const scroll = controlScroll()
       renderHeader("faculty")
       scroll(200)
-      expect(screen.getByRole("banner")).toHaveAttribute("data-hidden", "false")
+      expect(screen.getByRole("banner")).toHaveAttribute("data-hidden", "true")
     })
   }
 )
