@@ -1,8 +1,13 @@
 import { LegalPageLayout } from "@/routes/pages/LegalPageLayout"
 
-export function TermsOfUsePage() {
+export function TermsOfUsePage({
+  presentation = "page",
+}: {
+  presentation?: "page" | "dialog"
+} = {}) {
   return (
     <LegalPageLayout
+      presentation={presentation}
       title="Terms of Use"
       intro="These terms cover your use of AEGIS, the school's information system: what the school expects from you, and what you can expect from the system."
     >

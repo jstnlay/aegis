@@ -90,9 +90,11 @@ function NotificationRow({
       </TableCell>
       <TableCell className="align-top">
         {notification.is_read ? (
-          <Badge variant="outline">Read</Badge>
+          <Badge status={"neutral"} variant="outline">
+            Read
+          </Badge>
         ) : (
-          <Badge>Unread</Badge>
+          <Badge status={"pending"}>Unread</Badge>
         )}
       </TableCell>
       <TableCell className="align-top">

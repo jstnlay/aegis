@@ -762,6 +762,29 @@ describe("PH11.11 mobile drawer keyboard contract", () => {
     }
   })
 
+  it("closes the mobile drawer with the back arrow and restores focus", async () => {
+    const restore = stubViewport({ wide: false })
+    try {
+      await renderAuthenticatedApp("student")
+      const trigger = await shellReady()
+      expect(
+        screen.queryByRole("button", { name: "Minimize navigation" })
+      ).not.toBeInTheDocument()
+      fireEvent.click(trigger)
+      fireEvent.click(
+        screen.getByRole("button", { name: "Minimize navigation" })
+      )
+      expect(primaryNav()).toHaveAttribute("inert")
+      expect(trigger).toHaveAttribute("aria-expanded", "false")
+      expect(trigger).toHaveFocus()
+      expect(
+        screen.queryByRole("button", { name: "Minimize navigation" })
+      ).not.toBeInTheDocument()
+    } finally {
+      restore()
+    }
+  })
+
   it("moves focus to the main region on navigation", async () => {
     // Two constraints on this test, both learned the hard way:
     //

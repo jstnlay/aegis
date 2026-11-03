@@ -73,7 +73,7 @@ const ASSESSMENT_TYPE_LABELS: Record<GuidanceAssessmentType, string> = {
 
 function PageHeading() {
   return (
-    <div className="flex flex-col gap-1">
+    <div className="guidance-page-heading flex flex-col gap-1">
       <div className="flex items-center gap-3">
         <ClipboardCheck
           className="size-5 text-muted-foreground"
@@ -863,7 +863,11 @@ function ResultsForAssessment({
                 </div>
               </TableCell>
               <TableCell>
-                <Badge variant="outline" data-result-status={result.status}>
+                <Badge
+                  status={result.status}
+                  variant="outline"
+                  data-result-status={result.status}
+                >
                   {result.status === "completed" ? "Completed" : "In progress"}
                 </Badge>
               </TableCell>
@@ -970,7 +974,7 @@ export function AssessmentsPage() {
     status !== "all" || assessmentType !== "all" || search.trim().length > 0
 
   return (
-    <div className="space-y-6">
+    <div className="guidance-page space-y-6">
       <PageHeading />
 
       <Card>
@@ -987,7 +991,7 @@ export function AssessmentsPage() {
         </CardHeader>
 
         <CardContent className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="guidance-filter-bar grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <div className="space-y-1.5">
               <Label htmlFor="assessment-filter-status">Status</Label>
               <Select
@@ -1072,6 +1076,7 @@ export function AssessmentsPage() {
                         ] ?? assessment.assessment_type}
                       </Badge>
                       <Badge
+                        status={assessment.is_published ? "published" : "draft"}
                         variant="outline"
                         data-published={
                           assessment.is_published ? "true" : "false"

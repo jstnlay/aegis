@@ -11,31 +11,6 @@
   isolation: isolate;
   font-family: var(--font-sans);
   font-kerning: normal;
-  background:
-    radial-gradient(
-      ellipse 70% 18% at 100% 20%,
-      color-mix(in srgb, var(--primary) 4%, transparent),
-      transparent 75%
-    ),
-    radial-gradient(
-      ellipse 75% 20% at 0% 55%,
-      color-mix(in srgb, var(--primary) 3%, transparent),
-      transparent 75%
-    ),
-    radial-gradient(
-      ellipse 60% 18% at 100% 88%,
-      color-mix(in srgb, var(--primary) 4%, transparent),
-      transparent 75%
-    ),
-    linear-gradient(
-      160deg,
-      color-mix(in srgb, var(--primary) 2%, var(--background)),
-      color-mix(in srgb, var(--primary) 3%, var(--background)) 48%,
-      color-mix(in srgb, var(--primary) 2%, var(--background))
-    );
-  /* Keep the artwork's scale independent of accordion/content height. */
-  background-size: 100% var(--landing-background-height);
-  background-repeat: repeat-y;
 }
 .landing-main :is(h1, h2, h3) {
   font-family: var(--landing-font-heading);
@@ -112,43 +87,6 @@
   padding: 28px 40px 0;
   display: grid;
   gap: var(--landing-section-space);
-}
-
-/* One flowing composition, with a fixed coordinate system so expanding
-   content cannot stretch or reposition the background artwork. */
-.landing-background-art {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  overflow: clip;
-  pointer-events: none;
-}
-.landing-background-canvas {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: var(--landing-background-height);
-  overflow: visible;
-  pointer-events: none;
-}
-.landing-background-canvas path {
-  vector-effect: non-scaling-stroke;
-}
-.landing-background-field--rose {
-  fill: color-mix(in srgb, var(--color-maroon-400) 24%, transparent);
-}
-.landing-background-field--maroon {
-  fill: color-mix(in srgb, var(--primary) 12%, transparent);
-}
-.landing-background-contours {
-  fill: none;
-  stroke: color-mix(in srgb, var(--primary) 22%, transparent);
-  stroke-width: 1;
-  stroke-linecap: round;
-}
-.landing-background-accents {
-  fill: color-mix(in srgb, var(--primary) 64%, transparent);
 }
 
 .landing-main > * {
@@ -1273,6 +1211,18 @@
   text-decoration-color: color-mix(in srgb, var(--primary) 30%, transparent);
   text-underline-offset: 5px;
 }
+.landing-contact-address {
+  display: block;
+  color: inherit;
+  font-size: 14px;
+  line-height: 1.6;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.landing-contact-campus .landing-contact-link-arrow {
+  flex-shrink: 0;
+  margin-left: auto;
+}
 a.landing-contact-channel {
   cursor: pointer;
 }
@@ -1295,7 +1245,8 @@ a.landing-contact-channel p {
   }
 }
 .landing-contact-channel:focus-visible,
-.landing-contact-number:focus-visible {
+.landing-contact-number:focus-visible,
+.landing-contact-address:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 4px;
 }
@@ -1410,6 +1361,7 @@ a.landing-contact-channel p {
   :is(
     .landing-contact-channel,
     .landing-contact-number,
+    .landing-contact-address,
     .landing-faq-item button
   ):focus-visible,
 .school-homepage .landing-glass [data-slot="button"]:focus-visible {
@@ -1495,12 +1447,7 @@ a.landing-contact-channel p {
   .school-homepage {
     --landing-background-height: 5200px;
   }
-  .landing-background-canvas {
-    opacity: 0.85;
-  }
-  .landing-background-accents {
-    display: none;
-  }
+
   .landing-section {
     scroll-margin-top: 128px;
   }

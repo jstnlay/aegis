@@ -85,6 +85,13 @@ describe("landing school identity", () => {
     renderPage(<LandingPage />, "/")
 
     expect(screen.getByText(CONTACT.address)).toBeInTheDocument()
+    const address = screen.getByRole("link", {
+      name: `View address: ${CONTACT.address}`,
+    })
+    const mapUrl = new URL(address.getAttribute("href")!)
+    expect(mapUrl.origin).toBe("https://www.google.com")
+    expect(mapUrl.searchParams.get("query")).toBe(CONTACT.address)
+    expect(address).toHaveAttribute("title", CONTACT.address)
     expect(screen.getByText(CONTACT.schoolId)).toBeInTheDocument()
     const mail = screen.getByRole("link", { name: CONTACT.email })
     expect(mail).toHaveAttribute("href", `mailto:${CONTACT.email}`)
@@ -93,6 +100,9 @@ describe("landing school identity", () => {
       "tel:09463781119"
     )
     expect(screen.getByText(CONTACT.messengerName)).toBeInTheDocument()
+    expect(
+      screen.getByRole("link", { name: `Messenger: ${CONTACT.messengerName}` })
+    ).toHaveAttribute("href", "https://m.me/hiscarestamariastotomas")
     const facebook = screen.getByRole("link", { name: "Facebook" })
     expect(facebook).toHaveAttribute("href", CONTACT.facebookUrl)
     expect(facebook).toHaveAttribute("target", "_blank")

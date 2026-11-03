@@ -1,5 +1,7 @@
 import { NavLink } from "react-router-dom"
-import { useCallback, useEffect, useSyncExternalStore } from "react"
+import { createPortal } from "react-dom"
+import { ChevronLeft, ChevronRight } from "lucide-react"
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react"
 
 import { Badge } from "@/components/ui/badge"
 import { PRIMARY_NAV_ID } from "@/components/layout/Header"
@@ -22,7 +24,7 @@ import { cn } from "@/lib/utils"
 
 function Brand() {
   return (
-    <div className="flex shrink-0 items-center gap-2.5 px-4 py-4">
+    <div className="app-sidebar-brand flex shrink-0 items-center gap-2.5 px-4 py-4">
       {/* A round disc rather than a rounded square: the seal art itself has an
           alpha channel, so on the brand-maroon rail it reads as the circular
           badge the reference shows instead of an unstyled white tile. */}
@@ -34,7 +36,7 @@ function Brand() {
           className="size-full object-cover"
         />
       </div>
-      <div className="min-w-0">
+      <div className="app-sidebar-brand-copy min-w-0">
         <p className="text-lg font-bold leading-tight text-sidebar-foreground">
           AEGIS
         </p>
@@ -46,16 +48,20 @@ function Brand() {
   )
 }
 
-function AvailableNavLink({ item }: { item: NavItem }) {
+function AvailableNavLink({
+  item,
+  compact,
+}: {
+  item: NavItem
+  compact: boolean
+}) {
   const Icon = item.icon
   return (
     <NavLink
       to={itemHref(item)}
+      title={compact ? item.label : undefined}
       className={({ isActive }) =>
         cn(
-          // `rounded-lg` because the active state is a white pill on the brand
-          // rail, and a near-square pill reads as an accident rather than a
-          // choice.
           "flex h-9 items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-sidebar-ring",
           isActive
             ? "bg-sidebar-primary text-sidebar-primary-foreground"
@@ -63,8 +69,20 @@ function AvailableNavLink({ item }: { item: NavItem }) {
         )
       }
     >
-      <Icon className="size-4" aria-hidden="true" />
-      {item.label}
+      {({ isActive }) => (
+        <>
+          <span className="app-sidebar-item-icon" aria-hidden="true">
+            <Icon className="size-4" />
+          </span>
+          <span className="app-sidebar-label">{item.label}</span>
+          {isActive ? (
+            <ChevronRight
+              className="app-sidebar-current-arrow"
+              aria-hidden="true"
+            />
+          ) : null}
+        </>
+      )}
     </NavLink>
   )
 }
@@ -75,11 +93,11 @@ function PlannedNavEntry({ item }: { item: NavItem }) {
     <div className="flex h-9 items-center justify-between rounded-lg px-3 text-sm text-sidebar-foreground/70">
       <span className="flex items-center gap-2.5">
         <Icon className="size-4" aria-hidden="true" />
-        {item.label}
+        <span className="app-sidebar-label">{item.label}</span>
       </span>
       <Badge
         variant="outline"
-        className="border-sidebar-border text-sidebar-foreground/70"
+        className="app-sidebar-label border-sidebar-border text-sidebar-foreground/70"
       >
         Planned
       </Badge>
@@ -87,15 +105,21 @@ function PlannedNavEntry({ item }: { item: NavItem }) {
   )
 }
 
-function NavItemRow({ item }: { item: NavItem }) {
+function NavItemRow({ item, compact }: { item: NavItem; compact: boolean }) {
   return item.status === "available" ? (
-    <AvailableNavLink item={item} />
+    <AvailableNavLink item={item} compact={compact} />
   ) : (
     <PlannedNavEntry item={item} />
   )
 }
 
-function NavGroupSection({ group }: { group: NavGroup }) {
+function NavGroupSection({
+  group,
+  compact,
+}: {
+  group: NavGroup
+  compact: boolean
+}) {
   return (
     <li>
       <p className="px-3 pt-4 pb-1.5 text-xs font-semibold tracking-wider text-sidebar-foreground/70 uppercase">
@@ -104,7 +128,7 @@ function NavGroupSection({ group }: { group: NavGroup }) {
       <ul className="space-y-0.5">
         {group.items.map((item) => (
           <li key={item.route}>
-            <NavItemRow item={item} />
+            <NavItemRow item={item} compact={compact} />
           </li>
         ))}
       </ul>
@@ -173,9 +197,11 @@ function useEscapeToClose(active: boolean, onEscape: () => void) {
 export function Sidebar({
   open,
   onOpenChange,
+  brandContainer = null,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
+  brandContainer?: HTMLDivElement | null
 }) {
   const { user } = useAuth()
   const navigation = user ? getVisibleNavigationForRole(user.role) : []
@@ -183,6 +209,38 @@ export function Sidebar({
   const close = useCallback(() => onOpenChange(false), [onOpenChange])
   const isWide = useIsWideViewport()
   useEscapeToClose(open, close)
+  const [compact, setCompact] = useState(false)
+  const [hovered, setHovered] = useState(false)
+  const [focused, setFocused] = useState(false)
+  const schoolTheme =
+    user?.role === "admin" ||
+    user?.role === "guidance" ||
+    user?.role === "student" ||
+    user?.role === "parent" ||
+    user?.role === "faculty"
+  const autoCompact = schoolTheme && isWide
+  const isCompact = autoCompact && compact
+
+  useEffect(() => {
+    if (!autoCompact || hovered || focused || open) return
+    const timeout = window.setTimeout(() => setCompact(true), 2400)
+    return () => window.clearTimeout(timeout)
+  }, [autoCompact, hovered, focused, open])
+
+  useEffect(() => {
+    if (!autoCompact) return
+    let previousY = Math.max(0, window.scrollY)
+
+    function minimizeOnScrollDown() {
+      const currentY = Math.max(0, window.scrollY)
+      if (currentY > previousY) setCompact(true)
+      previousY = currentY
+    }
+
+    // Listen to page scrolling only; the navigation has its own scroll area.
+    window.addEventListener("scroll", minimizeOnScrollDown, { passive: true })
+    return () => window.removeEventListener("scroll", minimizeOnScrollDown)
+  }, [autoCompact])
 
   /*
    * PH11.11. While the drawer is closed on a narrow viewport it was translated
@@ -193,6 +251,38 @@ export function Sidebar({
    * moment it is open or the viewport is wide.
    */
   const inertWhenOffCanvas = !open && !isWide
+
+  const branding = (
+    <>
+      <Brand />
+      {(autoCompact && !isCompact) || (!isWide && open) ? (
+        <button
+          type="button"
+          className={cn(
+            "app-sidebar-toggle",
+            !isWide && "app-sidebar-toggle--mobile"
+          )}
+          aria-label="Minimize navigation"
+          title="Minimize navigation"
+          aria-expanded="true"
+          aria-controls={PRIMARY_NAV_ID}
+          onClick={(event) => {
+            if (!isWide) {
+              close()
+              return
+            }
+            event.currentTarget.blur()
+            document
+              .getElementById("main-content")
+              ?.focus({ preventScroll: true })
+            setCompact(true)
+          }}
+        >
+          <ChevronLeft aria-hidden="true" />
+        </button>
+      ) : null}
+    </>
+  )
 
   return (
     <>
@@ -205,40 +295,83 @@ export function Sidebar({
         />
       ) : null}
 
-      <aside
-        aria-label="Primary"
-        data-state={open ? "open" : "closed"}
-        className={cn(
-          /*
-           * Desktop: the rail is pinned for the full viewport and scrolls its
-           * own navigation, so a long module page never takes the main menu
-           * off screen (Cycle-3 TC-SYS-12). Mobile keeps the off-canvas drawer.
-           */
-          "flex w-64 flex-col border-r border-sidebar-border bg-sidebar transition-transform duration-normal ease-out motion-reduce:transition-none max-lg:fixed max-lg:inset-y-0 max-lg:left-0 max-lg:-translate-x-full lg:sticky lg:top-0 lg:h-svh lg:translate-x-0",
-          open && "max-lg:translate-x-0"
-        )}
-      >
-        <Brand />
-
-        {/* `min-h-0` lets this column shrink inside the pinned rail, so the
-            nav is the part that scrolls rather than the whole sidebar. */}
-        <nav
-          id={PRIMARY_NAV_ID}
-          className="min-h-0 flex-1 overflow-y-auto px-2 py-2"
-          aria-label="Main"
-          inert={inertWhenOffCanvas}
+      <div className="app-sidebar-dock">
+        <aside
+          aria-label="Primary"
+          data-state={open ? "open" : "closed"}
+          data-compact={isCompact}
+          onPointerEnter={(event) => {
+            if (event.pointerType === "touch") return
+            setHovered(true)
+            if ((event.target as Element).closest(".app-sidebar-toggle")) return
+            setCompact(false)
+          }}
+          onPointerLeave={() => setHovered(false)}
+          onFocusCapture={(event) => {
+            setFocused(true)
+            if ((event.target as Element).closest(".app-sidebar-toggle")) return
+            setCompact(false)
+          }}
+          onBlurCapture={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget))
+              setFocused(false)
+          }}
+          className={cn(
+            /*
+             * Desktop: the rail is pinned for the full viewport and scrolls its
+             * own navigation, so a long module page never takes the main menu
+             * off screen (Cycle-3 TC-SYS-12). Mobile keeps the off-canvas drawer.
+             */
+            "app-sidebar flex w-64 flex-col border-r border-sidebar-border bg-sidebar transition-transform duration-normal ease-out motion-reduce:transition-none max-lg:fixed max-lg:inset-y-0 max-lg:left-0 max-lg:-translate-x-full lg:sticky lg:top-0 lg:h-svh lg:translate-x-0",
+            open && "max-lg:translate-x-0"
+          )}
         >
-          <ul>
-            {navigation.map((group) => (
-              <NavGroupSection key={group.heading} group={group} />
-            ))}
-          </ul>
-        </nav>
+          {brandContainer && autoCompact
+            ? createPortal(
+                <div className="app-header-brand" data-compact={isCompact}>
+                  {branding}
+                </div>,
+                brandContainer
+              )
+            : branding}
 
-        <div className="shrink-0 border-t border-sidebar-border p-3">
-          <p className="px-1 text-xs text-sidebar-foreground/70">AEGIS</p>
-        </div>
-      </aside>
+          {/* `min-h-0` lets this column shrink inside the pinned rail, so the
+            nav is the part that scrolls rather than the whole sidebar. */}
+          <nav
+            id={PRIMARY_NAV_ID}
+            className="min-h-0 flex-1 overflow-y-auto px-2 py-2"
+            aria-label="Main"
+            inert={inertWhenOffCanvas}
+          >
+            <ul>
+              {navigation.map((group) => (
+                <NavGroupSection
+                  key={group.heading}
+                  group={group}
+                  compact={isCompact}
+                />
+              ))}
+            </ul>
+          </nav>
+
+          <div className="app-sidebar-footer shrink-0 border-t border-sidebar-border p-3">
+            <p className="px-1 text-xs text-sidebar-foreground/70">AEGIS</p>
+            {schoolTheme ? (
+              <span className="app-sidebar-label">
+                {user?.role === "admin"
+                  ? "Admin workspace"
+                  : user?.role === "guidance"
+                    ? "Guidance workspace"
+                    : user?.role === "parent"
+                      ? "Parent workspace"
+                      : user?.role === "faculty"
+                        ? "Faculty workspace"
+                        : "Student workspace"}
+              </span>
+            ) : null}
+          </div>
+        </aside>
+      </div>
     </>
   )
 }

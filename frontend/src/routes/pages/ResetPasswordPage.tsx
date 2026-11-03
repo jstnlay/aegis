@@ -1,28 +1,31 @@
 import { useState } from "react"
 import { Link, useSearchParams } from "react-router-dom"
-import { CheckCircle2, KeyRound, Loader2 } from "lucide-react"
+import {
+  ArrowRight,
+  CheckCircle2,
+  KeyRound,
+  Loader2,
+  ShieldCheck,
+  Link2Off,
+} from "lucide-react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 
 import { Button } from "@/components/ui/button"
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-} from "@/components/ui/card"
-import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
   FormMessage,
 } from "@/components/ui/form"
-import { Input } from "@/components/ui/input"
 import { resetPasswordRequest } from "@/features/auth/api"
 import { normalizeApiError } from "@/lib/error"
+import { PasswordRecoveryLayout } from "./PasswordRecoveryLayout"
+import { RecoveryPasswordInput } from "./RecoveryPasswordInput"
 
 const resetSchema = z
   .object({
@@ -92,146 +95,128 @@ function PasswordLinkForm({ purpose }: { purpose: "reset" | "setup" }) {
 
   if (done) {
     return (
-      <div
-        role="status"
-        className="flex min-h-svh items-center justify-center bg-background px-4 py-10"
+      <PasswordRecoveryLayout
+        title={purpose === "setup" ? "Password set" : "Password reset"}
+        description="Your password has been changed and every signed-in session has been ended. You can sign in now."
+        icon={CheckCircle2}
+        step={3}
+        setup={purpose === "setup"}
+        success
       >
-        <Card className="w-full max-w-md">
-          <CardHeader className="gap-2 text-center">
-            <div className="mx-auto flex size-12 items-center justify-center rounded-md bg-success text-success-foreground">
-              <CheckCircle2 className="size-6" aria-hidden="true" />
-            </div>
-            <h1 className="text-xl font-bold text-foreground">
-              {purpose === "setup" ? "Password set" : "Password reset"}
-            </h1>
-            <CardDescription>
-              Your password has been changed and every signed-in session has
-              been ended. You can sign in now.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button asChild className="w-full">
-              <Link to="/login">Sign in</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
+        <Button asChild className="w-full">
+          <Link to="/login">
+            Sign in
+            <ArrowRight aria-hidden="true" />
+          </Link>
+        </Button>
+      </PasswordRecoveryLayout>
     )
   }
 
   return (
-    <div className="flex min-h-svh items-center justify-center bg-background px-4 py-10">
-      <Card className="w-full max-w-md">
-        <CardHeader className="gap-2 text-center">
-          <div className="mx-auto flex size-12 items-center justify-center rounded-md bg-primary text-primary-foreground">
-            <KeyRound className="size-6" aria-hidden="true" />
-          </div>
-          <h1 className="text-xl font-bold text-foreground">
-            {purpose === "setup"
-              ? "Set your password"
-              : "Choose a new password"}
-          </h1>
-          <CardDescription>
-            {token
-              ? purpose === "setup"
-                ? "Choose the password you will use to sign in. Nobody else knows it."
-                : "Pick a new password for your account. Signing in on other devices will require it."
-              : purpose === "setup"
-                ? "This link is missing its token. Ask the office to send a new one."
-                : "This reset link is missing its token. Request a new link and try again."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {token ? (
-            <Form {...form}>
-              <form
-                onSubmit={(e) => void form.handleSubmit(onSubmit)(e)}
-                className="space-y-4"
-                noValidate
-                aria-busy={isSubmitting}
+    <PasswordRecoveryLayout
+      title={
+        purpose === "setup" ? "Set your password" : "Choose a new password"
+      }
+      description={
+        token
+          ? purpose === "setup"
+            ? "Choose the password you will use to sign in. Nobody else knows it."
+            : "Pick a new password for your account. Signing in on other devices will require it."
+          : purpose === "setup"
+            ? "This link is missing its token. Ask the office to send a new one."
+            : "This reset link is missing its token. Request a new link and try again."
+      }
+      icon={token ? KeyRound : Link2Off}
+      step={3}
+      setup={purpose === "setup"}
+      showSteps={Boolean(token)}
+    >
+      {token ? (
+        <Form {...form}>
+          <form
+            onSubmit={(e) => void form.handleSubmit(onSubmit)(e)}
+            className="school-recovery-form"
+            noValidate
+            aria-busy={isSubmitting}
+          >
+            {serverError ? (
+              <div
+                role="alert"
+                className="rounded-sm border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive"
               >
-                {serverError ? (
-                  <div
-                    role="alert"
-                    className="rounded-sm border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-                  >
-                    {serverError}
-                  </div>
-                ) : null}
+                {serverError}
+              </div>
+            ) : null}
 
-                <FormField
-                  control={form.control}
-                  name="new_password"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>New password</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          type="password"
-                          autoComplete="new-password"
-                          disabled={isSubmitting}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+            <FormField
+              control={form.control}
+              name="new_password"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>New password</FormLabel>
+                  <FormControl>
+                    <RecoveryPasswordInput
+                      {...field}
+                      visibilityLabel="new password"
+                      placeholder="Create a new password"
+                      disabled={isSubmitting}
+                    />
+                  </FormControl>
+                  <FormDescription className="school-recovery-password-hint">
+                    Use at least 8 characters.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-                <FormField
-                  control={form.control}
-                  name="confirm_password"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Confirm new password</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          type="password"
-                          autoComplete="new-password"
-                          disabled={isSubmitting}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+            <FormField
+              control={form.control}
+              name="confirm_password"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Confirm new password</FormLabel>
+                  <FormControl>
+                    <RecoveryPasswordInput
+                      {...field}
+                      visibilityLabel="password confirmation"
+                      placeholder="Re-enter your new password"
+                      disabled={isSubmitting}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-                <Button
-                  type="submit"
-                  className="w-full"
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2
-                        className="size-4 animate-spin"
-                        aria-hidden="true"
-                      />
-                      Saving...
-                    </>
-                  ) : (
-                    "Set new password"
-                  )}
-                </Button>
-              </form>
-            </Form>
-          ) : (
-            <Button asChild className="w-full">
-              <Link to="/forgot-password">Request a new link</Link>
+            <Button type="submit" className="w-full" disabled={isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  Set new password
+                  <ArrowRight aria-hidden="true" />
+                </>
+              )}
             </Button>
-          )}
-
-          <p className="mt-4 text-center text-sm">
-            <Link
-              to="/login"
-              className="underline underline-offset-4 transition-colors hover:text-foreground"
-            >
-              Back to sign in
-            </Link>
-          </p>
-        </CardContent>
-      </Card>
-    </div>
+            <div className="school-recovery-note">
+              <ShieldCheck aria-hidden="true" />
+              <p>
+                After resetting, sign in again on your other devices with your
+                new password.
+              </p>
+            </div>
+          </form>
+        </Form>
+      ) : (
+        <Button asChild className="w-full">
+          <Link to="/forgot-password">Request a new link</Link>
+        </Button>
+      )}
+    </PasswordRecoveryLayout>
   )
 }

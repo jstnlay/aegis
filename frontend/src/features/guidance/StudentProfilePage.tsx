@@ -151,12 +151,17 @@ function RiskAlertsBlock({ alerts }: { alerts: RiskAlert[] }) {
           <div className="min-w-0 space-y-1">
             <div className="flex flex-wrap items-center gap-2">
               <Badge
+                status={alert.risk_level}
                 variant="secondary"
                 className={riskLevelBadgeClass(alert.risk_level)}
               >
                 {RISK_LEVEL_LABELS[alert.risk_level]}
               </Badge>
-              <Badge variant="outline" data-alert-status={alert.status}>
+              <Badge
+                status={alert.status === "active" ? "open" : alert.status}
+                variant="outline"
+                data-alert-status={alert.status}
+              >
                 {alert.status.replace("_", " ")}
               </Badge>
             </div>
@@ -200,6 +205,7 @@ function ConsultationsBlock({
               {CONSULTATION_SESSION_TYPE_LABELS[consultation.session_type]}
             </span>
             <Badge
+              status={consultation.status}
               variant="outline"
               className={consultationStatusBadgeClass(consultation.status)}
             >
@@ -240,6 +246,9 @@ function InterventionsBlock({
             </p>
           </div>
           <Badge
+            status={
+              intervention.status === "active" ? "ongoing" : intervention.status
+            }
             variant="outline"
             data-intervention-status={intervention.status}
           >
@@ -264,7 +273,11 @@ function BehavioralNotesBlock({ notes }: { notes: BehavioralNote[] }) {
           className="space-y-1 rounded-md border border-border p-3"
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <Badge variant="outline" data-note-type={note.note_type}>
+            <Badge
+              status={note.note_type}
+              variant="outline"
+              data-note-type={note.note_type}
+            >
               {BEHAVIORAL_NOTE_TYPE_LABELS[note.note_type]}
             </Badge>
             <span className="text-xs text-muted-foreground">
@@ -530,8 +543,8 @@ export function StudentProfilePage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="guidance-page space-y-6">
+      <div className="guidance-profile-heading flex flex-wrap items-start justify-between gap-3">
         <StudentIdentity
           name={directoryEntry?.name ?? "Student"}
           code={directoryEntry?.code ?? null}
@@ -539,6 +552,7 @@ export function StudentProfilePage() {
         <div className="flex items-center gap-2">
           {atRiskLevel ? (
             <Badge
+              status={atRiskLevel}
               variant="secondary"
               className={riskLevelBadgeClass(atRiskLevel)}
               data-at-risk="true"
@@ -568,7 +582,7 @@ export function StudentProfilePage() {
       {studentConsultations.length > 0 ||
       studentInterventions.length > 0 ||
       reportQuery.data ? (
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="guidance-profile-counts grid gap-3 sm:grid-cols-3">
           <div className="rounded-md border border-border p-3">
             <div className="text-xs text-muted-foreground">Risk alerts</div>
             <div className="tabular-nums text-xl font-semibold">
@@ -852,8 +866,14 @@ function GuidanceReportSection({
                     key={alert.id}
                     className="flex flex-wrap items-center gap-2 text-sm"
                   >
-                    <Badge variant="secondary">{alert.risk_level}</Badge>
-                    <span>{alert.status}</span>
+                    <Badge status={alert.risk_level} variant="secondary">
+                      {alert.risk_level}
+                    </Badge>
+                    <Badge
+                      status={alert.status === "active" ? "open" : alert.status}
+                    >
+                      {alert.status.replaceAll("_", " ")}
+                    </Badge>
                     <span className="text-muted-foreground">
                       {alert.source} · {alert.generated_at.slice(0, 10)}
                     </span>

@@ -121,7 +121,7 @@ export function FacultyAdvisoryPage() {
   const [managing, setManaging] = useState<Enrollment | null>(null)
 
   return (
-    <div className="space-y-6">
+    <div className="faculty-page space-y-6">
       <div className="flex flex-col gap-1">
         <div className="flex items-center gap-3">
           <Users className="size-5 text-muted-foreground" aria-hidden="true" />
@@ -522,7 +522,10 @@ function NotesCard() {
       key: "note_type",
       header: "Type",
       cell: (note) => (
-        <Badge variant={NOTE_TYPE_BADGE[note.note_type] ?? "secondary"}>
+        <Badge
+          status={note.note_type}
+          variant={NOTE_TYPE_BADGE[note.note_type] ?? "secondary"}
+        >
           {BEHAVIORAL_NOTE_TYPE_LABELS[note.note_type] ?? note.note_type}
         </Badge>
       ),

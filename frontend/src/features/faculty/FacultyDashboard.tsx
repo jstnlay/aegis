@@ -1,5 +1,14 @@
 import { useMemo } from "react"
-import { CalendarCheck, ClipboardList, NotebookPen, Users } from "lucide-react"
+import {
+  ArrowUpRight,
+  BookOpen,
+  CalendarCheck,
+  ClipboardCheck,
+  ClipboardList,
+  Download,
+  NotebookPen,
+  Users,
+} from "lucide-react"
 import { Link } from "react-router-dom"
 
 import {
@@ -19,7 +28,6 @@ import {
   GRID_COLOR,
 } from "@/components/charts/chart-config"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   EmptyState,
@@ -37,6 +45,9 @@ import {
   useFacultySubjectAssignments,
 } from "@/features/faculty/api"
 import { formatCount, formatPercent } from "@/lib/metric-format"
+import { SubjectArt } from "@/features/student/SubjectArt"
+import { getSubjectTheme } from "@/features/student/subject-appearance"
+import { FacultyDeskArt } from "./FacultyDeskArt"
 
 const NOTE_TYPE_LABELS = {
   positive: "Positive",
@@ -70,15 +81,25 @@ function FacultyDashboard() {
   if (!user) return null
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-1">
-        <h2 className="text-2xl font-bold text-foreground">
-          Faculty Dashboard
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Your sections, attendance and grading at a glance.
-        </p>
-      </div>
+    <div className="faculty-page faculty-dashboard space-y-6">
+      <header className="faculty-welcome">
+        <div>
+          <p className="faculty-eyebrow">
+            A little inspiration. A lot of learning.
+          </p>
+          <h2 className="text-2xl font-bold text-foreground">
+            Faculty Dashboard
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Welcome, {user.first_name || "Teacher"}. Keep your class records and
+            student progress in view.
+          </p>
+          <Link to="/app/faculty/assessments" className="faculty-welcome-cta">
+            Prepare an assessment <ArrowUpRight aria-hidden="true" />
+          </Link>
+        </div>
+        <FacultyDeskArt />
+      </header>
 
       {/*
         PH11.11: one note for the metric row, then announced placeholders and a
@@ -92,7 +113,7 @@ function FacultyDashboard() {
         <ErrorNote message="Unable to load the faculty statistics. Please try again." />
       ) : null}
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+      <div className="faculty-metrics grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <MetricCard
           title="Total Students"
           hint="Active enrollments across all sections"
@@ -146,36 +167,159 @@ function FacultyDashboard() {
         </MetricCard>
       </div>
 
-      <div className="grid items-start gap-4 lg:grid-cols-2">
-        <Card>
+      <div className="faculty-class-grid grid gap-4 lg:grid-cols-2">
+        <Card className="faculty-classroom-board">
           <CardHeader>
-            <CardTitle>Quick actions</CardTitle>
+            <CardTitle>Subject Assignments</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Your classrooms, ready for the next lesson.
+            </p>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-wrap gap-2">
-              <Button asChild variant="outline" size="sm">
-                <Link to="/app/academics">Encode a grade</Link>
-              </Button>
-              <Button asChild variant="outline" size="sm">
-                <Link to="/app/attendance">Take attendance</Link>
-              </Button>
-              <Button asChild variant="outline" size="sm">
-                <Link to="/app/faculty/advisory">Advisory class</Link>
-              </Button>
-              <Button asChild variant="outline" size="sm">
-                <Link to="/app/faculty/advisory">Add behavior note</Link>
-              </Button>
-              <Button asChild variant="outline" size="sm">
-                <Link to="/app/faculty/import">Imports & exports</Link>
-              </Button>
-              <Button asChild variant="outline" size="sm">
-                <Link to="/app/reports">Reports</Link>
-              </Button>
-            </div>
+            {assignmentsQuery.isLoading ? (
+              <PendingRegion label="Subject assignments">
+                <Skeleton className="h-10 w-full" />
+              </PendingRegion>
+            ) : assignmentsQuery.isError ? (
+              <ErrorNote message="Unable to load subject assignments. Please try again." />
+            ) : assignmentsQuery.data && assignmentsQuery.data.length > 0 ? (
+              <ul className="faculty-classrooms">
+                {assignmentsQuery.data.map((assignment, idx) => (
+                  <li
+                    key={idx}
+                    className="faculty-classroom"
+                    data-subject-theme={getSubjectTheme(
+                      assignment.subject_name,
+                      assignment.subject_code
+                    )}
+                  >
+                    <div className="faculty-classroom-cover">
+                      <SubjectArt
+                        theme={getSubjectTheme(
+                          assignment.subject_name,
+                          assignment.subject_code
+                        )}
+                      />
+                      <span className="faculty-classroom-code">
+                        {assignment.subject_code}
+                      </span>
+                      <h4>{assignment.subject_name}</h4>
+                      <p>{assignment.section_name}</p>
+                    </div>
+                    <div className="faculty-classroom-footer">
+                      <span>
+                        <BookOpen aria-hidden="true" /> Class records
+                      </span>
+                      <Link
+                        to="/app/academics"
+                        aria-label={`Open grade records for ${assignment.subject_name}, ${assignment.section_name}`}
+                      >
+                        Open <ArrowUpRight aria-hidden="true" />
+                      </Link>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <EmptyState message="No subject assignments found." />
+            )}
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="faculty-sections-board">
+          <CardHeader>
+            <CardTitle>Sections Overview</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {sectionsQuery.isLoading ? (
+              <PendingRegion label="Sections overview">
+                <Skeleton className="h-10 w-full" />
+              </PendingRegion>
+            ) : sectionsQuery.isError ? (
+              <ErrorNote message="Unable to load sections. Please try again." />
+            ) : sectionsQuery.data && sectionsQuery.data.length > 0 ? (
+              <ul className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                {sectionsQuery.data.map((section, idx) => (
+                  <li
+                    key={idx}
+                    className="flex items-center justify-between gap-2 rounded-md border p-3"
+                  >
+                    <p className="min-w-0 font-medium">{section.name}</p>
+                    <p className="shrink-0 text-xs text-muted-foreground">
+                      {section.grade_level_name}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <EmptyState message="No sections found." />
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="faculty-task-grid">
+        <Card className="faculty-actions">
+          <CardHeader className="faculty-actions-heading">
+            <CardTitle>Quick actions</CardTitle>
+            <Link to="/app/reports" className="faculty-reports-link">
+              Reports <ArrowUpRight aria-hidden="true" />
+            </Link>
+          </CardHeader>
+          <CardContent className="faculty-action-grid">
+            {[
+              {
+                to: "/app/academics",
+                label: "Encode a grade",
+                detail: "Enter and review draft grades",
+                icon: BookOpen,
+              },
+              {
+                to: "/app/attendance",
+                label: "Take attendance",
+                detail: "Record your class attendance",
+                icon: CalendarCheck,
+              },
+              {
+                to: "/app/faculty/advisory",
+                label: "Advisory class",
+                detail: "View students and class records",
+                icon: Users,
+              },
+              {
+                to: "/app/faculty/assessments",
+                label: "Assessments",
+                detail: "Prepare questions and review results",
+                icon: ClipboardCheck,
+              },
+              {
+                to: "/app/faculty/advisory",
+                label: "Add behavior note",
+                detail: "Document observations and support",
+                icon: NotebookPen,
+              },
+              {
+                to: "/app/faculty/import",
+                label: "Imports & exports",
+                detail: "Upload or download class records",
+                icon: Download,
+              },
+            ].map(({ to, label, detail, icon: Icon }) => (
+              <Link key={label} to={to} className="faculty-action">
+                <span className="faculty-action-icon">
+                  <Icon aria-hidden="true" />
+                </span>
+                <span>
+                  <strong>{label}</strong>
+                  <small>{detail}</small>
+                </span>
+                <ArrowUpRight aria-hidden="true" />
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card className="faculty-notes">
           <CardHeader>
             <CardTitle>Recent Notes</CardTitle>
           </CardHeader>
@@ -197,7 +341,11 @@ function FacultyDashboard() {
                       <p className="min-w-0 truncate text-sm font-medium">
                         {note.student_name}
                       </p>
-                      <Badge variant="secondary" className="shrink-0">
+                      <Badge
+                        status={note.note_type}
+                        variant="secondary"
+                        className="shrink-0"
+                      >
                         {NOTE_TYPE_LABELS[note.note_type]}
                       </Badge>
                     </div>
@@ -217,9 +365,12 @@ function FacultyDashboard() {
         </Card>
       </div>
 
-      <Card>
+      <Card className="faculty-pending">
         <CardHeader>
           <CardTitle>Pending Grades</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Draft records and submissions awaiting completion.
+          </p>
         </CardHeader>
         <CardContent>
           {statsQuery.isLoading ? (
@@ -241,79 +392,6 @@ function FacultyDashboard() {
           )}
         </CardContent>
       </Card>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Subject Assignments</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {assignmentsQuery.isLoading ? (
-              <PendingRegion label="Subject assignments">
-                <Skeleton className="h-10 w-full" />
-              </PendingRegion>
-            ) : assignmentsQuery.isError ? (
-              <ErrorNote message="Unable to load subject assignments. Please try again." />
-            ) : assignmentsQuery.data && assignmentsQuery.data.length > 0 ? (
-              <ul className="max-h-72 space-y-2 overflow-y-auto pr-1">
-                {assignmentsQuery.data.map((assignment, idx) => (
-                  <li
-                    key={idx}
-                    className="flex items-center justify-between gap-2 rounded-md border p-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate font-medium">
-                        {assignment.subject_name}
-                      </p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {assignment.subject_code} • {assignment.section_name}
-                      </p>
-                    </div>
-                    <Badge variant="secondary" className="shrink-0">
-                      {assignment.section_name}
-                    </Badge>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <EmptyState message="No subject assignments found." />
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Sections Overview</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {sectionsQuery.isLoading ? (
-              <PendingRegion label="Sections overview">
-                <Skeleton className="h-10 w-full" />
-              </PendingRegion>
-            ) : sectionsQuery.isError ? (
-              <ErrorNote message="Unable to load sections. Please try again." />
-            ) : sectionsQuery.data && sectionsQuery.data.length > 0 ? (
-              <ul className="max-h-72 space-y-2 overflow-y-auto pr-1">
-                {sectionsQuery.data.map((section, idx) => (
-                  <li
-                    key={idx}
-                    className="flex items-center justify-between gap-2 rounded-md border p-3"
-                  >
-                    <p className="min-w-0 truncate font-medium">
-                      {section.name}
-                    </p>
-                    <p className="shrink-0 text-xs text-muted-foreground">
-                      {section.grade_level_name}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <EmptyState message="No sections found." />
-            )}
-          </CardContent>
-        </Card>
-      </div>
     </div>
   )
 }

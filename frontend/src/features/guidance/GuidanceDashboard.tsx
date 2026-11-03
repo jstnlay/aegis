@@ -214,7 +214,7 @@ export function GuidanceDashboard() {
   if (!user) return null
 
   return (
-    <div className="space-y-6">
+    <div className="guidance-page guidance-dashboard space-y-6">
       {/* ---------------------------------------------------------------- */}
       {/* Welcome banner                                                   */}
       {/* ---------------------------------------------------------------- */}
@@ -227,9 +227,10 @@ export function GuidanceDashboard() {
       */}
       <section
         aria-label="Guidance overview"
-        className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+        className="guidance-overview flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
       >
         <div>
+          <p className="guidance-eyebrow">Student support</p>
           <h2 className="text-2xl font-bold text-foreground">
             Welcome back, {greetingName(user)}!
           </h2>
@@ -237,7 +238,7 @@ export function GuidanceDashboard() {
             Here&apos;s an overview of the student support activities today.
           </p>
         </div>
-        <div className="flex items-center gap-3 rounded-lg border border-border bg-card/80 px-4 py-3 shadow-sm backdrop-blur-sm">
+        <div className="guidance-date-card flex items-center gap-3 rounded-lg border border-border bg-card/80 px-4 py-3 shadow-sm backdrop-blur-sm">
           <ClipboardList aria-hidden="true" className="size-6 text-primary" />
           <div>
             <p className="text-sm font-semibold">{formatToday()}</p>
@@ -275,8 +276,9 @@ export function GuidanceDashboard() {
       {/* ---------------------------------------------------------------- */}
       {/* Metric tiles                                                     */}
       {/* ---------------------------------------------------------------- */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+      <div className="guidance-dashboard-metrics grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <MetricCard
+          className="guidance-metric-card guidance-metric-card--featured"
           icon={ShieldAlert}
           title="Active Cases"
           hint="Open risk alerts (not yet resolved)"
@@ -287,6 +289,7 @@ export function GuidanceDashboard() {
         </MetricCard>
 
         <MetricCard
+          className="guidance-metric-card"
           icon={Users}
           title="At-Risk Students"
           hint="Distinct students with an open moderate/high alert"
@@ -297,6 +300,7 @@ export function GuidanceDashboard() {
         </MetricCard>
 
         <MetricCard
+          className="guidance-metric-card"
           icon={CalendarClock}
           title="Pending Follow-up"
           hint="Your ongoing and follow-up consultations"
@@ -313,6 +317,7 @@ export function GuidanceDashboard() {
           sentence that never explains it.
         */}
         <MetricCard
+          className="guidance-metric-card"
           icon={ClipboardCheck}
           title="Assessment Completion"
           hint={
@@ -333,7 +338,7 @@ export function GuidanceDashboard() {
         Two columns, per the Dashboard reference: working lists on the left,
         the consultation feed and its summaries on the right.
       */}
-      <div className="grid items-start gap-4 lg:grid-cols-2">
+      <div className="guidance-dashboard-columns grid items-start gap-4 lg:grid-cols-2">
         <div className="space-y-4">
           <Card>
             <CardHeader>
@@ -376,6 +381,7 @@ export function GuidanceDashboard() {
                             </p>
                           </div>
                           <Badge
+                            status={alert.risk_level}
                             variant="secondary"
                             className={`shrink-0 ${riskLevelBadgeClass(alert.risk_level)}`}
                             data-risk-level={alert.risk_level}
@@ -445,6 +451,7 @@ export function GuidanceDashboard() {
                         </div>
                       </div>
                       <Badge
+                        status={consultation.status}
                         variant="secondary"
                         className={consultationStatusBadgeClass(
                           consultation.status
@@ -510,6 +517,7 @@ export function GuidanceDashboard() {
                       </div>
                       <div className="flex shrink-0 flex-col items-end gap-1">
                         <Badge
+                          status={consultation.status}
                           variant="secondary"
                           className={consultationStatusBadgeClass(
                             consultation.status

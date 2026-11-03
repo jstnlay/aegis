@@ -166,6 +166,7 @@ function ImportsCard() {
       header: "Status",
       cell: (job) => (
         <Badge
+          status={job.status}
           variant={STATUS_VARIANT[job.status]}
           data-job-status={job.status}
         >

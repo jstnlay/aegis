@@ -17,6 +17,7 @@ import {
   GRID_COLOR,
 } from "@/components/charts/chart-config"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import {
   Card,
   CardContent,
@@ -111,7 +112,7 @@ function StudentAttendance() {
   const loading = profileQuery.isLoading || recordsQuery.isLoading
 
   return (
-    <div className="space-y-6">
+    <div className="student-page student-attendance space-y-6">
       <PageHeading
         title="Attendance"
         description="Your attendance history and totals by section."
@@ -254,7 +255,11 @@ function StudentAttendance() {
                       {r.date}
                     </TableCell>
                     <TableCell>{r.section_name}</TableCell>
-                    <TableCell>{ATTENDANCE_STATUS_LABELS[r.status]}</TableCell>
+                    <TableCell>
+                      <Badge status={r.status}>
+                        {ATTENDANCE_STATUS_LABELS[r.status]}
+                      </Badge>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -410,7 +415,11 @@ function AttendanceRecordRow({ record }: { record: AttendanceRecord }) {
       <TableCell>{record.student_name}</TableCell>
       <TableCell>{record.student_id_code}</TableCell>
       <TableCell>{record.section_name}</TableCell>
-      <TableCell>{ATTENDANCE_STATUS_LABELS[record.status]}</TableCell>
+      <TableCell>
+        <Badge status={record.status}>
+          {ATTENDANCE_STATUS_LABELS[record.status]}
+        </Badge>
+      </TableCell>
       <TableCell>{record.recorded_by_name}</TableCell>
     </TableRow>
   )
@@ -499,7 +508,7 @@ function FacultyAttendance() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="faculty-page space-y-6">
       <PageHeading
         title="Attendance"
         description="Record attendance in your authorized sections and review existing records."

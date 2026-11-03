@@ -1,59 +1,89 @@
-/**
- * Static, typed class maps for the guidance status badges.
- *
- * Same constraint as `grade-badge.ts`: Tailwind only emits utilities it
- * can see as complete literals in the source, so every class must be
- * spelled out here rather than composed at runtime.
- */
-
+/** Shared display semantics. Status labels and backend decisions stay unchanged. */
+export type StatusTone = "success" | "warning" | "danger" | "info" | "neutral"
 export type RiskLevel = "low" | "moderate" | "high"
-
 export type ConsultationStatus = "ongoing" | "follow_up" | "completed"
 
-/**
- * Risk levels use the PH11.2 semantic status tokens ($6.2): Low -> --success,
- * Moderate -> --warning, High -> --destructive.
- *
- * The three tokens are NOT interchangeable in role, which is why this is a
- * text treatment rather than a fill:
- * - `--warning` (oklch 0.82 0.15 80) is a light amber built for a surface. As
- *   text on a card it measures 1.77:1, so moderate uses its paired
- *   `--warning-foreground` (16.16:1) to keep the amber hue readable.
- * - `--success` (oklch 0.55 0.16 145) is a mid-tone. PH11.2 $6.1 pins both
- *   `--success` and `--success-foreground` to these values, and neither a solid
- *   fill (4.35:1) nor a `bg-success/10` tint (3.99:1) behind it reaches the
- *   4.5:1 normal-text bar -- this badge renders at text-xs. `text-success` on
- *   the card surface is the only compliant option (4.54:1).
- * - `--destructive` reads cleanly both ways; the text form is used for
- *   consistency (4.88:1).
- *
- * `bg-card` pins the measured backdrop to the surface instead of inheriting
- * the Badge `secondary` variant's `bg-secondary` (which is darker and would
- * drop success to ~4.1:1). The border restates the text hue so the pill keeps
- * its shape with the fill removed.
- */
-const RISK_LEVEL_CLASSES: Readonly<Record<RiskLevel, string>> = {
-  low: "bg-card text-success border-success",
-  moderate: "bg-card text-warning-foreground border-warning-foreground",
-  high: "bg-card text-destructive border-destructive",
+export const STATUS_TONE_CLASSES: Readonly<Record<StatusTone, string>> = {
+  success: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  warning: "border-amber-200 bg-amber-50 text-amber-900",
+  danger: "border-red-200 bg-red-50 text-red-800",
+  info: "border-sky-200 bg-sky-50 text-sky-800",
+  neutral: "border-slate-200 bg-slate-50 text-slate-600",
 }
 
-const CONSULTATION_STATUS_CLASSES: Readonly<
-  Record<ConsultationStatus, string>
-> = {
-  ongoing: "bg-blue-100 text-blue-800 border-blue-200",
-  follow_up: "bg-purple-100 text-purple-800 border-purple-200",
-  completed: "bg-muted text-muted-foreground border-border",
+const STATUS_TONES: Readonly<Record<string, StatusTone>> = {
+  low: "success",
+  normal: "success",
+  positive: "success",
+  approved: "success",
+  accepted: "success",
+  completed: "success",
+  complete: "success",
+  resolved: "success",
+  finalized: "success",
+  published: "success",
+  present: "success",
+  passing: "success",
+  active: "success",
+  current: "success",
+  success: "success",
+  successful: "success",
+  moderate: "warning",
+  medium: "warning",
+  warning: "warning",
+  under_monitoring: "warning",
+  pending: "warning",
+  submitted: "warning",
+  not_submitted: "warning",
+  in_progress: "warning",
+  ongoing: "warning",
+  follow_up: "warning",
+  acknowledged: "warning",
+  partial: "warning",
+  late: "warning",
+  open: "warning",
+  high: "danger",
+  severe: "danger",
+  critical: "danger",
+  urgent: "danger",
+  incident: "danger",
+  negative: "danger",
+  rejected: "danger",
+  reject: "danger",
+  failed: "danger",
+  absent: "danger",
+  below_passing: "danger",
+  overdue: "danger",
+  escalated: "danger",
+  processing: "info",
+  scheduled: "info",
+  excused: "info",
+  draft: "neutral",
+  cancelled: "neutral",
+  canceled: "neutral",
+  inactive: "neutral",
+  dismissed: "neutral",
+  skipped: "neutral",
+  not_recorded: "neutral",
 }
 
-const FALLBACK_CLASS = "bg-muted text-muted-foreground border-border"
+/** Explicit values only: never infer status from names, roles or visible text. */
+export function statusTone(status: string): StatusTone {
+  const key = status
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_")
+  return Object.hasOwn(STATUS_TONES, key) ? STATUS_TONES[key]! : "neutral"
+}
 
-export function riskLevelBadgeClass(riskLevel: string): string {
-  return RISK_LEVEL_CLASSES[riskLevel as RiskLevel] ?? FALLBACK_CLASS
+export function statusBadgeClass(status: string): string {
+  return STATUS_TONE_CLASSES[statusTone(status)]
+}
+
+export function riskLevelBadgeClass(level: string): string {
+  return statusBadgeClass(level)
 }
 
 export function consultationStatusBadgeClass(status: string): string {
-  return (
-    CONSULTATION_STATUS_CLASSES[status as ConsultationStatus] ?? FALLBACK_CLASS
-  )
+  return statusBadgeClass(status)
 }

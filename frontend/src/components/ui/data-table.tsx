@@ -202,7 +202,7 @@ export function DataTable<T>({
         lets the container scroll horizontally, which is the behaviour the
         overflow container was there for.
       */}
-      <Table scrollLabel={caption} className="min-w-[40rem]">
+      <Table role="table" scrollLabel={caption} className="min-w-[40rem]">
         <TableCaption className="sr-only">{caption}</TableCaption>
         <TableHeader>
           <TableRow>
@@ -235,7 +235,15 @@ export function DataTable<T>({
           {rows.map((row, index) => (
             <TableRow key={rowKey(row, index)} {...(rowProps?.(row) ?? {})}>
               {columns.map((column) => (
-                <TableCell key={column.key} className={column.cellClassName}>
+                <TableCell
+                  key={column.key}
+                  className={column.cellClassName}
+                  data-label={
+                    typeof column.header === "string"
+                      ? column.header
+                      : undefined
+                  }
+                >
                   {column.cell(row)}
                 </TableCell>
               ))}

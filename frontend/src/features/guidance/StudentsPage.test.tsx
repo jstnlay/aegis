@@ -174,11 +174,11 @@ describe("StudentsPage", () => {
     const pill = screen.getByText("Moderate")
     expect(pill).toHaveAttribute("data-at-risk-level", "moderate")
     // The moderate pill must carry the warning treatment, not the
-    // destructive/high one. `text-destructive` is the high-risk marker; the
+    // destructive/high one. `text-red-800` is the high-risk marker; the
     // Badge base class merely lists the variant name in its own utilities, so
     // the check is on the text token specifically.
-    expect(pill.className).toContain("text-warning-foreground")
-    expect(pill.className).not.toContain("text-destructive")
+    expect(pill.className).toContain("text-amber-900")
+    expect(pill.className).not.toContain("text-red-800")
   })
 
   it("does not flag a student the server marked as not at risk", async () => {

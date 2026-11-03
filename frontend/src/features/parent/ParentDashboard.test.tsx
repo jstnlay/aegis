@@ -36,8 +36,8 @@ vi.mock("@/features/auth/AuthContext", () => ({
 vi.mock("@/features/parent/api", async (importOriginal) => ({
   // Partial mock: `useLinkedStudents` is stubbed because it is the network
   // call, while `useSelectedChild` stays real so these tests exercise the
-  // child-resolution rule (explicit choice wins, otherwise the first linked
-  // child) instead of a second stub that could disagree with it.
+  // explicit child selection instead of a second stub that could disagree
+  // with the selection used by the other parent pages.
   ...(await importOriginal<typeof import("@/features/parent/api")>()),
   useLinkedStudents: vi.fn(),
 }))
@@ -155,7 +155,7 @@ describe("ParentDashboard", () => {
     // stronger claim: it pins that the card is labelled by a heading, which the
     // loose text match never checked, and it still fails if the label goes.
     expect(
-      screen.getByRole("heading", { name: /Linked Students/i })
+      screen.getByRole("heading", { name: /Choose a student/i })
     ).toBeInTheDocument()
     // The placeholder announces itself rather than sitting silent.
     expect(screen.getAllByRole("status")[0]).toHaveAttribute(
@@ -196,6 +196,65 @@ describe("ParentDashboard", () => {
     // Scores render numerically; the Philippine system uses no letters.
     expect(screen.queryByText("N/A")).not.toBeInTheDocument()
     expect(screen.queryByText("A")).not.toBeInTheDocument()
+  })
+
+  it("keeps the selected child and the displayed record in sync", async () => {
+    stubLoadedChild()
+    mockedUseLinkedStudents.mockReturnValue({
+      data: [
+        CHILD,
+        {
+          ...CHILD,
+          id: "sp-uuid-2",
+          student_name: "Luis Cruz",
+          section_name: "Grade 9 - Faith",
+        },
+      ],
+      isLoading: false,
+      isError: false,
+    } as unknown as ReturnType<typeof useLinkedStudents>)
+    renderWithClient(<ParentDashboard />)
+
+    expect(
+      screen.queryByRole("region", { name: /School record for/ })
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText("91.50%")).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: /Ana Cruz/ }))
+    expect(
+      await screen.findByRole("region", { name: "School record for Ana Cruz" })
+    ).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: /Luis Cruz/ }))
+    expect(
+      await screen.findByRole("region", { name: "School record for Luis Cruz" })
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole("region", { name: "School record for Ana Cruz" })
+    ).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /Luis Cruz/ })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    )
+    expect(mockedUseStudentDashboardData).toHaveBeenLastCalledWith("sp-uuid-2")
+  })
+
+  it("shows a neutral portal greeting and waits for a student choice before exposing records", () => {
+    stubLoadedChild()
+    renderWithClient(<ParentDashboard />)
+    expect(
+      screen.getByRole("heading", { name: "Your family portal" })
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole("heading", { name: /Welcome.*Mara/i })
+    ).not.toBeInTheDocument()
+    expect(
+      screen.getByRole("heading", { name: "Select a student to get started" })
+    ).toBeInTheDocument()
+    expect(screen.queryByText("Academic Progress")).not.toBeInTheDocument()
+    expect(screen.queryByText("Average Grade")).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole("navigation", { name: "Parent quick links" })
+    ).not.toBeInTheDocument()
+    expect(mockedUseStudentDashboardData).toHaveBeenLastCalledWith("")
   })
 
   it("shows N/A instead of 0.00% when there is no grade or attendance data", async () => {

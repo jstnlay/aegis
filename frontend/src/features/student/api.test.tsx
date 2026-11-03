@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from "@testing-library/react"
+import { act, renderHook, waitFor } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import type { ReactNode } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
@@ -155,6 +155,39 @@ describe("useStudentDashboardData attendance", () => {
 })
 
 describe("useStudentDashboardData grading periods", () => {
+  it("resets the period filter when a parent switches to another student", async () => {
+    vi.spyOn(apiClient, "get").mockImplementation((async (url: string) => {
+      if (url.startsWith("/attendance/summary")) return { data: [] }
+      return { data: { status: "ok", data: { has_data: false } } }
+    }) as unknown as typeof apiClient.get)
+    mockedFetchAllPages.mockImplementation(async (url: string) => {
+      if (!url.includes("/academics/grades/")) return { count: 0, results: [] }
+      const periods = url.includes("student=first-child")
+        ? ["Quarter 1", "Quarter 2"]
+        : ["Quarter 1"]
+      return {
+        count: periods.length,
+        results: periods.map((period) => ({
+          subject_name: "Mathematics",
+          subject_code: "MATH",
+          score: 88,
+          letter_grade: null,
+          grading_period_name: period,
+        })),
+      }
+    })
+    const { result, rerender } = renderHook(
+      ({ id }) => useStudentDashboardData(id),
+      { wrapper: createWrapper(), initialProps: { id: "first-child" } }
+    )
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    act(() => result.current.setSelectedPeriod("Quarter 2"))
+    expect(result.current.selectedPeriod).toBe("Quarter 2")
+    rerender({ id: "second-child" })
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.selectedPeriod).toBe("Quarter 1")
+    expect(result.current.grades).toHaveLength(1)
+  })
   /**
    * Regression for the "finalized grades on Academics, N/A on Dashboard"
    * report (TC-STU-03).

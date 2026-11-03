@@ -1,4 +1,4 @@
-import { Lightbulb } from "lucide-react"
+import { BookMarked, Bookmark, Eye, Lightbulb } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -18,6 +18,7 @@ import {
   type Recommendation,
 } from "@/features/student/recommendations-api"
 import { normalizeApiError } from "@/lib/error"
+import { getSubjectTheme } from "@/features/student/subject-appearance"
 
 /**
  * Recommended learning items for the signed-in student.
@@ -49,10 +50,10 @@ export function RecommendationsCard({
   const items = data?.recommendations ?? []
 
   return (
-    <Card className="col-span-2 lg:col-span-3">
+    <Card className="student-recommendations col-span-2 lg:col-span-3">
       <CardHeader>
         <div className="flex flex-row items-center justify-between space-y-0">
-          <CardTitle className="flex items-center gap-2 text-sm font-medium">
+          <CardTitle className="student-card-title">
             <Lightbulb
               className="size-4 text-muted-foreground"
               aria-hidden="true"
@@ -82,7 +83,7 @@ export function RecommendationsCard({
             approve learning resources for recommendation.
           </p>
         ) : (
-          <ul className="space-y-2">
+          <ul className="student-recommendation-list">
             {items.map((item) => (
               <RecommendationRow
                 key={item.learning_item_id}
@@ -124,36 +125,44 @@ function RecommendationRow({
   disabled: boolean
 }) {
   return (
-    <li className="space-y-1 rounded-md border border-border p-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="font-medium break-words">{item.title}</span>
-        <Badge variant="secondary">
-          {ITEM_TYPE_LABELS[item.item_type] ?? item.item_type}
-        </Badge>
-      </div>
-      {item.topic ? (
-        <p className="text-xs text-muted-foreground">{item.topic}</p>
-      ) : null}
-      <p className="text-xs text-muted-foreground">{item.reason}</p>
-      <div className="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          size="xs"
-          variant="outline"
-          disabled={disabled}
-          onClick={() => onInteract("viewed")}
-        >
-          {INTERACTION_TYPE_LABELS.viewed}
-        </Button>
-        <Button
-          type="button"
-          size="xs"
-          variant="outline"
-          disabled={disabled}
-          onClick={() => onInteract("saved")}
-        >
-          {INTERACTION_TYPE_LABELS.saved}
-        </Button>
+    <li
+      className="student-recommendation-item"
+      data-subject-theme={getSubjectTheme(item.topic || item.title)}
+    >
+      <span className="student-resource-icon" aria-hidden="true">
+        <BookMarked />
+      </span>
+      <div className="student-resource-copy">
+        <div className="student-resource-meta">
+          <Badge variant="secondary">
+            {ITEM_TYPE_LABELS[item.item_type] ?? item.item_type}
+          </Badge>
+          {item.topic ? <span>{item.topic}</span> : null}
+        </div>
+        <h4>{item.title}</h4>
+        <p className="text-xs text-muted-foreground">{item.reason}</p>
+        <div className="student-resource-actions flex flex-wrap gap-2">
+          <Button
+            type="button"
+            size="xs"
+            variant="outline"
+            disabled={disabled}
+            onClick={() => onInteract("viewed")}
+          >
+            <Eye aria-hidden="true" />
+            {INTERACTION_TYPE_LABELS.viewed}
+          </Button>
+          <Button
+            type="button"
+            size="xs"
+            variant="outline"
+            disabled={disabled}
+            onClick={() => onInteract("saved")}
+          >
+            <Bookmark aria-hidden="true" />
+            {INTERACTION_TYPE_LABELS.saved}
+          </Button>
+        </div>
       </div>
     </li>
   )

@@ -71,7 +71,7 @@ function PageHeading({
   description: string
 }) {
   return (
-    <div className="flex flex-col gap-1">
+    <div className="guidance-page-heading flex flex-col gap-1">
       <div className="flex items-center gap-3">
         <ShieldAlert
           className="size-5 text-muted-foreground"
@@ -97,7 +97,11 @@ function ErrorNote({ message }: { message: string }) {
 
 function AlertStatusBadge({ status }: { status: RiskAlertStatus }) {
   return (
-    <Badge variant="outline" data-alert-status={status}>
+    <Badge
+      status={status === "active" ? "open" : status}
+      variant="outline"
+      data-alert-status={status}
+    >
       {RISK_ALERT_STATUS_LABELS[status]}
     </Badge>
   )
@@ -448,6 +452,7 @@ export function RiskAlertsPage() {
         sortTieBreak: (row) => row.student_name,
         cell: (row) => (
           <Badge
+            status={row.risk_level}
             variant="secondary"
             className={riskLevelBadgeClass(row.risk_level)}
             data-risk-level={row.risk_level}
@@ -539,7 +544,7 @@ export function RiskAlertsPage() {
   )
 
   return (
-    <div className="space-y-6">
+    <div className="guidance-page space-y-6">
       <PageHeading
         title="Risk Alerts"
         description="Every risk alert across the school, with the transitions each alert currently allows."
@@ -555,6 +560,7 @@ export function RiskAlertsPage() {
       */}
       <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-5">
         <MetricCard
+          className="guidance-metric-card"
           centered
           title="Total Alerts"
           isLoading={alertsQuery.isLoading}
@@ -563,6 +569,7 @@ export function RiskAlertsPage() {
           {formatCount(counts.all)}
         </MetricCard>
         <MetricCard
+          className="guidance-metric-card"
           centered
           title="Active"
           hint="Currently active"
@@ -572,6 +579,7 @@ export function RiskAlertsPage() {
           {formatCount(counts.active)}
         </MetricCard>
         <MetricCard
+          className="guidance-metric-card"
           centered
           title="Under monitoring"
           hint="Being monitored"
@@ -581,6 +589,7 @@ export function RiskAlertsPage() {
           {formatCount(counts.under_monitoring)}
         </MetricCard>
         <MetricCard
+          className="guidance-metric-card"
           centered
           title="Resolved"
           hint="Successfully resolved"
@@ -590,6 +599,7 @@ export function RiskAlertsPage() {
           {formatCount(counts.resolved)}
         </MetricCard>
         <MetricCard
+          className="guidance-metric-card"
           centered
           title="Escalated"
           hint="Requires immediate attention"
@@ -621,7 +631,7 @@ export function RiskAlertsPage() {
             onChange={setStatus}
           />
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="guidance-filter-bar grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <div className="space-y-1.5">
               <Label htmlFor="alert-filter-level">Risk level</Label>
               <Select

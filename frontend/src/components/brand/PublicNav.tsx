@@ -107,7 +107,10 @@ export function PublicNav() {
   }, [open])
 
   return (
-    <div ref={wrapper} className="relative order-last sm:order-none">
+    <div
+      ref={wrapper}
+      className="public-nav-wrapper relative order-last sm:order-none"
+    >
       <nav
         aria-label="Primary"
         className="hidden items-center gap-5 text-sm lg:flex"

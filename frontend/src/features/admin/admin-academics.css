@@ -1,0 +1,345 @@
+.app-shell[data-role="admin"] .admin-academics {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+  min-width: 0;
+
+  .academic-page-intro {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+  }
+  .academic-page-heading {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    min-width: 0;
+  }
+  .academic-page-icon {
+    display: grid;
+    place-items: center;
+    width: 56px;
+    height: 56px;
+    flex-shrink: 0;
+    border: 1px solid var(--border);
+    border-radius: 16px 16px 6px 16px;
+    color: var(--primary);
+    background: color-mix(in srgb, var(--card) 78%, transparent);
+    box-shadow:
+      inset 0 1px var(--card),
+      0 4px 12px color-mix(in srgb, var(--primary) 6%, transparent);
+  }
+  .academic-page-icon svg {
+    width: 26px;
+    height: 26px;
+  }
+  .academic-page-eyebrow {
+    margin-bottom: 5px;
+    color: var(--muted-foreground);
+    font-size: 10px;
+    font-weight: 650;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .academic-page-heading h2 {
+    font-size: clamp(24px, 2.5vw, 30px);
+    line-height: 1.2;
+  }
+  .academic-page-description {
+    margin-top: 8px;
+    color: var(--muted-foreground);
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  .academic-area-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    padding: 9px 12px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--primary);
+    background: color-mix(in srgb, var(--card) 65%, transparent);
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .academic-area-count svg {
+    width: 14px;
+    height: 14px;
+  }
+  > [role="tablist"] {
+    display: flex;
+    flex-wrap: nowrap;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    gap: 4px;
+    padding: 6px;
+    overflow-x: auto;
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--card) 82%, transparent);
+    box-shadow:
+      inset 0 1px var(--card),
+      0 3px 10px color-mix(in srgb, var(--primary) 4%, transparent);
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+  [role="tab"] {
+    flex: 1 0 auto;
+    min-height: 44px;
+    gap: 8px;
+    padding-inline: 14px;
+    border: 0;
+    border-radius: 9px;
+    color: var(--muted-foreground);
+    background: transparent;
+    box-shadow: none;
+    font-size: 12px;
+  }
+  [role="tab"] > span {
+    display: inline-flex;
+  }
+  [role="tab"]:hover {
+    color: var(--primary);
+    background: color-mix(in srgb, var(--primary) 5%, var(--card));
+  }
+  [role="tab"][aria-selected="true"] {
+    color: var(--primary-foreground);
+    background: var(--primary);
+    box-shadow:
+      inset 0 1px #ffffff24,
+      0 3px 8px color-mix(in srgb, var(--primary) 16%, transparent);
+  }
+  > [role="tabpanel"] > [data-slot="card"] {
+    gap: 0;
+    padding-block: 0;
+    overflow: hidden;
+    border-radius: 16px;
+  }
+  > [role="tabpanel"] {
+    min-width: 0;
+  }
+  .academic-card-heading[data-slot="card-header"] {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 22px 24px;
+    border-bottom: 1px solid var(--border);
+    background: color-mix(in srgb, var(--card) 38%, transparent);
+  }
+  .academic-card-icon {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    color: var(--primary);
+    background: color-mix(in srgb, var(--primary) 5%, var(--card));
+  }
+  .academic-card-icon svg {
+    width: 20px;
+    height: 20px;
+  }
+  .academic-card-heading [data-slot="card-title"] {
+    color: var(--primary);
+    font-size: 17px;
+    font-weight: 650;
+  }
+  .academic-card-heading [data-slot="card-description"] {
+    margin-top: 3px;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+  [data-slot="card-content"] {
+    padding: 24px;
+  }
+  .academic-create-form {
+    display: grid;
+    gap: 20px;
+    padding: 20px;
+    border: 1px solid var(--border);
+    border-radius: 13px;
+    background: color-mix(in srgb, var(--card) 62%, transparent);
+    box-shadow: inset 0 1px var(--card);
+  }
+  .academic-form-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 650;
+  }
+  .academic-form-title svg {
+    width: 17px;
+    height: 17px;
+    color: var(--primary);
+  }
+  .academic-form-fields {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: 16px;
+  }
+  /* Required markers and optional labels reserve the same row height. */
+  .academic-form-fields > div > div:first-child {
+    min-height: 22px;
+  }
+  .academic-form-fields [data-slot="label"] {
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .academic-form-fields :is([data-slot="input"], [data-slot="select-trigger"]) {
+    width: 100%;
+    height: 42px;
+    padding-inline: 12px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--card) 94%, transparent);
+    font-size: 13px;
+  }
+  .academic-form-fields > div > p {
+    font-size: 11px;
+    line-height: 1.5;
+  }
+  .academic-form-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+  .academic-form-actions p {
+    color: var(--muted-foreground);
+    font-size: 11px;
+  }
+  .academic-form-actions p span {
+    margin-right: 3px;
+    color: var(--destructive);
+  }
+  .academic-form-actions button {
+    min-height: 40px;
+    padding-inline: 16px;
+    font-size: 12px;
+  }
+  .academic-records {
+    display: grid;
+    gap: 16px;
+    margin-top: 28px;
+    min-width: 0;
+  }
+  .academic-records-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .academic-records-heading h3 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 650;
+  }
+  .academic-records-heading h3 svg {
+    width: 16px;
+    height: 16px;
+    color: var(--muted-foreground);
+  }
+  .academic-record-count {
+    padding: 4px 9px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--primary);
+    background: color-mix(in srgb, var(--card) 70%, transparent);
+    font-size: 10px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .academic-records table th {
+    padding: 12px 14px;
+    color: var(--muted-foreground);
+    font-size: 10px;
+    font-weight: 650;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }
+  .academic-records table td {
+    padding: 14px;
+    font-size: 13px;
+  }
+  .academic-records :is(th, td):last-child {
+    width: 100px;
+    text-align: right;
+  }
+  .academic-records tbody tr:nth-child(even) {
+    background: color-mix(in srgb, var(--card) 35%, transparent);
+  }
+  .academic-records tbody tr:hover {
+    background: color-mix(in srgb, var(--primary) 4%, var(--card));
+  }
+  .academic-code {
+    display: inline-block;
+    padding: 4px 8px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    color: var(--primary);
+    background: color-mix(in srgb, var(--card) 60%, transparent);
+    font-family: ui-monospace, monospace;
+    font-size: 11px;
+  }
+  @media (min-width: 640px) {
+    .academic-form-fields {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (min-width: 1000px) {
+    .academic-form-fields[data-columns="3"] {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .academic-form-fields[data-columns="4"] {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+  @media (min-width: 1280px) {
+    .academic-form-fields[data-columns="5"] {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+  }
+  @media (max-width: 639px) {
+    gap: 20px;
+    .academic-page-heading {
+      align-items: flex-start;
+      gap: 12px;
+    }
+    .academic-page-icon {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+    }
+    .academic-page-icon svg {
+      width: 22px;
+      height: 22px;
+    }
+    .academic-area-count {
+      display: none;
+    }
+    .academic-page-description {
+      font-size: 12px;
+    }
+    .academic-card-heading[data-slot="card-header"] {
+      align-items: flex-start;
+      padding: 18px 16px;
+    }
+    [data-slot="card-content"] {
+      padding: 16px;
+    }
+    .academic-create-form {
+      gap: 16px;
+      padding: 16px;
+    }
+  }
+}

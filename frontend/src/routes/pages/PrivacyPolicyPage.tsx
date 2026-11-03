@@ -1,8 +1,13 @@
 import { LegalPageLayout } from "@/routes/pages/LegalPageLayout"
 
-export function PrivacyPolicyPage() {
+export function PrivacyPolicyPage({
+  presentation = "page",
+}: {
+  presentation?: "page" | "dialog"
+} = {}) {
   return (
     <LegalPageLayout
+      presentation={presentation}
       title="Privacy Policy"
       intro="What AEGIS holds about you and your child, why it holds it, who can see it, and what you can ask the school to do with it."
     >

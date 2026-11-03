@@ -1,6 +1,20 @@
-import { BellRing, ShieldAlert, TriangleAlert, Users } from "lucide-react"
+import {
+  BellRing,
+  BookOpen,
+  GraduationCap,
+  ShieldAlert,
+  TriangleAlert,
+  Users,
+} from "lucide-react"
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import { ErrorNote } from "@/components/feedback/Feedback"
 import { MetricCard } from "@/components/ui/metric-card"
 import { RiskDistributionChart } from "@/components/charts/RiskDistributionChart"
@@ -52,8 +66,8 @@ function AdminDashboard() {
   if (!user) return null
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-1">
+    <div className="admin-dashboard space-y-6">
+      <div className="admin-dashboard-heading flex flex-col gap-1">
         <h2 className="text-2xl font-bold text-foreground">
           Administration Panel
         </h2>
@@ -70,9 +84,10 @@ function AdminDashboard() {
         <ErrorNote message="Unable to load the risk overview. Please try again." />
       ) : null}
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+      <div className="admin-dashboard-metrics grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <MetricCard
           title="Total Students"
+          className="admin-metric-card admin-metric-card--featured"
           hint="Active student enrollments"
           icon={Users}
           isLoading={metricsQuery.isLoading}
@@ -83,6 +98,7 @@ function AdminDashboard() {
 
         <MetricCard
           title="At-Risk Students"
+          className="admin-metric-card"
           hint="Latest score moderate or high"
           icon={ShieldAlert}
           isLoading={riskQuery.isLoading}
@@ -93,6 +109,7 @@ function AdminDashboard() {
 
         <MetricCard
           title="High Risk Students"
+          className="admin-metric-card"
           hint="Latest score at the high level"
           icon={TriangleAlert}
           isLoading={riskQuery.isLoading}
@@ -103,6 +120,7 @@ function AdminDashboard() {
 
         <MetricCard
           title="Active Alerts"
+          className="admin-metric-card admin-metric-card--soft"
           hint="Alerts not yet resolved"
           icon={BellRing}
           isLoading={riskQuery.isLoading}
@@ -112,7 +130,7 @@ function AdminDashboard() {
         </MetricCard>
       </div>
 
-      <div className="grid items-start gap-4 lg:grid-cols-2">
+      <div className="admin-dashboard-charts grid items-start gap-4 lg:grid-cols-2">
         <RiskDistributionChart />
         <RiskAlertTrendChart
           points={riskQuery.data?.alert_trend ?? []}
@@ -121,9 +139,25 @@ function AdminDashboard() {
         />
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Average by grade level</CardTitle>
+      <Card className="admin-dashboard-table">
+        <CardHeader className="admin-grade-summary-header">
+          <div className="admin-grade-summary-heading">
+            <span className="admin-grade-summary-icon" aria-hidden="true">
+              <BookOpen />
+            </span>
+            <div>
+              <CardTitle>Average by grade level</CardTitle>
+              <CardDescription>
+                Compare grade averages and the number of grades included.
+              </CardDescription>
+            </div>
+          </div>
+          {comparisonQuery.isSuccess ? (
+            <Badge variant="outline" className="admin-grade-level-count">
+              {comparisonQuery.data.length} grade{" "}
+              {comparisonQuery.data.length === 1 ? "level" : "levels"}
+            </Badge>
+          ) : null}
         </CardHeader>
         <CardContent>
           <GradeLevelTable
@@ -154,22 +188,40 @@ function GradeLevelTable({
     {
       key: "name",
       header: "Grade level",
+      headerClassName: "admin-grade-name-column",
       cell: (row) => (
-        <span className="font-medium">{row.grade_level_name}</span>
+        <div className="admin-grade-name">
+          <span aria-hidden="true">
+            <GraduationCap />
+          </span>
+          <span>{row.grade_level_name}</span>
+        </div>
       ),
     },
     {
       key: "average",
       header: "Average",
+      headerClassName: "admin-grade-average-column",
       cell: (row) => (
-        <span className="font-bold">{formatPercent(row.average, 2)}</span>
+        <div className="admin-grade-average">
+          <span>{formatPercent(row.average, 2)}</span>
+          {row.average !== null && Number.isFinite(row.average) ? (
+            <span className="admin-grade-average-track" aria-hidden="true">
+              <span
+                style={{ width: `${Math.min(100, Math.max(0, row.average))}%` }}
+              />
+            </span>
+          ) : null}
+        </div>
       ),
     },
     {
       key: "count",
       header: "Grades counted",
+      headerClassName: "admin-grade-count-column",
+      cellClassName: "admin-grade-count-cell",
       cell: (row) => (
-        <span className="text-muted-foreground">
+        <span className="admin-grade-count">
           {formatCount(row.grade_count)}
         </span>
       ),
@@ -178,6 +230,7 @@ function GradeLevelTable({
 
   return (
     <DataTable
+      className="admin-grade-comparison"
       caption="Average grade by level"
       columns={columns}
       rows={rows}

@@ -6,7 +6,14 @@ import {
   ErrorNote,
   LoadingState,
 } from "@/components/feedback/Feedback"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import { getSubjectTheme } from "./subject-appearance"
 import { normalizeApiError } from "@/lib/error"
 import {
   SCHEDULE_DAY_LABELS,
@@ -29,7 +36,7 @@ import {
 
 function PageHeading() {
   return (
-    <div className="flex flex-col gap-1">
+    <div className="student-page-heading flex flex-col gap-1">
       <div className="flex items-center gap-3">
         <CalendarDays
           className="size-5 text-muted-foreground"
@@ -49,8 +56,14 @@ function ScheduleRow({ entry }: { entry: ScheduleEntry }) {
   const detail = entry.subject_assignment_detail
 
   return (
-    <li className="flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-md border border-border px-3 py-2">
-      <span className="min-w-32 font-medium tabular-nums">
+    <li
+      className="student-schedule-row flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-md border border-border px-3 py-2"
+      data-subject-theme={getSubjectTheme(
+        detail.subject_name,
+        detail.subject_code
+      )}
+    >
+      <span className="student-schedule-time min-w-32 font-medium tabular-nums">
         {formatScheduleTime(entry.start_time)} –{" "}
         {formatScheduleTime(entry.end_time)}
       </span>
@@ -93,7 +106,7 @@ export function StudentSchedulePage() {
   const visibleDays = SCHEDULE_DAY_ORDER.filter((day) => byDay.has(day))
 
   return (
-    <div className="space-y-6">
+    <div className="student-page student-schedule space-y-6">
       <PageHeading />
 
       {scheduleQuery.isLoading ? (
@@ -103,11 +116,14 @@ export function StudentSchedulePage() {
       ) : visibleDays.length === 0 ? (
         <EmptyState message="No class periods are on record for your section yet." />
       ) : (
-        <div className="space-y-4">
+        <div className="student-schedule-grid">
           {visibleDays.map((day) => (
-            <Card key={day}>
-              <CardHeader>
+            <Card key={day} className="student-schedule-day">
+              <CardHeader data-day={day.toUpperCase()}>
                 <CardTitle as="h3">{SCHEDULE_DAY_LABELS[day]}</CardTitle>
+                <CardDescription>
+                  {byDay.get(day)?.length} class periods
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <ul className="space-y-2">

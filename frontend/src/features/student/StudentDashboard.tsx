@@ -1,10 +1,21 @@
 import { useMemo, useState } from "react"
+import { Link } from "react-router-dom"
+import {
+  ArrowUpRight,
+  BookOpen,
+  CalendarCheck,
+  CalendarDays,
+  ClipboardCheck,
+  GraduationCap,
+  HeartHandshake,
+  Sparkles,
+  TrendingUp,
+} from "lucide-react"
 
 import {
   StudentAcademicTrendChart,
   StudentAttendanceTrendChart,
 } from "@/components/charts/StudentTrendCharts"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -36,8 +47,8 @@ import {
   useStudentProfileId,
 } from "@/features/student/api"
 import { RecommendationsCard } from "@/features/student/RecommendationsCard"
+import { SubjectGradeCard } from "@/features/student/SubjectGradeCard"
 import { formatCount, formatPercent } from "@/lib/metric-format"
-import { scoreStatus, scoreStatusLabel } from "@/lib/score-status"
 
 /**
  * One headline figure, with its three states kept distinct.
@@ -85,15 +96,44 @@ export function StudentDashboard() {
   if (!user) return null
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-1">
-        <h2 className="text-2xl font-bold text-foreground">
-          Student Dashboard
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Your academic record at a glance.
-        </p>
-      </div>
+    <div className="student-dashboard space-y-6">
+      <header className="student-welcome">
+        <div className="student-welcome-copy">
+          <p className="student-eyebrow">
+            <Sparkles aria-hidden="true" className="size-3.5" /> Your learning
+            space
+          </p>
+          <h2 className="text-2xl font-bold text-foreground">
+            Welcome back
+            {user.first_name?.trim() ? `, ${user.first_name.trim()}` : ""}!
+          </h2>
+          <p className="student-welcome-message">
+            Keep up with your grades, attendance, and next steps.
+          </p>
+        </div>
+        <div className="student-welcome-art" aria-hidden="true">
+          <GraduationCap strokeWidth={1.5} />
+          <Sparkles />
+        </div>
+      </header>
+      <nav className="student-shortcuts" aria-label="Student quick links">
+        {[
+          { to: "/app/academics", label: "Your grades", icon: BookOpen },
+          { to: "/app/attendance", label: "Attendance", icon: CalendarCheck },
+          { to: "/app/schedule", label: "Class schedule", icon: CalendarDays },
+          {
+            to: "/app/student/assessments",
+            label: "Assessments",
+            icon: ClipboardCheck,
+          },
+        ].map(({ to, label, icon: Icon }) => (
+          <Link key={to} to={to} className="student-shortcut">
+            <Icon aria-hidden="true" />
+            <span>{label}</span>
+            <ArrowUpRight aria-hidden="true" />
+          </Link>
+        ))}
+      </nav>
 
       {/*
         PH11.11: the placeholder is announced and the failure is distinct from
@@ -106,56 +146,68 @@ export function StudentDashboard() {
         but with nothing to say why. A bare "N/A" is an answer nobody can act on;
         the hint now names the state, the way Attendance Rate already did.
       */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
-        <MetricCard
-          className="col-span-2 lg:col-span-1"
-          title="Average Grade"
-          hint={
-            dataError
-              ? "Could not load finalized grades"
-              : averageGrade === null
-                ? "No finalized grades yet"
-                : "Overall academic performance"
-          }
-          isLoading={dataLoading}
-          isError={dataError}
-        >
-          {formatPercent(averageGrade, 2)}
-        </MetricCard>
+      <div className="student-dashboard-grid">
+        <section className="student-overview" aria-label="Learning overview">
+          <MetricCard
+            className="student-metric student-metric--average"
+            icon={GraduationCap}
+            title="Average Grade"
+            hint={
+              dataError
+                ? "Could not load finalized grades"
+                : averageGrade === null
+                  ? "No finalized grades yet"
+                  : "Overall academic performance"
+            }
+            isLoading={dataLoading}
+            isError={dataError}
+          >
+            {formatPercent(averageGrade, 2)}
+          </MetricCard>
 
-        <MetricCard
-          title="Attendance Rate"
-          hint={
-            dataError
-              ? "Could not load attendance records"
-              : attendance
-                ? `${attendance.present_days} present, ${attendance.absent_days} absent`
-                : "No attendance records"
-          }
-          isLoading={dataLoading}
-          isError={dataError}
-        >
-          {formatPercent(attendance?.attendance_rate, 1)}
-        </MetricCard>
+          <MetricCard
+            className="student-metric student-metric--attendance"
+            icon={CalendarCheck}
+            title="Attendance Rate"
+            hint={
+              dataError
+                ? "Could not load attendance records"
+                : attendance
+                  ? `${attendance.present_days} present, ${attendance.absent_days} absent`
+                  : "No attendance records"
+            }
+            isLoading={dataLoading}
+            isError={dataError}
+          >
+            {formatPercent(attendance?.attendance_rate, 1)}
+          </MetricCard>
 
-        <MetricCard
-          title="Total Subjects"
-          hint={
-            dataError
-              ? "Could not load finalized grades"
-              : totalSubjects === null
-                ? "No finalized grades yet"
-                : "Subjects with finalized grades"
-          }
-          isLoading={dataLoading}
-          isError={dataError}
-        >
-          {formatCount(totalSubjects)}
-        </MetricCard>
-
-        <Card className="col-span-2 lg:col-span-3">
+          <MetricCard
+            className="student-metric student-metric--subjects"
+            icon={BookOpen}
+            title="Total Subjects"
+            hint={
+              dataError
+                ? "Could not load finalized grades"
+                : totalSubjects === null
+                  ? "No finalized grades yet"
+                  : "Subjects with finalized grades"
+            }
+            isLoading={dataLoading}
+            isError={dataError}
+          >
+            {formatCount(totalSubjects)}
+          </MetricCard>
+        </section>
+        <Card className="student-progress">
           <CardHeader>
-            <CardTitle>Academic Progress</CardTitle>
+            <CardTitle className="student-card-title">
+              <BookOpen aria-hidden="true" />
+              Academic Progress
+            </CardTitle>
+            <CardDescription>
+              Your finalized grades for the selected grading period.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             {dataLoading ? (
@@ -174,8 +226,8 @@ export function StudentDashboard() {
             ) : periods.length === 0 ? (
               <EmptyState message="No grading period data available." />
             ) : (
-              <div className="space-y-3">
-                <div className="space-y-1.5">
+              <div className="student-subject-board">
+                <div className="student-progress-filter space-y-1.5">
                   <Label htmlFor="student-grading-period">Grading period</Label>
                   <select
                     id="student-grading-period"
@@ -196,59 +248,30 @@ export function StudentDashboard() {
                     message={`No finalized grades for ${selectedPeriod}.`}
                   />
                 ) : (
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium">Grades by Subject</p>
-                    {/*
-                     * Each row is the subject, its score, and whether that
-                     * score passes. This card used to carry a six-pixel bar
-                     * under every row: the number was already printed beside
-                     * it, so the bar repeated the same value as a length and
-                     * read as an unfinished rule rather than a chart. The one
-                     * thing the number does not say on its own — passes or not
-                     * — is now a word, which is also what stops the meaning
-                     * resting on colour alone.
-                     */}
-                    <ul className="space-y-2">
-                      {displayGrades.map((grade) => {
-                        const status = scoreStatus(grade.score)
-                        return (
-                          <li
-                            key={grade.subject_code}
-                            className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border p-3"
-                          >
-                            <span className="min-w-0 truncate font-medium">
-                              {grade.subject_name}
-                            </span>
-                            <span className="flex shrink-0 items-center gap-2">
-                              <span
-                                className={`font-bold tabular-nums ${
-                                  grade.score === null
-                                    ? "text-muted-foreground"
-                                    : grade.score >= 90
-                                      ? "text-success"
-                                      : grade.score >= 75
-                                        ? "text-warning-foreground"
-                                        : "text-destructive"
-                                }`}
-                              >
-                                {formatPercent(grade.score, 2)}
-                              </span>
-                              <Badge
-                                variant={
-                                  status === "below-passing"
-                                    ? "destructive"
-                                    : status === "passing"
-                                      ? "secondary"
-                                      : "outline"
-                                }
-                              >
-                                {scoreStatusLabel(status)}
-                              </Badge>
-                            </span>
-                          </li>
-                        )
-                      })}
+                  <div className="student-subject-section">
+                    <div className="student-subject-section-heading">
+                      <p>
+                        Grades by Subject
+                        {grades.length > displayGrades.length ? (
+                          <span className="student-subject-count">
+                            {displayGrades.length} of {grades.length}
+                          </span>
+                        ) : null}
+                      </p>
+                    </div>
+                    <ul className="student-subject-grid">
+                      {displayGrades.map((grade) => (
+                        <SubjectGradeCard
+                          key={grade.subject_code}
+                          name={grade.subject_name}
+                          code={grade.subject_code}
+                          score={grade.score}
+                        />
+                      ))}
                     </ul>
+                    <Link to="/app/academics" className="student-full-record">
+                      View full grade record <ArrowUpRight aria-hidden="true" />
+                    </Link>
                   </div>
                 )}
               </div>
@@ -258,20 +281,30 @@ export function StudentDashboard() {
 
         <RecommendationsCard studentId={profileQuery.data ?? null} />
 
-        <FamilyAccessCard />
-
-        <Card className="col-span-2 lg:col-span-3">
+        <Card className="student-trend student-trend--academic">
           <CardHeader>
-            <CardTitle>Academic Trend</CardTitle>
+            <CardTitle className="student-card-title">
+              <TrendingUp aria-hidden="true" />
+              Academic Trend
+            </CardTitle>
+            <CardDescription>
+              How your average changes across grading periods.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <StudentAcademicTrendChart studentId={profileQuery.data ?? null} />
           </CardContent>
         </Card>
 
-        <Card className="col-span-2 lg:col-span-3">
+        <Card className="student-trend student-trend--attendance">
           <CardHeader>
-            <CardTitle>Attendance Trend</CardTitle>
+            <CardTitle className="student-card-title">
+              <CalendarCheck aria-hidden="true" />
+              Attendance Trend
+            </CardTitle>
+            <CardDescription>
+              Your recorded attendance over time.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <StudentAttendanceTrendChart
@@ -279,6 +312,7 @@ export function StudentDashboard() {
             />
           </CardContent>
         </Card>
+        <FamilyAccessCard />
       </div>
     </div>
   )
@@ -302,9 +336,12 @@ function FamilyAccessCard() {
     name.trim().length > 0 && email.trim().length > 0 && !nominate.isPending
 
   return (
-    <Card className="col-span-2 lg:col-span-3">
+    <Card className="student-family">
       <CardHeader>
-        <CardTitle>Family access</CardTitle>
+        <CardTitle className="student-card-title">
+          <HeartHandshake aria-hidden="true" />
+          Family access
+        </CardTitle>
         <CardDescription>
           Ask for a parent or guardian to be able to follow your academic
           record. The school reviews every request, and your parent sets their
@@ -318,7 +355,7 @@ function FamilyAccessCard() {
             parent with an invitation.
           </p>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="student-family-fields grid gap-3 sm:grid-cols-3">
             <div className="space-y-1.5">
               <Label htmlFor="family-name">Parent or guardian name</Label>
               <Input

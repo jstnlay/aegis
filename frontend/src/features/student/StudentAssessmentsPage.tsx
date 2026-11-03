@@ -1,4 +1,4 @@
-import { ClipboardCheck } from "lucide-react"
+import { CircleCheck, ClipboardCheck } from "lucide-react"
 import { useMemo, useState } from "react"
 
 import { Badge } from "@/components/ui/badge"
@@ -35,7 +35,7 @@ import { normalizeApiError } from "@/lib/error"
 
 function PageHeading() {
   return (
-    <div className="flex flex-col gap-1">
+    <div className="student-page-heading flex flex-col gap-1">
       <div className="flex items-center gap-3">
         <ClipboardCheck
           className="size-5 text-muted-foreground"
@@ -242,7 +242,7 @@ export function StudentAssessmentsPage() {
   const completed = assessments.filter((a) => submittedIds.has(a.id))
 
   return (
-    <div className="space-y-6">
+    <div className="student-page student-assessments space-y-6">
       <PageHeading />
 
       {assessmentsQuery.isLoading ? (
@@ -261,11 +261,14 @@ export function StudentAssessmentsPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-6">
+        <div className="student-assessment-columns">
           {pending.length > 0 ? (
-            <Card>
+            <Card className="student-assessment-group student-assessment-group--pending">
               <CardHeader>
-                <CardTitle>To take</CardTitle>
+                <CardTitle className="student-card-title">
+                  <ClipboardCheck aria-hidden="true" />
+                  To take
+                </CardTitle>
                 <CardDescription>
                   {pending.length} assessment
                   {pending.length === 1 ? "" : "s"} awaiting submission.
@@ -290,9 +293,12 @@ export function StudentAssessmentsPage() {
           ) : null}
 
           {completed.length > 0 ? (
-            <Card>
+            <Card className="student-assessment-group student-assessment-group--completed">
               <CardHeader>
-                <CardTitle>Completed</CardTitle>
+                <CardTitle className="student-card-title">
+                  <CircleCheck aria-hidden="true" />
+                  Completed
+                </CardTitle>
                 <CardDescription>
                   Your submitted assessments and their scores.
                 </CardDescription>
@@ -324,12 +330,14 @@ function AssessmentRow({
   return (
     <div
       data-assessment-id={assessment.id}
-      className="space-y-3 rounded-md border border-border p-4"
+      className="student-assessment-item space-y-3 rounded-md border border-border p-4"
     >
       <div className="space-y-1">
         <div className="flex flex-wrap items-center gap-2">
-          <h3 className="font-semibold">{assessment.title}</h3>
-          <Badge variant="outline">Not submitted</Badge>
+          <h4 className="font-semibold">{assessment.title}</h4>
+          <Badge status={"not_submitted"} variant="outline">
+            Not submitted
+          </Badge>
         </div>
         {assessment.description ? (
           <p className="text-sm text-muted-foreground">
@@ -363,11 +371,13 @@ function CompletedRow({ assessment }: { assessment: StudentAssessment }) {
   return (
     <div
       data-assessment-id={assessment.id}
-      className="space-y-1 rounded-md border border-border p-4"
+      className="student-assessment-item space-y-1 rounded-md border border-border p-4"
     >
       <div className="flex flex-wrap items-center gap-2">
-        <h3 className="font-semibold">{assessment.title}</h3>
-        <Badge variant="secondary">Submitted</Badge>
+        <h4 className="font-semibold">{assessment.title}</h4>
+        <Badge status={"submitted"} variant="secondary">
+          Submitted
+        </Badge>
       </div>
 
       {resultQuery.isLoading ? (

@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { BookOpen, CalendarCheck, FolderOpen } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import {
@@ -35,6 +36,11 @@ import {
 } from "@/features/parent/api"
 import { PortfolioList } from "@/features/portfolio/PortfolioCard"
 import { formatCount, formatPercent } from "@/lib/metric-format"
+import { ParentChildSelect } from "./ParentChildSelect"
+import {
+  ParentSelectionPrompt,
+  ParentStudentContext,
+} from "./ParentStudentContext"
 
 /**
  * Parent's view of a child's academic record.
@@ -58,13 +64,10 @@ const ATTENDANCE_FILTERS = [
 
 export function ParentAcademicsPage() {
   const { user } = useAuth()
-  const [statusFilter, setStatusFilter] = useState<string>("all")
-  const [search, setSearch] = useState("")
 
   const linkedQuery = useLinkedStudents()
   const linked = linkedQuery.data ?? []
 
-  // A parent with one child lands on that child's record; see useSelectedChild.
   const { selectedChildId, setSelectedChildId, child } =
     useSelectedChild(linked)
 
@@ -75,8 +78,8 @@ export function ParentAcademicsPage() {
   if (!user) return null
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-1">
+    <div className="parent-page parent-academics space-y-6">
+      <div className="parent-page-heading flex flex-col gap-1">
         <h2 className="text-2xl font-bold text-foreground">Academic Record</h2>
         <p className="text-sm text-muted-foreground">
           Finalized grades and attendance for each of your linked children.
@@ -104,11 +107,11 @@ export function ParentAcademicsPage() {
           records={recordsQuery.data ?? []}
           recordsLoading={recordsQuery.isLoading}
           recordsError={recordsQuery.isError}
-          statusFilter={statusFilter}
-          onStatusFilterChange={setStatusFilter}
-          search={search}
-          onSearchChange={setSearch}
         />
+      ) : !linkedQuery.isLoading &&
+        !linkedQuery.isError &&
+        linked.length > 0 ? (
+        <ParentSelectionPrompt />
       ) : null}
     </div>
   )
@@ -157,26 +160,12 @@ function ChildPicker({
   }
 
   return (
-    <div className="space-y-1.5">
-      <Label htmlFor="parent-academics-child">Student</Label>
-      <Select value={selectedId} onValueChange={onSelect}>
-        <SelectTrigger id="parent-academics-child">
-          <SelectValue placeholder="Select a student" />
-        </SelectTrigger>
-        <SelectContent>
-          {linked.map((student) => (
-            <SelectItem key={student.id} value={student.id}>
-              {student.student_name} — {student.section_name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      {selectedId ? null : (
-        <p className="text-xs text-muted-foreground">
-          Select a student to see their record.
-        </p>
-      )}
-    </div>
+    <ParentChildSelect
+      id="parent-academics-child"
+      linked={linked}
+      selectedId={selectedId}
+      onSelect={onSelect}
+    />
   )
 }
 
@@ -191,10 +180,6 @@ function AcademicRecord({
   records,
   recordsLoading,
   recordsError,
-  statusFilter,
-  onStatusFilterChange,
-  search,
-  onSearchChange,
 }: {
   child: LinkedStudent
   grades: readonly ParentGrade[]
@@ -223,11 +208,9 @@ function AcademicRecord({
   }[]
   recordsLoading: boolean
   recordsError: boolean
-  statusFilter: string
-  onStatusFilterChange: (value: string) => void
-  search: string
-  onSearchChange: (value: string) => void
 }) {
+  const [statusFilter, onStatusFilterChange] = useState("all")
+  const [search, onSearchChange] = useState("")
   const withScores = grades.filter((g) => g.score !== null)
   const average =
     withScores.length > 0
@@ -256,15 +239,11 @@ function AcademicRecord({
     totalRecords > 0 ? ((present + late) / totalRecords) * 100 : null
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-2">
-        <h3 className="text-xl font-bold">{child.student_name}</h3>
-        <Badge variant="secondary">{child.section_name}</Badge>
-        <Badge variant="outline">{child.student_id}</Badge>
-      </div>
+    <div className="parent-record-details space-y-6">
+      <ParentStudentContext child={child} />
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">
-        <Card>
+      <div className="parent-academic-metrics">
+        <Card className="parent-metric parent-metric--grade">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Average grade</CardTitle>
           </CardHeader>
@@ -288,7 +267,7 @@ function AcademicRecord({
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="parent-metric parent-metric--attendance">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Attendance</CardTitle>
           </CardHeader>
@@ -316,10 +295,10 @@ function AcademicRecord({
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="parent-metric">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">
-              Subjects graded
+              Finalized grades
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -343,7 +322,10 @@ function AcademicRecord({
 
       <Card>
         <CardHeader>
-          <CardTitle>Grades</CardTitle>
+          <CardTitle className="parent-card-title">
+            <BookOpen aria-hidden="true" />
+            Grades
+          </CardTitle>
           <CardDescription>
             Only finalized grades are shown. Draft and submitted grades are not
             reportable.
@@ -364,7 +346,10 @@ function AcademicRecord({
 
       <Card>
         <CardHeader>
-          <CardTitle>Portfolio</CardTitle>
+          <CardTitle className="parent-card-title">
+            <FolderOpen aria-hidden="true" />
+            Portfolio
+          </CardTitle>
           <CardDescription>
             School activities {child.student_name} showcases — paperwork, term
             exams, recitations.
@@ -377,7 +362,10 @@ function AcademicRecord({
 
       <Card>
         <CardHeader>
-          <CardTitle>Attendance record</CardTitle>
+          <CardTitle className="parent-card-title">
+            <CalendarCheck aria-hidden="true" />
+            Attendance record
+          </CardTitle>
           <CardDescription>
             Day-by-day attendance recorded by the class teacher.
           </CardDescription>
@@ -566,7 +554,11 @@ function AttendanceTable({
       key: "status",
       header: "Status",
       cell: (record) => (
-        <Badge variant="outline" data-attendance-status={record.status}>
+        <Badge
+          status={record.status}
+          variant="outline"
+          data-attendance-status={record.status}
+        >
           {ATTENDANCE_STATUS_LABELS[record.status]}
         </Badge>
       ),

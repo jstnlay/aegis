@@ -119,7 +119,14 @@ export function useStudentProfileId() {
 }
 
 export function useStudentDashboardData(studentId: string) {
-  const [selectedPeriod, setSelectedPeriod] = useState<string>("")
+  const [periodSelection, setPeriodSelection] = useState({
+    studentId,
+    period: "",
+  })
+  const selectedPeriod =
+    periodSelection.studentId === studentId ? periodSelection.period : ""
+  const setSelectedPeriod = (period: string) =>
+    setPeriodSelection({ studentId, period })
 
   const enabled = Boolean(studentId)
 

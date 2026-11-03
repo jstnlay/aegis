@@ -225,3 +225,64 @@
     margin-left: auto;
   }
 }
+
+@media (max-width: 767px) {
+  .public-school-footer {
+    background: linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--primary) 90%, black),
+      color-mix(in srgb, var(--primary) 72%, black)
+    );
+  }
+  .public-school-footer-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 3px;
+    padding: 6px 16px;
+  }
+  .public-school-footer-nav {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0 16px;
+    align-self: center;
+    width: min(100%, 304px);
+    font-size: 12px;
+    line-height: 1.4;
+  }
+  .public-school-footer-nav a {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 24px;
+    text-align: center;
+    white-space: normal;
+  }
+  .public-school-footer-nav a::before {
+    content: "";
+    flex-shrink: 0;
+    margin-right: 5px;
+  }
+  .public-school-footer-policies {
+    justify-content: center;
+    gap: 0 12px;
+    width: 100%;
+    padding-top: 4px;
+    border-top: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+    font-size: 11px;
+  }
+  .public-school-footer-policies a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    white-space: normal;
+  }
+  .public-school-footer-copyright {
+    order: 2;
+    flex-basis: auto;
+    font-size: 10px;
+    line-height: 1.4;
+    text-align: center;
+  }
+}

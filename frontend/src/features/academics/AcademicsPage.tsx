@@ -52,6 +52,7 @@ import {
 } from "@/features/academics/api"
 import { useAuth } from "@/features/auth/AuthContext"
 import { useStudentProfileId } from "@/features/student/api"
+import { getSubjectTheme } from "@/features/student/subject-appearance"
 import { StudentPortfolioCard } from "@/features/portfolio/PortfolioCard"
 import { AcademicsLandingPage } from "@/routes/pages/AcademicsLandingPage"
 import { getFieldError, normalizeApiError } from "@/lib/error"
@@ -98,7 +99,7 @@ const STATUS_BADGE_VARIANT: Record<
 
 function StatusBadge({ status }: { status: GradeStatus }) {
   return (
-    <Badge variant={STATUS_BADGE_VARIANT[status]}>
+    <Badge status={status} variant={STATUS_BADGE_VARIANT[status]}>
       {GRADE_STATUS_LABELS[status]}
     </Badge>
   )
@@ -175,7 +176,11 @@ function GradeTable({
   onEditGrade?: (grade: Grade) => void
 }) {
   return (
-    <Table scrollLabel={caption} className="min-w-[40rem]">
+    <Table
+      role="table"
+      scrollLabel={caption}
+      className="student-record-table min-w-[40rem]"
+    >
       {/*
         PH11.11. `scrollLabel` added. This is a five-to-seven column table with a
         `Subject`, `Section` and `Grading period` column of free text, so it is the
@@ -204,7 +209,13 @@ function GradeTable({
       </TableHeader>
       <TableBody>
         {grades.map((grade) => (
-          <TableRow key={grade.id}>
+          <TableRow
+            key={grade.id}
+            data-subject-theme={getSubjectTheme(
+              grade.subject_name,
+              grade.subject_code
+            )}
+          >
             {showStudent ? (
               <TableCell>
                 <span className="font-medium whitespace-nowrap">
@@ -215,7 +226,7 @@ function GradeTable({
                 </span>
               </TableCell>
             ) : null}
-            <TableCell>
+            <TableCell data-label="Subject" className="student-record-subject">
               <span className="font-medium whitespace-nowrap">
                 {grade.subject_name}
               </span>
@@ -228,10 +239,13 @@ function GradeTable({
                 {grade.section_name}
               </TableCell>
             ) : null}
-            <TableCell className="text-muted-foreground">
+            <TableCell
+              data-label="Grading period"
+              className="text-muted-foreground"
+            >
               {grade.grading_period_name ?? "Unassigned"}
             </TableCell>
-            <TableCell className="text-sm">
+            <TableCell data-label="Activity" className="text-sm">
               {(() => {
                 const { activity } = parseActivityRemarks(grade.remarks)
                 return activity ? (
@@ -250,10 +264,13 @@ function GradeTable({
               keep the new wrapping default — those are the free-text columns that
               made this table wider than the screen.
             */}
-            <TableCell className="text-right whitespace-nowrap tabular-nums">
+            <TableCell
+              data-label="Score"
+              className="text-right whitespace-nowrap tabular-nums"
+            >
               <ScoreCell score={grade.score} />
             </TableCell>
-            <TableCell>
+            <TableCell data-label="Status">
               <StatusBadge status={grade.status} />
             </TableCell>
             {onEditGrade ? (
@@ -307,7 +324,7 @@ function StudentAcademics() {
   const loading = profileQuery.isLoading || gradesQuery.isLoading
 
   return (
-    <div className="space-y-6">
+    <div className="student-page student-academics space-y-6">
       <PageHeading
         title="Academics"
         description="Your official grade record. Grades appear here once they are finalized."
@@ -317,7 +334,7 @@ function StudentAcademics() {
         <ErrorNote message={normalizeApiError(profileQuery.error).message} />
       ) : null}
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-2">
+      <div className="student-academic-metrics grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-2">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">
@@ -374,7 +391,7 @@ function StudentAcademics() {
         </Card>
       </div>
 
-      <Card>
+      <Card className="student-grade-record">
         <CardHeader>
           <CardTitle>Grade record</CardTitle>
           <CardDescription>
@@ -760,7 +777,7 @@ function FacultyAcademics() {
   )
 
   return (
-    <div className="space-y-6">
+    <div className="faculty-page space-y-6">
       <PageHeading
         title="Academics"
         description="Encode draft grades and review the results for your subject assignments."
