@@ -34,11 +34,15 @@ import { normalizeApiError } from "@/lib/error"
  *
  * - **It is not a conversation.** Each message is classified and answered on its
  *   own; there is no memory of earlier turns. The help text says so.
- * - **It is deterministic, not an LLM.** `policies.py` classifies with keyword
- *   tables and `service._deterministic_reply` answers from templates. A reply it
- *   cannot classify returns the "rephrase" fallback rather than a guess.
- * - **It does not persist anything.** The transcript is component state. Closing
- *   the panel discards it, and nothing is written to the database.
+ * - **It is deterministic when no model answers.** `policies.py` classifies
+ *   with keyword tables; `service._deterministic_reply` answers from templates
+ *   and, for academic/attendance/recommendation intents, from the caller's own
+ *   imported records. The server tries a local model first and an offsite one
+ *   only as its fallback, with no client change. A reply it cannot classify
+ *   returns the "rephrase" fallback rather than a guess.
+ * - **It does not persist the transcript.** The transcript is component state.
+ *   Closing the panel discards it. A distress signal does write a Guidance
+ *   risk alert and notification, because that is the point of the escalation.
  */
 /**
  * A message id that is stable and unique within the transcript.
@@ -116,7 +120,8 @@ export function ChatbotPanel({
               AEGIS Assistant
             </CardTitle>
             <CardDescription>
-              Answers about grades, attendance and learning resources.
+              Answers about your grades, academic status, attendance and
+              learning resources.
             </CardDescription>
           </div>
           <Button type="button" size="xs" variant="ghost" onClick={onClose}>
@@ -126,18 +131,6 @@ export function ChatbotPanel({
       </CardHeader>
 
       <CardContent className="flex min-h-0 flex-1 flex-col gap-3">
-        {/*
-          Stated up front rather than discovered by typing something the bot
-          cannot answer. Each message is handled on its own, so "it forgot what I
-          said" is a real and permanent limitation, not a bug.
-        */}
-        <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
-          This assistant recognises a fixed set of questions and answers each
-          one on its own. It does not hold a conversation, and nothing you type
-          here is saved after you close this panel. For anything urgent, contact
-          Guidance directly.
-        </p>
-
         <div
           className="min-h-0 flex-1 space-y-3 overflow-y-auto"
           role="log"
@@ -243,12 +236,27 @@ function ChatBubble({ message }: { message: ChatMessage }) {
  * Rendered because the numbers are the point of the question — a student asking
  * "what is my average?" wants the average, not just "here is your information".
  */
+const ACADEMIC_STATUS_LABELS: Record<string, string> = {
+  on_track: "On track",
+  at_risk: "At risk",
+  insufficient_data: "Not enough data",
+}
+
 function ResponseDetail({ response }: { response: ChatResponse }) {
   const grades = response.data.grade_summary
+  const status = response.data.academic_status
+  const recommendations = response.data.recommendations?.recommendations ?? []
   const attendance = response.data.attendance_summary
   const resources = response.data.resources ?? []
 
-  if (!grades && !attendance && resources.length === 0 && !response.escalated) {
+  if (
+    !grades &&
+    !status &&
+    recommendations.length === 0 &&
+    !attendance &&
+    resources.length === 0 &&
+    !response.escalated
+  ) {
     return null
   }
 
@@ -264,7 +272,43 @@ function ResponseDetail({ response }: { response: ChatResponse }) {
           {typeof grades.subject_count === "number"
             ? ` · ${grades.subject_count} subject(s)`
             : ""}
+          {grades.data_status === "pending_finalization"
+            ? " · provisional"
+            : ""}
         </p>
+      ) : null}
+
+      {status ? (
+        <p>
+          Status:{" "}
+          {ACADEMIC_STATUS_LABELS[status.status ?? ""] ?? "Not enough data"}
+          {typeof status.passing_grade === "number"
+            ? ` · passing ${status.passing_grade}`
+            : ""}
+        </p>
+      ) : null}
+
+      {/*
+        Every weak subject, in one line. A prose answer may name only some of
+        them, so the complete list is rendered from the data instead.
+      */}
+      {status?.weak_subjects && status.weak_subjects.length > 0 ? (
+        <p>
+          Needs support:{" "}
+          {status.weak_subjects
+            .map((subject) => `${subject.subject} (${subject.score.toFixed(2)}%)`)
+            .join(", ")}
+        </p>
+      ) : null}
+
+      {recommendations.length > 0 ? (
+        <ul className="space-y-0.5">
+          {recommendations.map((recommendation, index) => (
+            <li key={recommendation.learning_item_id ?? `${index}`}>
+              {recommendation.title ?? "Recommended support"}
+            </li>
+          ))}
+        </ul>
       ) : null}
 
       {attendance ? (

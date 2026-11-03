@@ -7,9 +7,10 @@ unknown intent, low-confidence, fallback, urgency, escalation.
 
 from datetime import date
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase, override_settings
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -30,13 +31,22 @@ from apps.academics.models import (
     Subject,
     SubjectAssignment,
 )
+from apps.attendance.models import AttendanceRecord
 from apps.chatbot.policies import (
     classify_intent,
     classify_urgency,
     detect_urgent,
     parse_message,
 )
+from apps.chatbot.providers import (
+    ChainProvider,
+    ChatProviderRequest,
+    OllamaProvider,
+    OpenAICompatProvider,
+    redact,
+)
 from apps.chatbot.taxonomy import ChatIntent, UrgencyLevel
+from apps.guidance.models import RiskAlert
 
 User = get_user_model()
 
@@ -140,6 +150,33 @@ class IntentClassificationTest(ChatbotBase):
 
     def test_unknown(self):
         self.assertEqual(classify_intent("florbeldorbus xyzzy"), ChatIntent.UNKNOWN)
+
+    def test_full_subject_name_reaches_subject_help(self):
+        """
+        The real subject names, not only the abbreviations.
+
+        "Mathematics" is what the grade book stores; a bare `\bmath\b` does not
+        match it, so the message used to fall through to HELP.
+        """
+        self.assertEqual(
+            classify_intent("I need help with Mathematics"),
+            ChatIntent.ASK_SUBJECT_HELP,
+        )
+        self.assertEqual(
+            classify_intent("Can you help me with Edukasyon?"),
+            ChatIntent.ASK_SUBJECT_HELP,
+        )
+
+    def test_assessment_plural_reaches_assessment(self):
+        """"What assessments do I have?" is the natural phrasing."""
+        self.assertEqual(
+            classify_intent("What assessments do I have?"),
+            ChatIntent.ASK_ASSESSMENT,
+        )
+        self.assertEqual(
+            classify_intent("Do I have any quizzes?"),
+            ChatIntent.ASK_ASSESSMENT,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -481,6 +518,7 @@ class WiredIntentReachabilityTest(ChatbotBase):
             ("do you have a module for algebra", ChatIntent.ASK_LEARNING_RESOURCE),
             ("how do i study better", ChatIntent.ASK_STUDY_STRATEGY),
             ("any suggestions for improving", ChatIntent.ASK_RECOMMENDATION),
+            ("am i at risk", ChatIntent.ASK_RISK_STATUS),
             ("what is my attendance", ChatIntent.ASK_ATTENDANCE),
             ("am i doing okay with my attendance",
              ChatIntent.ASK_ATTENDANCE_STATUS),
@@ -639,3 +677,662 @@ class ChatbotPolicyTest(ChatbotAPIBase):
         self.assertFalse(check_intent_allowed("faculty", ChatIntent.ASK_GRADE))
         # Guidance can help seeker
         self.assertTrue(check_intent_allowed("student", ChatIntent.REQUEST_COUNSELOR))
+
+
+class ChatbotDynamicDataTest(ChatbotAPIBase):
+    """
+    The bot answers from imported records, not templates.
+
+    The existing templates are still the fallback shape; these assertions pin
+    the data path that replaced the static numbers.
+    """
+
+    def _make_student(self, email, student_id):
+        user = User.objects.create_user(
+            email=email, password="pass12345",
+            first_name="Data", last_name="Student", role="student",
+        )
+        profile = StudentProfile.objects.create(
+            user=user,
+            student_id=student_id,
+            grade_level=self.grade_level,
+            section=self.section,
+            enrollment_date=date(2024, 6, 10),
+        )
+        Enrollment.objects.create(
+            student=profile, section=self.section,
+            academic_year=self.academic_year, date_enrolled=date(2024, 6, 10),
+            is_active=True,
+        )
+        return user, profile
+
+    def test_grade_query_returns_status_and_recommendations(self):
+        resp = self.post_message("How are my grades?", self.student_user)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["intent"], "ask_grade")
+        payload = resp.data["data"]
+        self.assertIn("grade_summary", payload)
+        self.assertIn("academic_status", payload)
+        self.assertIn("recommendations", payload)
+        self.assertEqual(payload["grade_summary"]["data_status"], "finalized")
+        self.assertEqual(payload["grade_summary"]["subject_count"], 1)
+        self.assertEqual(payload["academic_status"]["status"], "on_track")
+
+    def test_imported_draft_grades_are_reported_as_provisional(self):
+        user, profile = self._make_student("chat_draft@test.com", "CHATDRAFT")
+        Grade.objects.create(
+            student=profile, subject_assignment=self.sa,
+            grading_period=self.gp, score=Decimal("62"), status="draft",
+            encoded_by=self.faculty_profile,
+        )
+
+        resp = self.post_message("What is my grade?", user)
+
+        payload = resp.data["data"]["grade_summary"]
+        self.assertEqual(payload["data_status"], "pending_finalization")
+        self.assertTrue(resp.data["data"]["academic_status"]["provisional"])
+        self.assertEqual(payload["average"], 62.0)
+
+    def test_at_risk_student_reported_for_risk_question(self):
+        user, profile = self._make_student("chat_risk@test.com", "CHATRISK")
+        Grade.objects.create(
+            student=profile, subject_assignment=self.sa,
+            grading_period=self.gp, score=Decimal("60"), status="finalized",
+            encoded_by=self.faculty_profile,
+        )
+
+        resp = self.post_message("Am I at risk?", user)
+
+        self.assertEqual(resp.data["intent"], "ask_risk_status")
+        status_payload = resp.data["data"]["academic_status"]
+        self.assertEqual(status_payload["status"], "at_risk")
+        self.assertIn("at-risk band", resp.data["reply"])
+
+    def test_grade_reply_names_every_weak_subject(self):
+        """
+        The reply lists all of them, never a first few.
+
+        Five is deliberate: the reply used to stop at three, which read as if
+        the missing subjects were fine.
+        """
+        user, profile = self._make_student("chat_weak@test.com", "CHATWEAK")
+        names = []
+        for index, score in enumerate(["51", "52", "53", "54", "55"]):
+            subject = Subject.objects.create(
+                name=f"Weak Subject {index}",
+                code=f"WEAK-{index}",
+                grade_level=self.grade_level,
+            )
+            assignment = SubjectAssignment.objects.create(
+                subject=subject, section=self.section,
+                academic_year=self.academic_year, faculty=self.faculty_profile,
+            )
+            Grade.objects.create(
+                student=profile, subject_assignment=assignment,
+                grading_period=self.gp, score=Decimal(score),
+                status="finalized", encoded_by=self.faculty_profile,
+            )
+            names.append(subject.name)
+
+        resp = self.post_message("How are my grades?", user)
+
+        weak = resp.data["data"]["academic_status"]["weak_subjects"]
+        self.assertEqual(len(weak), 5)
+        for name in names:
+            self.assertIn(name, resp.data["reply"])
+
+    def test_subject_help_quotes_the_grade_book_not_a_guess(self):
+        """
+        "help me with Mathematics" names the student's own score.
+
+        The provider used to answer this intent and produced "the overall
+        average for Mathematics is a C-. You are currently on track" for a
+        student whose Mathematics grade was 55. The number comes from the
+        summary, so an invented one is impossible here.
+        """
+        user, profile = self._make_student("chat_help@test.com", "CHATHELP")
+        Grade.objects.create(
+            student=profile, subject_assignment=self.sa,
+            grading_period=self.gp, score=Decimal("55"), status="finalized",
+            encoded_by=self.faculty_profile,
+        )
+
+        resp = self.post_message("I need help with Mathematics", user)
+
+        self.assertEqual(resp.data["intent"], "ask_subject_help")
+        self.assertIn("55.00%", resp.data["reply"])
+        self.assertIn("Mathematics", resp.data["reply"])
+
+    def test_study_strategy_names_the_weak_subjects(self):
+        user, profile = self._make_student("chat_strategy@test.com", "CHATSTRAT")
+        Grade.objects.create(
+            student=profile, subject_assignment=self.sa,
+            grading_period=self.gp, score=Decimal("58"), status="finalized",
+            encoded_by=self.faculty_profile,
+        )
+
+        resp = self.post_message("How should I study?", user)
+
+        self.assertEqual(resp.data["intent"], "ask_study_strategy")
+        self.assertIn("Mathematics", resp.data["reply"])
+
+    def test_assessment_question_is_honest_about_missing_coverage(self):
+        resp = self.post_message("What assessments do I have?", self.student_user)
+
+        self.assertEqual(resp.data["intent"], "ask_assessment")
+        self.assertIn("teacher", resp.data["reply"])
+
+    def test_attendance_query_uses_imported_records(self):
+        AttendanceRecord.objects.create(
+            student=self.student_profile, section=self.section,
+            date=date(2024, 6, 11), status="present",
+            recorded_by=self.faculty_profile,
+        )
+        AttendanceRecord.objects.create(
+            student=self.student_profile, section=self.section,
+            date=date(2024, 6, 12), status="late",
+            recorded_by=self.faculty_profile,
+        )
+        AttendanceRecord.objects.create(
+            student=self.student_profile, section=self.section,
+            date=date(2024, 6, 13), status="absent",
+            recorded_by=self.faculty_profile,
+        )
+
+        resp = self.post_message("What is my attendance?", self.student_user)
+
+        summary = resp.data["data"]["attendance_summary"]
+        self.assertEqual(summary["present_count"], 1)
+        self.assertEqual(summary["late_count"], 1)
+        self.assertEqual(summary["absent_count"], 1)
+        self.assertEqual(len(summary["recent_records"]), 3)
+
+    def test_recommendation_intent_uses_computed_recommendations(self):
+        from apps.cms.models import LearningItem
+
+        LearningItem.objects.create(
+            item_type=LearningItem.ItemType.LEARNING_RESOURCE,
+            title="Mathematics practice set",
+            lifecycle_status=LearningItem.LifecycleStatus.APPROVED,
+            is_active=True,
+            grade_level=self.grade_level,
+            subject=self.subject,
+        )
+
+        resp = self.post_message("Any suggestions for improving?", self.student_user)
+
+        payload = resp.data["data"]["recommendations"]
+        self.assertIn("recommendations", payload)
+        self.assertIn("method", payload)
+
+
+class ChatbotSafetyEscalationTest(ChatbotAPIBase):
+    """
+    A distress signal reaches Guidance through the same risk surface staff
+    already monitor, without quoting the student's message back at them.
+    """
+
+    def setUp(self):
+        super().setUp()
+        User.objects.create_user(
+            email="chat_guidance_safety@test.com", password="pass12345",
+            first_name="Safe", last_name="Guidance", role="guidance",
+        )
+
+    def test_crisis_message_creates_one_open_risk_alert(self):
+        from apps.notifications.models import Notification
+
+        Notification.objects.all().delete()
+        resp = self.post_message("I want to kill myself", self.student_user)
+
+        self.assertTrue(resp.data["escalated"])
+        alerts = RiskAlert.objects.filter(
+            student=self.student_profile, source=RiskAlert.Source.CHATBOT
+        )
+        self.assertEqual(alerts.count(), 1)
+        self.assertEqual(alerts.first().risk_level, RiskAlert.RiskLevel.HIGH)
+        # The message body is never persisted into the alert.
+        self.assertNotIn("kill", str(alerts.first().risk_factors).lower())
+        self.assertEqual(Notification.objects.count(), 1)
+
+    def test_repeated_crisis_does_not_duplicate_open_alert(self):
+        self.post_message("I want to kill myself", self.student_user)
+        self.post_message("I want to hurt myself", self.student_user)
+
+        alerts = RiskAlert.objects.filter(
+            student=self.student_profile, source=RiskAlert.Source.CHATBOT
+        )
+        self.assertEqual(alerts.count(), 1)
+
+    def test_ordinary_concern_does_not_create_risk_alert(self):
+        resp = self.post_message("I am worried about my grades", self.student_user)
+
+        self.assertFalse(resp.data["escalated"])
+        self.assertFalse(
+            RiskAlert.objects.filter(
+                student=self.student_profile, source=RiskAlert.Source.CHATBOT
+            ).exists()
+        )
+
+    @override_settings(AEGIS_CRISIS_HELPLINE="1553")
+    def test_distress_reply_includes_configured_helpline(self):
+        resp = self.post_message("I want to hurt myself", self.student_user)
+
+        self.assertIn("1553", resp.data["reply"])
+        self.assertIn("911", resp.data["reply"])
+
+
+class ChatbotProviderTest(ChatbotAPIBase):
+    """
+    The provider abstraction is a boundary: a provider gets authorized data
+    and returns prose, and any failure falls back to the deterministic reply.
+    """
+
+    class GoodProvider:
+        def __init__(self):
+            self.requests = []
+
+        def generate(self, request):
+            self.requests.append(request)
+            return "Provider-generated answer."
+
+    class FailingProvider:
+        def generate(self, request):
+            raise RuntimeError("provider offline")
+
+    def test_provider_reply_is_used_when_it_succeeds(self):
+        from apps.chatbot import service
+
+        provider = self.GoodProvider()
+        response = service.handle_message(
+            self.student_user,
+            "How should I study for Math?",
+            use_llm=True,
+            provider=provider,
+        )
+
+        self.assertEqual(response.reply, "Provider-generated answer.")
+        self.assertFalse(response.degraded)
+        self.assertEqual(provider.requests[0].user_role, "student")
+        # The advice intent is handed the weak subjects, not the whole record.
+        self.assertIn("weak_subjects", provider.requests[0].data)
+        self.assertNotIn("grade_summary", provider.requests[0].data)
+
+    def test_provider_is_not_consulted_for_a_grade_question(self):
+        """
+        The record-keeping answers are the application's, not a model's.
+
+        The local model reversed a comparison — "68.6, which is above the
+        required 75 to pass" — with every number in the sentence correct, so no
+        value check could catch it. Grade, status, risk, attendance and
+        recommendation questions therefore never reach a provider.
+        """
+        from apps.chatbot import service
+
+        for question in (
+            "What is my grade in Math?",
+            "How am I doing academically?",
+            "Am I at risk?",
+            "What is my attendance?",
+            "What should I study?",
+        ):
+            provider = self.GoodProvider()
+            response = service.handle_message(
+                self.student_user, question, use_llm=True, provider=provider
+            )
+            self.assertEqual(
+                provider.requests, [], f"provider consulted for {question!r}"
+            )
+            self.assertFalse(response.degraded)
+
+    class EnumLeakingProvider:
+        """A provider that quotes internal field values back at the student."""
+
+        def generate(self, request):
+            return 'Your status is "at_risk" and you are on_track elsewhere.'
+
+    def test_internal_field_values_never_reach_the_student(self):
+        """
+        The reply must not contain a database value, even if a provider does.
+
+        The local model wrote "you are at_risk" verbatim, so this is enforced on
+        the way out rather than requested in the prompt.
+        """
+        from apps.chatbot import service
+
+        response = service.handle_message(
+            self.student_user,
+            "How should I study for Math?",
+            use_llm=True,
+            provider=self.EnumLeakingProvider(),
+        )
+
+        self.assertNotIn("at_risk", response.reply)
+        self.assertNotIn("on_track", response.reply)
+        self.assertIn("at risk", response.reply)
+
+    class PayloadDumpingProvider:
+        """A provider that restates the record instead of giving advice."""
+
+        def generate(self, request):
+            # No digits, so only the section-label check can reject this.
+            return (
+                "**Academic Status:** you are at risk. "
+                "**Recommendations:** Content-based study activity - Mathematics"
+            )
+
+    def test_payload_dump_is_discarded(self):
+        """
+        The advice reply must be advice.
+
+        Asked how to study, the local model copied the sections it was handed
+        and invented a recommendation title no record held. The provider is no
+        longer given those sections, and a reply that prints a section label is
+        discarded in favour of the deterministic advice.
+        """
+        from apps.chatbot import service
+
+        response = service.handle_message(
+            self.student_user,
+            "How should I study for Math?",
+            use_llm=True,
+            provider=self.PayloadDumpingProvider(),
+        )
+
+        self.assertTrue(response.degraded)
+        self.assertNotIn("Academic Status", response.reply)
+        self.assertNotIn("Content-based study activity", response.reply)
+
+    class InventingProvider:
+        """A provider that states a grade it was never given."""
+
+        def generate(self, request):
+            return "Your average in Math is 85%. You are on track."
+
+    def test_ungrounded_number_is_discarded(self):
+        """
+        A number the provider was not handed is treated as an invention.
+
+        The API fixture's only grade is 88, so 85 cannot come from the
+        authorized data. The deterministic reply must stand instead.
+        """
+        from apps.chatbot import service
+
+        response = service.handle_message(
+            self.student_user,
+            "How should I study for Math?",
+            use_llm=True,
+            provider=self.InventingProvider(),
+        )
+
+        self.assertTrue(response.degraded)
+        self.assertNotIn("85", response.reply)
+        self.assertIn("grade_summary", response.data)
+
+    def test_provider_failure_falls_back_to_structured_reply(self):
+        from apps.chatbot import service
+
+        response = service.handle_message(
+            self.student_user,
+            "How should I study for Math?",
+            use_llm=True,
+            provider=self.FailingProvider(),
+        )
+
+        self.assertTrue(response.degraded)
+        self.assertIn("grade_summary", response.data)
+        self.assertNotEqual(response.reply, "")
+
+    def test_provider_receives_no_cross_student_data(self):
+        from apps.chatbot import service
+
+        provider = self.GoodProvider()
+        service.handle_message(
+            self.student_user,
+            "How should I study for Math?",
+            use_llm=True,
+            provider=provider,
+        )
+
+        request = provider.requests[0]
+        self.assertNotIn(str(self.other_profile.id), str(request.data))
+
+    def test_provider_is_not_consulted_for_a_distress_signal(self):
+        from apps.chatbot import service
+
+        provider = self.GoodProvider()
+        response = service.handle_message(
+            self.student_user,
+            "I want to kill myself",
+            use_llm=True,
+            provider=provider,
+        )
+
+        self.assertTrue(response.escalated)
+        self.assertEqual(provider.requests, [])
+
+    def test_provider_is_not_consulted_for_a_non_eligible_intent(self):
+        from apps.chatbot import service
+
+        provider = self.GoodProvider()
+        response = service.handle_message(
+            self.student_user,
+            "hello there",
+            use_llm=True,
+            provider=provider,
+        )
+
+        # A greeting is answered deterministically, so the model is never asked
+        # and this is a deliberate path, not a degraded one.
+        self.assertEqual(provider.requests, [])
+        self.assertFalse(response.degraded)
+        self.assertEqual(response.intent, "greeting")
+
+
+class _StubProvider:
+    """A provider that records what it was given and returns a fixed reply."""
+
+    offsite = False
+
+    def __init__(self, reply=None):
+        self.reply = reply
+        self.calls = 0
+        self.seen = None
+
+    def generate(self, request):
+        self.calls += 1
+        self.seen = request
+        return self.reply
+
+
+class _OffsiteStub(_StubProvider):
+    offsite = True
+
+
+class _BoomProvider:
+    offsite = False
+
+    def generate(self, request):
+        raise RuntimeError("provider offline")
+
+
+class ChatbotProviderChainTest(SimpleTestCase):
+    """
+    The chain is the deployment shape: a local model plus optional offsite
+    models, first usable reply wins, a failure never blocks the next, and an
+    offsite provider never sees a direct student identifier.
+    """
+
+    def _request(self, data=None):
+        return ChatProviderRequest(
+            user_role="student",
+            message="What is my grade in Math?",
+            intent="ask_grade",
+            urgency="normal",
+            data=(
+                data
+                if data is not None
+                else {
+                    "grade_summary": {
+                        "student_id": "ABC-123",
+                        "student_name": "Ana Dela Cruz",
+                        "average": 82.0,
+                    }
+                }
+            ),
+        )
+
+    def test_chain_uses_the_first_provider_that_replies(self):
+        first = _StubProvider(reply=None)
+        second = _StubProvider(reply="second answer")
+
+        reply = ChainProvider([first, second]).generate(self._request())
+
+        self.assertEqual(reply, "second answer")
+        self.assertEqual(first.calls, 1)
+
+    def test_chain_skips_a_failing_provider(self):
+        good = _StubProvider(reply="still works")
+
+        reply = ChainProvider([_BoomProvider(), good]).generate(self._request())
+
+        self.assertEqual(reply, "still works")
+        self.assertEqual(good.calls, 1)
+
+    def test_chain_returns_none_when_every_provider_fails(self):
+        chain = ChainProvider([_BoomProvider(), _StubProvider(reply=None)])
+
+        self.assertIsNone(chain.generate(self._request()))
+
+    def test_offsite_provider_receives_a_redacted_payload(self):
+        offsite = _OffsiteStub(reply="ok")
+        request = self._request()
+
+        ChainProvider([offsite]).generate(request)
+
+        summary = offsite.seen.data["grade_summary"]
+        self.assertNotIn("student_id", summary)
+        self.assertNotIn("student_name", summary)
+        self.assertEqual(summary["average"], 82.0)
+        # The caller's own request object is untouched.
+        self.assertIn("student_name", request.data["grade_summary"])
+
+    def test_local_provider_receives_the_full_payload(self):
+        local = _StubProvider(reply="ok")
+
+        ChainProvider([local]).generate(self._request())
+
+        self.assertIn("student_name", local.seen.data["grade_summary"])
+
+    @override_settings(AEGIS_CHATBOT_REDACT_OFFSITE=False)
+    def test_redaction_can_be_disabled(self):
+        offsite = _OffsiteStub(reply="ok")
+
+        ChainProvider([offsite]).generate(self._request())
+
+        self.assertIn("student_name", offsite.seen.data["grade_summary"])
+
+    def test_redact_keeps_non_identifying_data(self):
+        clean = redact(
+            {
+                "student_id": "ABC-123",
+                "grade_summary": {"student_name": "Ana", "average": 82.0},
+                "recommendations": {"student_id": "ABC-123", "method": "cf"},
+            }
+        )
+
+        self.assertNotIn("student_id", clean)
+        self.assertEqual(clean["grade_summary"], {"average": 82.0})
+        self.assertEqual(clean["recommendations"]["method"], "cf")
+
+    def test_ollama_provider_parses_and_blank_is_no_reply(self):
+        with patch("apps.chatbot.providers._post_json") as post:
+            post.return_value = {"response": "  local answer  "}
+            self.assertEqual(
+                OllamaProvider().generate(self._request()), "local answer"
+            )
+            post.return_value = {"response": ""}
+            self.assertIsNone(OllamaProvider().generate(self._request()))
+
+    @override_settings(
+        AEGIS_CHATBOT_OPENAI_BASE_URL="https://api.example.com/v1",
+        AEGIS_CHATBOT_OPENAI_MODEL="llama-3.1-8b-instant",
+        AEGIS_CHATBOT_OPENAI_API_KEY="test-key",
+    )
+    def test_openai_compat_provider_parses_choices(self):
+        with patch("apps.chatbot.providers._post_json") as post:
+            post.return_value = {
+                "choices": [{"message": {"content": " cloud answer "}}]
+            }
+            self.assertEqual(
+                OpenAICompatProvider().generate(self._request()), "cloud answer"
+            )
+
+    @override_settings(AEGIS_CHATBOT_OPENAI_BASE_URL="", AEGIS_CHATBOT_OPENAI_MODEL="")
+    def test_openai_compat_provider_without_config_is_unavailable(self):
+        self.assertIsNone(OpenAICompatProvider().generate(self._request()))
+
+    @override_settings(
+        AEGIS_CHATBOT_PROVIDER_CHAIN=(
+            "apps.chatbot.providers.OpenAICompatProvider,"
+            "apps.chatbot.providers.OllamaProvider"
+        ),
+        AEGIS_CHATBOT_OPENAI_BASE_URL="https://api.example.com/v1",
+        AEGIS_CHATBOT_OPENAI_MODEL="llama-3.1-8b-instant",
+        AEGIS_CHATBOT_OPENAI_API_KEY="test-key",
+    )
+    def test_get_provider_builds_a_chain_and_falls_through_to_local(self):
+        from apps.chatbot import providers
+
+        with patch.object(providers, "_post_json") as post:
+            post.side_effect = [
+                RuntimeError("cloud offline"),
+                {"response": "local answer"},
+            ]
+            provider = providers.get_provider()
+            reply = provider.generate(self._request())
+
+        self.assertIsInstance(provider, ChainProvider)
+        self.assertEqual(reply, "local answer")
+        self.assertIn(
+            "chat/completions", post.call_args_list[0].args[0]
+        )
+        self.assertIn("/api/generate", post.call_args_list[1].args[0])
+
+    def test_default_chain_is_local_first_with_cloud_fallback(self):
+        from django.conf import settings
+
+        paths = [
+            path.strip()
+            for path in settings.AEGIS_CHATBOT_PROVIDER_CHAIN.split(",")
+            if path.strip()
+        ]
+
+        self.assertEqual(
+            paths,
+            [
+                "apps.chatbot.providers.OllamaProvider",
+                "apps.chatbot.providers.OpenAICompatProvider",
+            ],
+        )
+
+    @override_settings(
+        AEGIS_CHATBOT_PROVIDER_CHAIN=(
+            "apps.chatbot.providers.OllamaProvider,"
+            "apps.chatbot.providers.OpenAICompatProvider"
+        ),
+        AEGIS_CHATBOT_OPENAI_BASE_URL="https://api.example.com/v1",
+        AEGIS_CHATBOT_OPENAI_MODEL="llama-3.1-8b-instant",
+        AEGIS_CHATBOT_OPENAI_API_KEY="test-key",
+    )
+    def test_local_provider_wins_and_the_cloud_is_not_called(self):
+        from apps.chatbot import providers
+
+        with patch.object(providers, "_post_json") as post:
+            post.return_value = {"response": "local answer"}
+            reply = providers.get_provider().generate(self._request())
+
+        self.assertEqual(reply, "local answer")
+        self.assertEqual(post.call_count, 1)
+        self.assertIn("/api/generate", post.call_args_list[0].args[0])

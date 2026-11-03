@@ -50,12 +50,10 @@ class ChatView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # PH9.10: deterministic only. No LLM yet.
-        response = service.handle_message(
-            request.user,
-            message,
-            use_llm=False,
-        )
+        # `handle_message` reads AEGIS_CHATBOT_USE_LLM and the configured
+        # provider chain (local model first, offsite fallback). If no model
+        # answers, it returns the deterministic structured reply.
+        response = service.handle_message(request.user, message)
 
         return Response(response.to_dict(), status=status.HTTP_200_OK)
 

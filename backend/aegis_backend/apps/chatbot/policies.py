@@ -7,6 +7,11 @@ queries. It uses lightweight keyword/pattern matching + simple entity
 extraction — no external dependencies.
 
 INTENT and URGENCY are separate (D25).
+
+The rule for *which* intents a response provider may answer lives in
+`service.LLM_ELIGIBLE_INTENTS`, next to the role and escalation policies: the
+deterministic layer here decides meaning, and the provider only phrases an
+answer for the intents the service can ground.
 """
 
 from __future__ import annotations
@@ -72,8 +77,14 @@ PERFORMANCE_PATTERNS = [
 ]
 
 # Subject help
+#
+# Full subject names are listed, not only the abbreviations: the grade book
+# stores "Mathematics", and `\bmath\b` does not match "mathematics" (no word
+# boundary after "math"). A student typing the subject's real name fell through
+# to HELP and was answered with the menu of things the bot can do.
 SUBJECT_HELP_PATTERNS = [
-    r"\b(subject|math|english|science|filipino|mapeh|tle|araling)\b",
+    r"\b(subject|math|mathematics|english|science|filipino|mapeh|tle|"
+    r"araling|edukasyon)\b",
     r"\btulong\s*(sa|ko)\b",
 ]
 
@@ -81,6 +92,16 @@ SUBJECT_HELP_PATTERNS = [
 RESOURCE_PATTERNS = [
     r"\b(resource|material|module|lesson|reviewer|handout)\b",
     r"\b(magaaral|study|learn)\b",
+]
+
+# Academic risk status. Kept separate from generic performance because "Am I at
+# risk?" asks for the risk judgement, not a list of grades, and the reply pairs
+# that status with the student's active recommendations.
+RISK_STATUS_PATTERNS = [
+    r"\b(am|are|is)\s+(i|we|my\s+child|my\s+student|the\s+student)\s+(at\s+)?risk\b",
+    r"\b(at\s+risk|academic\s+risk|risk\s+status|risk\s+level)\b",
+    r"\bdelikado\s+(ba\s+)?(ako|ang\s+bata|ang\s+estudyante)\b",
+    r"\b(panganib|alanganin)\s+(ba\s+)?(ako|siya)\b",
 ]
 
 # Study strategy. `how do i study` is matched before the bare `study` token in
@@ -129,8 +150,12 @@ ATTENDANCE_STATUS_PATTERNS = [
 ]
 
 # Assessment
+#
+# Plurals matter here: "What assessments do I have?" is how the question is
+# actually asked, and `\bassessment\b` never matched "assessments", so it fell
+# through to UNKNOWN and the bot said it did not understand.
 ASSESSMENT_PATTERNS = [
-    r"\b(assessment|exam|test|quiz|final)\b",
+    r"\b(assessments?|exams?|tests?|quiz(zes)?|finals?)\b",
     r"\b(periodical|quarterly|long test)\b",
 ]
 
@@ -211,6 +236,13 @@ URGENT_PATTERNS = [
     # Recessive phrasing with no actor named.
     r"\b(don'?t|do not)\s+want\s+to\s+(live|be here|exist)\b",
     r"\bwant\s+to\s+disappear\b",
+    # Severe distress that is not a method but still needs a counselor now.
+    # These are phrases, not bare emotion words: "stressed" and "worried" stay
+    # ELEVATED so ordinary academic anxiety does not page a counselor.
+    r"\b(hopeless|worthless|no\s+reason\s+to\s+live|better\s+off\s+dead)\b",
+    r"\b(can'?t|cannot)\s+go\s+on\b",
+    r"\b(end|ending)\s+my\s+life\b",
+    r"\b(panic\s+attack|being\s+abused|abusing\s+me|hurt\s+me)\b",
 ]
 
 # Subject names for entity extraction
@@ -307,8 +339,8 @@ def classify_intent(text: str) -> ChatIntent:
     """
     Deterministic intent classification using pattern matching.
 
-    Priority order: urgent → guidance → attendance → assessment →
-    academic → general.
+    Priority order: urgent → guidance → navigation → attendance →
+    assessment → academic → general.
 
     This is the fallback when the LLM is unavailable, or the
     low-confidence path. It does NOT use the LLM.
@@ -330,6 +362,13 @@ def classify_intent(text: str) -> ChatIntent:
     if any(re.search(p, lower) for p in GUIDANCE_HELP_PATTERNS):
         return ChatIntent.GUIDANCE_HELP
 
+    # Navigation before assessment. Both match "how do I navigate to the
+    # assessments page": the UI noun (page/menu/section/tab) means the user is
+    # asking where to click, not what an assessment covers. NAVIGATION_PATTERNS
+    # requires that noun, so checking it first cannot steal a content question.
+    if any(re.search(p, lower) for p in NAVIGATION_PATTERNS):
+        return ChatIntent.SYSTEM_NAVIGATION
+
     # Assessment. Instructions are checked before schedule because
     # "How many questions is the quiz?" contains "how", which SCHEDULE treats as
     # a when-question; a duration/rule question is not a scheduling question.
@@ -347,6 +386,12 @@ def classify_intent(text: str) -> ChatIntent:
         return ChatIntent.ASK_ATTENDANCE_STATUS
     if any(re.search(p, lower) for p in ATTENDANCE_PATTERNS):
         return ChatIntent.ASK_ATTENDANCE
+
+    # Academic risk status before generic recommendation/grade patterns:
+    # "am I at risk, what should I do?" is a status question that also asks
+    # for next steps, not a bare recommendation request.
+    if any(re.search(p, lower) for p in RISK_STATUS_PATTERNS):
+        return ChatIntent.ASK_RISK_STATUS
 
     # Academic (grade/perf checked before subject-help so an explicit
     # grade query with a subject name is still classified as grade)
@@ -368,8 +413,6 @@ def classify_intent(text: str) -> ChatIntent:
         return ChatIntent.GREETING
     if any(re.search(p, lower) for p in HELP_PATTERNS):
         return ChatIntent.HELP
-    if any(re.search(p, lower) for p in NAVIGATION_PATTERNS):
-        return ChatIntent.SYSTEM_NAVIGATION
 
     return ChatIntent.UNKNOWN
 

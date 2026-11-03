@@ -23,6 +23,7 @@ const SERVER_INTENTS: ChatIntent[] = [
   "ask_learning_resource",
   "ask_study_strategy",
   "ask_recommendation",
+  "ask_risk_status",
   "ask_attendance",
   "ask_attendance_status",
   "ask_assessment",
@@ -38,8 +39,8 @@ const SERVER_URGENCIES: ChatUrgency[] = ["normal", "elevated", "urgent"]
 
 describe("chatbot payload vocabulary", () => {
   it("mirrors every ChatIntent the backend declares", () => {
-    // 19 intents in taxonomy.ChatIntent, 3 in taxonomy.UrgencyLevel.
-    expect(SERVER_INTENTS).toHaveLength(19)
+    // 20 intents in taxonomy.ChatIntent, 3 in taxonomy.UrgencyLevel.
+    expect(SERVER_INTENTS).toHaveLength(20)
     expect(SERVER_URGENCIES).toHaveLength(3)
   })
 })

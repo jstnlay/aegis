@@ -158,10 +158,20 @@ def integrate_risk_result(
         )
 
     # --- Find existing actionable alert for this student ---
-    existing_alert = RiskAlert.objects.filter(
-        student=student_profile,
-        status__in=["active", "under_monitoring"],
-    ).order_by("-generated_at").first()
+    #
+    # Chatbot-sourced alerts are excluded. A crisis message is its own signal
+    # with its own follow-up; treating it as the decision tree's existing alert
+    # would let a chatbot alert suppress a computed academic-risk alert (or be
+    # overwritten by one), which is the wrong record for either.
+    existing_alert = (
+        RiskAlert.objects.filter(
+            student=student_profile,
+            status__in=["active", "under_monitoring"],
+        )
+        .exclude(source="chatbot")
+        .order_by("-generated_at")
+        .first()
+    )
 
     # --- Determine meaningful change ---
     changed = _compute_meaningful_change(

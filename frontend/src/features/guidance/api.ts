@@ -181,11 +181,12 @@ export const OPEN_ALERT_STATUSES: readonly RiskAlertStatus[] = [
 ] as const
 
 /** `RiskAlert.Source.choices`. */
-export type RiskAlertSource = "manual" | "decision_tree"
+export type RiskAlertSource = "manual" | "decision_tree" | "chatbot"
 
 export const RISK_ALERT_SOURCE_LABELS: Record<RiskAlertSource, string> = {
   manual: "Manual",
   decision_tree: "Decision tree",
+  chatbot: "Chatbot",
 }
 
 /**

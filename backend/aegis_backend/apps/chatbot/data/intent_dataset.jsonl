@@ -82,6 +82,15 @@
 {"text": "need suggestions", "intent": "ask_recommendation"}
 {"text": "ano ang recommendation mo", "intent": "ask_recommendation"}
 {"text": "any advice for me", "intent": "ask_recommendation"}
+{"text": "am i at risk", "intent": "ask_risk_status"}
+{"text": "are we at risk academically", "intent": "ask_risk_status"}
+{"text": "is my child at risk", "intent": "ask_risk_status"}
+{"text": "what is my risk status", "intent": "ask_risk_status"}
+{"text": "what is my academic risk level", "intent": "ask_risk_status"}
+{"text": "delikado ba ako", "intent": "ask_risk_status"}
+{"text": "panganib ba ako sa bagsak", "intent": "ask_risk_status"}
+{"text": "should i be worried about failing", "intent": "ask_risk_status"}
+{"text": "am i academically at risk", "intent": "ask_risk_status"}
 {"text": "what is my attendance", "intent": "ask_attendance"}
 {"text": "ilang absen ko", "intent": "ask_attendance"}
 {"text": "how many absnces do i have", "intent": "ask_attendance"}

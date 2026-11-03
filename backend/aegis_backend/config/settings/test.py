@@ -75,6 +75,17 @@ REST_FRAMEWORK = {
 
 DEBUG = False
 
+# ---------------------------------------------------------------------------
+# Chatbot provider
+# ---------------------------------------------------------------------------
+#
+# base.py points the chatbot at a local Ollama model by default, with an
+# offsite provider as its fallback. The suite must not depend on a model
+# runtime being installed or reachable, so the provider path is off here. The
+# tests that exercise it either inject a provider explicitly or patch the HTTP
+# call; the ones that assert the default chain read the settings directly.
+AEGIS_CHATBOT_USE_LLM = False
+
 
 # ---------------------------------------------------------------------------
 # Test-only password hasher

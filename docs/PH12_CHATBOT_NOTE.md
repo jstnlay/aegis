@@ -3,7 +3,7 @@
 **Status:** implementation complete and regression-verified.
 **The trained intent classifier was measured and deliberately NOT adopted.** See [§6](#6-the-classifier-experiment-and-why-it-was-declined).
 
-**Scope:** the chatbot's intent and urgency layers only. No backend schema change, no new dependency, no LLM.
+**Scope:** the chatbot's intent, urgency and answer layers. No new dependency; no model is *required*.
 
 ---
 
@@ -18,7 +18,7 @@
 | Typo accuracy | 20% (unchanged, documented as a known limit) |
 | Trained classifier | Built, measured, **declined** |
 
-Tests: `apps.chatbot` 23 -> **57**.
+Tests: `apps.chatbot` 23 -> **84**.
 
 ---
 
@@ -100,7 +100,7 @@ Approved scope: a `char_wb` + `word` TF-IDF union with LogisticRegression, ~15 e
 | File | Role |
 |---|---|
 | `apps/chatbot/dataset.py` | Loads the committed labelled set |
-| `apps/chatbot/data/intent_dataset.jsonl` | 165 labelled rows across 19 intents |
+| `apps/chatbot/data/intent_dataset.jsonl` | 174 labelled rows across 20 intents (the 165-row / 19-intent set measured below, plus `ask_risk_status`) |
 | `apps/chatbot/data/holdout_probe.jsonl` | 68 probes, disjoint from training |
 | `apps/chatbot/classifier.py` | Pipeline, prediction, **not wired in** |
 | `manage.py evaluate_intent_classifier` | Reproduces every number below |
@@ -117,7 +117,7 @@ The model is fitted at import from the committed file, so there is no artifact t
 
 The classifier contributed **nothing**. Two measured causes:
 
-**It overfits.** Out-of-fold top-1 accuracy was **60.0%**, worse than regex's 64.7%. The character branch alone produces **1,110 features from 165 documents** - it memorises rather than generalises.
+**It overfits.** Out-of-fold top-1 accuracy was **60.0%**, worse than regex's 64.7%. The character branch alone produces **1,110 features from the 165 documents measured** - it memorises rather than generalises.
 
 **A confidence floor converts that into precision at the cost of coverage.** The floor was chosen by 5-fold stratified cross-validation on the *training* set, never on the holdout:
 
@@ -144,13 +144,13 @@ At the best setting it rescues only a quarter of the `UNKNOWN` stratum.
 
 ## 7. Limitations to state in the paper
 
-1. The chatbot recognises a **fixed set of 19 intents** and does not hold open-ended conversation. Each message is classified and answered independently; there is no memory of earlier turns.
-2. It is **deterministic, not an LLM**. Intent is keyword/regex classification and answers are templates. `views.py` passes `use_llm=False`.
+1. The chatbot recognises a **fixed set of 20 intents** and does not hold open-ended conversation. Each message is classified and answered independently; there is no memory of earlier turns.
+2. It is **deterministic when no model is reachable**. Intent is keyword/regex classification and answers are templates, but academic, attendance, status and recommendation answers are now built from the caller's imported records. A provider layer (`apps/chatbot/providers.py`) tries a **local** model first and an offsite one only as its fallback; if neither answers, the deterministic reply is used. See [§10](#10-response-providers).
 3. **Misunderstands misspellings** (20%). Unhandled input degrades to the safe rephrase reply rather than a wrong answer.
 4. **Parent queries across multiple children are refused, not guessed.** With one linked child the data is returned; with several the bot asks which child. Name disambiguation is absent because `parse_message` extracts only `subject` and `topic` - there is no `person` entity type to match against. That is a parser change, not a lookup change.
 5. **Faculty, guidance and admin get a narrow assistant.** `ALLOWED_INTENTS_BY_ROLE` restricts them to greeting, help, navigation and unknown. The UI offers only prompts those roles can actually satisfy.
-6. **Nothing is persisted.** The transcript is component state; closing the panel discards it. There is no `ChatSession` or `ChatMessage` model.
-7. **No LLM is deployed.** D29 remains open; no provider is configured and no model is selected.
+6. **The transcript is not persisted.** It is component state; closing the panel discards it. There is no `ChatSession` or `ChatMessage` model. A distress signal is the exception: it writes one open `RiskAlert` (`source=chatbot`) and a Guidance notification, without copying the message text into either.
+7. **A local model is the default provider.** It is attempted first; the offsite provider is only its fallback and stays silent unless a vendor is configured. A deployment that installs no model degrades to the deterministic reply, and no provider can change the API, the frontend or the escalation path.
 
 ---
 
@@ -166,13 +166,96 @@ At the best setting it rescues only a quarter of the `UNKNOWN` stratum.
 
 | Check | Result |
 |---|---|
-| `manage.py test apps.chatbot` | 57/57 PASS |
+| `manage.py test apps.chatbot` | 84/84 PASS |
 | `manage.py test` - batch 1 (accounts, academics, attendance, guidance, notifications, assessments) | 540/540 PASS |
 | `manage.py test` - batch 2 (data_import, chatbot, recommendations, analytics, audit, ai_engine) | 950/950 PASS |
 | `manage.py check` | clean |
 | `manage.py evaluate_intent_classifier` | reproduces every number above |
 
 The suite is split into two batches because a single invocation exceeds the execution timeout. Batch totals: **1,490 tests**.
+
+---
+
+## 10. Response providers
+
+The chatbot answers deterministically. A deployment that wants a model phrases
+the answer through a **provider** without changing the API, the frontend or the
+data flow.
+
+| Provider | Offsite | Notes |
+|---|---|---|
+| `OllamaProvider` | no | **Default, first in the chain.** Local runtime (`AEGIS_OLLAMA_URL`, `AEGIS_OLLAMA_MODEL`). No key, no egress, works offline. |
+| `OpenAICompatProvider` | **yes** | **Fallback.** Any OpenAI-compatible `/chat/completions` endpoint (Groq, Cerebras, OpenRouter, Mistral, GitHub Models, ...). Silent until a vendor is configured. |
+| `ChainProvider` | — | Tries providers in order; first non-empty reply wins; a failure moves on; all-fail returns to the deterministic reply. |
+| `NoopProvider` | no | Used only when the chain is empty by configuration. Returns no reply. |
+
+The default is local-first, cloud-as-fallback:
+
+```
+AEGIS_CHATBOT_USE_LLM = True                       # default
+AEGIS_CHATBOT_PROVIDER_CHAIN = (
+    "apps.chatbot.providers.OllamaProvider,"
+    "apps.chatbot.providers.OpenAICompatProvider"
+)
+AEGIS_OLLAMA_URL = "http://127.0.0.1:11434"
+AEGIS_OLLAMA_MODEL = "llama3.2:3b"
+```
+
+With no model installed the request degrades to the deterministic reply
+(`degraded=true` in the response, which the panel does not surface). With
+Ollama running, the answer is local and no student record leaves the machine.
+If Ollama is down and an offsite vendor is configured, the chain — and only
+then — sends the **redacted** payload to that vendor. Set
+`AEGIS_CHATBOT_USE_LLM=False` to stay fully deterministic, or
+`AEGIS_CHATBOT_PROVIDER_CHAIN=""` to fall back to the single
+`AEGIS_CHATBOT_PROVIDER`.
+
+### 10.1 The policies that keep it safe
+
+1. **Distress never reaches a provider.** The escalation path runs before the
+   provider and returns, so a crisis reply is always the application's, not a
+   model's.
+2. **Only `LLM_ELIGIBLE_INTENTS` reach a provider**, and today that set is
+   `ASK_STUDY_STRATEGY` alone — the one question whose answer is open-ended
+   advice. Every answer that states a fact about a student's record (grades,
+   status, risk, attendance, recommendations, resources) is written by the
+   application. Greetings, help, navigation and `UNKNOWN` are deterministic; a
+   message the classifier could not understand returns the honest rephrase
+   prompt instead of a model's guess.
+3. **A provider is handed only authorized, already-computed data** — never ORM
+   access, never another student's records.
+4. **An offsite provider receives a redacted payload.** `providers.redact`
+   drops direct student identifiers (`student_id`, `student_name`) before the
+   request leaves the machine; the local provider gets the full payload. Set
+   `AEGIS_CHATBOT_REDACT_OFFSITE=False` only for a vendor cleared to hold
+   student data.
+5. **A provider cannot escalate.** Alert and notification writes stay in
+   `service.create_escalation`.
+6. **A provider reply must be grounded in the data it was given.** Every
+   provider reply passes three checks before it is returned. `sanitize_provider_reply`
+   rewrites internal field values (`at_risk`, `on_track`, ...) into plain words;
+   `reply_is_grounded` requires every number in the prose to appear in the
+   authorized payload; and `reply_echoes_payload` rejects a reply that prints one
+   of the service's own section headings (`Grade Summary:`, `Academic Status:`,
+   markdown `**`). A reply that names a figure it was not handed, or restates the
+   record instead of giving advice, is discarded in favour of the deterministic
+   answer. The checks exist because the local model was measured ignoring the
+   prompt: it wrote `at_risk` verbatim, invented an 85% average for a student
+   averaging 65.72, and — handed the full record for the advice intent — replied
+   with a section dump plus a recommendation title no record held. Because no
+   check can see a reversed comparison ("68.6, which is above the required 75"),
+   the record-keeping answers are deterministic to begin with and a provider is
+   kept only for `ASK_STUDY_STRATEGY`, whose payload is narrowed by
+   `provider_payload` to the weak-subject names and the two numbers it may refer
+   to (root fix; the label check is the backstop).
+
+### 10.2 Privacy note
+
+The provider payload contains real student records (grades, status, weak
+subjects, recommendations). The PH9.0 discovery report already concluded that
+a cloud LLM API is *not suitable for student data*; the local provider is the
+default shape for that reason. Point an offsite provider only at a vendor the
+school has cleared, and keep redaction on.
 
 ---
 

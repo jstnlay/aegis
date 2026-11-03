@@ -369,6 +369,7 @@ class RiskAlert(TimestampedModel):
     class Source(models.TextChoices):
         MANUAL = "manual", "Manual"
         DECISION_TREE = "decision_tree", "Decision Tree"
+        CHATBOT = "chatbot", "Chatbot"
 
     class Status(models.TextChoices):
         ACTIVE = "active", "Active"

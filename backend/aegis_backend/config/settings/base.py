@@ -337,6 +337,79 @@ SIMPLE_JWT = {
 # (password reset, account invitation) is built from this base URL.
 AEGIS_FRONTEND_URL = config("AEGIS_FRONTEND_URL", default="http://127.0.0.1:5173")
 
+# ---------------------------------------------------------------------------
+# Chatbot provider + safety contacts
+# ---------------------------------------------------------------------------
+#
+# The chatbot answers from templates by default and tries a model only for the
+# groundable intents (`service.LLM_ELIGIBLE_INTENTS`).
+#
+# Default shape: a LOCAL model first, an offsite model only as its fallback.
+#   - OllamaProvider   — local runtime, no key, no egress. Works offline.
+#   - OpenAICompatProvider — offsite, redacted payload. Falls through silently
+#     when unconfigured, so a deployment with no vendor configured simply
+#     degrades to the deterministic reply.
+#
+# If every provider fails or is unavailable, the deterministic reply is used.
+# Set AEGIS_CHATBOT_USE_LLM=False to keep the chatbot fully deterministic, or
+# set AEGIS_CHATBOT_PROVIDER_CHAIN="" to fall back to the single
+# AEGIS_CHATBOT_PROVIDER below.
+AEGIS_CHATBOT_USE_LLM = config(
+    "AEGIS_CHATBOT_USE_LLM", default=True, cast=bool
+)
+AEGIS_CHATBOT_PROVIDER_CHAIN = config(
+    "AEGIS_CHATBOT_PROVIDER_CHAIN",
+    default=(
+        "apps.chatbot.providers.OllamaProvider,"
+        "apps.chatbot.providers.OpenAICompatProvider"
+    ),
+)
+
+# Offsite providers (OpenAI-compatible endpoints) receive a redacted payload:
+# direct student identifiers are dropped before the request leaves the machine.
+AEGIS_CHATBOT_REDACT_OFFSITE = config(
+    "AEGIS_CHATBOT_REDACT_OFFSITE", default=True, cast=bool
+)
+
+AEGIS_CHATBOT_TIMEOUT_SECONDS = config(
+    "AEGIS_CHATBOT_TIMEOUT_SECONDS", default=8, cast=int
+)
+AEGIS_CHATBOT_MAX_TOKENS = config(
+    "AEGIS_CHATBOT_MAX_TOKENS", default=300, cast=int
+)
+
+#: Escape hatch used only when AEGIS_CHATBOT_PROVIDER_CHAIN is empty.
+AEGIS_CHATBOT_PROVIDER = config(
+    "AEGIS_CHATBOT_PROVIDER",
+    default="apps.chatbot.providers.NoopProvider",
+)
+
+#: Local model runtime (Ollama). Student data never leaves the machine here.
+AEGIS_OLLAMA_URL = config(
+    "AEGIS_OLLAMA_URL", default="http://127.0.0.1:11434"
+)
+AEGIS_OLLAMA_MODEL = config("AEGIS_OLLAMA_MODEL", default="llama3.2:3b")
+
+#: Any OpenAI-compatible chat endpoint (Groq, Cerebras, OpenRouter, Mistral,
+#: GitHub Models, ...). Offsite: point it only at a vendor cleared for student
+#: data, or leave it empty to keep the local provider as the only model.
+AEGIS_CHATBOT_OPENAI_BASE_URL = config(
+    "AEGIS_CHATBOT_OPENAI_BASE_URL", default=""
+)
+AEGIS_CHATBOT_OPENAI_API_KEY = config(
+    "AEGIS_CHATBOT_OPENAI_API_KEY", default=""
+)
+AEGIS_CHATBOT_OPENAI_MODEL = config("AEGIS_CHATBOT_OPENAI_MODEL", default="")
+
+#: Shown in a distress reply. Deployments should set the real Guidance Office
+#: contact and, where available, the national crisis helpline.
+AEGIS_COUNSELING_CONTACT = config(
+    "AEGIS_COUNSELING_CONTACT",
+    default="your school's Guidance Office",
+)
+AEGIS_CRISIS_HELPLINE = config("AEGIS_CRISIS_HELPLINE", default="")
+AEGIS_EMERGENCY_NUMBER = config("AEGIS_EMERGENCY_NUMBER", default="911")
+
 #: The address outgoing mail is sent from. Without it, Django uses the
 # webserver's own account, which is usually not a deliverable address.
 DEFAULT_FROM_EMAIL = config(

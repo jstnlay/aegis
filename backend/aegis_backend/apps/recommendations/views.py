@@ -41,8 +41,7 @@ class RecommendationsView(APIView):
         from django.shortcuts import get_object_or_404
 
         from apps.accounts.models import StudentProfile
-        from apps.cms.models import LearningItem, StudentInteraction
-        from ai_engine.recommender import recommend
+        from apps.recommendations.services import recommend_for_student
 
         student = get_object_or_404(StudentProfile, pk=student_id)
 
@@ -51,82 +50,11 @@ class RecommendationsView(APIView):
                 {"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN
             )
 
-        # Every interaction in the school, not just this student's. CF computes
-        # item-item similarity across the whole cohort; scoping the matrix to one
-        # student would make every similarity zero by construction.
-        interactions = list(StudentInteraction.objects.select_related("learning_item"))
-
-        # Only APPROVED + ACTIVE items are recommendable. `LearningItem
-        # .is_recommendation_eligible` is that rule; it is applied here rather
-        # than inside the recommender because the recommender is also used by
-        # offline benchmark code that supplies its own item list.
-        learning_items = [
-            item
-            for item in LearningItem.objects.all()
-            if item.is_recommendation_eligible
-        ]
-
-        features, prediction = self._student_signals(student)
-
-        result = recommend(
-            student,
-            interactions,
-            learning_items,
-            feature_dict=features,
-            prediction=prediction,
-        )
+        # The chatbot reads the same service, so its answer cannot describe a
+        # different recommendation than this endpoint returns.
+        result = recommend_for_student(student)
 
         return Response({"status": "ok", "data": result})
-
-    @staticmethod
-    def _student_signals(student):
-        """
-        Feature dict + prediction for the content-based path.
-
-        Returns `(features, prediction)`. The prediction is empty when the risk
-        engine has not run, because a fabricated risk level would let
-        `extract_academic_needs` invent a need. `resolve_recommendations` reads
-        needs from the feature dict regardless, so content-based still works off
-        real grades and attendance alone.
-        """
-        from apps.academics.models import AcademicYear, GradingPeriod
-        from ai_engine.feature_engine import compute_student_features
-
-        year = (
-            AcademicYear.objects.filter(is_current=True)
-            .order_by("-start_date")
-            .first()
-        )
-        if year is None:
-            return {}, {}
-
-        from datetime import date
-
-        completed = list(
-            GradingPeriod.objects.filter(
-                academic_year=year, end_date__lte=date.today()
-            ).order_by("order")
-        )
-
-        features = compute_student_features(student, completed, year)
-
-        # The latest stored RiskScore for this student, if the engine has run.
-        # A read-only lookup: nothing here triggers a computation.
-        from apps.guidance.models import RiskScore
-
-        latest = (
-            RiskScore.objects.filter(student=student)
-            .order_by("-computed_at")
-            .first()
-        )
-        if latest is None:
-            return features, {}
-
-        return features, {
-            "risk_level": latest.risk_level,
-            "risk_score": latest.risk_score,
-            "explanation": latest.explanation or {},
-        }
 
     @staticmethod
     def _may_read(user, student):

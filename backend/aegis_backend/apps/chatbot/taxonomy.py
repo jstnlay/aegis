@@ -30,6 +30,7 @@ class ChatIntent(str, Enum):
     ASK_LEARNING_RESOURCE = "ask_learning_resource"
     ASK_STUDY_STRATEGY = "ask_study_strategy"
     ASK_RECOMMENDATION = "ask_recommendation"
+    ASK_RISK_STATUS = "ask_risk_status"
 
     # ATTENDANCE
     ASK_ATTENDANCE = "ask_attendance"

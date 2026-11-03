@@ -70,7 +70,8 @@ RANDOM_STATE = 42
 # TRAINING set (out-of-fold predictions) — not tuned against the holdout, which
 # would contaminate the only honest estimate available.
 #
-# Measured out-of-fold on 165 samples across 19 intents:
+# Measured out-of-fold on the 165-sample / 19-intent set at the time of the
+# experiment (the dataset has since gained `ask_risk_status` examples):
 #
 #     floor   kept   accuracy_on_kept   overall
 #     0.00    165          60.0%          60.0%
