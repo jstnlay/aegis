@@ -24,6 +24,19 @@ export type ExportKind =
   "grades" | "attendance" | "students" | "advisory" | "guidance_records"
 
 /**
+ * URL slug per kind. The import type is `guidance_records` (underscore) but
+ * the export route is `/exports/guidance-records/` (hyphen); using the import
+ * type as the path answers 404.
+ */
+const EXPORT_PATH: Record<ExportKind, string> = {
+  grades: "grades",
+  attendance: "attendance",
+  students: "students",
+  advisory: "advisory",
+  guidance_records: "guidance-records",
+}
+
+/**
  * Which header flavor the file carries: `standard` is the human-readable
  * document, `reimport` (PH12 / TC-ADM-03/04/05) is the round-trip file whose
  * columns are exactly the matching import template's, so the download can be
@@ -46,13 +59,16 @@ export async function downloadExport(
   format: ExportFormat,
   schema: ExportSchema = "standard"
 ): Promise<void> {
-  const response = await apiClient.get(`/data-import/exports/${kind}/`, {
-    params:
-      schema === "reimport"
-        ? { file_format: format, schema }
-        : { file_format: format },
-    responseType: "blob",
-  })
+  const response = await apiClient.get(
+    `/data-import/exports/${EXPORT_PATH[kind]}/`,
+    {
+      params:
+        schema === "reimport"
+          ? { file_format: format, schema }
+          : { file_format: format },
+      responseType: "blob",
+    }
+  )
 
   const filename = filenameFromDisposition(
     response.headers["content-disposition"]
