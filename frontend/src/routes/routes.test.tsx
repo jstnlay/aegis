@@ -105,9 +105,9 @@ beforeEach(() => {
 const ROLE_CASES: ReadonlyArray<{ role: Role; heading: RegExp }> = [
   { role: "student", heading: /Welcome back/i },
   { role: "parent", heading: /Your family portal/i },
-  { role: "faculty", heading: /Faculty Dashboard/i },
+  { role: "faculty", heading: /Welcome back.*Teacher/i },
   { role: "guidance", heading: /Welcome back/i },
-  { role: "admin", heading: /Administration Panel/i },
+  { role: "admin", heading: /Administration overview/i },
 ]
 
 describe("PH11.7 domain routes", () => {
@@ -298,7 +298,7 @@ describe("no page describes implemented functionality as future work", () => {
       authState.user = makeUser(role)
       renderAt("/app/dashboard")
 
-      await screen.findByRole("heading", { name: heading })
+      await screen.findByRole("heading", { name: heading, level: 1 })
       const text = document.body.textContent ?? ""
 
       expect(text).not.toMatch(/coming soon/i)
@@ -323,7 +323,7 @@ describe("no page describes implemented functionality as future work", () => {
     authState.user = makeUser("student")
     renderAt("/app/dashboard")
 
-    await screen.findByRole("heading", { name: /Welcome back/i })
+    await screen.findByRole("heading", { name: /Welcome back/i, level: 1 })
 
     // Dashboard quick links may share navigation labels. Plain duplicate
     // labels must not masquerade as links that a reader could activate.
@@ -753,7 +753,7 @@ describe("role dashboard routes", () => {
       renderAt(`/app/dashboard/${role}`)
 
       expect(
-        await screen.findByRole("heading", { name: heading })
+        await screen.findByRole("heading", { name: heading, level: 1 })
       ).toBeInTheDocument()
       expect(document.body.textContent?.trim().length ?? 0).toBeGreaterThan(0)
     }
@@ -780,7 +780,10 @@ describe("role dashboard routes", () => {
     renderAt("/app/dashboard")
 
     expect(
-      await screen.findByRole("heading", { name: /Faculty Dashboard/i })
+      await screen.findByRole("heading", {
+        name: /Welcome back.*Teacher/i,
+        level: 1,
+      })
     ).toBeInTheDocument()
   })
 })

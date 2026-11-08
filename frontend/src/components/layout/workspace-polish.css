@@ -1,0 +1,767 @@
+@import "@fontsource-variable/plus-jakarta-sans";
+
+/* Shared reading scale and navigation treatment for authenticated school workspaces. */
+.app-shell[data-role] {
+  --font-heading: "Plus Jakarta Sans Variable", "Inter Variable", sans-serif;
+  --sidebar: color-mix(in srgb, var(--primary) 74%, #321414);
+  --sidebar-foreground: #fff8f3;
+  --sidebar-primary: #fff8f3;
+  --sidebar-primary-foreground: color-mix(in srgb, var(--primary) 74%, #321414);
+  --sidebar-accent: color-mix(in srgb, var(--primary) 80%, white);
+  --sidebar-accent-foreground: #fff8f3;
+  --sidebar-border: #ffffff1f;
+  --sidebar-ring: #f1ce98;
+
+  .app-main {
+    background:
+      radial-gradient(
+        ellipse at 100% 12%,
+        color-mix(in srgb, var(--primary) 3%, transparent),
+        transparent 60%
+      ),
+      radial-gradient(ellipse at 8% 32%, #fff1d94d, transparent 55%), #fffdfb;
+    color: var(--foreground);
+  }
+  .landing-background-art {
+    opacity: 0.32;
+    z-index: 0;
+  }
+  .app-content {
+    position: relative;
+    z-index: 1;
+    max-width: 1440px;
+    padding-block: 30px 88px;
+  }
+  .app-sidebar {
+    border-right-color: var(--sidebar-border);
+    background: var(--sidebar);
+    box-shadow: 5px 0 24px #36111b10;
+  }
+  .app-sidebar-brand,
+  .app-header-brand {
+    background: var(--sidebar);
+    color: #fff8f3;
+  }
+  .app-sidebar-brand p:first-child {
+    color: #fffaf6;
+    font-family: var(--font-heading);
+    font-size: 24px;
+    font-weight: 750;
+    letter-spacing: -0.055em;
+  }
+  .app-sidebar-brand p:last-child {
+    color: #ecd1d4;
+    font-size: 9px;
+    letter-spacing: 0.04em;
+  }
+  .app-sidebar nav {
+    padding: 8px 12px 20px;
+    scrollbar-color: #b27e88 transparent;
+    scrollbar-width: thin;
+  }
+  .app-sidebar nav > ul > li > p {
+    padding: 16px 14px 10px;
+    color: #d8aeb7;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.11em;
+  }
+  .app-sidebar nav > ul > li:first-child > p {
+    padding-top: 4px;
+  }
+  .app-sidebar nav > ul > li > p::before {
+    display: none;
+  }
+  .app-sidebar nav a {
+    min-height: 52px;
+    height: auto;
+    gap: 12px;
+    margin-block: 5px;
+    padding: 12px 13px;
+    border: 1px solid transparent;
+    border-radius: 14px;
+    color: #edd2d7;
+    font-family: var(--font-heading);
+    font-size: 15px;
+    font-weight: 550;
+    line-height: 1.4;
+    letter-spacing: -0.025em;
+    white-space: normal;
+  }
+  .app-sidebar nav a:is(:hover, :focus-visible):not([aria-current="page"]) {
+    border-color: #f1cbbd;
+    background: #fff3eb;
+    color: var(--primary);
+  }
+  .app-sidebar
+    nav
+    a:is(:hover, :focus-visible):not([aria-current="page"])
+    .app-sidebar-label,
+  .app-sidebar
+    nav
+    a:is(:hover, :focus-visible):not([aria-current="page"])
+    .app-sidebar-item-icon {
+    color: var(--primary);
+  }
+  .app-sidebar nav a[aria-current="page"] {
+    border-color: #ffffff20;
+    background: #ffffff20;
+    color: #fff;
+    box-shadow: inset 3px 0 #f1ce98;
+    font-weight: 700;
+  }
+  .app-sidebar-item-icon {
+    display: grid;
+    place-items: center;
+    flex: 0 0 26px;
+    width: 26px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #d4a6b0;
+    box-shadow: none;
+  }
+  .app-sidebar-item-icon svg {
+    width: 22px;
+    height: 22px;
+    stroke-width: 1.7;
+  }
+  .app-sidebar nav a[aria-current="page"] .app-sidebar-item-icon {
+    color: #f5d39f;
+    background: transparent;
+    box-shadow: none;
+  }
+  .app-sidebar-current-arrow {
+    display: block;
+    flex: 0 0 7px;
+    width: 7px;
+    height: 7px;
+    margin-left: auto;
+    border-radius: 50%;
+    background: #f1ce98;
+    box-shadow: 0 0 10px #f1ce9840;
+  }
+  .app-sidebar-current-arrow > * {
+    display: none;
+  }
+  .app-sidebar-toggle {
+    border-color: #d8bcc3;
+    background: #fffaf6;
+    color: #702a3c;
+    box-shadow: 0 3px 10px #30101b18;
+  }
+  .app-sidebar-footer {
+    display: flex;
+    align-items: center;
+    justify-content: start;
+    gap: 11px;
+    min-height: 84px;
+    margin: 10px;
+    padding: 14px 12px;
+    border: 1px solid #ffffff20;
+    border-radius: 14px;
+    background: #ffffff09;
+  }
+  .app-sidebar-footer > .app-sidebar-user-avatar {
+    display: grid;
+    place-items: center;
+    flex: 0 0 36px;
+    width: 36px;
+    height: 36px;
+    border: 1px solid #ffffff38;
+    border-radius: 50%;
+    background: #ffffff19;
+    color: #fff7ed;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .app-sidebar-user-copy {
+    min-width: 0;
+  }
+  .app-sidebar-footer .app-sidebar-user-copy p {
+    overflow: hidden;
+    padding: 0;
+    color: #fff8f3;
+    font-size: 13px;
+    font-weight: 650;
+    line-height: 1.6;
+    letter-spacing: -0.02em;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .app-sidebar-user-copy .app-sidebar-label {
+    color: #dbb9c0;
+    font-size: 11px;
+    line-height: 1.5;
+  }
+  .app-header {
+    border-bottom-color: color-mix(in srgb, var(--primary) 10%, var(--card));
+    background: #fff;
+    box-shadow: 0 3px 16px #36304704;
+  }
+  .app-header h1 {
+    color: var(--primary);
+    font-family: var(--font-heading);
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    text-transform: none;
+  }
+  .app-content :is(h2, h3, h4, [data-slot="card-title"]) {
+    font-family: var(--font-heading);
+  }
+  .app-main [data-slot="card"] {
+    --admin-glass-surface: color-mix(in srgb, var(--card) 62%, transparent);
+    background:
+      linear-gradient(135deg, #ffffff45, #ffffff0a), var(--admin-glass-surface);
+    -webkit-backdrop-filter: blur(14px) saturate(115%);
+    backdrop-filter: blur(14px) saturate(115%);
+    border-radius: 18px;
+    box-shadow:
+      inset 0 1px 0 #ffffffc4,
+      0 6px 22px #633c2909;
+    --card-spacing: 24px;
+  }
+  .app-main [data-slot="card-title"] {
+    font-size: 19px;
+    line-height: 1.45;
+    font-weight: 650;
+    letter-spacing: -0.035em;
+  }
+  .app-main [data-slot="card-description"] {
+    font-size: 14px;
+    line-height: 1.7;
+  }
+  .app-content :is(.text-sm, .text-base) {
+    font-size: 15px;
+    line-height: 1.65;
+  }
+  .app-content .text-xs {
+    font-size: 12px;
+    line-height: 1.65;
+  }
+  .app-content [data-slot="badge"] {
+    font-size: 11px;
+    line-height: 1.25;
+  }
+  .app-content
+    [data-slot="card"]:has(> [data-slot="card-content"] > .tabular-nums)
+    [data-slot="card-title"] {
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .app-content :is(input, textarea, [data-slot="select-trigger"]) {
+    font-size: 15px;
+  }
+  .app-content label {
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .app-content :is(th, td) {
+    line-height: 1.6;
+  }
+  .app-content th {
+    font-size: 12px;
+  }
+  .app-content td {
+    font-size: 14px;
+  }
+  .app-content .faculty-classroom-board[data-slot="card"] {
+    --card-spacing: 24px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .app-shell[data-role] {
+    --rail-motion: 140ms cubic-bezier(0.2, 0, 0.2, 1);
+    --workspace-rail-width: 72px;
+    &:has(.app-sidebar[data-compact="false"]) {
+      --workspace-rail-width: 256px;
+    }
+    .app-sidebar-dock {
+      flex: 0 0 var(--workspace-rail-width);
+      width: var(--workspace-rail-width);
+      transition:
+        flex-basis var(--rail-motion),
+        width var(--rail-motion);
+    }
+    .app-header {
+      width: calc(100% + var(--workspace-rail-width));
+      margin-left: calc(-1 * var(--workspace-rail-width));
+      transition:
+        width var(--rail-motion),
+        margin-left var(--rail-motion),
+        transform 200ms ease-out;
+    }
+    .app-sidebar-dock .app-sidebar {
+      transition:
+        width var(--rail-motion),
+        transform var(--rail-motion);
+      overflow-x: clip;
+    }
+    .app-header-brand {
+      overflow: hidden;
+      transition: width var(--rail-motion);
+    }
+  }
+  .app-shell[data-role] {
+    .app-content {
+      padding-inline: clamp(24px, 3vw, 48px);
+    }
+    .app-content :is(.parent-page, .student-page, .faculty-page) {
+      font-size: 15px;
+    }
+    .app-content :is(.parent-page, .student-page, .faculty-page) h2 {
+      font-size: clamp(28px, 2.5vw, 36px);
+      letter-spacing: -0.045em;
+      line-height: 1.25;
+    }
+    .app-content :is(.faculty-welcome, .parent-welcome) h2 + p {
+      font-size: 15px;
+      line-height: 1.75;
+    }
+    .app-content :is(.faculty-action strong, .parent-child-option strong) {
+      font-size: 15px;
+    }
+    .app-content .faculty-action small {
+      font-size: 12px;
+    }
+    .app-content .faculty-classroom-cover h4 {
+      font-size: 21px;
+    }
+    .app-content .faculty-classroom-cover p {
+      font-size: 13px;
+    }
+    .app-content .faculty-classroom-code {
+      font-size: 11px;
+    }
+    .app-content .faculty-metrics [data-slot="card-title"] {
+      font-size: 14px;
+    }
+    .app-content .faculty-metrics [data-slot="card-content"] > p {
+      font-size: 12px;
+    }
+    .app-sidebar[data-compact="true"] .app-sidebar-user-copy {
+      display: none;
+    }
+    .app-sidebar[data-compact="true"] .app-sidebar-footer {
+      margin: 8px 5px;
+      padding: 10px 5px;
+      min-height: 60px;
+    }
+    .app-sidebar[data-compact="true"] nav a {
+      min-height: 48px;
+    }
+    .app-sidebar[data-compact="true"] .app-sidebar-item-icon {
+      color: #edd2d7;
+      flex: 0 0 40px;
+      width: 40px;
+      height: 40px;
+    }
+    .app-sidebar[data-compact="true"] .app-sidebar-item-icon > svg {
+      width: 25px;
+      height: 25px;
+      stroke-width: 1.8;
+    }
+  }
+}
+
+@media (min-width: 1024px) and (prefers-reduced-motion: reduce) {
+  .app-shell[data-role] {
+    .app-sidebar-dock,
+    .app-sidebar-dock .app-sidebar,
+    .app-header,
+    .app-header-brand {
+      transition: none;
+    }
+  }
+}
+
+@media (max-width: 1023px) {
+  .app-shell[data-role] .app-sidebar {
+    z-index: 60;
+    width: min(292px, calc(100vw - 44px));
+  }
+}
+
+@media (max-width: 639px) {
+  .app-shell[data-role] {
+    .app-content {
+      padding: 18px 14px 84px;
+    }
+    .app-header h1 {
+      font-size: 20px;
+    }
+    .app-main [data-slot="card"] {
+      --card-spacing: 16px;
+      border-radius: 14px;
+    }
+    .app-main [data-slot="card-title"] {
+      font-size: 16px;
+    }
+    .app-main [data-slot="card-description"] {
+      font-size: 12px;
+    }
+    .app-content :is(.text-sm, .text-base) {
+      font-size: 13px;
+    }
+    .app-content .text-xs {
+      font-size: 11px;
+    }
+    .app-content label {
+      font-size: 12px;
+    }
+    .app-content :is(input, textarea, [data-slot="select-trigger"]) {
+      font-size: 16px;
+    }
+    .app-content td {
+      font-size: 12px;
+    }
+    .app-content th {
+      font-size: 11px;
+    }
+    .app-content [data-slot="badge"] {
+      font-size: 10px;
+    }
+    .app-content
+      [data-slot="card"]:has(> [data-slot="card-content"] > .tabular-nums)
+      [data-slot="card-title"] {
+      font-size: 12px;
+    }
+    .app-sidebar nav a {
+      min-height: 50px;
+      font-size: 15px;
+    }
+  }
+}
+
+/* Shared framed panels across every school workspace and its record modules. */
+.app-shell[data-role] .app-main {
+  [data-slot="card"]:not(:has(> [data-slot="card-content"] > .tabular-nums)) {
+    --card-spacing: 24px;
+    gap: 0;
+    padding-block: 0 24px;
+    background:
+      linear-gradient(135deg, #ffffff45, #ffffff0a),
+      color-mix(in srgb, var(--card) 62%, transparent);
+    border: 1px solid
+      color-mix(in srgb, var(--panel-accent, var(--primary)) 16%, var(--card));
+    border-radius: 16px;
+    box-shadow: 0 4px 18px color-mix(in srgb, var(--primary) 4%, transparent);
+    --tw-ring-color: transparent;
+  }
+  [data-slot="card"]:not(:has(> [data-slot="card-content"] > .tabular-nums))
+    > [data-slot="card-header"] {
+    margin: 0;
+    padding: 20px 24px;
+    gap: 6px;
+    border-bottom: 1px solid color-mix(in srgb, var(--primary) 9%, var(--card));
+    border-radius: 15px 15px 0 0;
+    background: linear-gradient(
+      110deg,
+      color-mix(in srgb, var(--panel-tint, #fcf6f0) 45%, transparent),
+      color-mix(in srgb, var(--card) 16%, transparent) 85%
+    );
+  }
+  [data-slot="card"]:not(:has(> [data-slot="card-content"] > .tabular-nums))
+    > [data-slot="card-content"] {
+    min-width: 0;
+    padding: 20px 24px 0;
+  }
+  .faculty-classroom-board > [data-slot="card-header"] > p {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.65;
+  }
+}
+@media (max-width: 639px) {
+  .app-shell[data-role] .app-main {
+    [data-slot="card"]:not(:has(> [data-slot="card-content"] > .tabular-nums)) {
+      --card-spacing: 16px;
+      padding-bottom: 16px;
+      border-radius: 14px;
+    }
+    [data-slot="card"]:not(:has(> [data-slot="card-content"] > .tabular-nums))
+      > [data-slot="card-header"] {
+      padding: 16px;
+      border-radius: 13px 13px 0 0;
+    }
+    [data-slot="card"]:not(:has(> [data-slot="card-content"] > .tabular-nums))
+      > [data-slot="card-content"] {
+      padding: 16px 16px 0;
+    }
+    .faculty-classroom-board > [data-slot="card-header"] > p {
+      font-size: 12px;
+    }
+  }
+}
+
+/* Rounded editorial headings paired with the existing Inter reading font. */
+.app-shell[data-role] {
+  .app-content :is(h2, h3, h4, [data-slot="card-title"]) {
+    font-family: var(--font-heading);
+    font-feature-settings: "ss01";
+    text-wrap: balance;
+  }
+  .app-header h1 {
+    font-weight: 750;
+    letter-spacing: -0.045em;
+  }
+  .app-sidebar nav a {
+    font-weight: 650;
+    letter-spacing: -0.035em;
+  }
+  .app-content [data-slot="card-title"] {
+    color: #45312b;
+    font-weight: 750;
+    letter-spacing: -0.04em;
+  }
+  .app-content [data-slot="card-description"] {
+    color: #81736e;
+  }
+  .app-content .faculty-action strong {
+    font-family: var(--font-heading);
+    font-weight: 750;
+    color: #4e3430;
+    letter-spacing: -0.035em;
+  }
+  .app-content .faculty-classroom-cover h4 {
+    font-family: var(--font-heading);
+    font-weight: 750;
+    letter-spacing: -0.045em;
+    color: white;
+  }
+  .app-content .faculty-metrics [data-slot="card-content"] > .tabular-nums {
+    font-family: var(--font-heading);
+    font-weight: 750;
+    letter-spacing: -0.055em;
+    color: #49312c;
+  }
+}
+
+/* Faculty dashboard: one main teaching column and one supporting overview column. */
+
+/* App controls: consistent touch targets, surfaces and interaction states. */
+.app-shell[data-role] {
+  .app-content [data-slot="button"] {
+    border-radius: 10px;
+    font-family: var(--font-heading);
+    font-weight: 650;
+    letter-spacing: -0.02em;
+    gap: 8px;
+  }
+  .app-content [data-slot="button"][data-size="default"],
+  .app-content [data-slot="button"][data-size="lg"] {
+    min-height: 42px;
+    padding-inline: 16px;
+  }
+  .app-content [data-slot="button"][data-size="sm"] {
+    min-height: 36px;
+    padding-inline: 12px;
+  }
+  .app-content [data-slot="button"][data-variant="default"] {
+    border: 1px solid color-mix(in srgb, var(--primary) 85%, black);
+    background: var(--primary);
+    color: var(--primary-foreground);
+    box-shadow:
+      inset 0 1px #ffffff18,
+      0 3px 7px color-mix(in srgb, var(--primary) 10%, transparent);
+  }
+  .app-content
+    [data-slot="button"][data-variant="default"]:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--primary) 88%, black);
+  }
+  .app-content [data-slot="button"][data-variant="outline"] {
+    border-color: #e3d3c9;
+    background: #fffdfa;
+    color: #754337;
+    box-shadow: 0 1px 3px #66352005;
+  }
+  .app-content
+    [data-slot="button"][data-variant="outline"]:hover:not(:disabled) {
+    border-color: #cfae9a;
+    background: #faf0e7;
+    color: var(--primary);
+  }
+  .app-content
+    :is(
+      [data-slot="input"],
+      [data-slot="textarea"],
+      [data-slot="select-trigger"]
+    ) {
+    min-height: 42px;
+    border: 1px solid #dfd8d2;
+    border-radius: 10px;
+    background: #fffdfa;
+    color: var(--foreground);
+    padding-inline: 13px;
+    box-shadow: inset 0 1px 2px #63422903;
+  }
+  .app-content
+    :is(
+      [data-slot="input"],
+      [data-slot="textarea"],
+      [data-slot="select-trigger"]
+    ):hover:not(:disabled):not([aria-invalid="true"]) {
+    border-color: #bfa795;
+  }
+  .app-content
+    :is(
+      [data-slot="input"],
+      [data-slot="textarea"],
+      [data-slot="select-trigger"]
+    ):focus-visible:not([aria-invalid="true"]) {
+    border-color: var(--primary);
+    outline: 2px solid color-mix(in srgb, var(--primary) 15%, transparent);
+    outline-offset: 2px;
+    background: white;
+  }
+  .app-content
+    :is(
+      [data-slot="input"],
+      [data-slot="textarea"],
+      [data-slot="select-trigger"]
+    )[aria-invalid="true"] {
+    border-color: var(--destructive);
+  }
+  .app-content
+    :is(
+      [data-slot="input"],
+      [data-slot="textarea"],
+      [data-slot="select-trigger"]
+    ):disabled {
+    background: var(--muted);
+    opacity: 0.65;
+    cursor: not-allowed;
+  }
+  .app-content [data-slot="input"]::placeholder,
+  .app-content [data-slot="textarea"]::placeholder {
+    color: #a39489;
+  }
+  .app-content [data-slot="textarea"] {
+    min-height: 112px;
+    padding-block: 12px;
+    line-height: 1.7;
+    resize: vertical;
+  }
+  .app-content input[type="search"] {
+    border-radius: 12px;
+  }
+  .app-content [role="tablist"] {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 5px;
+    padding: 5px;
+    overflow-x: auto;
+    border: 1px solid #e9ded4;
+    border-radius: 12px;
+    background: #f7f2ed;
+    scrollbar-width: thin;
+  }
+  .app-content [role="tablist"] [role="tab"] {
+    flex-shrink: 0;
+    min-height: 40px;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    background: transparent;
+    color: #857064;
+    box-shadow: none;
+  }
+  .app-content [role="tablist"] [role="tab"][aria-selected="true"] {
+    border-color: #e5d6ca;
+    background: white;
+    color: var(--primary);
+    box-shadow: 0 2px 5px #6b3b2110;
+  }
+  .app-content [data-slot="table-container"] {
+    border: 1px solid #e9dfd6;
+    border-radius: 12px;
+    background: white;
+  }
+  .app-content thead th {
+    background: #faf5ef;
+    color: #856b5d;
+    font-weight: 650;
+  }
+  .app-content tbody tr {
+    border-bottom-color: #f0e9e3;
+  }
+  .app-content tbody tr:hover {
+    background: #fffbf6;
+  }
+  .app-content tbody tr:last-child {
+    border-bottom: 0;
+  }
+  .app-content form > .grid:has(label) {
+    min-width: 0;
+    padding: 16px;
+    border: 1px solid #efe4d9;
+    border-radius: 12px;
+    background: #fffcf8;
+  }
+  .app-content [data-slot="label"] {
+    color: #765b4e;
+    font-weight: 600;
+  }
+}
+[data-slot="select-content"] {
+  padding: 5px;
+  border-color: #e6d7ca;
+  border-radius: 12px;
+  box-shadow:
+    0 10px 30px #48261014,
+    0 2px 6px #48261008;
+}
+[data-slot="select-item"] {
+  min-height: 36px;
+  border-radius: 7px;
+}
+@media (max-width: 639px) {
+  .app-shell[data-role] {
+    .app-content
+      [data-slot="button"]:not([data-size="xs"]):not([data-size^="icon"]) {
+      min-height: 44px;
+    }
+    .app-content :is([data-slot="input"], [data-slot="select-trigger"]) {
+      min-height: 44px;
+      font-size: 16px;
+    }
+    .app-content form > .grid:has(label) {
+      padding: 12px;
+      gap: 14px;
+    }
+  }
+}
+
+/* Designed module containers: an identifiable header and a quiet reading surface. */
+
+/* Keep the illustrated welcome surface on the same frosted material. */
+.app-shell[data-role="faculty"]
+  .app-content
+  .faculty-dashboard
+  .faculty-welcome {
+  background:
+    radial-gradient(ellipse at 95% 20%, #efd0ac70, transparent 57%),
+    linear-gradient(115deg, #fffdf8a8, #fcf0e780);
+  -webkit-backdrop-filter: blur(14px) saturate(115%);
+  backdrop-filter: blur(14px) saturate(115%);
+  border-color: #ffffffb8;
+  box-shadow:
+    inset 0 1px 0 #ffffffd9,
+    0 8px 26px #873c2009;
+}
+@supports not (
+  (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))
+) {
+  .app-shell[data-role] .app-main [data-slot="card"],
+  .app-shell[data-role="faculty"]
+    .app-main
+    [data-slot="card"]:not(:has(> [data-slot="card-content"] > .tabular-nums)),
+  .app-shell[data-role="faculty"]
+    .app-content
+    .faculty-dashboard
+    .faculty-welcome {
+    background: #fffcf5f2;
+  }
+}

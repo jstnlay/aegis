@@ -290,6 +290,31 @@ class UserSeesOnlyOwnNotificationsTest(NotificationsTestBase):
         self.assertEqual(resp.data["results"][0]["title"], "Student notif")
 
 
+class DeleteNotificationTest(NotificationsTestBase):
+    def setUp(self):
+        super().setUp()
+        self.notification = Notification.objects.create(
+            recipient=self.student_user,
+            notification_type="GRADE_POSTED",
+            title="Grade posted", message="Your grade is available.",
+        )
+        self.url = f"/api/v1/notifications/{self.notification.id}/"
+
+    def test_recipient_can_delete(self):
+        self._auth(self.student_user)
+        self.assertEqual(self.client.delete(self.url).status_code, 204)
+        self.assertFalse(Notification.objects.filter(pk=self.notification.pk).exists())
+
+    def test_other_user_cannot_delete(self):
+        self._auth(self.parent_user)
+        self.assertEqual(self.client.delete(self.url).status_code, 404)
+        self.assertTrue(Notification.objects.filter(pk=self.notification.pk).exists())
+
+    def test_anonymous_cannot_delete(self):
+        self.assertEqual(self.client.delete(self.url).status_code, 401)
+        self.assertTrue(Notification.objects.filter(pk=self.notification.pk).exists())
+
+
 class FilterByReadStatusTest(NotificationsTestBase):
     def test_filter_unread(self):
         n1 = Notification.objects.create(

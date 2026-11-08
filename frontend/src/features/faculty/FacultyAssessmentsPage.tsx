@@ -638,11 +638,16 @@ export function FacultyAssessmentsPage() {
     <div className="faculty-page space-y-6">
       <PageHeading />
 
-      <Card>
+      <Card data-panel="assessments">
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="space-y-1">
-              <CardTitle>Your assessments</CardTitle>
+              <CardTitle>
+                <span className="faculty-panel-icon" aria-hidden="true">
+                  <ClipboardCheck />
+                </span>
+                <span>Your assessments</span>
+              </CardTitle>
               <CardDescription>
                 Showing {visible.length} of {assessments.length}.
               </CardDescription>

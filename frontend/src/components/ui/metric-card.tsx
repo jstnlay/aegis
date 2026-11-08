@@ -53,7 +53,7 @@ export function MetricCard({
   children: React.ReactNode
 }) {
   return (
-    <Card className={cn("h-full", className)}>
+    <Card data-metric="true" className={cn("h-full", className)}>
       <CardHeader
         className={cn(
           "flex flex-row items-center justify-between space-y-0 pb-2",

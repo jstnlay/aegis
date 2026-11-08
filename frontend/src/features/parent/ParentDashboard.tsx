@@ -1,4 +1,4 @@
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import {
   ArrowUpRight,
@@ -17,6 +17,7 @@ import {
   StudentAttendanceTrendChart,
 } from "@/components/charts/StudentTrendCharts"
 import { Badge } from "@/components/ui/badge"
+import { GradeMeter } from "@/components/ui/grade-meter"
 import {
   Card,
   CardContent,
@@ -57,6 +58,9 @@ import {
 
 function ParentDashboard() {
   const { user } = useAuth()
+  const [expandedGradesFor, setExpandedGradesFor] = useState<string | null>(
+    null
+  )
 
   const linkedStudentsQuery = useLinkedStudents()
   const linkedStudents = useMemo(
@@ -85,6 +89,11 @@ function ParentDashboard() {
     () => linkedStudents.find((s: { id: string }) => s.id === selectedChildId),
     [linkedStudents, selectedChildId]
   )
+  const gradesContext = JSON.stringify([selectedChildId, selectedPeriod])
+  const gradesExpanded = expandedGradesFor === gradesContext
+  const visibleGrades = gradesExpanded
+    ? (grades ?? [])
+    : (grades?.slice(0, 3) ?? [])
 
   if (!user) return null
 
@@ -104,7 +113,7 @@ function ParentDashboard() {
         </span>
       </header>
 
-      <Card className="parent-linked-students">
+      <Card data-panel="students" className="parent-linked-students">
         <CardHeader>
           <CardTitle className="parent-card-title">
             <UsersRound aria-hidden="true" />
@@ -251,7 +260,7 @@ function ParentDashboard() {
           </div>
 
           <div className="parent-dashboard-columns">
-            <Card className="parent-progress">
+            <Card data-panel="records" className="parent-progress">
               <CardHeader>
                 <CardTitle className="parent-card-title">
                   <BookOpen aria-hidden="true" />
@@ -305,16 +314,11 @@ function ParentDashboard() {
                     ) : (
                       <div className="space-y-2">
                         <p className="text-sm font-medium">Grades by Subject</p>
-                        {/*
-                         * Subject, score, and whether it passes. The six-pixel
-                         * bar that sat under each row repeated the printed
-                         * number as a length and read as an unfinished rule, so
-                         * it is gone; the passing mark is now stated in words,
-                         * which the number alone never said and which colour
-                         * alone must not be left to say.
-                         */}
-                        <ul className="parent-subject-list">
-                          {grades.map((grade, idx) => {
+                        <ul
+                          id="parent-dashboard-subjects"
+                          className="parent-subject-list"
+                        >
+                          {visibleGrades.map((grade, idx) => {
                             const status = scoreStatus(grade.score)
                             return (
                               <li
@@ -356,10 +360,32 @@ function ParentDashboard() {
                                     {scoreStatusLabel(status)}
                                   </Badge>
                                 </span>
+                                <GradeMeter
+                                  score={grade.score}
+                                  label={grade.subject_name}
+                                />
                               </li>
                             )
                           })}
                         </ul>
+                        {grades.length > 3 ? (
+                          <button
+                            type="button"
+                            className="parent-action-link parent-subject-toggle"
+                            aria-expanded={gradesExpanded}
+                            aria-controls="parent-dashboard-subjects"
+                            onClick={() =>
+                              setExpandedGradesFor(
+                                gradesExpanded ? null : gradesContext
+                              )
+                            }
+                          >
+                            {gradesExpanded
+                              ? "Show less"
+                              : `View more subjects (${grades.length - visibleGrades.length})`}
+                            <ChevronRight aria-hidden="true" />
+                          </button>
+                        ) : null}
                       </div>
                     )}
                   </div>
@@ -367,7 +393,7 @@ function ParentDashboard() {
               </CardContent>
             </Card>
 
-            <Card className="parent-recent-grades">
+            <Card data-panel="records" className="parent-recent-grades">
               <CardHeader>
                 <CardTitle>Recent Grades</CardTitle>
                 <CardDescription>
@@ -411,7 +437,52 @@ function ParentDashboard() {
               </CardContent>
             </Card>
 
-            <Card className="parent-support-callout">
+            {/*
+            The same two charts the student dashboard draws, over the same
+            hooks. A parent's view of a child's record must not look like a
+            different feature, and the student-scoped analytics endpoint
+            already authorises a linked parent for exactly this student.
+          */}
+            {selectedChildId ? (
+              <>
+                <Card
+                  data-panel="records"
+                  className="parent-trend parent-trend--academic"
+                >
+                  <CardHeader>
+                    <CardTitle className="parent-card-title">
+                      <TrendingUp aria-hidden="true" />
+                      Academic Trend
+                    </CardTitle>
+                    <CardDescription>
+                      How the average grade changes across grading periods.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <StudentAcademicTrendChart studentId={selectedChildId} />
+                  </CardContent>
+                </Card>
+
+                <Card
+                  data-panel="attendance"
+                  className="parent-trend parent-trend--attendance"
+                >
+                  <CardHeader>
+                    <CardTitle className="parent-card-title">
+                      <CalendarCheck aria-hidden="true" />
+                      Attendance Trend
+                    </CardTitle>
+                    <CardDescription>
+                      Recorded attendance over time.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <StudentAttendanceTrendChart studentId={selectedChildId} />
+                  </CardContent>
+                </Card>
+              </>
+            ) : null}
+            <Card data-panel="notes" className="parent-support-callout">
               <CardHeader>
                 <CardTitle className="parent-card-title">
                   <HeartHandshake aria-hidden="true" />
@@ -429,46 +500,6 @@ function ParentDashboard() {
                 </Link>
               </CardContent>
             </Card>
-
-            {/*
-            The same two charts the student dashboard draws, over the same
-            hooks. A parent's view of a child's record must not look like a
-            different feature, and the student-scoped analytics endpoint
-            already authorises a linked parent for exactly this student.
-          */}
-            {selectedChildId ? (
-              <>
-                <Card className="parent-trend parent-trend--academic">
-                  <CardHeader>
-                    <CardTitle className="parent-card-title">
-                      <TrendingUp aria-hidden="true" />
-                      Academic Trend
-                    </CardTitle>
-                    <CardDescription>
-                      How the average grade changes across grading periods.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <StudentAcademicTrendChart studentId={selectedChildId} />
-                  </CardContent>
-                </Card>
-
-                <Card className="parent-trend parent-trend--attendance">
-                  <CardHeader>
-                    <CardTitle className="parent-card-title">
-                      <CalendarCheck aria-hidden="true" />
-                      Attendance Trend
-                    </CardTitle>
-                    <CardDescription>
-                      Recorded attendance over time.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <StudentAttendanceTrendChart studentId={selectedChildId} />
-                  </CardContent>
-                </Card>
-              </>
-            ) : null}
           </div>
         </section>
       )}

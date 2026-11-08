@@ -40,6 +40,18 @@ function scrollPage(top: number) {
   fireEvent.scroll(window)
 }
 
+it("does not leave a mobile backdrop over the desktop when the menu is open", () => {
+  renderSidebar(true, true)
+  expect(document.querySelector('[data-slot="navigation-backdrop"]')).toBeNull()
+})
+
+it("shows the navigation backdrop for an open mobile menu", () => {
+  renderSidebar(false, true)
+  expect(
+    document.querySelector('[data-slot="navigation-backdrop"]')
+  ).toBeInTheDocument()
+})
+
 beforeEach(() => {
   state.role = "admin"
   vi.stubGlobal("scrollY", 0)
@@ -52,7 +64,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe.each(["admin", "guidance", "student", "parent"])(
+describe.each(["admin", "guidance", "student", "parent", "faculty"])(
   "%s sidebar auto-minimize",
   (role) => {
     beforeEach(() => {
@@ -75,9 +87,7 @@ describe.each(["admin", "guidance", "student", "parent"])(
           "data-compact",
           "false"
         )
-        fireEvent.click(
-          screen.getByRole("button", { name: "Minimize navigation" })
-        )
+        fireEvent.pointerLeave(sidebar, { pointerType: "mouse" })
         expect(sidebar).toHaveAttribute("data-compact", "true")
         expect(headerBrand.querySelector(".app-header-brand")).toHaveAttribute(
           "data-compact",
@@ -88,26 +98,19 @@ describe.each(["admin", "guidance", "student", "parent"])(
       }
     })
 
-    it("allows manual minimizing while the pointer and focus are inside the panel", () => {
+    it("uses automatic desktop minimizing without an arrow button", () => {
       const sidebar = renderSidebar()
       fireEvent.pointerEnter(sidebar, { pointerType: "mouse" })
-      const toggle = screen.getByRole("button", { name: "Minimize navigation" })
-      expect(toggle).toHaveAttribute("aria-controls", "primary-navigation")
-      act(() => toggle.focus())
-      fireEvent.click(toggle)
-      idle()
+      expect(
+        screen.queryByRole("button", { name: /navigation/i })
+      ).not.toBeInTheDocument()
+      fireEvent.pointerLeave(sidebar, { pointerType: "mouse" })
       expect(sidebar).toHaveAttribute("data-compact", "true")
-      expect(toggle).not.toBeInTheDocument()
-
-      fireEvent.pointerLeave(sidebar)
       fireEvent.pointerEnter(sidebar, { pointerType: "mouse" })
       expect(sidebar).toHaveAttribute("data-compact", "false")
-      expect(
-        screen.getByRole("button", { name: "Minimize navigation" })
-      ).toHaveAttribute("aria-expanded", "true")
     })
 
-    it("hides the arrow while minimized and shows it again when keyboard focus expands navigation", () => {
+    it("supports keyboard expansion without a desktop arrow", () => {
       const sidebar = renderSidebar()
       idle()
       expect(
@@ -117,8 +120,8 @@ describe.each(["admin", "guidance", "student", "parent"])(
       act(() => screen.getByRole("link", { name: "Dashboard" }).focus())
       expect(sidebar).toHaveAttribute("data-compact", "false")
       expect(
-        screen.getByRole("button", { name: "Minimize navigation" })
-      ).toBeInTheDocument()
+        screen.queryByRole("button", { name: /navigation/i })
+      ).not.toBeInTheDocument()
     })
 
     it("collapses after idle and preserves accessible link names", () => {
@@ -132,15 +135,13 @@ describe.each(["admin", "guidance", "student", "parent"])(
       )
     })
 
-    it("expands on hover and waits until the pointer leaves before collapsing", () => {
+    it("expands on hover and collapses immediately when the pointer leaves", () => {
       const sidebar = renderSidebar()
       idle()
       fireEvent.pointerEnter(sidebar, { pointerType: "mouse" })
       idle()
       expect(sidebar).toHaveAttribute("data-compact", "false")
       fireEvent.pointerLeave(sidebar)
-      expect(sidebar).toHaveAttribute("data-compact", "false")
-      idle()
       expect(sidebar).toHaveAttribute("data-compact", "true")
     })
 
@@ -188,10 +189,10 @@ describe.each(["admin", "guidance", "student", "parent"])(
       idle()
       expect(sidebar).toHaveAttribute("data-compact", "false")
       expect(
-        screen.getByRole("button", {
-          name: "Minimize navigation",
+        screen.queryByRole("button", {
+          name: "Close navigation",
         })
-      ).toHaveAttribute("aria-expanded", "true")
+      ).not.toBeInTheDocument()
       expect(
         screen.getByRole("navigation", { name: "Main" })
       ).not.toHaveAttribute("inert")

@@ -244,6 +244,40 @@ describe("AcademicsPage (faculty grade update)", () => {
     return screen.findByRole("dialog")
   }
 
+  it("pages grade records, changes page size, and resets on status filtering", async () => {
+    mockedFetchAllPages.mockImplementation(async (url: string) => {
+      if (url.startsWith("/academics/grades")) {
+        return {
+          count: 26,
+          results: Array.from({ length: 26 }, (_, index) => ({
+            ...gradeRow,
+            id: `g-${index + 1}`,
+            student_name: `Learner ${index + 1}`,
+            status: index === 25 ? "finalized" : "draft",
+          })),
+        }
+      }
+      return { count: 0, results: [] }
+    })
+    renderPage()
+    await screen.findByText("Learner 1")
+    expect(screen.getAllByRole("button", { name: "Edit" })).toHaveLength(10)
+    expect(screen.queryByText("Learner 11")).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "Next" }))
+    expect(screen.getByText("Learner 11")).toBeInTheDocument()
+    expect(screen.getByText("Page 2 of 3")).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText("Rows per page"), {
+      target: { value: "25" },
+    })
+    expect(screen.getAllByRole("button", { name: "Edit" })).toHaveLength(25)
+    fireEvent.click(screen.getByRole("button", { name: "Next" }))
+    expect(screen.getByText("Learner 26")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: /Finalized/ }))
+    expect(screen.getByText("Page 1 of 1")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled()
+  })
+
   it("saves the updated score with the content-only payload (TC-FAC-11)", async () => {
     const dialog = await openEditDialog()
     expect(

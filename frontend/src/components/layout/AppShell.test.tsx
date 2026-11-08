@@ -762,23 +762,28 @@ describe("PH11.11 mobile drawer keyboard contract", () => {
     }
   })
 
-  it("closes the mobile drawer with the back arrow and restores focus", async () => {
+  it("closes the mobile drawer by tapping outside without an extra close button", async () => {
     const restore = stubViewport({ wide: false })
     try {
       await renderAuthenticatedApp("student")
       const trigger = await shellReady()
       expect(
-        screen.queryByRole("button", { name: "Minimize navigation" })
+        screen.queryByRole("button", { name: "Close navigation" })
       ).not.toBeInTheDocument()
       fireEvent.click(trigger)
-      fireEvent.click(
-        screen.getByRole("button", { name: "Minimize navigation" })
+      expect(
+        screen.queryByRole("button", { name: "Close navigation" })
+      ).not.toBeInTheDocument()
+      const backdrop = document.querySelector(
+        '[data-slot="navigation-backdrop"]'
       )
+      expect(backdrop).not.toBeNull()
+      fireEvent.click(backdrop!)
       expect(primaryNav()).toHaveAttribute("inert")
       expect(trigger).toHaveAttribute("aria-expanded", "false")
       expect(trigger).toHaveFocus()
       expect(
-        screen.queryByRole("button", { name: "Minimize navigation" })
+        screen.queryByRole("button", { name: "Close navigation" })
       ).not.toBeInTheDocument()
     } finally {
       restore()

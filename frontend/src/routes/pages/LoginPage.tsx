@@ -1,17 +1,19 @@
 import { useState } from "react"
-import { Link, Navigate } from "react-router-dom"
-import { ArrowLeft, Eye, EyeOff, Loader2 } from "lucide-react"
+import { Link, Navigate, useNavigate } from "react-router-dom"
+import {
+  ArrowLeft,
+  Eye,
+  EyeOff,
+  Loader2,
+  Mail,
+  LockKeyhole,
+} from "lucide-react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 
 import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-} from "@/components/ui/card"
+import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import {
   Form,
   FormControl,
@@ -26,6 +28,8 @@ import { useAuth } from "@/features/auth/AuthContext"
 import { normalizeApiError } from "@/lib/error"
 import { SCHOOL_NAME } from "@/lib/school-content"
 import { HomepageBackground } from "@/components/brand/HomepageBackground"
+import { PolicyWelcome } from "@/components/brand/PolicyWelcome"
+import { hasAcknowledgedPolicies } from "@/lib/policy-acknowledgment"
 import { LoginLegalPolicies } from "./LoginLegalPolicies"
 import "./login-page.css"
 
@@ -48,6 +52,10 @@ const loginSchema = z.object({
 type LoginFormValues = z.infer<typeof loginSchema>
 
 export function LoginPage() {
+  const navigate = useNavigate()
+  const [policiesAccepted, setPoliciesAccepted] = useState(
+    hasAcknowledgedPolicies
+  )
   const {
     status,
     isAuthenticated,
@@ -80,6 +88,7 @@ export function LoginPage() {
   }
 
   async function onSubmit(values: LoginFormValues) {
+    if (!policiesAccepted) return
     setServerError(null)
     try {
       await login(values.email, values.password, values.rememberMe)
@@ -92,16 +101,40 @@ export function LoginPage() {
 
   return (
     <div className="school-login-page school-brand-background">
+      {!policiesAccepted ? (
+        <PolicyWelcome
+          open
+          cancelLabel="Back to homepage"
+          onCancel={() => {
+            void navigate("/")
+          }}
+          onAccepted={() => setPoliciesAccepted(true)}
+        />
+      ) : null}
       <HomepageBackground />
       <Link
         to="/"
-        className="school-login-home"
+        className="school-login-corner-home"
         aria-label="Back to landing page"
-        title="Back to landing page"
       >
         <ArrowLeft aria-hidden="true" />
+        Back to Home
       </Link>
-      <div className="school-login-visual" aria-hidden="true" />
+      <aside className="school-login-visual" aria-label="Welcome to HIS CARE">
+        <div className="school-login-welcome">
+          <p className="school-login-welcome-school">
+            HIS CARE CHRISTIAN INSTITUTE
+          </p>
+          <h2>
+            Every step shapes
+            <br />
+            your future.
+          </h2>
+          <p className="school-login-welcome-message">
+            Stay connected to your learning journey with AEGIS.
+          </p>
+        </div>
+      </aside>
       <main className="school-login-main" aria-labelledby="login-title">
         <Card className="school-login-card">
           <CardHeader className="school-login-heading text-center">
@@ -109,13 +142,15 @@ export function LoginPage() {
               <img
                 src="/hcci-logo.png"
                 alt={SCHOOL_NAME}
-                className="size-full object-cover"
+                className="size-full object-contain"
+                width={381}
+                height={377}
               />
             </div>
             <h1 id="login-title">Sign in to AEGIS</h1>
-            <CardDescription>
-              Academic Governance and Intervention System
-            </CardDescription>
+            <p className="school-login-subtitle">
+              Welcome to your learning space.
+            </p>
           </CardHeader>
           <CardContent>
             <Form {...form}>
@@ -175,16 +210,22 @@ export function LoginPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Email</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          type="email"
-                          placeholder="you@school.edu"
-                          autoComplete="email"
-                          inputMode="email"
-                          disabled={isSubmitting}
+                      <div className="school-login-field">
+                        <Mail
+                          className="school-login-field-icon"
+                          aria-hidden="true"
                         />
-                      </FormControl>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            type="email"
+                            placeholder="your@email.com"
+                            autoComplete="email"
+                            inputMode="email"
+                            disabled={isSubmitting}
+                          />
+                        </FormControl>
+                      </div>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -196,7 +237,11 @@ export function LoginPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Password</FormLabel>
-                      <div className="school-login-password">
+                      <div className="school-login-password school-login-field">
+                        <LockKeyhole
+                          className="school-login-field-icon"
+                          aria-hidden="true"
+                        />
                         <FormControl>
                           <Input
                             {...field}
@@ -292,9 +337,9 @@ export function LoginPage() {
               </form>
             </Form>
             <div className="school-login-support">
-              {/* Document element 6, "Sign Up" link. */}
-              <p className="school-login-register">
-                New student? <Link to="/register">Request an account</Link>
+              <p className="school-login-help">
+                Need help signing in?{" "}
+                <Link to="/#contact">Contact the school</Link>
               </p>
               <LoginLegalPolicies />
             </div>

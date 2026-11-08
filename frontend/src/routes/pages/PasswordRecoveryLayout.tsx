@@ -35,11 +35,16 @@ export function PasswordRecoveryLayout({
   return (
     <div className="school-recovery-page school-brand-background">
       <HomepageBackground />
+      <Link
+        to="/login"
+        className="school-recovery-back"
+        aria-label="Back to sign in"
+        title="Back to sign in"
+      >
+        <ArrowLeft aria-hidden="true" />
+        <span className="sr-only">Back to sign in</span>
+      </Link>
       <div className="school-recovery-wrap">
-        <Link to="/login" className="school-recovery-back">
-          <ArrowLeft aria-hidden="true" />
-          Back to sign in
-        </Link>
         <div className="school-recovery-shell">
           <aside
             className="school-recovery-story"

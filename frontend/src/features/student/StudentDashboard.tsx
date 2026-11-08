@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useState } from "react"
 import { Link } from "react-router-dom"
 import {
   ArrowUpRight,
@@ -48,6 +48,7 @@ import {
 } from "@/features/student/api"
 import { RecommendationsCard } from "@/features/student/RecommendationsCard"
 import { SubjectGradeCard } from "@/features/student/SubjectGradeCard"
+import { StudentJournalBackdrop } from "./StudentJournalArtwork"
 import { formatCount, formatPercent } from "@/lib/metric-format"
 
 /**
@@ -87,16 +88,17 @@ export function StudentDashboard() {
   // `true | Error | null`.
   const dataError = profileError || Boolean(error)
 
-  const displayGrades = useMemo(() => {
-    if (dataLoading) return Array(5).fill(null) as (typeof grades)[number][]
-    if (error || !grades.length) return []
-    return grades.slice(0, 5)
-  }, [grades, dataLoading, error])
-
+  const [subjectSelection, setSubjectSelection] = useState({
+    period: "",
+    code: "",
+  })
+  const selectedSubject =
+    subjectSelection.period === selectedPeriod ? subjectSelection.code : ""
   if (!user) return null
 
   return (
     <div className="student-dashboard space-y-6">
+      <StudentJournalBackdrop />
       <header className="student-welcome">
         <div className="student-welcome-copy">
           <p className="student-eyebrow">
@@ -116,24 +118,6 @@ export function StudentDashboard() {
           <Sparkles />
         </div>
       </header>
-      <nav className="student-shortcuts" aria-label="Student quick links">
-        {[
-          { to: "/app/academics", label: "Your grades", icon: BookOpen },
-          { to: "/app/attendance", label: "Attendance", icon: CalendarCheck },
-          { to: "/app/schedule", label: "Class schedule", icon: CalendarDays },
-          {
-            to: "/app/student/assessments",
-            label: "Assessments",
-            icon: ClipboardCheck,
-          },
-        ].map(({ to, label, icon: Icon }) => (
-          <Link key={to} to={to} className="student-shortcut">
-            <Icon aria-hidden="true" />
-            <span>{label}</span>
-            <ArrowUpRight aria-hidden="true" />
-          </Link>
-        ))}
-      </nav>
 
       {/*
         PH11.11: the placeholder is announced and the failure is distinct from
@@ -199,15 +183,57 @@ export function StudentDashboard() {
             {formatCount(totalSubjects)}
           </MetricCard>
         </section>
-        <Card className="student-progress">
+        <nav className="student-shortcuts" aria-label="Student quick links">
+          {[
+            { to: "/app/academics", label: "Your grades", icon: BookOpen },
+            { to: "/app/attendance", label: "Attendance", icon: CalendarCheck },
+            {
+              to: "/app/schedule",
+              label: "Class schedule",
+              icon: CalendarDays,
+            },
+            {
+              to: "/app/student/assessments",
+              label: "Assessments",
+              icon: ClipboardCheck,
+            },
+          ].map(({ to, label, icon: Icon }) => (
+            <Link key={to} to={to} className="student-shortcut">
+              <Icon aria-hidden="true" />
+              <span>{label}</span>
+              <ArrowUpRight aria-hidden="true" />
+            </Link>
+          ))}
+        </nav>
+        <Card data-panel="records" className="student-progress">
           <CardHeader>
-            <CardTitle className="student-card-title">
-              <BookOpen aria-hidden="true" />
-              Academic Progress
-            </CardTitle>
-            <CardDescription>
-              Your finalized grades for the selected grading period.
-            </CardDescription>
+            <div className="student-progress-heading">
+              <CardTitle className="student-card-title">
+                <BookOpen aria-hidden="true" />
+                Academic Progress
+              </CardTitle>
+              <CardDescription>
+                Your finalized grades for the selected grading period.
+              </CardDescription>
+            </div>
+            {!dataLoading && !dataError && periods.length > 0 ? (
+              <div className="student-progress-filter space-y-1.5">
+                <Label htmlFor="student-grading-period">Grading period</Label>
+                <select
+                  id="student-grading-period"
+                  value={selectedPeriod}
+                  onChange={(e) => setSelectedPeriod(e.target.value)}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  {periods.map((p) => (
+                    <option key={p.period_name} value={p.period_name}>
+                      {p.period_name} — Average:{" "}
+                      {formatPercent(p.average_grade, 2)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
           </CardHeader>
           <CardContent>
             {dataLoading ? (
@@ -226,93 +252,95 @@ export function StudentDashboard() {
             ) : periods.length === 0 ? (
               <EmptyState message="No grading period data available." />
             ) : (
-              <div className="student-subject-board">
-                <div className="student-progress-filter space-y-1.5">
-                  <Label htmlFor="student-grading-period">Grading period</Label>
-                  <select
-                    id="student-grading-period"
-                    value={selectedPeriod}
-                    onChange={(e) => setSelectedPeriod(e.target.value)}
-                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  >
-                    {periods.map((p) => (
-                      <option key={p.period_name} value={p.period_name}>
-                        {p.period_name} — Average:{" "}
-                        {formatPercent(p.average_grade, 2)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                {displayGrades.length === 0 ? (
+              <div className="student-grade-viewer space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Select a subject card to view its grade.
+                </p>
+                {grades.length === 0 ? (
                   <EmptyState
                     message={`No finalized grades for ${selectedPeriod}.`}
                   />
                 ) : (
-                  <div className="student-subject-section">
-                    <div className="student-subject-section-heading">
-                      <p>
-                        Grades by Subject
-                        {grades.length > displayGrades.length ? (
-                          <span className="student-subject-count">
-                            {displayGrades.length} of {grades.length}
-                          </span>
-                        ) : null}
-                      </p>
-                    </div>
-                    <ul className="student-subject-grid">
-                      {displayGrades.map((grade) => (
-                        <SubjectGradeCard
-                          key={grade.subject_code}
-                          name={grade.subject_name}
-                          code={grade.subject_code}
-                          score={grade.score}
-                        />
-                      ))}
-                    </ul>
-                    <Link to="/app/academics" className="student-full-record">
-                      View full grade record <ArrowUpRight aria-hidden="true" />
-                    </Link>
-                  </div>
-                )}
+                  <ul className="student-subject-grid">
+                    {grades.map((grade) => (
+                      <SubjectGradeCard
+                        key={grade.subject_code}
+                        name={grade.subject_name}
+                        code={grade.subject_code}
+                        score={grade.score}
+                        selected={selectedSubject === grade.subject_code}
+                        onSelect={() =>
+                          setSubjectSelection({
+                            period: selectedPeriod,
+                            code:
+                              selectedSubject === grade.subject_code
+                                ? ""
+                                : grade.subject_code,
+                          })
+                        }
+                      />
+                    ))}
+                  </ul>
+                )}{" "}
+                <Link to="/app/academics" className="student-full-record">
+                  View full grade record <ArrowUpRight aria-hidden="true" />
+                </Link>
               </div>
             )}
           </CardContent>
         </Card>
 
-        <RecommendationsCard studentId={profileQuery.data ?? null} />
+        <section
+          className="student-trends-row"
+          aria-label="Your progress over time"
+        >
+          <Card
+            data-panel="records"
+            className="student-trend student-trend--academic"
+          >
+            <CardHeader>
+              <CardTitle className="student-card-title">
+                <TrendingUp aria-hidden="true" />
+                Academic Trend
+              </CardTitle>
+              <CardDescription>
+                How your average changes across grading periods.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <StudentAcademicTrendChart
+                studentId={profileQuery.data ?? null}
+              />
+            </CardContent>
+          </Card>
 
-        <Card className="student-trend student-trend--academic">
-          <CardHeader>
-            <CardTitle className="student-card-title">
-              <TrendingUp aria-hidden="true" />
-              Academic Trend
-            </CardTitle>
-            <CardDescription>
-              How your average changes across grading periods.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <StudentAcademicTrendChart studentId={profileQuery.data ?? null} />
-          </CardContent>
-        </Card>
-
-        <Card className="student-trend student-trend--attendance">
-          <CardHeader>
-            <CardTitle className="student-card-title">
-              <CalendarCheck aria-hidden="true" />
-              Attendance Trend
-            </CardTitle>
-            <CardDescription>
-              Your recorded attendance over time.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <StudentAttendanceTrendChart
-              studentId={profileQuery.data ?? null}
-            />
-          </CardContent>
-        </Card>
-        <FamilyAccessCard />
+          <Card
+            data-panel="attendance"
+            className="student-trend student-trend--attendance"
+          >
+            <CardHeader>
+              <CardTitle className="student-card-title">
+                <CalendarCheck aria-hidden="true" />
+                Attendance Trend
+              </CardTitle>
+              <CardDescription>
+                Your recorded attendance over time.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <StudentAttendanceTrendChart
+                studentId={profileQuery.data ?? null}
+              />
+            </CardContent>
+          </Card>
+        </section>
+        <section
+          className="student-support-row"
+          aria-label="Learning support and family access"
+        >
+          <RecommendationsCard studentId={profileQuery.data ?? null} />
+          <FamilyAccessCard />
+        </section>
       </div>
     </div>
   )
@@ -336,7 +364,7 @@ function FamilyAccessCard() {
     name.trim().length > 0 && email.trim().length > 0 && !nominate.isPending
 
   return (
-    <Card className="student-family">
+    <Card data-panel="notes" className="student-family">
       <CardHeader>
         <CardTitle className="student-card-title">
           <HeartHandshake aria-hidden="true" />

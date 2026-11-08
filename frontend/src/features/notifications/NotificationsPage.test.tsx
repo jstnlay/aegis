@@ -1,4 +1,10 @@
-import { render, screen, waitFor, within } from "@testing-library/react"
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { MemoryRouter } from "react-router-dom"
 import { beforeEach, describe, expect, it, vi } from "vitest"
@@ -18,7 +24,7 @@ vi.mock("@/features/auth/AuthContext", () => ({
 }))
 
 vi.mock("@/lib/api", () => ({
-  apiClient: { post: vi.fn(), get: vi.fn(), put: vi.fn() },
+  apiClient: { post: vi.fn(), get: vi.fn(), put: vi.fn(), delete: vi.fn() },
 }))
 
 vi.mock("@/lib/pagination", () => ({
@@ -178,6 +184,55 @@ beforeEach(() => {
 })
 
 describe("NotificationsPage", () => {
+  it("views details, retains a read notification, and deletes only after confirmation", async () => {
+    let items = [makeNotification()]
+    mockedFetchAllPages.mockImplementation(async (url) => ({
+      count: items.length,
+      results: String(url).includes("is_read=false")
+        ? items.filter((item) => !item.is_read)
+        : items,
+    }))
+    mockedPost.mockImplementation(async () => {
+      items = items.map((item) => ({ ...item, is_read: true }))
+      return { data: { success: true } }
+    })
+    vi.mocked(apiClient.delete).mockImplementation(async () => {
+      items = []
+      return { data: undefined }
+    })
+    renderPage()
+    fireEvent.click(await screen.findByRole("button", { name: "View" }))
+    const dialog = await screen.findByRole("dialog")
+    expect(
+      within(dialog).getByText("Your Mathematics grade has been posted.")
+    ).toBeInTheDocument()
+    await waitFor(() =>
+      expect(
+        within(dialog).getByText("Read", { exact: true })
+      ).toBeInTheDocument()
+    )
+    fireEvent.click(
+      within(dialog).getAllByRole("button", { name: "Close" })[0]!
+    )
+    expect(
+      await screen.findByRole("button", { name: "View" })
+    ).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "View" }))
+    fireEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Delete",
+      })
+    )
+    expect(apiClient.delete).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }))
+    await waitFor(() =>
+      expect(apiClient.delete).toHaveBeenCalledWith("/notifications/n-1/")
+    )
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
+    expect(
+      await screen.findByText("No notifications match the current filters.")
+    ).toBeInTheDocument()
+  })
   it("lists notifications newest first with their type and sender", async () => {
     mockedFetchAllPages.mockImplementation(async (url: string) => {
       if (url.includes("is_read=false")) {
@@ -341,7 +396,7 @@ describe("NotificationsPage", () => {
 
     renderPage("student")
 
-    await screen.findByText("Grade posted")
+    await screen.findAllByText("Grade posted")
     const links = screen.getAllByRole("link", { name: /open/i })
     expect(links).toHaveLength(1)
     expect(links[0]).toHaveAttribute("href", "/app/academics")

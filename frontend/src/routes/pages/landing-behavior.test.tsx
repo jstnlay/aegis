@@ -1,8 +1,14 @@
 import { fireEvent, render, screen, within } from "@testing-library/react"
-import { MemoryRouter } from "react-router-dom"
+import {
+  MemoryRouter,
+  createMemoryRouter,
+  RouterProvider,
+} from "react-router-dom"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { LandingPage } from "./LandingPage"
+import { POLICY_ACKNOWLEDGMENT_KEY } from "@/lib/policy-acknowledgment"
+import { LEGAL_LAST_UPDATED } from "./LegalPageLayout"
 
 const cms = vi.hoisted(() => ({ announcements: vi.fn(), resources: vi.fn() }))
 vi.mock("@/features/cms/public-api", () => ({
@@ -24,11 +30,43 @@ const page = () => (
 )
 
 beforeEach(() => {
+  localStorage.clear()
   cms.announcements.mockReturnValue(empty())
   cms.resources.mockReturnValue(empty())
 })
 
 describe("homepage interactions", () => {
+  function renderLandingRoute() {
+    const router = createMemoryRouter([
+      { path: "/", element: <LandingPage /> },
+      { path: "/login", element: <h1>Login destination</h1> },
+    ])
+    render(<RouterProvider router={router} />)
+    return router
+  }
+
+  it("navigates to the sign-in interface before any policy popup", async () => {
+    const router = renderLandingRoute()
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole("link", { name: "Sign in" }))
+    expect(
+      await screen.findByRole("heading", { name: "Login destination" })
+    ).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe("/login")
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+    expect(localStorage.getItem(POLICY_ACKNOWLEDGMENT_KEY)).toBeNull()
+  })
+
+  it("opens login directly when the current policies are already acknowledged", async () => {
+    localStorage.setItem(POLICY_ACKNOWLEDGMENT_KEY, LEGAL_LAST_UPDATED)
+    const router = renderLandingRoute()
+    fireEvent.click(screen.getByRole("link", { name: "Sign in" }))
+    expect(
+      await screen.findByRole("heading", { name: "Login destination" })
+    ).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe("/login")
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+  })
   it("expands one offer on mobile and shows all descriptions on desktop", () => {
     const originalWidth = window.innerWidth
     Object.defineProperty(window, "innerWidth", {

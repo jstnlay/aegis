@@ -1,4 +1,4 @@
-import { Crown, MessageCircle } from "lucide-react"
+import { Crown, MessageCircle, Sparkles } from "lucide-react"
 
 /** School-supplied event feature, independent of the live CMS feed. */
 export function FeaturedAnnouncement() {
@@ -22,8 +22,11 @@ export function FeaturedAnnouncement() {
           />
         </a>
         <p className="landing-event-closing">
-          Let us support and celebrate our learners as they take the spotlight!{" "}
-          <span aria-hidden="true">👑 ✨</span>
+          <Sparkles aria-hidden="true" className="size-4" />
+          <span>
+            Let us support and celebrate our learners as they take the
+            spotlight!{" "}
+          </span>
         </p>
       </div>
       <div className="landing-event-copy">
@@ -43,11 +46,14 @@ export function FeaturedAnnouncement() {
         </p>
         <div className="landing-event-inquiry">
           <MessageCircle aria-hidden="true" className="size-5" />
-          <p>
-            For more details and inquiries, kindly look for{" "}
-            <strong>Ms. Anica Elain R. Banquil</strong> or coordinate with your
-            child&apos;s <strong>Class Adviser.</strong>
-          </p>
+          <div>
+            <h4>Event inquiries</h4>
+            <p>
+              For more details and inquiries, kindly look for{" "}
+              <strong>Ms. Anica Elain R. Banquil</strong> or coordinate with
+              your child&apos;s <strong>Class Adviser.</strong>
+            </p>
+          </div>
         </div>
       </div>
     </article>

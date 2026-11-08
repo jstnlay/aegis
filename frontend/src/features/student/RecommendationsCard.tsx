@@ -1,4 +1,5 @@
 import { BookMarked, Bookmark, Eye, Lightbulb } from "lucide-react"
+import { useId, useState } from "react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -45,12 +46,17 @@ export function RecommendationsCard({
 }) {
   const query = useStudentRecommendations(studentId)
   const record = useRecordInteraction()
+  const [expanded, setExpanded] = useState(false)
+  const listId = useId()
 
   const data = query.data
   const items = data?.recommendations ?? []
 
   return (
-    <Card className="student-recommendations col-span-2 lg:col-span-3">
+    <Card
+      data-panel="resources"
+      className="student-recommendations col-span-2 lg:col-span-3"
+    >
       <CardHeader>
         <div className="flex flex-row items-center justify-between space-y-0">
           <CardTitle className="student-card-title">
@@ -83,21 +89,37 @@ export function RecommendationsCard({
             approve learning resources for recommendation.
           </p>
         ) : (
-          <ul className="student-recommendation-list">
-            {items.map((item) => (
-              <RecommendationRow
-                key={item.learning_item_id}
-                item={item}
-                onInteract={(interactionType) =>
-                  record.mutate({
-                    learningItemId: item.learning_item_id,
-                    interactionType,
-                  })
-                }
-                disabled={record.isPending}
-              />
-            ))}
-          </ul>
+          <div className="space-y-3">
+            <ul id={listId} className="student-recommendation-list">
+              {(expanded ? items : items.slice(0, 3)).map((item) => (
+                <RecommendationRow
+                  key={item.learning_item_id}
+                  item={item}
+                  onInteract={(interactionType) =>
+                    record.mutate({
+                      learningItemId: item.learning_item_id,
+                      interactionType,
+                    })
+                  }
+                  disabled={record.isPending}
+                />
+              ))}
+            </ul>
+            {items.length > 3 ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                aria-expanded={expanded}
+                aria-controls={listId}
+                onClick={() => setExpanded((current) => !current)}
+              >
+                {expanded
+                  ? "Show less"
+                  : `Show all ${items.length} recommendations`}
+              </Button>
+            ) : null}
+          </div>
         )}
 
         {record.isError ? (

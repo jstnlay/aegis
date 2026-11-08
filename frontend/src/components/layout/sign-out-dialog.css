@@ -54,12 +54,37 @@
 .sign-out-actions button:disabled {
   cursor: wait;
 }
-@media (max-width: 359px) {
+@media (max-width: 639px) {
   .sign-out-dialog[data-slot="dialog-content"] {
-    gap: 20px;
-    padding: 24px 20px;
+    width: min(340px, calc(100% - 40px));
+    gap: 16px;
+    padding: 20px;
+    border-radius: 16px;
+  }
+  .sign-out-heading[data-slot="dialog-header"] {
+    gap: 8px;
+  }
+  .sign-out-icon {
+    width: 40px;
+    height: 40px;
+    margin-bottom: 0;
+    border-radius: 12px;
+  }
+  .sign-out-icon svg {
+    width: 21px;
+    height: 21px;
   }
   .sign-out-heading [data-slot="dialog-title"] {
-    font-size: 22px;
+    font-size: 20px;
+  }
+  .sign-out-heading [data-slot="dialog-description"] {
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .sign-out-actions {
+    gap: 8px;
+  }
+  .sign-out-actions button {
+    min-height: 44px;
   }
 }

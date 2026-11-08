@@ -578,32 +578,35 @@
   overflow: hidden;
   border-color: color-mix(in srgb, var(--primary) 24%, var(--card));
   box-shadow: 0 12px 36px color-mix(in srgb, var(--primary) 8%, transparent);
+  background:
+    radial-gradient(ellipse at 100% 0%, #eac8cd80, transparent 65%),
+    linear-gradient(120deg, #fcf7f8, #f5e9ec);
 }
 .landing-feed-announcements > .landing-feed-heading {
-  gap: 14px;
-  padding: 16px 28px;
+  gap: 10px;
+  padding: 24px 28px 0;
   border: 0;
-  background: var(--primary);
+  background: transparent;
 }
 .landing-feed-announcements .landing-feed-title {
-  color: var(--primary-foreground);
-  font-size: clamp(25px, 2.5vw, 30px);
+  color: #66333b;
+  font-size: clamp(20px, 2vw, 23px);
+  font-weight: 650;
 }
 .landing-announcement-signal {
   display: grid;
   place-items: center;
   flex-shrink: 0;
-  width: 44px;
-  height: 44px;
-  border: 1px solid
-    color-mix(in srgb, var(--primary-foreground) 28%, transparent);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--primary-foreground) 12%, transparent);
-  color: var(--primary-foreground);
+  width: 32px;
+  height: 32px;
+  border: 1px solid #e3c8cb;
+  border-radius: 10px;
+  background: #f1dfe1;
+  color: var(--primary);
 }
 .landing-announcement-signal > svg {
-  width: 25px;
-  height: 25px;
+  width: 18px;
+  height: 18px;
   transform-origin: 30% 75%;
 }
 @keyframes landing-announcement-sway {
@@ -634,21 +637,21 @@
 .landing-event {
   display: grid;
   grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
-  align-items: start;
-  gap: 32px;
-  padding: 28px;
+  align-items: center;
+  gap: clamp(24px, 4vw, 52px);
+  padding: 20px 28px 28px;
 }
 .landing-event-media {
   min-width: 0;
-  padding: 12px;
-  border: 1px solid color-mix(in srgb, var(--primary) 12%, var(--card));
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--primary) 3%, var(--card));
+  padding: 0;
 }
 .landing-event-poster {
+  position: relative;
   display: grid;
   min-width: 0;
   border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 12px 28px #51172318;
 }
 .landing-event-poster img {
   display: block;
@@ -671,13 +674,12 @@
   align-items: center;
   justify-self: start;
   gap: 7px;
-  padding: 6px 10px;
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--primary) 6%, var(--card));
+  padding: 0;
   color: var(--primary);
   font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 .landing-event-copy h3 {
   color: var(--primary);
@@ -697,9 +699,9 @@
   align-items: flex-start;
   gap: 12px;
   padding: 14px 16px;
-  border-left: 3px solid color-mix(in srgb, var(--primary) 65%, var(--card));
-  border-radius: 0 12px 12px 0;
-  background: color-mix(in srgb, var(--primary) 5%, var(--card));
+  border: 1px solid #dab9c0;
+  border-radius: 12px;
+  background: #ffffff60;
 }
 .landing-event-inquiry > svg {
   flex-shrink: 0;
@@ -707,8 +709,8 @@
   color: var(--primary);
 }
 .landing-event-media .landing-event-closing {
-  padding: 16px 8px 6px;
-  color: var(--primary);
+  padding: 16px 0 0;
+  color: #7e3442;
   font-size: 14px;
   font-weight: 600;
   line-height: 1.65;

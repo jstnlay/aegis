@@ -1,5 +1,6 @@
 import { BookOpen, Info, Lock } from "lucide-react"
 import { useMemo, useState, type FormEvent } from "react"
+import { useDataTablePagination } from "@/components/ui/data-table-pagination"
 
 import {
   EmptyState,
@@ -554,9 +555,14 @@ function GradeEncodeForm({
   const scoreError = getFieldError(encodeMutation.error, "score")
 
   return (
-    <Card>
+    <Card data-panel="grades">
       <CardHeader>
-        <CardTitle>Encode a grade</CardTitle>
+        <CardTitle>
+          <span className="faculty-panel-icon" aria-hidden="true">
+            <BookOpen />
+          </span>
+          <span>Encode a grade</span>
+        </CardTitle>
         <CardDescription>
           Encodes a single grade as a <strong>draft</strong> for a student
           enrolled in the selected subject assignment.
@@ -775,6 +781,8 @@ function FacultyAcademics() {
         : grades.filter((g) => g.status === statusFilter),
     [grades, statusFilter]
   )
+  const { pagination, pageRows, totalPages, setPageSize } =
+    useDataTablePagination(visibleGrades, 10, statusFilter)
 
   return (
     <div className="faculty-page space-y-6">
@@ -797,9 +805,14 @@ function FacultyAcademics() {
 
       <GradeEncodeForm />
 
-      <Card>
+      <Card data-panel="records">
         <CardHeader>
-          <CardTitle>Grade records</CardTitle>
+          <CardTitle>
+            <span className="faculty-panel-icon" aria-hidden="true">
+              <BookOpen />
+            </span>
+            <span>Grade records</span>
+          </CardTitle>
           <CardDescription>
             Every grade for the subject assignments assigned to you.
           </CardDescription>
@@ -854,12 +867,73 @@ function FacultyAcademics() {
               }
             />
           ) : (
-            <GradeTable
-              grades={visibleGrades}
-              showStudent
-              caption={`${visibleGrades.length} of ${grades.length} grade records.`}
-              onEditGrade={setEditingGrade}
-            />
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-muted-foreground" aria-live="polite">
+                  Showing {(pagination.page - 1) * pagination.pageSize + 1}–
+                  {Math.min(
+                    pagination.page * pagination.pageSize,
+                    pagination.totalCount
+                  )}{" "}
+                  of {pagination.totalCount} grade records
+                </p>
+                <label
+                  className="flex items-center gap-2 text-sm"
+                  htmlFor="faculty-grades-page-size"
+                >
+                  Rows per page
+                  <select
+                    id="faculty-grades-page-size"
+                    value={pagination.pageSize}
+                    onChange={(event) =>
+                      setPageSize(Number(event.target.value))
+                    }
+                    className="h-10 rounded-md border border-input bg-background px-3"
+                  >
+                    {[10, 25, 50].map((size) => (
+                      <option key={size} value={size}>
+                        {size}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <GradeTable
+                grades={pageRows}
+                showStudent
+                caption={`${visibleGrades.length} of ${grades.length} grade records.`}
+                onEditGrade={setEditingGrade}
+              />
+              <nav
+                aria-label="Grade records pages"
+                className="flex flex-wrap items-center justify-end gap-3"
+              >
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={pagination.page === 1}
+                  onClick={() => pagination.onPageChange(pagination.page - 1)}
+                >
+                  Previous
+                </Button>
+                <span
+                  className="text-sm text-muted-foreground"
+                  aria-live="polite"
+                >
+                  Page {pagination.page} of {totalPages}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={pagination.page === totalPages}
+                  onClick={() => pagination.onPageChange(pagination.page + 1)}
+                >
+                  Next
+                </Button>
+              </nav>
+            </div>
           )}
         </CardContent>
       </Card>

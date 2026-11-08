@@ -13,6 +13,8 @@ import {
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { LoginPage } from "./LoginPage"
+import { POLICY_ACKNOWLEDGMENT_KEY } from "@/lib/policy-acknowledgment"
+import { LEGAL_LAST_UPDATED } from "./LegalPageLayout"
 
 const login = vi.fn(async () => {})
 
@@ -50,9 +52,39 @@ async function fillAndSubmit() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  localStorage.setItem(POLICY_ACKNOWLEDGMENT_KEY, LEGAL_LAST_UPDATED)
 })
 
 describe("LoginPage", () => {
+  it("shows policies over the login interface before the first sign-in", async () => {
+    localStorage.removeItem(POLICY_ACKNOWLEDGMENT_KEY)
+    renderPage()
+    const dialog = screen.getByRole("dialog", { name: "Before you begin" })
+    expect(document.querySelector(".school-login-page")).toBeInTheDocument()
+    expect(login).not.toHaveBeenCalled()
+    fireEvent.click(within(dialog).getByRole("checkbox"))
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Agree and continue" })
+    )
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+    expect(login).not.toHaveBeenCalled()
+    await fillAndSubmit()
+    await waitFor(() =>
+      expect(login).toHaveBeenCalledExactlyOnceWith(
+        "student@school.edu",
+        "pass12345",
+        false
+      )
+    )
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+  })
+
+  it("does not reopen policies when the current version was already accepted", () => {
+    renderPage()
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+    expect(screen.getByLabelText("Email")).toBeVisible()
+  })
+
   it("carries the sign-in elements the system documentation names", () => {
     renderPage()
 
@@ -66,13 +98,13 @@ describe("LoginPage", () => {
   it("links to password recovery and to student registration", () => {
     renderPage()
 
-    // Document elements 4 and 6.
+    // Password recovery stays available; account requests are no longer shown.
     expect(
       screen.getByRole("link", { name: "Forgot password?" })
     ).toHaveAttribute("href", "/forgot-password")
     expect(
-      screen.getByRole("link", { name: "Request an account" })
-    ).toHaveAttribute("href", "/register")
+      screen.queryByRole("link", { name: "Request an account" })
+    ).not.toBeInTheDocument()
   })
 
   it("returns directly to the landing page even when login was opened directly", async () => {

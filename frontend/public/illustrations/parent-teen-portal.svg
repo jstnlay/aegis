@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="112" viewBox="0 0 240 112" fill="none">
+  <defs>
+    <filter id="paper"><feTurbulence type="fractalNoise" baseFrequency=".65" numOctaves="3" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/><feComponentTransfer><feFuncA type="linear" slope=".07"/></feComponentTransfer><feBlend in="SourceGraphic" mode="multiply"/></filter>
+    <clipPath id="figures"><path d="M21 110V93l27-20 33-5 24 13 26-7 35-6 35 19 17 23Z"/><path d="M58 68c-19-3-22-17-12-28-2-13 5-29 25-29 21-3 34 10 30 26l-5 31Z"/><path d="M135 69V31l42-10 17 16-5 35Z"/></clipPath>
+  </defs>
+  <path d="M8 111V93l25-8 20 4 28-11 38 13 39-8 23 6 39-4 12 26Z" fill="#EEE0D4"/>
+  <path d="m185 111 10-41 37 3-4 38" fill="#E6D2C9"/>
+  <g>
+    <!-- Parent: relaxed posture, softly drawn features and dusty burgundy knit. -->
+    <path d="M57 66c-15 0-20-9-17-18 2-5 7-6 5-13-3-14 9-24 25-25 17-2 29 5 30 17 1 8-6 12-5 20 2 12-9 22-20 20Z" fill="#675042"/>
+    <path d="M68 59h19l2 18-13 11-15-12Z" fill="#D0A386"/>
+    <path d="M61 31c8 3 18 0 26-9 5 7 8 20 6 30-2 12-9 19-18 17-10-2-16-13-16-26Z" fill="#E6BDA0"/>
+    <path d="M58 43c-7-5-9 6-3 11l7 1" fill="#E6BDA0"/>
+    <path d="m89 43 4 7-5 1" stroke="#AE7D68" stroke-width="1.2" stroke-linecap="round"/>
+    <path d="m78 56 8 1c-2 4-6 4-8-1Z" fill="#A96F62"/>
+    <path d="M70 39c2-2 5-2 7-1m8-2 5 1" stroke="#79594A" stroke-width="1.5" stroke-linecap="round"/>
+    <path d="M74 44v1m13-3v1" stroke="#59483E" stroke-width="2" stroke-linecap="round"/>
+    <path d="m54 72 10-3 12 13 13-11c17 5 29 13 32 39H33c3-19 7-30 21-38Z" fill="#B37873"/>
+    <path d="m64 70 12 12-8 12-10-22m31 0L76 82l10 11 10-17" fill="#CA9590"/>
+    <path d="m53 91-4 19m48-21 8 21M76 85v25" stroke="#915F5B" stroke-width="1.2" opacity=".6"/>
+    <!-- Teenager: cream school shirt, open notebook and attentive expression. -->
+    <path d="M141 55c-6-4-8-17-4-24l-4-4 9-3 3-7 9 3 8-5 6 6 11-1 2 7c12 4 13 16 8 28Z" fill="#604A3B"/>
+    <path d="m151 63-1 13 13 10 12-12-4-15" fill="#CDA181"/>
+    <path d="M144 34c9 3 16 0 24-5 3 6 8 9 14 9l-1 15c-2 13-10 20-20 18-10-2-17-13-17-26Z" fill="#E6BDA0"/>
+    <path d="M182 43c7-3 8 8 2 12l-5 1" fill="#E6BDA0"/>
+    <path d="m157 46-3 7 5 1m-2 7c4 2 8 1 11-2" stroke="#AE7D68" stroke-width="1.2" stroke-linecap="round"/>
+    <path d="m148 39 6-1m13 1 6 2" stroke="#79594A" stroke-width="1.5" stroke-linecap="round"/>
+    <path d="M152 44v1m17 1v1" stroke="#59483E" stroke-width="2" stroke-linecap="round"/>
+    <path d="m148 73-15 7c-12 8-17 18-20 30h89c-1-16-9-29-28-37l-12 9Z" fill="#F5EBDD"/>
+    <path d="m150 71 12 11-8 13-12-19m31-4-11 10 9 12 9-17" fill="#DED0BD"/>
+    <path d="m163 84 1 26m24-20 4 20" stroke="#C4AE9A" stroke-width="1.2"/>
+    <path d="m183 79 7 31h8l-9-29" fill="#A36E69"/>
+    <path d="m104 96 27 4 20-5 10 15h-50Z" fill="#C1AC90"/>
+    <path d="m104 94 27 4 20-5 8 14-26 2-22-2Z" fill="#FFFAEF"/>
+    <path d="m131 98 2 11m-18-9 12 2m9 0 12-3" stroke="#D2C1A9" stroke-width="1"/>
+  </g>
+  <g clip-path="url(#figures)" opacity=".55"><path d="M29 7h180v105H29Z" fill="#C8AB96" filter="url(#paper)" opacity=".18"/></g>
+</svg>

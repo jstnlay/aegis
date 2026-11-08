@@ -1,0 +1,106 @@
+.app-header .app-account-trigger {
+  min-height: 48px;
+  max-width: 300px;
+  gap: 11px;
+  padding: 5px 10px 5px 14px;
+  border: 1px solid #b8968547;
+  border-radius: 15px;
+  background: linear-gradient(135deg, #fffefd, #fff2e8);
+  box-shadow:
+    inset 0 1px white,
+    0 2px 6px #633c2907;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+.app-header .app-account-trigger:is(:hover, [aria-expanded="true"]) {
+  border-color: #ab7763;
+  background: #faeade;
+  box-shadow: 0 3px 10px #633c2912;
+}
+.app-header .app-account-trigger:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+}
+.app-header .app-account-copy {
+  max-width: 190px;
+}
+.app-header .app-account-copy > span:first-child {
+  color: #48352f;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.45;
+}
+.app-header .app-account-copy > span:last-child {
+  color: #786154;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.app-header .app-account-avatar {
+  width: 38px;
+  height: 38px;
+  background: linear-gradient(140deg, #bb3c38, #8b1422);
+  color: white;
+  box-shadow: 0 2px 6px #9819191c;
+}
+.app-header .app-account-chevron {
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+  color: #8d5945;
+  transition: transform 140ms ease;
+}
+.app-header .app-account-trigger[aria-expanded="true"] .app-account-chevron {
+  transform: rotate(180deg);
+}
+.app-header .app-notification-trigger {
+  width: 42px;
+  height: 42px;
+  margin-right: 8px;
+  border: 1px solid #b8968538;
+  border-radius: 13px;
+  background: #fffaf5;
+  color: #84584c;
+  cursor: pointer;
+}
+.app-header .app-notification-trigger:is(:hover, [aria-expanded="true"]) {
+  background: #faeade;
+  border-color: #ab7763;
+}
+.app-header [data-slot="account-menu"] {
+  width: min(248px, calc(100vw - 24px));
+  padding: 6px;
+  border-color: #b8968559;
+  border-radius: 16px;
+  background: #fffdfa;
+  box-shadow: 0 12px 30px #633c291c;
+}
+.app-header [data-slot="account-menu"] [role="menuitem"] {
+  min-height: 42px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+@media (max-width: 639px) {
+  .app-header .app-account-trigger {
+    min-height: 44px;
+    padding: 4px 7px;
+    gap: 6px;
+    border-radius: 13px;
+  }
+  .app-header .app-account-avatar {
+    width: 32px;
+    height: 32px;
+  }
+  .app-header .app-notification-trigger {
+    width: 38px;
+    height: 38px;
+    margin-right: 4px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-header :is(.app-account-trigger, .app-account-chevron) {
+    transition: none;
+  }
+}

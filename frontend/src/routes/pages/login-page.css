@@ -3,13 +3,65 @@
   --login-photo-tint: color-mix(in srgb, var(--primary) 68%, transparent);
   --landing-background-height: max(100svh, 1800px);
   display: grid;
-  grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
-  grid-template-rows: minmax(0, 1fr);
-  height: 100svh;
+  /* Scale the photo panel itself with page zoom, rather than reserving 50vw. */
+  grid-template-columns: 45rem minmax(0, 1fr);
+  grid-template-rows: minmax(min-content, 1fr);
+  min-height: 100svh;
+}
+.school-login-back {
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top));
+  left: max(20px, env(safe-area-inset-left));
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid #e5cfc7;
+  background: #fffaf5;
+  box-shadow: 0 3px 12px #501b1920;
+  color: var(--primary);
+  border-radius: 50%;
+}
+.school-login-back svg {
+  width: 20px;
+  height: 20px;
+}
+.school-login-back:hover {
+  background: #f2e2dd;
+}
+.school-login-back:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 4px;
 }
 .school-login-page .landing-background-field--rose > path:first-child,
 .school-login-page .landing-background-contours > path:first-child {
   transform: translate(240px, -180px);
+}
+.school-login-return {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  margin-top: 12px;
+  border-top: 1px solid color-mix(in srgb, var(--primary) 12%, transparent);
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+}
+.school-login-return svg {
+  width: 16px;
+  height: 16px;
+}
+.school-login-return:hover {
+  color: var(--primary);
+}
+.school-login-return:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+  border-radius: 6px;
 }
 .school-login-home {
   position: absolute;
@@ -36,37 +88,84 @@
   outline-offset: 3px;
 }
 .school-login-visual {
+  position: relative;
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
   background-color: color-mix(in srgb, var(--primary) 75%, var(--card));
+  -webkit-mask: url("/login-photo-wave-mask.svg") center / 100% 100% no-repeat;
+  mask: url("/login-photo-wave-mask.svg") center / 100% 100% no-repeat;
+}
+/* The photo and its wave mask share the panel's bounds and scale together. */
+.school-login-visual::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
   background-image:
     linear-gradient(var(--login-photo-tint), var(--login-photo-tint)),
     var(--login-background-image);
   background-size: cover;
   background-position: 75% center;
   background-repeat: no-repeat;
-  -webkit-mask: url("/login-photo-wave-mask.svg") center / 100% 100% no-repeat;
-  mask: url("/login-photo-wave-mask.svg") center / 100% 100% no-repeat;
 }
 .school-login-main {
   display: flex;
   align-items: safe center;
   justify-content: center;
   min-width: 0;
-  min-height: 0;
-  padding: clamp(16px, 4svh, 48px) clamp(28px, 4vw, 64px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  min-height: auto;
+  padding: clamp(20px, 4svh, 48px) clamp(24px, 3vw, 48px);
+  overflow: visible;
+}
+.school-login-welcome {
+  position: absolute;
+  inset: auto 0 0;
+  padding: 100px clamp(28px, 4vw, 56px) 40px;
+  background: linear-gradient(transparent, #420c15c9);
+  color: #fffaf3;
+}
+.school-login-welcome-school {
+  max-width: 440px;
+  margin-bottom: 14px;
+  color: #f4dac8;
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.5;
+  letter-spacing: 0.16em;
+}
+.school-login-welcome h2 {
+  max-width: 440px;
+  font-family: "Plus Jakarta Sans Variable", "Inter Variable", sans-serif;
+  font-size: clamp(30px, 3vw, 42px);
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: -0.04em;
+}
+.school-login-welcome-message {
+  max-width: 340px;
+  margin-top: 14px;
+  color: #fff2e6;
+  font-size: 14px;
+  line-height: 1.7;
+}
+@media (max-width: 1103px) {
+  .school-login-welcome {
+    display: none;
+  }
 }
 .school-login-card[data-slot="card"] {
   width: 100%;
-  max-width: 400px;
-  gap: 28px;
+  max-width: 440px;
+  flex-shrink: 0;
+  gap: 22px;
   padding: 0;
   overflow: visible;
   border: 0;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
+  --tw-ring-color: transparent;
 }
 .school-login-card > [data-slot="card-header"],
 .school-login-card > [data-slot="card-content"] {
@@ -74,38 +173,49 @@
 }
 .school-login-heading {
   justify-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 .school-login-seal {
-  width: 72px;
-  height: 72px;
-  margin-bottom: 8px;
+  width: 104px;
+  height: 104px;
+  margin-bottom: 6px;
+  padding: 5px;
+  border: 1px solid #b8968538;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 4px 16px #98191912;
 }
 .school-login-seal img {
   border-radius: 50%;
 }
 .school-login-heading h1 {
   color: var(--primary);
-  font-family: "Trebuchet MS", "Inter Variable", sans-serif;
-  font-size: clamp(28px, 2.5vw, 34px);
-  font-weight: 700;
+  font-family: "Plus Jakarta Sans Variable", "Inter Variable", sans-serif;
+  font-size: clamp(32px, 3vw, 42px);
+  font-weight: 750;
   line-height: 1.2;
   letter-spacing: -0.025em;
   text-wrap: balance;
 }
 .school-login-heading [data-slot="card-description"] {
-  max-width: 310px;
-  font-size: 14px;
+  max-width: 350px;
+  color: #68554b;
+  font-size: 15px;
   line-height: 1.65;
 }
 .school-login-card [data-slot="form-label"] {
-  font-size: 14px;
+  color: #48352f;
+  font-size: 15px;
   font-weight: 600;
 }
 .school-login-card [data-slot="input"] {
-  height: 46px;
-  border-radius: 8px;
-  background: var(--card);
+  height: 52px;
+  padding-inline: 15px;
+  border-radius: 12px;
+  background: #fffdfa;
+  font-size: 16px;
+  color: #392b27;
+  box-shadow: inset 0 1px 3px #633c2905;
 }
 .school-login-card [data-slot="input"]:not([aria-invalid="true"]) {
   border-color: color-mix(in srgb, var(--primary) 20%, var(--card));
@@ -121,8 +231,8 @@
 }
 .school-login-password-toggle {
   position: absolute;
-  top: 3px;
-  right: 3px;
+  top: 6px;
+  right: 6px;
   display: grid;
   place-items: center;
   width: 40px;
@@ -148,20 +258,35 @@
   cursor: not-allowed;
 }
 .school-login-card [data-slot="button"] {
-  height: 46px;
-  border-radius: 8px;
-  font-size: 15px;
+  height: 52px;
+  border-radius: 12px;
+  font-size: 16px;
   font-weight: 600;
   cursor: pointer;
 }
+.school-login-card [data-slot="button"][type="submit"] {
+  background: linear-gradient(110deg, #8d1721, var(--primary) 55%, #b83c35);
+  color: #fff;
+  border: 1px solid #8d1721;
+  box-shadow:
+    inset 0 1px #ffffff26,
+    0 5px 14px #98191920;
+}
+.school-login-card [data-slot="button"][type="submit"]:hover {
+  background: linear-gradient(110deg, #7b141e, #981919 55%, #a52e2a);
+}
+.school-login-card form > .flex.items-center.justify-between {
+  flex-wrap: wrap;
+  row-gap: 10px;
+}
 .school-login-support {
-  margin-top: 12px;
+  margin-top: 14px;
   padding-top: 12px;
   border-top: 1px solid color-mix(in srgb, var(--primary) 12%, var(--card));
 }
 .school-login-register {
-  color: var(--muted-foreground);
-  font-size: 13px;
+  color: #68554b;
+  font-size: 14px;
   line-height: 1.6;
   text-align: center;
 }
@@ -182,44 +307,52 @@
   outline-offset: 4px;
   border-radius: 2px;
 }
-@media (max-width: 1023px) {
-  .school-login-page {
-    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+@media (max-width: 1103px) {
+  .school-login-back {
+    top: max(6px, env(safe-area-inset-top));
+    left: max(12px, env(safe-area-inset-left));
   }
-}
-@media (max-width: 767px) {
   .school-login-home {
     top: 8px;
     left: 12px;
   }
   .school-login-page {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: clamp(64px, 14svh, 120px) minmax(0, 1fr);
+    grid-template-rows: clamp(56px, 9svh, 84px) minmax(min-content, 1fr);
   }
   .school-login-visual {
+    min-height: 0;
     -webkit-mask: none;
     mask: none;
     border-radius: 0 0 45% 10% / 0 0 24px 12px;
   }
+  .school-login-visual::before {
+    width: 100%;
+    height: 100%;
+  }
   .school-login-main {
-    align-items: flex-start;
-    padding: clamp(16px, 3svh, 28px) 24px clamp(20px, 4svh, 40px);
+    align-items: safe center;
+    padding: 16px;
   }
   .school-login-card[data-slot="card"] {
-    gap: 24px;
+    gap: 20px;
+    padding: 0 8px;
   }
   .school-login-seal {
-    width: 60px;
-    height: 60px;
+    width: 96px;
+    height: 96px;
     margin-bottom: 4px;
   }
 }
 @media (max-width: 359px) {
   .school-login-main {
-    padding-inline: 20px;
+    padding-inline: 12px;
+  }
+  .school-login-card[data-slot="card"] {
+    padding-inline: 8px;
   }
   .school-login-page {
-    grid-template-rows: clamp(48px, 12svh, 88px) minmax(0, 1fr);
+    grid-template-rows: clamp(48px, 12svh, 88px) minmax(min-content, 1fr);
   }
 }
 @media (max-height: 740px) {
@@ -230,20 +363,23 @@
     gap: 8px;
   }
   .school-login-seal {
-    width: 60px;
-    height: 60px;
+    width: 88px;
+    height: 88px;
     margin-bottom: 4px;
   }
 }
-@media (max-width: 767px) and (max-height: 740px) {
+@media (max-width: 1103px) and (max-height: 740px) {
   .school-login-page {
-    grid-template-rows: clamp(48px, 8svh, 60px) minmax(0, 1fr);
+    grid-template-rows: clamp(48px, 8svh, 60px) minmax(min-content, 1fr);
   }
   .school-login-main {
     padding-block: 16px;
   }
 }
-@media (max-width: 767px) and (max-height: 620px) {
+@media (max-width: 1103px) and (max-height: 620px) {
+  .school-login-main {
+    padding-top: 64px;
+  }
   .school-login-home {
     background: var(--primary);
   }
@@ -254,7 +390,7 @@
     outline-color: var(--ring);
   }
   .school-login-page {
-    grid-template-rows: minmax(0, 1fr);
+    grid-template-rows: minmax(min-content, 1fr);
   }
   .school-login-visual {
     display: none;
@@ -263,7 +399,256 @@
     gap: 16px;
   }
   .school-login-seal {
-    width: 56px;
-    height: 56px;
+    width: 68px;
+    height: 68px;
+  }
+}
+
+/* A quiet split composition keeps the school photograph and sign-in distinct. */
+.school-login-page.school-brand-background {
+  background:
+    radial-gradient(ellipse at 100% 0%, #f0e2dc70, transparent 55%), #fcfaf7;
+  background-size: auto;
+  background-repeat: no-repeat;
+}
+.school-login-page > .landing-background-art {
+  display: none;
+}
+.school-login-page {
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  .school-login-main {
+    padding: 24px clamp(28px, 5vw, 80px);
+  }
+  .school-login-card[data-slot="card"] {
+    max-width: 420px;
+    gap: 24px;
+  }
+  .school-login-seal {
+    padding: 3px;
+    border-color: transparent;
+    box-shadow: none;
+    background: transparent;
+  }
+  .school-login-heading h1 {
+    color: #7d202b;
+    font-size: clamp(32px, 2.8vw, 40px);
+    letter-spacing: -0.045em;
+    font-weight: 700;
+  }
+  .school-login-card [data-slot="form-label"] {
+    color: #53433c;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .school-login-card [data-slot="input"] {
+    height: 50px;
+    border-radius: 10px;
+    background: #fffefd;
+    color: #342c28;
+    box-shadow: 0 1px 2px #50372b04;
+    transition:
+      border-color 160ms ease,
+      box-shadow 160ms ease;
+  }
+  .school-login-card [data-slot="input"]:not([aria-invalid="true"]) {
+    border-color: #d9cdc3;
+  }
+  .school-login-card [data-slot="input"]:not([aria-invalid="true"]):hover {
+    border-color: #bda49a;
+  }
+  .school-login-card [data-slot="input"]:focus-visible {
+    border-color: #a5646d;
+    box-shadow: 0 0 0 3px #a5646d14;
+  }
+  .school-login-card [data-slot="input"]::placeholder {
+    color: #a29289;
+  }
+  .school-login-card [data-slot="button"][type="submit"] {
+    height: 50px;
+    border-radius: 10px;
+    font-size: 15px;
+    background: linear-gradient(110deg, #8a2330, #9a2d36);
+    border-color: #852331;
+    box-shadow:
+      inset 0 1px #ffffff22,
+      0 4px 10px #7d202b16;
+  }
+  .school-login-card [data-slot="button"][type="submit"]:hover {
+    background: #7c202d;
+  }
+  .school-login-support {
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top-color: #e8ded6;
+  }
+  .school-login-return {
+    margin-top: 12px;
+    border: 0;
+    min-height: 40px;
+    gap: 7px;
+    color: #7d5b53;
+    font-size: 12px;
+  }
+  .school-login-return:hover {
+    color: #8a2330;
+  }
+  .school-login-welcome {
+    padding-bottom: 36px;
+    background: linear-gradient(transparent, #3d111be6);
+  }
+  .school-login-welcome h2 {
+    font-weight: 600;
+    letter-spacing: -0.045em;
+  }
+  .school-login-welcome-message {
+    color: #f0dcd2;
+    font-size: 13px;
+    line-height: 1.75;
+  }
+}
+@media (max-width: 1103px) {
+  .school-login-page {
+    grid-template-columns: minmax(0, 1fr);
+    .school-login-main {
+      padding: 18px 24px 24px;
+    }
+    .school-login-card[data-slot="card"] {
+      gap: 20px;
+    }
+  }
+}
+@media (max-height: 740px) {
+  .school-login-page {
+    .school-login-main {
+      padding-block: 16px;
+    }
+    .school-login-card[data-slot="card"] {
+      gap: 18px;
+    }
+    .school-login-support {
+      margin-top: 12px;
+      padding-top: 10px;
+    }
+    .school-login-return {
+      margin-top: 6px;
+    }
+  }
+}
+
+.school-login-page {
+  .school-login-subtitle {
+    color: #857269;
+    font-size: 13px;
+    line-height: 1.5;
+    margin-top: -4px;
+  }
+  .school-login-field {
+    position: relative;
+  }
+  .school-login-field-icon {
+    position: absolute;
+    z-index: 1;
+    left: 15px;
+    top: 25px;
+    transform: translateY(-50%);
+    width: 18px;
+    height: 18px;
+    color: #a17c74;
+    pointer-events: none;
+    stroke-width: 1.6;
+  }
+  .school-login-field [data-slot="input"] {
+    padding-left: 43px;
+  }
+  .school-login-field:focus-within .school-login-field-icon {
+    color: #8a2330;
+  }
+  .school-login-help {
+    margin-bottom: 10px;
+    text-align: center;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #857269;
+  }
+  .school-login-help a {
+    font-weight: 600;
+    text-decoration: underline;
+    text-decoration-color: #cdb4ab;
+  }
+}
+@keyframes login-form-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .school-login-page .school-login-card {
+    animation: login-form-enter 450ms ease-out both;
+  }
+}
+@media (max-height: 740px) {
+  .school-login-page {
+    .school-login-card[data-slot="card"] {
+      gap: 14px;
+    }
+    .school-login-heading {
+      gap: 6px;
+    }
+    .school-login-help {
+      margin-bottom: 6px;
+    }
+  }
+}
+
+.school-login-corner-home {
+  position: absolute;
+  z-index: 10;
+  top: max(14px, env(safe-area-inset-top));
+  left: max(18px, env(safe-area-inset-left));
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #fffaf3;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: none;
+  text-shadow: 0 1px 3px #3d111b80;
+}
+.school-login-corner-home svg {
+  width: 16px;
+  height: 16px;
+}
+.school-login-corner-home:hover {
+  color: #fff;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.school-login-corner-home:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+@media (max-width: 1103px) {
+  .school-login-corner-home {
+    top: max(6px, env(safe-area-inset-top));
+    left: max(12px, env(safe-area-inset-left));
+  }
+}
+@media (max-width: 1103px) and (max-height: 620px) {
+  .school-login-corner-home {
+    color: #8a2330;
+    text-shadow: none;
+  }
+  .school-login-page .school-login-main {
+    padding-top: 64px;
   }
 }

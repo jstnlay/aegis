@@ -48,6 +48,7 @@ import {
   type NotificationType,
 } from "@/features/notifications/api"
 import { normalizeApiError } from "@/lib/error"
+import { NotificationDetails } from "./NotificationDetails"
 
 /**
  * Notifications inbox, open to all five roles (PH11.9).
@@ -77,11 +78,13 @@ function NotificationRow({
   href,
   onMarkRead,
   isPending,
+  onView,
 }: {
   notification: Notification
   href: string | null
   onMarkRead: (id: string) => void
   isPending: boolean
+  onView: () => void
 }) {
   return (
     <TableRow data-read={notification.is_read}>
@@ -99,6 +102,14 @@ function NotificationRow({
       </TableCell>
       <TableCell className="align-top">
         <div className="flex flex-wrap items-center justify-end gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onView}
+            aria-haspopup="dialog"
+          >
+            View
+          </Button>
           {href ? (
             <Button asChild variant="outline" size="sm">
               <Link to={href}>Open</Link>
@@ -124,6 +135,7 @@ export function NotificationsPage() {
   const { user } = useAuth()
   const [readFilter, setReadFilter] = useState<ReadFilter>("all")
   const [typeFilter, setTypeFilter] = useState<TypeFilter>(ALL_TYPES)
+  const [selected, setSelected] = useState<Notification | null>(null)
 
   const unread = useUnreadNotifications()
   const list = useNotifications({
@@ -257,6 +269,18 @@ export function NotificationsPage() {
                       href={resolveNotificationHref(notification.link, role)}
                       onMarkRead={(id) => markRead.mutate(id)}
                       isPending={markRead.isPending}
+                      onView={() => {
+                        setSelected(notification)
+                        if (!notification.is_read)
+                          markRead.mutate(notification.id, {
+                            onSuccess: () =>
+                              setSelected((current) =>
+                                current?.id === notification.id
+                                  ? { ...current, is_read: true }
+                                  : current
+                              ),
+                          })
+                      }}
                     />
                   ))}
                 </TableBody>
@@ -265,6 +289,16 @@ export function NotificationsPage() {
           )}
         </CardContent>
       </Card>
+      <NotificationDetails
+        key={selected?.id ?? "closed"}
+        notification={selected}
+        onClose={() => setSelected(null)}
+        readError={
+          markRead.isError
+            ? normalizeApiError(markRead.error).message
+            : undefined
+        }
+      />
     </div>
   )
 }

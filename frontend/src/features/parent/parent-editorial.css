@@ -1,0 +1,253 @@
+/* Family portal artwork and dashboard organization; scoped to this role. */
+.app-shell[data-role="parent"][data-dashboard="true"] {
+  --parent-paper-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='p'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23p)' opacity='.025'/%3E%3C/svg%3E");
+  .app-main {
+    background: var(--parent-paper-grain), #faf8f5;
+  }
+  .app-main > .landing-background-art {
+    opacity: 0.08;
+  }
+  .app-header[data-dashboard="true"] {
+    background-image: var(--parent-paper-grain);
+  }
+  .parent-portal-illustration {
+    position: absolute;
+    right: 100px;
+    bottom: 0;
+    width: 190px;
+    height: 94px;
+    object-fit: contain;
+    pointer-events: none;
+    user-select: none;
+  }
+  .app-main .app-content .parent-dashboard {
+    .parent-subject-toggle {
+      width: 100%;
+      cursor: pointer;
+    }
+    .parent-subject-toggle[aria-expanded="true"] > svg {
+      transform: rotate(-90deg);
+    }
+    .parent-record {
+      gap: 24px;
+    }
+    .parent-dashboard-columns {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 24px;
+      align-items: stretch;
+    }
+    .parent-dashboard-columns > .parent-progress {
+      grid-column: 1;
+      grid-row: 1;
+    }
+    .parent-dashboard-columns > .parent-recent-grades {
+      grid-column: 2;
+      grid-row: 1;
+      align-self: start;
+      min-height: 0;
+    }
+    .parent-dashboard-columns > .parent-support-callout {
+      grid-column: 1 / -1;
+      grid-row: auto;
+      display: grid;
+      grid-template-columns: minmax(190px, 1fr) minmax(0, 2fr);
+      align-items: center;
+      gap: 24px;
+      padding: 20px;
+    }
+    .parent-support-callout > [data-slot="card-header"] {
+      padding: 0;
+      border: 0;
+      background: transparent;
+    }
+    .parent-support-callout > [data-slot="card-content"] {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      padding: 0;
+    }
+    .parent-support-callout .parent-action-link {
+      flex-shrink: 0;
+      margin-top: 0;
+    }
+    .parent-viewing-student {
+      position: relative;
+      top: auto;
+      z-index: auto;
+    }
+    .parent-shortcuts > a {
+      min-height: 54px;
+    }
+    .parent-linked-students > [data-slot="card-header"] {
+      padding: 14px 20px;
+    }
+    .parent-linked-students > [data-slot="card-content"] {
+      padding: 14px 20px 0;
+    }
+    .parent-linked-students {
+      padding-bottom: 16px;
+    }
+    .parent-subject-row {
+      padding: 12px;
+      gap: 8px 12px;
+    }
+    .parent-subject-result {
+      flex-direction: row;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .parent-dashboard-columns > .parent-trend--academic {
+      grid-column: 1;
+      grid-row: 2;
+    }
+    .parent-dashboard-columns > .parent-trend--attendance {
+      grid-column: 2;
+      grid-row: 2;
+    }
+    .parent-dashboard-columns > .parent-trend {
+      align-self: stretch;
+    }
+    .parent-linked-students {
+      position: relative;
+      isolation: isolate;
+      border-color: #a9c9c4;
+      box-shadow:
+        inset 0 1px 0 #ffffffc9,
+        0 4px 15px #54433a08;
+    }
+    .parent-linked-students::before {
+      content: "";
+      position: absolute;
+      z-index: -1;
+      top: 0;
+      right: 0;
+      width: 140px;
+      height: 46px;
+      background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 140 46'%3E%3Cpath d='M0 0h140v22l-18-3-22-12-22 5-25-4-19 4Z' fill='%23eedbd7'/%3E%3Cpath d='M64 0h76v35l-17-10-21-2-19-12Z' fill='%23f6eddf'/%3E%3Cpath d='M104 0h36v46l-12-6-10-15-14-3 8-9Z' fill='%23bfd2cb' fill-opacity='.7'/%3E%3C/svg%3E")
+        top right / contain no-repeat;
+      pointer-events: none;
+    }
+    .parent-linked-students > [data-slot="card-header"] {
+      background: linear-gradient(110deg, #e6eeea70, #ffffff00 65%);
+    }
+    .parent-viewing-student {
+      background:
+        radial-gradient(
+          ellipse 95px 65px at 100% 0,
+          #f7e8e5 98%,
+          transparent 100%
+        ),
+        #fff;
+    }
+    .parent-shortcuts > a {
+      box-shadow: 0 3px 10px #54433a06;
+    }
+    .parent-selection-prompt {
+      background: #ffffffdb;
+      box-shadow: 0 4px 15px #54433a06;
+    }
+  }
+}
+@media (max-width: 1023px) {
+  .app-shell[data-role="parent"][data-dashboard="true"]
+    .app-main
+    .app-content
+    .parent-dashboard {
+    .parent-dashboard-columns > [data-slot="card"] {
+      grid-column: 1 / -1;
+      grid-row: auto;
+    }
+    .parent-dashboard-columns {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .parent-dashboard-columns > .parent-support-callout {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 12px;
+    }
+  }
+}
+@media (max-width: 1279px) {
+  .app-shell[data-role="parent"][data-dashboard="true"]
+    .parent-portal-illustration {
+    display: none;
+  }
+}
+@media (max-width: 639px) {
+  .app-shell[data-role="parent"][data-dashboard="true"]
+    .app-main
+    .app-content
+    .parent-dashboard {
+    .parent-linked-students::before {
+      width: 74px;
+      height: 25px;
+    }
+    .parent-record,
+    .parent-dashboard-columns {
+      gap: 16px;
+    }
+    .parent-support-callout > [data-slot="card-content"] {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 12px;
+    }
+    .parent-shortcuts {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 8px;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      overflow: visible;
+    }
+    .parent-shortcuts > a {
+      flex-direction: row;
+      justify-content: flex-start;
+      gap: 12px;
+      min-height: 52px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #ffffffd9;
+      text-align: left;
+      font-size: 13px;
+    }
+    .parent-shortcuts > a > svg:last-child {
+      display: block;
+      margin-left: auto;
+    }
+    .parent-metrics > .parent-metric[data-slot="card"][data-metric="true"] {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      min-height: 0;
+      gap: 12px;
+      padding: 18px;
+    }
+    .parent-metric > [data-slot="card-header"] {
+      width: 100%;
+      padding: 0;
+    }
+    .parent-metric > [data-slot="card-content"] {
+      display: block;
+      width: 100%;
+      padding: 0;
+    }
+    .parent-metric > [data-slot="card-content"] > .tabular-nums {
+      text-align: left;
+      line-height: 1.2;
+    }
+    .parent-metric > [data-slot="card-content"] > p {
+      margin-top: 6px;
+    }
+    .parent-viewing-student {
+      background:
+        radial-gradient(
+          ellipse 52px 38px at 100% 0,
+          #f7e8e5 98%,
+          transparent 100%
+        ),
+        #fff;
+    }
+  }
+}

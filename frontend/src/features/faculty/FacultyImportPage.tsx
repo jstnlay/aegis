@@ -123,9 +123,14 @@ function UploadCard({
   const createJob = useFacultyImportJob()
 
   return (
-    <Card>
+    <Card data-panel="upload">
       <CardHeader>
-        <CardTitle>Upload a file</CardTitle>
+        <CardTitle>
+          <span className="faculty-panel-icon" aria-hidden="true">
+            <Upload />
+          </span>
+          <span>Upload a file</span>
+        </CardTitle>
         <CardDescription>
           CSV or XLSX. The server detects the real type from the file&apos;s
           contents rather than its extension. A small file finishes before you
@@ -284,9 +289,14 @@ function HistoryCard() {
   ]
 
   return (
-    <Card>
+    <Card data-panel="history">
       <CardHeader>
-        <CardTitle>Your uploads</CardTitle>
+        <CardTitle>
+          <span className="faculty-panel-icon" aria-hidden="true">
+            <Upload />
+          </span>
+          <span>Your uploads</span>
+        </CardTitle>
         <CardDescription>
           Jobs you submitted, newest first. Only your own uploads are listed.
         </CardDescription>
@@ -362,9 +372,14 @@ function ExportsCard() {
   }
 
   return (
-    <Card>
+    <Card data-panel="exports">
       <CardHeader>
-        <CardTitle>Exports</CardTitle>
+        <CardTitle>
+          <span className="faculty-panel-icon" aria-hidden="true">
+            <Download />
+          </span>
+          <span>Exports</span>
+        </CardTitle>
         <CardDescription>
           Download your own grades or attendance as a CSV or XLSX file. If
           nothing is on record yet, the server answers with a message instead of

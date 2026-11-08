@@ -1,0 +1,182 @@
+.app-shell[data-role] .app-sidebar .app-sidebar-account {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-shrink: 0;
+  min-height: 88px;
+  max-width: calc(100% - 20px);
+  margin: 10px;
+  padding: 13px 10px;
+  border: 1px solid #f5d7b84d;
+  border-radius: 17px;
+  background: linear-gradient(125deg, #ffffff19, #f1ce980a);
+  box-shadow:
+    inset 0 1px #ffffff1c,
+    0 4px 12px #39060d18;
+  text-align: left;
+  color: #fff8f3;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+.app-shell[data-role]
+  .app-sidebar
+  .app-sidebar-account:is(:hover, [data-state="open"]) {
+  background: linear-gradient(125deg, #ffffff28, #f1ce9819);
+  border-color: #f5d7b899;
+  box-shadow:
+    inset 0 1px #ffffff30,
+    0 5px 15px #39060d24;
+}
+.app-sidebar-account:focus-visible {
+  outline: 2px solid #f1ce98;
+  outline-offset: 2px;
+}
+.app-sidebar-account .app-sidebar-user-copy {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.app-shell[data-role]
+  .app-sidebar
+  .app-sidebar-account
+  > .app-sidebar-user-avatar {
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+  border: 1px solid #ffe6c699;
+  background: linear-gradient(145deg, #fff9ef, #efd5b4);
+  color: #7f222b;
+  font-size: 13px;
+  font-weight: 750;
+  box-shadow: 0 2px 8px #39060d20;
+}
+.sidebar-account-role {
+  margin-bottom: 4px;
+  color: #f1d5b2;
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+.sidebar-account-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: #fff8f3;
+  font-size: 13px;
+  font-weight: 700;
+  overflow: hidden;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+}
+.sidebar-account-detail {
+  display: block;
+  margin-top: 5px;
+  color: #e8c8cc;
+  font-size: 11px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.sidebar-account-chevron {
+  width: 22px;
+  height: 22px;
+  padding: 4px;
+  border: 1px solid #ffffff26;
+  border-radius: 7px;
+  background: #ffffff0c;
+  flex-shrink: 0;
+  color: #e8c8cc;
+  transition: transform 140ms ease;
+}
+.app-sidebar-account[data-state="open"] .sidebar-account-chevron {
+  transform: rotate(180deg);
+}
+.app-sidebar[data-compact="true"] .sidebar-account-chevron {
+  display: none;
+}
+.app-shell[data-role] .app-sidebar[data-compact="true"] .app-sidebar-account {
+  justify-content: center;
+  padding: 6px;
+  margin: 10px;
+  min-height: 60px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-shell[data-role] .app-sidebar .app-sidebar-account,
+  .sidebar-account-chevron {
+    transition: none;
+  }
+}
+.sidebar-account-menu {
+  z-index: 80;
+  width: 264px;
+  max-width: calc(100vw - 24px);
+  max-height: var(--radix-dropdown-menu-content-available-height);
+  overflow-y: auto;
+  padding: 7px;
+  border: 1px solid #b8968559;
+  border-radius: 18px;
+  background: #fffdfa;
+  color: #48352f;
+  box-shadow: 0 12px 36px #38131e30;
+}
+.sidebar-account-menu-heading {
+  display: grid;
+  gap: 3px;
+  padding: 12px;
+  border-bottom: 1px solid #b8968526;
+  margin-bottom: 5px;
+}
+.sidebar-account-menu-heading strong {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.sidebar-account-menu-heading > span {
+  font-size: 12px;
+  color: #786154;
+}
+.sidebar-account-menu [role="menuitem"] {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 58px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  outline: none;
+}
+.sidebar-account-menu [role="menuitem"][data-highlighted] {
+  background: #f8ece2;
+}
+.sidebar-account-menu [role="menuitem"] > svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  color: var(--primary);
+}
+.sidebar-account-menu strong {
+  display: block;
+  font-size: 13px;
+}
+.sidebar-account-menu small {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  color: #786154;
+}
+.sidebar-account-separator {
+  height: 1px;
+  margin: 5px 10px;
+  background: #b8968526;
+}
+.sidebar-account-menu .sidebar-account-sign-out,
+.sidebar-account-menu .sidebar-account-sign-out svg,
+.sidebar-account-menu .sidebar-account-sign-out small {
+  color: #b12030;
+}
