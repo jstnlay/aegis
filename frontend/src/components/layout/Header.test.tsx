@@ -192,6 +192,13 @@ describe.each(["admin", "guidance", "student", "parent", "faculty"] as const)(
       expect(header).toHaveAttribute("data-hidden", "false")
       expect(notifications).toHaveAttribute("aria-expanded", "true")
     })
+
+    it("hides the faculty header like the other school roles", () => {
+      const scroll = controlScroll()
+      renderHeader("faculty")
+      scroll(200)
+      expect(screen.getByRole("banner")).toHaveAttribute("data-hidden", "true")
+    })
   }
 )
 

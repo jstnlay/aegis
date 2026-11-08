@@ -13,10 +13,12 @@ Reusable, security-hardened XLSX parsing primitives that later importers
   clients
 
 Design decisions (locked with project owner):
-- XLSX ONLY; legacy ``.xls`` is rejected.
+- ``.xlsx`` and ``.xlsm`` only; legacy ``.xls`` is rejected.
 - ``openpyxl`` is the ONLY Excel library.
 - Multi-sheet workbooks are rejected (ambiguous — one import file
-  represents one dataset).
+  represents one dataset) UNLESS the workbook is a recognised DepEd form, in
+  which case ``deped_forms`` translates its fixed layout into the same flat
+  rows the generic path produces.
 - Hidden/system worksheets are skipped entirely and never processed.
 """
 
@@ -27,6 +29,7 @@ from decimal import Decimal
 
 import openpyxl
 
+from . import deped_forms
 from .constants import (
     ImportErrorCode,
     MAX_IMPORT_FILE_SIZE,
@@ -71,7 +74,7 @@ class _XlsxResult:
 
 
 def _validate_extension(filename):
-    """Reject files without a ``.xlsx`` extension."""
+    """Reject files that are neither ``.xlsx`` nor ``.xlsm``."""
     name = safe_filename(filename)
     if not name:
         raise XlsxValidationError(
@@ -79,10 +82,10 @@ def _validate_extension(filename):
             "No usable filename supplied for the uploaded file.",
         )
     lower = name.lower()
-    if not lower.endswith(".xlsx"):
+    if not lower.endswith((".xlsx", ".xlsm")):
         raise XlsxValidationError(
             ImportErrorCode.INVALID_FILE_EXTENSION,
-            "Only .xlsx files are supported.",
+            "Only .xlsx and .xlsm files are supported.",
         )
     return lower
 
@@ -413,6 +416,18 @@ def parse_xlsx_bytes(content, sheet=None):
         )
 
     try:
+        # A DepEd SF2/SF9 workbook is recognised by its sheets and translated
+        # into the same flat rows a plain table would produce, so the importer
+        # validates a fill-in form exactly like a CSV export.
+        if deped_forms.detect(wb.sheetnames):
+            try:
+                headers, rows = deped_forms.read(wb)
+            except deped_forms.DepedFormError as exc:
+                raise XlsxValidationError(exc.code, exc.message)
+            return _XlsxResult(
+                headers=headers, rows=rows, raw_row_count=len(rows)
+            )
+
         ws = _select_worksheet(wb, sheet=sheet)
 
         # Read the header row (row 1).  In read-only mode, rows that have

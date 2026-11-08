@@ -5,6 +5,100 @@ TC-ADM-04 (attendance), TC-ADM-05 (guidance records), TC-ADM-18 (malformed
 file). Faculty uploads, TC-FAC-13 to TC-FAC-16, use the same two attendance
 files and the same grades file through the faculty page.
 
+## DepEd SF2 / SF9 datasets
+
+Two DepEd forms in this folder are the source. Each dataset is shipped twice:
+as the **filled form** a person uploads, and as the **flat CSV** the automated
+tests read.
+
+| Template | Form | Filled workbooks (upload these) | Flat CSV |
+| --- | --- | --- | --- |
+| `SF2 JUNIOR HS.xlsm` | School Form 2 — daily attendance | `attendance-sf2-<section>.xlsm` | `attendance-sf2.csv` |
+| `G4-10  School Form 9 (SY 26-27).xlsx` | School Form 9 — Learner's Progress Report Card (formerly Form 138) | `grades-sf9-<section>.xlsx`, `grades-sf9-terms-1-2-<section>.xlsx` | `grades-sf9.csv`, `grades-sf9-terms-1-2.csv` |
+
+`<section>` is `bonifacio` or `mabini`. Together they cover **two whole sections
+— 50 learners**: Grade 8 Bonifacio, `AEGIS-QA-S0026` to `S0050`, and Grade 9
+Mabini, `S0051` to `S0075`. They are shaped so the pipeline has something to
+find:
+
+- **grades-sf9-\<section\>.xlsx** — Term 3, 200 rows per section (25 learners ×
+  SF9's 8 learning areas). Each roster is split into three bands round-robin, so
+  about 16 learners across both sections sit below the passing mark. Term 3 is
+  the open term, so re-uploading updates in place instead of hitting the
+  finalized-grade lock.
+- **grades-sf9-terms-1-2-\<section\>.xlsx** — Term 1 and Term 2, 400 rows per
+  section. Uploaded *after* the Term 3 files as a second batch, it is what gives
+  the historical trend more than one point to plot.
+- **attendance-sf2-\<section\>.xlsm** — 125 rows per section (25 learners × 5
+  school days in the week of 2026-09-07, inside Term 1). The weak band carries
+  more absences and tardies.
+
+### Upload the workbook, not the CSV
+
+A filled workbook is multi-sheet and its learner rows do not start at row 1, so
+the generic "header in row 1" importer cannot read it. The backend recognises a
+DepEd form by its sheet names (`apps/data_import/deped_forms.py`) and translates
+it into the same flat rows a CSV produces, so both go through one validation
+path. One workbook is one section — SF9's summary band and SF2's month grid each
+hold a single class — so import both sections' files to reach 50 learners.
+
+**Grades workbook.** Each `TERM n SUMMARY` sheet carries one numbered row per
+learner (from row 15) and the learning-area band on row 12 from column K:
+
+```
+Filipino  English  Mathematics  Science  AP  GMRC/VE  EPP/TLE  MAPEH
+```
+
+Those are mapped to the subject codes the seeded school uses (`FIL`, `ENG`,
+`MATH`, `SCI`, `AP`, `ESP`, `TLE`, `MAPEH` — `GMRC/VE` is the current name for
+what the seed calls Edukasyon sa Pagpapakatao; `EPP/TLE` is TLE), each suffixed
+with the grade level (`FIL-8`, `FIL-9`) so both sections resolve to real
+subjects. MAPEH is the one area the form splits (`M A` | `P E H`); the reader
+averages the filled sub-columns. The sheet's own GRADE LEVEL and SECTION cells
+are formulas that point at the form's `INPUT DATA` sheet, so the reader takes
+them from the summary sheet and ignores a summary whose level is not a grade
+4-10 (the unfilled template caches a `0` there).
+
+**The form's own `Final Grade` is not the app's average.** Each `TERM n SUMMARY`
+sheet computes its `Final Grade` column with
+`ROUND((K+L+M+N+O+S)/6,0)`: that averages only Filipino, English, Mathematics,
+Science, AP and MAPEH's `P E H` column, and leaves out GMRC/VE, EPP/TLE and
+MAPEH's `M A`. The shipped template's `FINAL GRADES` sheet is also wrong — its
+`THIRD TERM` column looks up `TERM 2 SUMMARY`. The importer reads the
+learning-area grades and never that column, and the app averages all eight areas,
+which is DepEd's rule (a quarter grade is the average of the learner's learning
+areas, and MAPEH is the average of its components). The number the app reports
+for a student therefore will **not** equal the `Final Grade` this template
+prints, and that is intended — the formula is the template's, not the app's.
+
+**Attendance workbook.** The school header lives on the `COVER` sheet
+(`B2` section, `B4` school year, `B5` grade level, `B6` month); the month grid is
+on `SF2-JHS`. The form marks the exceptions only — `X` absent, `L` or `T`
+tardy, blank present — and the reader turns each learner-day cell into one
+attendance row. Fill the `COVER` sheet first: without a section, grade level and
+month the form is rejected rather than imported against a guessed section.
+
+**Learner identity.** Neither form has a column for the app's student code. The
+reader takes the **name cell** (SF9 column C, SF2 column B) as `student_id` and
+resolves it the way a CSV row is resolved, so a filled form must carry the
+school code the Students export shows (`AEGIS-QA-S0026` …). A real school writes
+the learner's name there; for QA the code is written there so it resolves.
+
+The workbooks and the CSVs are generated by one script:
+
+```powershell
+python docs/test-data/generate_datasets.py
+```
+
+Run that only when a template changes; the committed files are what the suite
+reads. `apps/data_import/tests_datasets_pipeline.py` imports the **workbooks**
+through the real API and proves the five capabilities (ingestion, at-risk run,
+read-back, recommendations, batch history, the two-batch academic trend, and a
+per-student risk series over time). `apps/data_import/tests_deped_forms.py`
+covers form recognition, malformed-form rejection and `.xlsm` acceptance;
+`apps/data_import/tests_shipped_files.py` covers the smaller manual-QA files
+below.
+
 ## No setup needed
 
 The files name records the way a school does: `section` is
@@ -57,9 +151,12 @@ role or password.
 A file with more than 200 rows is not finished while the upload page waits.
 The upload returns immediately and the job keeps running on the server; the
 job list on the page refreshes itself until the status is completed, failed or
-partial. The files above are all small, so they finish before the response.
-If a job ever stays "processing" after a redeploy or a restart, just upload the
-same file again: re-uploading is safe, and it corrects the same records.
+partial. The manual-QA files below are all small and finish before the
+response, but the SF2/SF9 datasets above do not: a section's grades workbook is
+200 rows (400 for the earlier-terms file) and its attendance workbook 125, so
+the grade files are finished by the worker pool. If a job ever stays
+"processing" after a redeploy or a restart, just upload the same file again:
+re-uploading is safe, and it corrects the same records.
 
 ## What each malformed row proves
 

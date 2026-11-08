@@ -197,5 +197,13 @@ describe.each(["admin", "guidance", "student", "parent", "faculty"])(
         screen.getByRole("navigation", { name: "Main" })
       ).not.toHaveAttribute("inert")
     })
+
+    it("auto-minimizes for faculty like the other school roles", () => {
+      state.role = "faculty"
+      const sidebar = renderSidebar()
+      scrollPage(100)
+      idle()
+      expect(sidebar).toHaveAttribute("data-compact", "true")
+    })
   }
 )
