@@ -5,7 +5,6 @@ import { Link } from "react-router-dom"
 import { PublicFooter } from "@/components/brand/PublicFooter"
 import { SchoolHeader } from "@/components/brand/SchoolHeader"
 import { Reveal } from "@/components/layout/Reveal"
-import { Button } from "@/components/ui/button"
 import { ABOUT_TEXT, MISSION_TEXT, VISION_TEXT } from "@/lib/school-content"
 import "./school-page.css"
 
@@ -39,9 +38,6 @@ export function SchoolPage() {
           <ArrowLeft aria-hidden="true" className="size-4" />
           <span>Back to the landing page</span>
         </Link>
-        <Button asChild size="lg" className="school-background-sign-in">
-          <Link to="/login">Sign in</Link>
-        </Button>
       </SchoolHeader>
 
       <main className="school-background-main">

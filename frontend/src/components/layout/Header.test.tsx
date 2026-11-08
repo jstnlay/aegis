@@ -11,6 +11,7 @@ import { MemoryRouter } from "react-router-dom"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { Header } from "@/components/layout/Header"
+import { SidebarAccount } from "@/components/layout/SidebarAccount"
 import type { Notification } from "@/features/notifications/api"
 import { apiClient } from "@/lib/api"
 import { fetchAllPages } from "@/lib/pagination"
@@ -83,15 +84,18 @@ function makeNotification(overrides: Partial<Notification> = {}): Notification {
   }
 }
 
-function renderHeader(role: Role = "student") {
+function renderHeader(role: Role = "student", pathname = "/") {
   currentUser = makeUser(role)
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[pathname]}>
       <QueryClientProvider client={client}>
         <Header onMenuClick={() => {}} />
+        <aside aria-label="Sidebar account">
+          <SidebarAccount />
+        </aside>
       </QueryClientProvider>
     </MemoryRouter>
   )
@@ -108,7 +112,40 @@ beforeEach(() => {
 
 afterEach(() => vi.restoreAllMocks())
 
-describe.each(["admin", "guidance", "student", "parent"] as const)(
+it.each([
+  ["student", "Welcome back, Ana!"],
+  ["faculty", "Welcome back, Teacher A. Cruz!"],
+  ["guidance", "Welcome back, Ana!"],
+  ["parent", "Your family portal"],
+  ["admin", "Administration overview"],
+] as const)(
+  "integrates the %s dashboard welcome into the top header",
+  (role, title) => {
+    renderHeader(role, `/app/dashboard/${role}`)
+    const header = screen.getByRole("banner")
+    expect(
+      within(header).getByRole("heading", { level: 1, name: title })
+    ).toBeInTheDocument()
+    expect(
+      within(header).queryByRole("heading", { name: "Dashboard" })
+    ).not.toBeInTheDocument()
+    expect(
+      within(header).getByRole("button", { name: /^Notifications/ })
+    ).toBeVisible()
+    expect(header).toHaveAttribute("data-dashboard", "true")
+    if (role === "student") {
+      expect(
+        within(header).getByText("One step at a time. Make today yours.")
+      ).toBeInTheDocument()
+    } else {
+      expect(
+        within(header).queryByText("One step at a time. Make today yours.")
+      ).not.toBeInTheDocument()
+    }
+  }
+)
+
+describe.each(["admin", "guidance", "student", "parent", "faculty"] as const)(
   "%s header scrolling",
   (role) => {
     function controlScroll() {
@@ -137,33 +174,33 @@ describe.each(["admin", "guidance", "student", "parent"] as const)(
       expect(header).toHaveAttribute("data-hidden", "false")
     })
 
-    it("reveals for keyboard focus and stays visible while the account menu is open", () => {
+    it("keeps account controls in the sidebar and reveals the header for its notification menu", () => {
       const scroll = controlScroll()
       renderHeader(role)
       const header = screen.getByRole("banner")
       scroll(150)
       expect(header).toHaveAttribute("data-hidden", "true")
       const account = screen.getByRole("button", { name: "Account menu" })
-      fireEvent.focus(account)
+      expect(header).not.toContainElement(account)
+      const notifications = screen.getByRole("button", {
+        name: /^Notifications/,
+      })
+      fireEvent.focus(notifications)
       expect(header).toHaveAttribute("data-hidden", "false")
-      fireEvent.click(account)
+      fireEvent.click(notifications)
       scroll(300)
       expect(header).toHaveAttribute("data-hidden", "false")
-      expect(screen.getByRole("menuitem", { name: "Sign out" })).toBeVisible()
-    })
-
-    it("keeps other roles' headers visible", () => {
-      const scroll = controlScroll()
-      renderHeader("faculty")
-      scroll(200)
-      expect(screen.getByRole("banner")).toHaveAttribute("data-hidden", "false")
+      expect(notifications).toHaveAttribute("aria-expanded", "true")
     })
   }
 )
 
 describe("sign-out confirmation", () => {
   async function openConfirmation() {
-    fireEvent.click(screen.getByRole("button", { name: "Account menu" }))
+    fireEvent.pointerDown(
+      screen.getByRole("button", { name: "Account menu" }),
+      { button: 0, ctrlKey: false }
+    )
     fireEvent.click(screen.getByRole("menuitem", { name: "Sign out" }))
     return screen.findByRole("alertdialog", { name: "Sign out of AEGIS?" })
   }
@@ -221,6 +258,42 @@ describe("sign-out confirmation", () => {
 })
 
 describe("header bell (TC-STU-08)", () => {
+  it("keeps related-page links outside the read button and marks the notification read on navigation", async () => {
+    mockedFetchAllPages.mockResolvedValue({
+      count: 1,
+      results: [makeNotification({ id: "n-related", link: "/academics" })],
+    })
+    renderHeader()
+    const bell = await screen.findByRole("button", {
+      name: "Notifications, 1 unread",
+    })
+    fireEvent.click(bell)
+    const menu = screen.getByRole("menu", { name: "Notifications" })
+    const link = within(menu).getByRole("menuitem", {
+      name: "Open the related page",
+    })
+    expect(link.closest("button")).toBeNull()
+    fireEvent.click(link)
+    await waitFor(() =>
+      expect(mockedPost).toHaveBeenCalledWith("/notifications/n-related/read/")
+    )
+    expect(
+      screen.queryByRole("menu", { name: "Notifications" })
+    ).not.toBeInTheDocument()
+  })
+
+  it("returns focus to the bell when the dropdown is dismissed with Escape", async () => {
+    renderHeader()
+    const bell = screen.getByRole("button", { name: "Notifications" })
+    fireEvent.click(bell)
+    fireEvent.keyDown(screen.getByRole("menu", { name: "Notifications" }), {
+      key: "Escape",
+    })
+    expect(
+      screen.queryByRole("menu", { name: "Notifications" })
+    ).not.toBeInTheDocument()
+    expect(bell).toHaveFocus()
+  })
   it("opens the unread notification in full, not just the inbox", async () => {
     mockedFetchAllPages.mockResolvedValue({
       count: 1,
@@ -236,7 +309,7 @@ describe("header bell (TC-STU-08)", () => {
     fireEvent.click(bell)
 
     const menu = await screen.findByRole("menu", {
-      name: /unread notifications/i,
+      name: /^notifications$/i,
     })
     // Title, body and provenance are all present without leaving the page.
     expect(within(menu).getByText("Grade posted")).toBeInTheDocument()
@@ -258,7 +331,7 @@ describe("header bell (TC-STU-08)", () => {
     )
 
     const menu = await screen.findByRole("menu", {
-      name: /unread notifications/i,
+      name: /^notifications$/i,
     })
     fireEvent.click(within(menu).getByText("Grade posted"))
 
@@ -267,9 +340,7 @@ describe("header bell (TC-STU-08)", () => {
     })
     // The panel closes on the selection, so the reader is not left under a
     // menu they have finished with.
-    expect(
-      screen.queryByRole("menu", { name: /unread notifications/i })
-    ).toBeNull()
+    expect(screen.queryByRole("menu", { name: /^notifications$/i })).toBeNull()
   })
 
   it("offers the related page only when the role can open it", async () => {
@@ -285,7 +356,7 @@ describe("header bell (TC-STU-08)", () => {
       await screen.findByRole("button", { name: "Notifications, 1 unread" })
     )
     const menu = await screen.findByRole("menu", {
-      name: /unread notifications/i,
+      name: /^notifications$/i,
     })
     expect(within(menu).queryByText(/open the related page/i)).toBeNull()
   })
@@ -297,10 +368,10 @@ describe("header bell (TC-STU-08)", () => {
     )
 
     const menu = await screen.findByRole("menu", {
-      name: /unread notifications/i,
+      name: /^notifications$/i,
     })
     expect(
-      within(menu).getByText(/no unread notifications/i)
+      await within(menu).findByText(/no notifications yet/i)
     ).toBeInTheDocument()
     // The inbox remains reachable from the badge even with nothing unread.
     expect(

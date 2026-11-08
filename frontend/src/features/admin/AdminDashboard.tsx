@@ -15,6 +15,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { GradeMeter } from "@/components/ui/grade-meter"
 import { ErrorNote } from "@/components/feedback/Feedback"
 import { MetricCard } from "@/components/ui/metric-card"
 import { RiskDistributionChart } from "@/components/charts/RiskDistributionChart"
@@ -139,7 +140,7 @@ function AdminDashboard() {
         />
       </div>
 
-      <Card className="admin-dashboard-table">
+      <Card data-panel="records" className="admin-dashboard-table">
         <CardHeader className="admin-grade-summary-header">
           <div className="admin-grade-summary-heading">
             <span className="admin-grade-summary-icon" aria-hidden="true">
@@ -205,13 +206,7 @@ function GradeLevelTable({
       cell: (row) => (
         <div className="admin-grade-average">
           <span>{formatPercent(row.average, 2)}</span>
-          {row.average !== null && Number.isFinite(row.average) ? (
-            <span className="admin-grade-average-track" aria-hidden="true">
-              <span
-                style={{ width: `${Math.min(100, Math.max(0, row.average))}%` }}
-              />
-            </span>
-          ) : null}
+          <GradeMeter score={row.average} label={row.grade_level_name} />
         </div>
       ),
     },

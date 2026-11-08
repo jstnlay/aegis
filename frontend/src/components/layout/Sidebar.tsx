@@ -1,6 +1,6 @@
 import { NavLink } from "react-router-dom"
 import { createPortal } from "react-dom"
-import { ChevronLeft, ChevronRight } from "lucide-react"
+import { ChevronRight } from "lucide-react"
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react"
 
 import { Badge } from "@/components/ui/badge"
@@ -13,6 +13,7 @@ import {
   type NavItem,
 } from "@/lib/navigation"
 import { cn } from "@/lib/utils"
+import { SidebarAccount } from "./SidebarAccount"
 
 /**
  * Shared role-aware sidebar (PH11.5).
@@ -209,6 +210,7 @@ export function Sidebar({
   const close = useCallback(() => onOpenChange(false), [onOpenChange])
   const isWide = useIsWideViewport()
   useEscapeToClose(open, close)
+  const [accountOpen, setAccountOpen] = useState(false)
   const [compact, setCompact] = useState(false)
   const [hovered, setHovered] = useState(false)
   const [focused, setFocused] = useState(false)
@@ -222,10 +224,10 @@ export function Sidebar({
   const isCompact = autoCompact && compact
 
   useEffect(() => {
-    if (!autoCompact || hovered || focused || open) return
+    if (!autoCompact || hovered || focused || open || accountOpen) return
     const timeout = window.setTimeout(() => setCompact(true), 2400)
     return () => window.clearTimeout(timeout)
-  }, [autoCompact, hovered, focused, open])
+  }, [autoCompact, hovered, focused, open, accountOpen])
 
   useEffect(() => {
     if (!autoCompact) return
@@ -252,43 +254,14 @@ export function Sidebar({
    */
   const inertWhenOffCanvas = !open && !isWide
 
-  const branding = (
-    <>
-      <Brand />
-      {(autoCompact && !isCompact) || (!isWide && open) ? (
-        <button
-          type="button"
-          className={cn(
-            "app-sidebar-toggle",
-            !isWide && "app-sidebar-toggle--mobile"
-          )}
-          aria-label="Minimize navigation"
-          title="Minimize navigation"
-          aria-expanded="true"
-          aria-controls={PRIMARY_NAV_ID}
-          onClick={(event) => {
-            if (!isWide) {
-              close()
-              return
-            }
-            event.currentTarget.blur()
-            document
-              .getElementById("main-content")
-              ?.focus({ preventScroll: true })
-            setCompact(true)
-          }}
-        >
-          <ChevronLeft aria-hidden="true" />
-        </button>
-      ) : null}
-    </>
-  )
+  const branding = <Brand />
 
   return (
     <>
       {/* Mobile backdrop */}
-      {open ? (
+      {open && !isWide ? (
         <div
+          data-slot="navigation-backdrop"
           className="fixed inset-0 z-40 bg-foreground/40 lg:hidden"
           aria-hidden="true"
           onClick={close}
@@ -306,7 +279,17 @@ export function Sidebar({
             if ((event.target as Element).closest(".app-sidebar-toggle")) return
             setCompact(false)
           }}
-          onPointerLeave={() => setHovered(false)}
+          onPointerLeave={(event) => {
+            setHovered(false)
+            if (
+              autoCompact &&
+              !accountOpen &&
+              event.pointerType !== "touch" &&
+              !event.currentTarget.querySelector(":focus-visible")
+            ) {
+              setCompact(true)
+            }
+          }}
           onFocusCapture={(event) => {
             setFocused(true)
             if ((event.target as Element).closest(".app-sidebar-toggle")) return
@@ -354,22 +337,11 @@ export function Sidebar({
             </ul>
           </nav>
 
-          <div className="app-sidebar-footer shrink-0 border-t border-sidebar-border p-3">
-            <p className="px-1 text-xs text-sidebar-foreground/70">AEGIS</p>
-            {schoolTheme ? (
-              <span className="app-sidebar-label">
-                {user?.role === "admin"
-                  ? "Admin workspace"
-                  : user?.role === "guidance"
-                    ? "Guidance workspace"
-                    : user?.role === "parent"
-                      ? "Parent workspace"
-                      : user?.role === "faculty"
-                        ? "Faculty workspace"
-                        : "Student workspace"}
-              </span>
-            ) : null}
-          </div>
+          <SidebarAccount
+            inert={inertWhenOffCanvas}
+            onMenuChange={setAccountOpen}
+            onNavigate={close}
+          />
         </aside>
       </div>
     </>

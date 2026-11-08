@@ -1,6 +1,6 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils import timezone
-from rest_framework import viewsets, generics, status
+from rest_framework import viewsets, generics, status, mixins
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.permissions import IsAuthenticated
@@ -17,12 +17,13 @@ from .serializers import (
 )
 
 
-class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
+class NotificationViewSet(mixins.DestroyModelMixin, viewsets.ReadOnlyModelViewSet):
     """
-    Read-only access to the requesting user's notifications.
+    Read and delete the requesting user's notifications.
 
     - GET  /notifications/            — list (paginated, filterable)
     - GET  /notifications/{id}/       — retrieve
+    - DELETE /notifications/{id}/    — delete own notification
     - POST /notifications/{id}/read/  — mark one as read
     - POST /notifications/read-all/   — mark all as read
     """

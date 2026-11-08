@@ -14,6 +14,9 @@ import {
   CircleHelp,
   FileText,
   Globe,
+  GraduationCap,
+  HeartHandshake,
+  BookHeart,
   HandHeart,
   Mail,
   MapPin,
@@ -53,6 +56,7 @@ import {
 import { cn } from "@/lib/utils"
 import "./landing-page.css"
 import "./landing-mobile.css"
+import "./landing-clarity.css"
 
 /** Hero entrance runs on the first landing visit of a session, not every one. */
 const HERO_SEEN_KEY = "aegis:hero-entrance-seen"
@@ -214,6 +218,54 @@ export function LandingPage() {
             </div>
           </Reveal>
         </section>
+        <Reveal>
+          <section
+            className="landing-section landing-core-values"
+            aria-labelledby="landing-core-values-title"
+          >
+            <div className="landing-core-values-heading">
+              <p>What we stand for</p>
+              <h2 id="landing-core-values-title">Our Core Values</h2>
+            </div>
+            <ul className="landing-core-values-grid">
+              {[
+                {
+                  title: "Academic Excellence",
+                  icon: GraduationCap,
+                  verse: "Colossians 3:23",
+                  text: "His Care Christian Institute provides an environment for students to excel in every facet of learning and holds them accountable for their efforts.",
+                },
+                {
+                  title: "Biblical World View",
+                  icon: BookOpen,
+                  verse: "2 Corinthians 10:5; Romans 12:2",
+                  text: "His Care Christian Institute integrates a biblical perspective into all aspects of the school experience so that students may view life from God's frame of reference.",
+                },
+                {
+                  title: "Christ-like Influence",
+                  icon: HeartHandshake,
+                  verse: "Matthew 5:13–16",
+                  text: "His Care Christian Institute equips students to be leaders in every arena of life to influence our society and our world for God's glory.",
+                },
+                {
+                  title: "Christ-like Character Development",
+                  icon: BookHeart,
+                  verse: "Philippians 2:5",
+                  text: "His Care Christian Institute trains both the heart and mind of students in the development of Godly wisdom so they may reflect the character of Jesus Christ in everything they do.",
+                },
+              ].map(({ title, icon: Icon, verse, text }) => (
+                <li key={title} className="landing-value-card">
+                  <span className="landing-value-icon" aria-hidden="true">
+                    <Icon />
+                  </span>
+                  <h3>{title}</h3>
+                  <p>{text}</p>
+                  <span className="landing-value-verse">{verse}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        </Reveal>
         <Reveal>
           <PortalHighlights />
         </Reveal>

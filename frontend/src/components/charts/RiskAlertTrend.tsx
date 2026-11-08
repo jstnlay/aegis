@@ -71,7 +71,7 @@ export function RiskAlertTrendChart({
               />
               <XAxis
                 dataKey="date"
-                tick={{ fill: AXIS_COLOR, fontSize: 11 }}
+                tick={{ fill: AXIS_COLOR, fontSize: 13 }}
                 tickLine={false}
                 axisLine={{ stroke: GRID_COLOR }}
                 tickFormatter={(date: string) => date.slice(5)}
@@ -79,10 +79,10 @@ export function RiskAlertTrendChart({
               />
               <YAxis
                 allowDecimals={false}
-                tick={{ fill: AXIS_COLOR, fontSize: 11 }}
+                tick={{ fill: AXIS_COLOR, fontSize: 13 }}
                 tickLine={false}
                 axisLine={false}
-                width={32}
+                width={42}
               />
               <Tooltip
                 content={({ active, payload, label }) => {

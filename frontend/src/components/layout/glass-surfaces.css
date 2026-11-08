@@ -1,0 +1,231 @@
+/* Colored frosted surfaces: clear edges, translucent centers, readable content. */
+.app-shell[data-role] .app-main .app-content {
+  [data-slot="card"],
+  [data-slot="card"]:not(:has(> [data-slot="card-content"] > .tabular-nums)) {
+    --surface-accent: var(--panel-accent, #985346);
+    border-color: color-mix(in srgb, var(--surface-accent) 28%, #ffffff99);
+    background:
+      radial-gradient(
+        ellipse at 0% 0%,
+        color-mix(in srgb, var(--surface-accent) 11%, transparent),
+        transparent 68%
+      ),
+      linear-gradient(140deg, #ffffffb8, #ffffff57 58%, #ffffff94);
+    -webkit-backdrop-filter: blur(16px) saturate(125%);
+    backdrop-filter: blur(16px) saturate(125%);
+    box-shadow:
+      inset 0 1px 0 #ffffffe6,
+      inset 1px 0 0 #ffffff73,
+      0 3px 8px #59352a06,
+      0 10px 24px #59352a0c;
+  }
+
+  [data-slot="card"]:not(:has(> [data-slot="card-content"] > .tabular-nums))
+    > [data-slot="card-header"] {
+    background: linear-gradient(
+      110deg,
+      color-mix(in srgb, var(--panel-accent, #985346) 7%, #ffffff47),
+      #ffffff26
+    );
+    border-bottom-color: color-mix(
+      in srgb,
+      var(--panel-accent, #985346) 15%,
+      #ffffff6b
+    );
+  }
+
+  [data-slot="card"][data-metric="true"]:has(
+      > [data-slot="card-content"] > .tabular-nums
+    ) {
+    --surface-accent: var(
+      --metric-color,
+      var(--parent-metric-color, var(--primary))
+    );
+    position: relative;
+    min-height: 178px;
+    gap: 12px;
+    padding-block: 22px 32px;
+    border: 1px solid color-mix(in srgb, var(--surface-accent) 30%, #ffffffa6);
+    border-radius: 20px;
+    background:
+      radial-gradient(
+        ellipse at 0% 0%,
+        color-mix(in srgb, var(--surface-accent) 19%, transparent),
+        transparent 75%
+      ),
+      linear-gradient(125deg, #ffffff7a, #ffffff29 65%, #ffffffa1);
+    box-shadow:
+      inset 0 1px #ffffffd9,
+      inset 1px 0 #ffffff66,
+      0 3px 8px #59352a06,
+      0 10px 24px #59352a0b;
+  }
+  [data-slot="card"][data-metric="true"]:has(
+      > [data-slot="card-content"] > .tabular-nums
+    )::before {
+    content: none;
+  }
+  [data-slot="card"][data-metric="true"]:has(
+      > [data-slot="card-content"] > .tabular-nums
+    )::after {
+    content: "";
+    position: absolute;
+    z-index: 0;
+    inset: auto auto 12px 20px;
+    width: 44px;
+    height: 3px;
+    border: 0;
+    border-radius: 999px;
+    background: linear-gradient(
+      90deg,
+      var(--surface-accent),
+      color-mix(in srgb, var(--surface-accent) 45%, transparent)
+    );
+    opacity: 0.9;
+    pointer-events: none;
+  }
+  [data-slot="card"][data-metric="true"]:has(
+      > [data-slot="card-content"] > .tabular-nums
+    )
+    > [data-slot="card-header"] {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+  }
+  [data-slot="card"][data-metric="true"]:has(
+      > [data-slot="card-content"] > .tabular-nums
+    )
+    > [data-slot="card-header"]::after {
+    content: none;
+  }
+  [data-slot="card"][data-metric="true"]:has(
+      > [data-slot="card-content"] > .tabular-nums
+    )
+    [data-slot="card-title"] {
+    color: #59473f;
+    font-size: 15px;
+    line-height: 1.5;
+    font-weight: 650;
+  }
+  [data-slot="card"][data-metric="true"]:has(
+      > [data-slot="card-content"] > .tabular-nums
+    )
+    > [data-slot="card-header"]
+    > svg {
+    width: 38px;
+    height: 38px;
+    flex-shrink: 0;
+    padding: 8px;
+    border: 1px solid color-mix(in srgb, var(--surface-accent) 22%, #ffffff80);
+    border-radius: 11px;
+    background: linear-gradient(
+      135deg,
+      #ffffffa6,
+      color-mix(in srgb, var(--surface-accent) 12%, #ffffff40)
+    );
+    color: var(--surface-accent);
+  }
+  [data-slot="card"][data-metric="true"]:has(
+      > [data-slot="card-content"] > .tabular-nums
+    )
+    > [data-slot="card-content"]
+    > .tabular-nums {
+    font-size: 40px;
+    line-height: 1.15;
+    letter-spacing: -0.035em;
+  }
+  [data-slot="card"][data-metric="true"]:has(
+      > [data-slot="card-content"] > .tabular-nums
+    )
+    > [data-slot="card-content"]
+    > p {
+    margin-top: 9px;
+    color: #68554b;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  [data-slot="card"] [data-slot="card-title"] {
+    font-size: 20px;
+    line-height: 1.45;
+  }
+  [data-slot="card"] [data-slot="card-description"] {
+    color: #68554b;
+    font-size: 16px;
+    line-height: 1.65;
+  }
+  [data-slot="card-content"] :is(p, span).text-sm {
+    font-size: 16px;
+    line-height: 1.65;
+  }
+  [data-slot="card-content"] :is(p, span).text-xs:not([data-slot="badge"]) {
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  .recharts-cartesian-axis-tick-value,
+  .recharts-legend-item-text {
+    font-size: 13px;
+  }
+}
+@media (max-width: 639px) {
+  .app-shell[data-role]
+    .app-main
+    .app-content
+    [data-slot="card"][data-metric="true"]:has(
+      > [data-slot="card-content"] > .tabular-nums
+    ) {
+    min-height: 164px;
+    border-radius: 16px;
+    gap: 8px;
+    padding-block: 18px 28px;
+  }
+  .app-shell[data-role] .app-main .app-content {
+    [data-slot="card"][data-metric="true"]:has(
+        > [data-slot="card-content"] > .tabular-nums
+      )
+      [data-slot="card-title"] {
+      font-size: 14px;
+    }
+    [data-slot="card"][data-metric="true"]:has(
+        > [data-slot="card-content"] > .tabular-nums
+      )
+      > [data-slot="card-content"]
+      > .tabular-nums {
+      font-size: 34px;
+    }
+    [data-slot="card"][data-metric="true"]:has(
+        > [data-slot="card-content"] > .tabular-nums
+      )
+      > [data-slot="card-content"]
+      > p {
+      font-size: 13px;
+    }
+    [data-slot="card"][data-metric="true"]:has(
+        > [data-slot="card-content"] > .tabular-nums
+      )
+      > [data-slot="card-header"]
+      > svg {
+      width: 32px;
+      height: 32px;
+      padding: 6px;
+    }
+    [data-slot="card"] [data-slot="card-title"] {
+      font-size: 18px;
+    }
+    [data-slot="card"] [data-slot="card-description"] {
+      font-size: 14px;
+    }
+    [data-slot="card-content"] :is(p, span).text-sm {
+      font-size: 14px;
+    }
+    [data-slot="card-content"] :is(p, span).text-xs:not([data-slot="badge"]) {
+      font-size: 13px;
+    }
+  }
+}
+@supports not (
+  (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))
+) {
+  .app-shell[data-role] .app-main .app-content [data-slot="card"] {
+    background-color: #fffaf4;
+  }
+}

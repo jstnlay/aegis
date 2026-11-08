@@ -1,6 +1,6 @@
 /* Faculty workspace: illustrated classrooms with quiet, readable record surfaces. */
 .app-shell[data-role="faculty"] {
-  --admin-canvas: #f7f6f2;
+  --admin-canvas: #fcf9f6;
 
   .app-main {
     background: var(--admin-canvas);
@@ -341,17 +341,21 @@
 
 /* Illustrated classroom layer. Subject colors identify subjects; badge colors describe status. */
 .app-shell[data-role="faculty"] {
-  --admin-canvas: #f7f7fc;
+  --admin-canvas: #fcf9f6;
   .faculty-welcome {
     position: relative;
     overflow: hidden;
     min-height: 226px;
     padding: 28px 34px;
-    border: 1px solid #e2d9ee;
+    border: 1px solid color-mix(in srgb, var(--primary) 14%, var(--card));
     border-radius: 22px;
     background:
-      radial-gradient(ellipse at 85% 20%, #eedff5 0, transparent 55%),
-      linear-gradient(110deg, #fffcf6, #f1eaf8);
+      radial-gradient(
+        ellipse at 85% 20%,
+        color-mix(in srgb, var(--primary) 10%, var(--card)) 0,
+        transparent 55%
+      ),
+      linear-gradient(110deg, #fffdf8, #f8ece6);
     box-shadow: 0 8px 28px #54406e08;
   }
   .faculty-welcome > div {
@@ -360,12 +364,12 @@
     max-width: 560px;
   }
   .faculty-welcome h2 {
-    color: #36284c;
+    color: var(--primary);
     font-size: clamp(27px, 2.8vw, 36px);
     letter-spacing: -0.045em;
   }
   .faculty-eyebrow {
-    color: #766087;
+    color: #88584d;
   }
   .faculty-welcome-cta {
     display: inline-flex;
@@ -374,10 +378,10 @@
     min-height: 42px;
     margin-top: 18px;
     padding: 9px 15px;
-    border: 1px solid #d7c8e1;
+    border: 1px solid color-mix(in srgb, var(--primary) 18%, var(--card));
     border-radius: 10px;
     background: #fffdf9;
-    color: #59416f;
+    color: var(--primary);
     font-size: 12px;
     font-weight: 650;
     box-shadow: 0 3px 8px #54406e08;
@@ -387,7 +391,7 @@
     height: 16px;
   }
   .faculty-welcome-cta:hover {
-    background: #f3edf8;
+    background: #faeee8;
   }
   .faculty-desk-art {
     flex: 0 0 260px;
@@ -400,7 +404,7 @@
     box-shadow:
       inset 0 3px 0 var(--metric-color),
       0 3px 12px #403b6505;
-    --metric-color: #6454a0;
+    --metric-color: var(--primary);
   }
   .faculty-metrics [data-slot="card"]:nth-child(2) {
     --metric-color: #318071;
@@ -426,15 +430,8 @@
     gap: 20px;
   }
   .faculty-classroom-board[data-slot="card"] {
-    background: transparent;
-    box-shadow: none;
-    --tw-ring-color: transparent;
-    padding: 0;
-    gap: 16px;
-  }
-  .faculty-classroom-board > [data-slot="card-header"],
-  .faculty-classroom-board > [data-slot="card-content"] {
-    padding-inline: 0;
+    background: var(--card);
+    --tw-ring-color: var(--border);
   }
   .faculty-classroom-board [data-slot="card-title"] {
     font-size: 20px;
@@ -614,7 +611,7 @@
   }
   .faculty-sections-board[data-slot="card"] {
     border-radius: 16px;
-    background: linear-gradient(160deg, #fff, #f6f3fb);
+    background: linear-gradient(160deg, #fff, #fcf5ee);
   }
   .faculty-sections-board [data-slot="card-header"] {
     padding-bottom: 12px;
@@ -630,7 +627,7 @@
     border-bottom: 0;
   }
   .faculty-action {
-    --action-color: #6a5598;
+    --action-color: var(--primary);
     background: color-mix(in srgb, var(--action-color) 3%, white);
     border-color: color-mix(in srgb, var(--action-color) 14%, white);
     border-radius: 12px;
@@ -654,10 +651,10 @@
   }
   .faculty-page > div:first-child:has(h2) {
     padding: 22px 24px;
-    border: 1px solid #e6dfee;
+    border: 1px solid color-mix(in srgb, var(--primary) 12%, var(--card));
     border-radius: 16px;
     background:
-      radial-gradient(circle at 100% 0, #eee5f7, transparent 45%), #fffdf9;
+      radial-gradient(circle at 100% 0, #f6e5dc, transparent 45%), #fffdf9;
   }
   .faculty-welcome-cta:focus-visible,
   .faculty-classroom-footer a:focus-visible {

@@ -340,7 +340,7 @@ export function GuidanceDashboard() {
       */}
       <div className="guidance-dashboard-columns grid items-start gap-4 lg:grid-cols-2">
         <div className="space-y-4">
-          <Card>
+          <Card data-panel="notes">
             <CardHeader>
               <PanelHeader title="Risk Alerts" to="/app/guidance/risk-alerts" />
             </CardHeader>
@@ -407,7 +407,7 @@ export function GuidanceDashboard() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card data-panel="pending">
             <CardHeader>
               <PanelHeader
                 title="Upcoming Follow-ups"
@@ -468,7 +468,7 @@ export function GuidanceDashboard() {
         </div>
 
         <div className="space-y-4">
-          <Card>
+          <Card data-panel="history">
             <CardHeader>
               <PanelHeader
                 title="Recent Consultations"
@@ -543,7 +543,7 @@ export function GuidanceDashboard() {
           </Card>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Card>
+            <Card data-panel="records">
               <CardHeader>
                 <PanelHeader title="Case Status Overview" />
               </CardHeader>
@@ -562,7 +562,7 @@ export function GuidanceDashboard() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card data-panel="history">
               <CardHeader>
                 <div className="flex items-center justify-between gap-2">
                   <CardTitle>Monthly Trend</CardTitle>

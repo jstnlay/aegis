@@ -1,4 +1,4 @@
-import { Users } from "lucide-react"
+import { BookOpen, NotebookPen, Users } from "lucide-react"
 import { useMemo, useState, type FormEvent } from "react"
 
 import { Badge } from "@/components/ui/badge"
@@ -205,9 +205,14 @@ function RosterCard({
   ]
 
   return (
-    <Card>
+    <Card data-panel="students">
       <CardHeader>
-        <CardTitle>Students in your class</CardTitle>
+        <CardTitle>
+          <span className="faculty-panel-icon" aria-hidden="true">
+            <Users />
+          </span>
+          <span>Students in your class</span>
+        </CardTitle>
         <CardDescription>
           Enrolled students in the sections you advise or teach. The server
           keeps this list scoped to your own sections.
@@ -402,9 +407,14 @@ function ClassSummaryCard() {
   ]
 
   return (
-    <Card>
+    <Card data-panel="records">
       <CardHeader>
-        <CardTitle>Advisory class summary</CardTitle>
+        <CardTitle>
+          <span className="faculty-panel-icon" aria-hidden="true">
+            <BookOpen />
+          </span>
+          <span>Advisory class summary</span>
+        </CardTitle>
         <CardDescription>
           Profiles, attendance and grades for your class on one page. Counts are
           attendance records taken, not a rate over school days, and an average
@@ -540,9 +550,14 @@ function NotesCard() {
   ]
 
   return (
-    <Card>
+    <Card data-panel="notes">
       <CardHeader>
-        <CardTitle>Behavioral notes</CardTitle>
+        <CardTitle>
+          <span className="faculty-panel-icon" aria-hidden="true">
+            <NotebookPen />
+          </span>
+          <span>Behavioral notes</span>
+        </CardTitle>
         <CardDescription>
           Notes are saved to the student&apos;s record and become visible to the
           guidance counselor. They cannot be edited or deleted after saving.

@@ -10,10 +10,8 @@ import type { Role } from "@/types/auth"
  *
  * Verified against `apps/notifications/`:
  *
- * - `NotificationViewSet` is a `ReadOnlyModelViewSet` — the list and detail
- *   routes are GET-only. There is no create/update/delete route: notifications
- *   are produced only by `dispatch_event()`, so no authoring UI is possible or
- *   appropriate.
+ * - Notifications are created by `dispatch_event()`. Recipients can read,
+ *   mark read, and delete their own notifications; authoring is unavailable.
  * - `get_queryset()` is `Notification.objects.filter(recipient=request.user)`,
  *   so cross-user leakage is impossible regardless of any id passed. Filters
  *   are `is_read` ("true"/"false") and `notification_type`.
@@ -222,6 +220,14 @@ export function useMarkAllNotificationsRead() {
   return useMutation({
     mutationFn: () =>
       apiClient.post("/notifications/read-all/").then((r) => r.data),
+    onSuccess: () => client.invalidateQueries({ queryKey: [KEY] }),
+  })
+}
+
+export function useDeleteNotification() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => apiClient.delete(`/notifications/${id}/`),
     onSuccess: () => client.invalidateQueries({ queryKey: [KEY] }),
   })
 }

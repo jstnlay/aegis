@@ -1,3 +1,4 @@
+import { useId } from "react"
 import {
   Bar,
   BarChart,
@@ -58,6 +59,7 @@ export function StudentAcademicTrendChart({
   studentId: string | null
 }) {
   const query = useStudentAcademicTrend(studentId)
+  const gradientId = `academic-${useId().replaceAll(":", "")}`
   const periods = (query.data?.periods ?? []) as TrendPeriod[]
 
   const points = [...periods]
@@ -109,6 +111,12 @@ export function StudentAcademicTrendChart({
           data={points}
           margin={{ top: 8, right: 8, bottom: 8, left: 0 }}
         >
+          <defs>
+            <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="var(--primary)" />
+              <stop offset="100%" stopColor="#c18b48" />
+            </linearGradient>
+          </defs>
           <CartesianGrid
             vertical={false}
             stroke={GRID_COLOR}
@@ -152,9 +160,14 @@ export function StudentAcademicTrendChart({
             type="monotone"
             dataKey="average"
             name="Average score"
-            stroke="var(--primary)"
-            strokeWidth={2}
-            dot={{ r: 4 }}
+            stroke={`url(#${gradientId})`}
+            strokeWidth={3}
+            dot={{
+              r: 4,
+              fill: "var(--primary)",
+              stroke: "white",
+              strokeWidth: 2,
+            }}
             // A period with no scores stays a gap.
             connectNulls={false}
             isAnimationActive={false}
@@ -198,6 +211,7 @@ export function StudentAttendanceTrendChart({
   studentId: string | null
 }) {
   const query = useStudentAttendanceTrend(studentId)
+  const gradientId = `attendance-${useId().replaceAll(":", "")}`
   const days = query.data?.days ?? []
 
   const points = days.map((day) => ({
@@ -246,6 +260,25 @@ export function StudentAttendanceTrendChart({
           data={points}
           margin={{ top: 8, right: 8, bottom: 8, left: 0 }}
         >
+          <defs>
+            {[
+              { key: "present", light: "#a2b096", dark: "#718367" },
+              { key: "late", light: "#dfba83", dark: "#bf8d48" },
+              { key: "absent", light: "#cf8790", dark: "#a13b48" },
+            ].map((tone) => (
+              <linearGradient
+                key={tone.key}
+                id={`${gradientId}-${tone.key}`}
+                x1="0"
+                y1="0"
+                x2="0"
+                y2="1"
+              >
+                <stop offset="0%" stopColor={tone.light} />
+                <stop offset="100%" stopColor={tone.dark} />
+              </linearGradient>
+            ))}
+          </defs>
           <CartesianGrid
             vertical={false}
             stroke={GRID_COLOR}
@@ -287,9 +320,9 @@ export function StudentAttendanceTrendChart({
           />
           {(
             [
-              { key: "present", label: "Present", color: "var(--chart-2)" },
-              { key: "late", label: "Late", color: "var(--chart-4)" },
-              { key: "absent", label: "Absent", color: "var(--destructive)" },
+              { key: "present", label: "Present", color: "#718367" },
+              { key: "late", label: "Late", color: "#bf8d48" },
+              { key: "absent", label: "Absent", color: "#a13b48" },
             ] as const
           ).map((series) => (
             <Bar
@@ -297,7 +330,7 @@ export function StudentAttendanceTrendChart({
               dataKey={series.key}
               name={series.label}
               stackId="attendance"
-              fill={series.color}
+              fill={`url(#${gradientId}-${series.key})`}
               maxBarSize={28}
               isAnimationActive={false}
             />

@@ -16,6 +16,13 @@ import "@/features/student/student-theme.css"
 import "@/features/parent/parent-theme.css"
 import "@/features/faculty/faculty-theme.css"
 import "./assistant-motion.css"
+import "./workspace-polish.css"
+import "@/features/faculty/faculty-studio.css"
+import "./school-studio.css"
+import "./dashboard-header.css"
+import "./glass-surfaces.css"
+import "@/features/student/student-studio.css"
+import "./workspace-clarity.css"
 
 /**
  * Shared application shell for all five roles (admin, faculty, guidance,
@@ -112,6 +119,7 @@ export function AppShell() {
     <div
       className="app-shell flex min-h-svh bg-background"
       data-role={user?.role}
+      data-dashboard={/^\/app\/dashboard(?:\/|$)/.test(location.pathname)}
     >
       <SkipLink />
 

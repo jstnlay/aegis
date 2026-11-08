@@ -1,0 +1,273 @@
+/* The faculty studio's visual language, shared by the other school portals. */
+.app-shell[data-role] .app-content .school-grade-meter {
+  --meter-start: #dc7a80;
+  --meter-end: #a32e43;
+  grid-column: 1 / -1;
+  height: 10px;
+  overflow: hidden;
+  border: 1px solid #ffffffc9;
+  border-radius: 999px;
+  background: #e8ded6a6;
+  box-shadow: inset 0 1px 3px #633c2910;
+}
+.app-shell[data-role] .app-content .school-grade-meter[data-tone="excellent"] {
+  --meter-start: #75c5aa;
+  --meter-end: #28775c;
+}
+.app-shell[data-role] .app-content .school-grade-meter[data-tone="passing"] {
+  --meter-start: #f0d17c;
+  --meter-end: #b78029;
+}
+.app-shell[data-role] .app-content .school-grade-meter > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background:
+    linear-gradient(180deg, #ffffff38, transparent 55%),
+    linear-gradient(90deg, var(--meter-start), var(--meter-end));
+  box-shadow: inset 0 1px 0 #ffffff70;
+}
+.app-shell[data-role] .app-content .student-subject-card > .school-grade-meter {
+  margin: 0 16px 16px;
+}
+.app-shell[data-role]
+  .app-content
+  .parent-subject-row:has(.school-grade-meter) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px 12px;
+}
+
+.app-shell[data-role]:not([data-role="faculty"]) .app-main .app-content {
+  --panel-accent: #985346;
+  --panel-tint: #fbede4;
+
+  [data-slot="card"] {
+    min-width: 0;
+    border-color: #b8968559;
+    background: linear-gradient(135deg, #fffffff0, #fff8efc7);
+    box-shadow:
+      inset 0 1px 0 #ffffffed,
+      0 4px 10px #633c290a,
+      0 12px 28px #633c2912;
+    backdrop-filter: blur(14px) saturate(115%);
+  }
+
+  [data-slot="card"]:not(:has(> [data-slot="card-content"] > .tabular-nums)) {
+    border-top: 2px solid color-mix(in srgb, var(--panel-accent) 45%, white);
+  }
+
+  [data-slot="card-header"] {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    background: linear-gradient(
+      110deg,
+      color-mix(in srgb, var(--panel-tint) 65%, transparent),
+      #ffffff26
+    );
+  }
+
+  [data-slot="card-header"]::after {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    pointer-events: none;
+    width: 128px;
+    height: 128px;
+    right: -36px;
+    top: -80px;
+    border: 18px solid color-mix(in srgb, var(--panel-accent) 5%, transparent);
+    border-radius: 50%;
+  }
+
+  [data-slot="card-title"] {
+    color: #48352f;
+    font-size: clamp(16px, 1.3vw, 19px);
+    font-weight: 700;
+    line-height: 1.45;
+    letter-spacing: -0.025em;
+    overflow-wrap: anywhere;
+  }
+
+  [data-slot="card-title"]:has(> svg) {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  [data-slot="card-title"] > svg {
+    flex: 0 0 34px;
+    width: 34px;
+    height: 34px;
+    padding: 7px;
+    border: 1px solid color-mix(in srgb, var(--panel-accent) 16%, white);
+    border-radius: 11px;
+    color: var(--panel-accent);
+    background: linear-gradient(135deg, white, var(--panel-tint));
+    stroke-width: 1.7;
+  }
+
+  :is(
+    .student-welcome,
+    .parent-welcome,
+    .guidance-overview,
+    .admin-dashboard-heading
+  ) {
+    position: relative;
+    overflow: hidden;
+    padding: clamp(22px, 3vw, 36px);
+    border: 1px solid #ffffffdb;
+    border-radius: 22px;
+    background:
+      radial-gradient(ellipse at 100% 0, #f2d3af55, transparent 65%),
+      linear-gradient(120deg, #fffef9d9, #fff3e885);
+    box-shadow:
+      inset 0 1px white,
+      0 8px 28px #713d2208;
+    backdrop-filter: blur(14px);
+    color: #514038;
+  }
+
+  :is(.student-eyebrow, .parent-eyebrow, .guidance-eyebrow) {
+    color: #875029;
+    opacity: 1;
+    font-weight: 700;
+  }
+
+  :is(
+    .student-welcome-message,
+    .parent-welcome h2 + p,
+    .guidance-overview h2 + p,
+    .admin-dashboard-heading > p
+  ) {
+    color: #68554b;
+    opacity: 1;
+  }
+
+  :is(.student-welcome-art, .parent-welcome-art) {
+    color: #a45e48;
+    opacity: 0.8;
+    border-color: #b17a5533;
+    background: linear-gradient(135deg, #ffffffb3, #f3ddbd80);
+  }
+
+  :is(.student-welcome-art, .parent-welcome-art) > svg {
+    color: #9a6135;
+  }
+
+  :is(
+      .student-welcome,
+      .parent-welcome,
+      .guidance-overview,
+      .admin-dashboard-heading
+    )
+    h2 {
+    color: var(--primary);
+    font-size: clamp(25px, 2.6vw, 35px);
+    font-weight: 750;
+    line-height: 1.25;
+    letter-spacing: -0.035em;
+    text-wrap: balance;
+  }
+
+  :is(.student-shortcut, .parent-shortcut) {
+    border: 1px solid #be94832b;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #fffefdcc, #fff1e685);
+    box-shadow:
+      inset 0 1px white,
+      0 3px 12px #713d2206;
+    transition:
+      border-color 160ms ease,
+      box-shadow 160ms ease;
+  }
+
+  :is(.student-shortcut, .parent-shortcut):hover {
+    border-color: #b78477;
+    box-shadow: 0 5px 16px #713d2210;
+  }
+}
+
+/* Keep the edges legible against the bright canvas in every role. */
+.app-shell[data-role] .app-main .app-content {
+  /* Metric labels belong to the tile surface, without a separate header band. */
+  [data-slot="card"]:has(> [data-slot="card-content"] > .tabular-nums)
+    > [data-slot="card-header"] {
+    background: transparent;
+    border-bottom: 0;
+    box-shadow: none;
+  }
+  [data-slot="card"]:has(> [data-slot="card-content"] > .tabular-nums)
+    > [data-slot="card-header"]::after {
+    content: none;
+  }
+  [data-slot="card"],
+  [data-slot="card"]:not(:has(> [data-slot="card-content"] > .tabular-nums)) {
+    border: 1px solid #b8968559;
+    background: linear-gradient(135deg, #fffffff0, #fff8efc7);
+    box-shadow:
+      inset 0 1px 0 #ffffffed,
+      0 4px 10px #633c290a,
+      0 12px 28px #633c2912;
+  }
+  [data-slot="card"][data-panel],
+  [data-slot="card"][data-panel]:not(
+      :has(> [data-slot="card-content"] > .tabular-nums)
+    ) {
+    border-top: 2px solid
+      color-mix(in srgb, var(--panel-accent, #985346) 55%, white);
+  }
+  [data-slot="card"]:not(:has(> [data-slot="card-content"] > .tabular-nums))
+    > [data-slot="card-header"] {
+    border-bottom: 1px solid #b8968538;
+    background: linear-gradient(
+      110deg,
+      color-mix(in srgb, var(--panel-tint, #f6e7da) 85%, white),
+      #fffaf3b8
+    );
+  }
+  :is(.student-subject-card, .parent-subject-row, .parent-child-option) {
+    border-color: #b8968559;
+    box-shadow: 0 3px 10px #633c290c;
+  }
+  :is(
+    .student-welcome,
+    .parent-welcome,
+    .guidance-overview,
+    .admin-dashboard-heading,
+    .faculty-welcome
+  ) {
+    border-color: #b8968566;
+    box-shadow:
+      inset 0 1px white,
+      0 6px 14px #633c290a,
+      0 14px 30px #633c2910;
+  }
+}
+
+@media (max-width: 639px) {
+  .app-shell[data-role]:not([data-role="faculty"]) .app-main .app-content {
+    :is(
+      .student-welcome,
+      .parent-welcome,
+      .guidance-overview,
+      .admin-dashboard-heading
+    ) {
+      padding: 20px;
+      border-radius: 17px;
+    }
+    [data-slot="card-title"] > svg {
+      flex-basis: 30px;
+      width: 30px;
+      height: 30px;
+      padding: 6px;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shell[data-role] .app-content :is(.student-shortcut, .parent-shortcut) {
+    transition: none;
+  }
+}

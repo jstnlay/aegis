@@ -429,7 +429,22 @@ function PreferenceToggle({
         className="w-full justify-between"
       >
         <span>{label}</span>
-        <span className="text-xs opacity-80">{checked ? "On" : "Off"}</span>
+        <span className="flex shrink-0 items-center gap-2" aria-hidden="true">
+          <span className="text-xs opacity-80">{checked ? "On" : "Off"}</span>
+          <span
+            className={`flex h-6 w-11 items-center rounded-full border p-0.5 ${
+              checked
+                ? "border-white/40 bg-white/25"
+                : "border-border bg-muted-foreground/25"
+            }`}
+          >
+            <span
+              className={`block size-4 rounded-full bg-white shadow-sm transition-transform duration-200 motion-reduce:transition-none ${
+                checked ? "translate-x-5" : "translate-x-0"
+              }`}
+            />
+          </span>
+        </span>
       </Button>
       <p className="text-xs text-muted-foreground">{description}</p>
     </div>

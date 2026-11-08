@@ -1,0 +1,1087 @@
+/* Warm, crisp surfaces retain the school's imagery and maroon identity. */
+.school-homepage.school-brand-background {
+  background:
+    radial-gradient(ellipse 85% 520px at 100% 0%, #ead4d766, transparent 75%),
+    radial-gradient(ellipse 65% 640px at 0% 48%, #ece0d54d, transparent 78%),
+    linear-gradient(180deg, #fdfbf8, #f8f4ef 65%, #fcf9f5);
+  background-size: auto;
+  background-repeat: no-repeat;
+}
+.school-homepage > .landing-background-art {
+  background-image: repeating-linear-gradient(
+    90deg,
+    transparent 0,
+    transparent calc(100% / 8 - 1px),
+    #754d3c08 calc(100% / 8 - 1px),
+    #754d3c08 calc(100% / 8)
+  );
+  -webkit-mask-image: linear-gradient(
+    transparent,
+    #000 180px,
+    #000 80%,
+    transparent
+  );
+  mask-image: linear-gradient(transparent, #000 180px, #000 80%, transparent);
+}
+.school-homepage > .landing-background-art > .landing-background-canvas {
+  display: none;
+}
+@media (max-width: 767px) {
+  .school-homepage > .landing-background-art {
+    background-image: linear-gradient(
+      90deg,
+      transparent calc(50% - 0.5px),
+      #754d3c06 50%,
+      transparent calc(50% + 0.5px)
+    );
+  }
+}
+.school-homepage {
+  --landing-copy-color: #554a45;
+  --landing-font-heading: "Inter Variable", sans-serif;
+  background-color: #faf7f3;
+  color: #352d29;
+
+  .school-header,
+  .school-header[data-scrolled="true"] {
+    background: #fffdfa;
+    border-bottom-color: #e5d8cf;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: 0 3px 14px #643e2b08;
+  }
+  .landing-hero {
+    border-color: #dfd1c7;
+    border-radius: 22px;
+    box-shadow: 0 8px 28px #643e2b0e;
+  }
+  .landing-hero__media {
+    --hero-photo-tint: #941b29;
+  }
+  .landing-hero h1 {
+    font-weight: 750;
+    letter-spacing: -0.045em;
+    text-wrap: balance;
+  }
+  .landing-hero__intro {
+    font-style: normal;
+    line-height: 1.75;
+    color: #594941;
+  }
+  .landing-hero__campus {
+    border-bottom-color: #d8b7ab;
+  }
+  [data-slot="button"] {
+    border-radius: 10px;
+    min-height: 44px;
+    box-shadow: 0 3px 8px #701a1915;
+  }
+  .landing-card {
+    border-color: #dacbc3;
+    border-radius: 20px;
+    box-shadow:
+      inset 0 1px #fff,
+      0 7px 24px #643e2b0b;
+  }
+  .landing-feed-announcements {
+    align-content: start;
+    row-gap: 0;
+    isolation: isolate;
+    background:
+      radial-gradient(
+        circle at 100% 0%,
+        transparent 108px,
+        #c7969c24 109px,
+        transparent 110px,
+        transparent 136px,
+        #c7969c1c 137px,
+        transparent 138px
+      ),
+      radial-gradient(ellipse at 100% 0%, #f0dfe34d, transparent 62%),
+      radial-gradient(ellipse at 0% 100%, #eee2d83d, transparent 48%), #fffcf9;
+    border-color: #d3bdb5;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow:
+      inset 0 1px #fff,
+      0 2px 5px #60403608,
+      0 14px 36px #60403612;
+  }
+  .landing-feed-announcements::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 28px;
+    width: 56px;
+    height: 3px;
+    border-radius: 0 0 4px 4px;
+    background: linear-gradient(90deg, #832c3c, #c59b87);
+    pointer-events: none;
+  }
+  .landing-feed-announcements > .landing-feed-heading {
+    padding: 18px 28px 0;
+    gap: 12px;
+  }
+  .landing-feed-announcements .landing-feed-title {
+    color: #382c2f;
+    font-size: 22px;
+    letter-spacing: -0.035em;
+  }
+  .landing-announcement-signal {
+    background: #f6e9e9;
+    border-color: #d9bfc4;
+    box-shadow: inset 0 1px #fff;
+  }
+  .landing-announcement-signal > svg {
+    animation: none;
+  }
+  .landing-event {
+    grid-template-columns: minmax(0, 1.08fr) minmax(0, 1fr);
+    align-items: start;
+    gap: clamp(24px, 3vw, 40px);
+    padding: 16px 28px 24px;
+  }
+  .landing-event-copy {
+    gap: 16px;
+    padding-top: 2px;
+  }
+  .landing-event-label {
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    color: #854452;
+    font-weight: 700;
+  }
+  .landing-event-copy p {
+    font-size: 14px;
+    line-height: 1.8;
+    color: #4c413c;
+  }
+  .landing-event-media .landing-event-closing {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    margin-top: 14px;
+    padding: 0 2px;
+    font-size: 12px;
+    line-height: 1.65;
+    font-weight: 500;
+    color: #715258;
+  }
+  .landing-event-closing > svg {
+    flex-shrink: 0;
+    margin-top: 2px;
+    color: #a36b71;
+  }
+  .landing-announcement-updates .landing-announcement-end {
+    background: #f7f0eb;
+    border-top-color: #e1d2c9;
+    padding: 12px 24px;
+    font-size: 11px;
+    color: #76655b;
+  }
+  .landing-glass {
+    background: linear-gradient(135deg, #971d28, #741923);
+    border-color: #a84b51;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow:
+      inset 0 1px #ffffff25,
+      0 8px 24px #64192516;
+  }
+  .landing-section-title {
+    font-weight: 700;
+    letter-spacing: -0.035em;
+  }
+  .landing-mission-title {
+    opacity: 1;
+    color: var(--primary);
+  }
+  .landing-icon {
+    border: 1px solid #dbc6bf;
+    background: #f6e9e4;
+    border-radius: 16px;
+  }
+  .landing-glass .landing-icon {
+    border-color: #ffffff30;
+    background: #ffffff12;
+  }
+  .landing-belief .landing-card-heading {
+    align-items: center;
+    gap: 12px;
+  }
+  .landing-beliefs {
+    -webkit-mask: none;
+    mask: none;
+    border-radius: 0;
+  }
+  .landing-contact-panel.landing-glass {
+    -webkit-mask: none;
+    mask: none;
+    border-radius: 0;
+    padding-block: 16px 8px;
+    row-gap: 4px;
+  }
+  .landing-contact-heading {
+    padding-block: 4px 12px;
+  }
+  .landing-contact-campus {
+    padding-block: 4px;
+  }
+  .landing-contact-channels > .landing-contact-row,
+  .landing-contact-channel {
+    padding-block: 5px;
+  }
+  .landing-contact-school-id {
+    margin-top: 4px;
+    padding-block: 2px;
+  }
+  .landing-belief .landing-icon {
+    width: 40px;
+    height: 40px;
+    border: 1px solid #ffffff40;
+    border-radius: 12px;
+    background: #ffffff0f;
+    color: #fff5ec;
+    box-shadow: none;
+  }
+  .landing-belief .landing-icon svg {
+    width: 22px;
+    height: 22px;
+    stroke-width: 1.6;
+  }
+  .landing-event-inquiry {
+    padding: 16px;
+    background: linear-gradient(115deg, #f5e9e9, #fcf6f1);
+    border: 1px solid #e3cbce;
+    border-left: 3px solid #9c5360;
+    border-radius: 12px;
+    box-shadow: inset 0 1px #fff;
+  }
+  .landing-event-inquiry h4 {
+    margin-bottom: 5px;
+    color: #71323f;
+    font-size: 12px;
+    font-weight: 650;
+  }
+  .landing-event-inquiry p {
+    font-size: 12px;
+    line-height: 1.7;
+  }
+  .landing-event-poster {
+    border: 3px solid #fff;
+    border-radius: 14px;
+    box-shadow:
+      0 0 0 1px #d8cec4,
+      0 8px 20px #242c2224;
+  }
+  .landing-event-poster img {
+    border: 0;
+    border-radius: 10px;
+  }
+  .landing-event-copy h3 {
+    color: #7d202d;
+    font-size: clamp(27px, 2.7vw, 35px);
+    font-weight: 700;
+    line-height: 1.18;
+    letter-spacing: -0.04em;
+  }
+  .landing-faq-question {
+    font-weight: 650;
+  }
+}
+@media (max-width: 899px) {
+  .school-homepage .landing-event {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
+}
+@media (max-width: 639px) {
+  .school-homepage {
+    .landing-hero,
+    .landing-card {
+      border-radius: 16px;
+    }
+    .landing-hero__intro {
+      font-size: 13px;
+      line-height: 1.65;
+    }
+    .landing-event-copy h3 {
+      font-size: 23px;
+    }
+    .landing-feed-announcements > .landing-feed-heading {
+      padding: 14px 18px 0;
+      gap: 9px;
+    }
+    .landing-feed-announcements .landing-feed-title {
+      font-size: 19px;
+    }
+    .landing-event {
+      padding: 12px 18px 18px;
+      gap: 20px;
+    }
+    .landing-event-copy {
+      gap: 12px;
+    }
+    .landing-event-copy p {
+      font-size: 13px;
+      line-height: 1.75;
+    }
+    .landing-event-inquiry p {
+      font-size: 12px;
+    }
+    .landing-icon {
+      border-radius: 12px;
+    }
+    .landing-belief .landing-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 9px;
+    }
+    .landing-belief .landing-icon svg {
+      width: 19px;
+      height: 19px;
+    }
+  }
+}
+
+@media (max-width: 767px) {
+  .school-homepage {
+    .landing-contact-panel.landing-glass {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      align-content: start;
+      gap: 0 10px;
+      padding: 8px 16px;
+      -webkit-mask: none;
+      mask: none;
+    }
+    .landing-contact-heading {
+      grid-column: 1 / -1;
+      padding: 0 0 4px;
+    }
+    .landing-contact-campus,
+    .landing-contact-channels:not(:last-child) > * {
+      grid-column: 1 / -1;
+    }
+    .landing-contact-panel .landing-contact-channels {
+      display: contents;
+    }
+    .landing-contact-campus > .landing-contact-row,
+    .landing-contact-channels > .landing-contact-row,
+    .landing-contact-channels > .landing-contact-channel {
+      padding-block: 4px;
+      min-height: 44px;
+    }
+    .landing-contact-panel
+      .landing-contact-channels:last-child
+      > .landing-contact-channel {
+      grid-column: auto;
+      grid-template-columns: 20px minmax(0, 1fr) 12px;
+      margin-top: 6px;
+      padding: 8px;
+      border: 1px solid #ffffff30;
+      border-radius: 9px;
+      background: #ffffff0d;
+    }
+    .landing-contact-channels:last-child .landing-contact-channel p {
+      display: none;
+    }
+    .landing-contact-channels:last-child .landing-contact-link-arrow {
+      grid-column: 3;
+    }
+  }
+}
+
+/* Desktop proportions: quieter type and tighter spacing without scaling text. */
+@media (min-width: 1024px) {
+  .school-homepage {
+    .landing-main {
+      --landing-section-space: 44px;
+      --landing-heading-space: 20px;
+      width: min(100%, 1180px);
+      padding: 22px 32px 0;
+    }
+    .school-header-inner {
+      min-height: 68px;
+      padding-block: 8px;
+    }
+    .public-nav-link {
+      font-size: 14px;
+    }
+    [data-slot="button"] {
+      min-height: 40px;
+      padding-inline: 16px;
+      font-size: 13px;
+    }
+    .landing-hero {
+      min-height: 350px;
+      border-radius: 18px;
+    }
+    .landing-hero__copy {
+      padding: 28px;
+    }
+    .landing-hero h1 {
+      font-size: clamp(38px, 3.6vw, 48px);
+      line-height: 1.1;
+    }
+    .landing-hero__campus {
+      font-size: 18px;
+      margin-block: 10px 16px;
+      padding-bottom: 8px;
+    }
+    .landing-hero__intro {
+      font-size: 14px;
+      line-height: 1.7;
+      max-width: 470px;
+    }
+    .landing-section-title,
+    .landing-offers > .landing-section-title {
+      font-size: 22px;
+    }
+    .landing-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+    }
+    .landing-icon svg {
+      width: 22px;
+      height: 22px;
+    }
+    .landing-beliefs {
+      padding-block: 24px;
+    }
+    .landing-belief {
+      padding: 24px 28px;
+    }
+    .landing-beliefs h3 {
+      font-size: 27px;
+    }
+    .landing-beliefs :is(p, .landing-mission-intro, .landing-vision-copy) {
+      font-size: 14px;
+      line-height: 1.7;
+    }
+    .landing-beliefs .landing-vision .landing-vision-copy {
+      line-height: 2.2;
+      margin-top: 6px;
+    }
+    .landing-beliefs .landing-mission-points {
+      gap: 14px;
+    }
+    .landing-mission-points li {
+      gap: 12px;
+    }
+    .landing-vision-lines {
+      min-height: 44px;
+      padding-top: 16px;
+    }
+    .landing-offers {
+      margin-block-start: 12px;
+      gap: 20px;
+    }
+    .landing-features {
+      gap: 18px;
+    }
+    .landing-feature {
+      padding: 22px;
+      border-radius: 16px;
+    }
+    .landing-feature-number {
+      font-size: 48px;
+    }
+    .landing-feature h3 {
+      font-size: 20px;
+    }
+    .landing-feature p {
+      font-size: 14px;
+      line-height: 1.7;
+    }
+    .landing-feed-announcements > .landing-feed-heading {
+      padding: 16px 24px 0;
+    }
+    .landing-feed-announcements .landing-feed-title {
+      font-size: 20px;
+    }
+    .landing-event {
+      padding: 16px 24px 22px;
+      gap: 28px;
+    }
+    .landing-event-copy {
+      gap: 12px;
+    }
+    .landing-event-copy h3 {
+      font-size: 29px;
+    }
+    .landing-event-copy p {
+      font-size: 13px;
+      line-height: 1.75;
+    }
+    .landing-event-inquiry {
+      padding: 12px 14px;
+    }
+    .landing-event-inquiry p {
+      font-size: 12px;
+    }
+    .landing-faq-layout {
+      gap: 32px;
+    }
+    .landing-faq-intro {
+      max-width: 290px;
+      gap: 12px;
+    }
+    .landing-faq-intro h2 {
+      font-size: 28px;
+    }
+    .landing-faq-intro p {
+      font-size: 14px;
+    }
+    .landing-faq-heading > .landing-icon {
+      width: 40px;
+      height: 40px;
+    }
+    .landing-faq-heading > .landing-icon svg {
+      width: 23px;
+      height: 23px;
+      animation: none;
+    }
+    .landing-faq-item button {
+      min-height: 58px;
+      padding: 16px 20px;
+      font-size: 14px;
+    }
+    .landing-contact .landing-contact-title {
+      font-size: 22px;
+    }
+  }
+}
+
+@media (min-width: 1024px) {
+  .school-homepage {
+    .landing-feed-resources {
+      padding: 16px 22px;
+      border-radius: 16px;
+    }
+    .landing-feed-resources .landing-feed-heading {
+      padding-bottom: 10px;
+      gap: 10px;
+    }
+    .landing-feed-resources .landing-feed-title {
+      font-size: 19px;
+    }
+    .landing-feed-resources .landing-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 10px;
+    }
+    .landing-feed-resources .landing-icon svg {
+      width: 19px;
+      height: 19px;
+    }
+    .landing-feed-resources .landing-feed-state {
+      min-height: 112px;
+      grid-template-columns: 74px minmax(0, 1fr);
+      gap: 16px;
+      padding-top: 12px;
+    }
+    .landing-feed-resources .landing-feed-art {
+      width: 74px;
+      height: 80px;
+    }
+    .landing-feed-resources .landing-feed-paper {
+      width: 46px;
+      height: 62px;
+      padding: 10px 8px;
+      gap: 6px;
+    }
+    .landing-feed-resources .landing-feed-message {
+      gap: 2px;
+    }
+    .landing-feed-resources .landing-feed-message p {
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .landing-feed-resources .landing-feed-state button {
+      margin-top: 6px;
+      min-height: 34px;
+    }
+    .landing-feed-resources .landing-feed-loading {
+      min-height: 112px;
+      padding: 16px 0;
+    }
+    .landing-faq-layout {
+      grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.6fr);
+      gap: 40px;
+    }
+    .landing-faq-intro {
+      max-width: 330px;
+      gap: 18px;
+    }
+    .landing-faq-intro h2 {
+      font-size: 34px;
+      line-height: 1.2;
+    }
+    .landing-faq-intro p {
+      font-size: 15px;
+      line-height: 1.7;
+    }
+    .landing-faq-heading > .landing-icon {
+      width: 48px;
+      height: 48px;
+    }
+    .landing-faq-heading > .landing-icon svg {
+      width: 26px;
+      height: 26px;
+    }
+    .landing-faq-item button {
+      min-height: 76px;
+      padding: 22px 24px;
+      font-size: 16px;
+    }
+    .landing-faq-answer p {
+      font-size: 15px;
+      line-height: 1.75;
+    }
+  }
+}
+
+@media (min-width: 1024px) {
+  .school-homepage {
+    .landing-faq-intro {
+      max-width: 360px;
+      gap: 20px;
+    }
+    .landing-faq-intro h2 {
+      font-size: clamp(36px, 3.1vw, 40px);
+      line-height: 1.15;
+    }
+    .landing-faq-intro p {
+      font-size: 16px;
+      line-height: 1.75;
+    }
+    .landing-faq-heading {
+      gap: 18px;
+    }
+    .landing-faq-heading > .landing-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 16px;
+    }
+    .landing-faq-heading > .landing-icon svg {
+      width: 30px;
+      height: 30px;
+    }
+    .landing-faq-intro [data-slot="button"] {
+      min-height: 44px;
+      padding-inline: 20px;
+      font-size: 14px;
+    }
+  }
+}
+@keyframes landing-help-float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-4deg);
+  }
+  50% {
+    transform: translateY(-7px) rotate(4deg);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .school-homepage .landing-faq-heading > .landing-icon {
+    animation: landing-help-float 3.8s ease-in-out infinite;
+    transform-origin: center;
+  }
+  .school-homepage .landing-faq-heading > .landing-icon svg {
+    animation: none;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .school-homepage .landing-feature {
+    transition:
+      transform 200ms ease,
+      box-shadow 200ms ease,
+      border-color 200ms ease;
+  }
+}
+@media (hover: hover) and (pointer: fine) {
+  .school-homepage .landing-feature:hover,
+  .school-homepage .landing-feature:focus-within {
+    border-color: #b4777f;
+    box-shadow: 0 10px 26px #64192520;
+  }
+}
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .school-homepage .landing-feature:hover,
+  .school-homepage .landing-feature:focus-within {
+    transform: translateY(-6px);
+  }
+}
+
+.school-homepage {
+  .landing-core-values {
+    padding: 28px 0;
+    background: radial-gradient(ellipse at 50% 40%, #eedadf60, transparent 70%);
+    gap: 24px;
+  }
+  .landing-core-values-heading {
+    text-align: center;
+  }
+  .landing-core-values-heading > p {
+    margin-bottom: 8px;
+    font-size: 10px;
+    font-weight: 650;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #94636a;
+  }
+  .landing-core-values-heading h2 {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.035em;
+    color: #702b37;
+  }
+  .landing-core-values-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+    list-style: none;
+    padding: 0;
+  }
+  .landing-value-card {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 22px 18px;
+    border: 1px solid #e2d1cb;
+    border-radius: 16px;
+    background: linear-gradient(140deg, #fffdfa, #fcf4f2);
+    box-shadow:
+      inset 0 1px #fff,
+      0 5px 16px #683c2b08;
+  }
+  .landing-value-icon {
+    display: grid;
+    place-items: center;
+    width: 42px;
+    height: 42px;
+    border: 1px solid #e5c9ce;
+    border-radius: 13px;
+    background: #f2e1e4;
+    color: #923545;
+  }
+  .landing-value-icon svg {
+    width: 23px;
+    height: 23px;
+    stroke-width: 1.6;
+  }
+  .landing-value-card h3 {
+    min-height: 40px;
+    font-size: 15px;
+    font-weight: 650;
+    line-height: 1.35;
+    color: #50333a;
+  }
+  .landing-value-card > p {
+    font-size: 12px;
+    line-height: 1.75;
+    color: #6c5850;
+  }
+  .landing-value-verse {
+    margin-top: auto;
+    padding-top: 8px;
+    border-top: 1px solid #eadbd5;
+    width: 100%;
+    font-size: 10px;
+    font-weight: 600;
+    color: #98656e;
+  }
+}
+@media (max-width: 899px) {
+  .school-homepage .landing-core-values-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 479px) {
+  .school-homepage {
+    .landing-core-values {
+      padding-block: 12px;
+      gap: 18px;
+    }
+    .landing-core-values-heading h2 {
+      font-size: 24px;
+    }
+    .landing-core-values-grid {
+      gap: 10px;
+    }
+    .landing-value-card {
+      padding: 16px 12px;
+      gap: 10px;
+    }
+    .landing-value-card h3 {
+      font-size: 13px;
+    }
+    .landing-value-card > p {
+      font-size: 11px;
+      line-height: 1.65;
+    }
+    .landing-value-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 11px;
+    }
+    .landing-value-icon svg {
+      width: 20px;
+      height: 20px;
+    }
+  }
+}
+
+@media (min-width: 768px) {
+  .school-homepage {
+    .landing-contact-campus .landing-icon,
+    .landing-contact-channels .landing-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+    }
+    .landing-contact-campus .landing-icon svg,
+    .landing-contact-channels .landing-icon svg {
+      width: 17px;
+      height: 17px;
+    }
+    .landing-contact-channel {
+      grid-template-columns: 28px minmax(0, 1fr) 14px;
+      gap: 8px;
+    }
+    .landing-contact-row {
+      gap: 8px;
+    }
+    .landing-contact-row h3,
+    .landing-contact-channel h3 {
+      font-size: 13px;
+      margin-bottom: 3px;
+    }
+    .landing-contact-panel .landing-contact-campus p,
+    .landing-contact-panel .landing-contact-channel p,
+    .landing-contact-address {
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .landing-contact-number {
+      font-size: 16px;
+    }
+    .landing-contact-campus {
+      padding-block: 2px;
+    }
+    .landing-contact-channels > .landing-contact-row,
+    .landing-contact-channel {
+      padding-block: 4px;
+    }
+  }
+}
+
+/* One material language for public content cards. */
+.school-homepage {
+  .landing-feature,
+  .landing-value-card,
+  .landing-feed-resources,
+  .landing-feed-announcements,
+  .landing-faq-list {
+    border-radius: 16px;
+    border: 1px solid #ddcec5;
+    box-shadow:
+      inset 0 1px 0 #ffffffb3,
+      0 2px 4px #49312605,
+      0 12px 28px #4931260a;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .landing-feature:not(.landing-glass),
+  .landing-value-card,
+  .landing-feed-resources {
+    background: linear-gradient(145deg, #fffefd, #fcf8f3);
+  }
+  .landing-feature.landing-glass,
+  .landing-faq-list.landing-glass {
+    border-color: #8f3c49;
+    background:
+      radial-gradient(ellipse at 0% 0%, #b94f4933, transparent 70%),
+      linear-gradient(135deg, #8b2634, #711d2c);
+    box-shadow:
+      inset 0 1px #ffffff26,
+      0 2px 5px #4d142a08,
+      0 12px 28px #4d142a14;
+  }
+  .landing-feature:not(.landing-glass) h3,
+  .landing-value-card h3 {
+    color: #50343b;
+  }
+  .landing-feature-art,
+  .landing-value-icon {
+    border-radius: 12px;
+    border-color: #e2cbc8;
+    box-shadow: inset 0 1px #ffffff80;
+  }
+  .landing-feature.landing-glass .landing-feature-art {
+    background: #ffffff0c;
+    border-color: #ffffff2e;
+    box-shadow: inset 0 1px #ffffff12;
+  }
+  .landing-feed-resources .landing-feed-heading {
+    border-bottom-color: #eaded7;
+  }
+  .landing-faq-item + .landing-faq-item {
+    border-top-color: #ffffff24;
+  }
+  .landing-faq-list .landing-faq-item button[aria-expanded="true"] {
+    background: #ffffff0d;
+  }
+  .landing-value-verse {
+    color: #86515e;
+    border-top-color: #e8d9d2;
+  }
+  .landing-event-inquiry {
+    border-radius: 10px;
+    background: #f6eeea;
+    box-shadow: inset 0 1px #ffffffb3;
+  }
+}
+@media (max-width: 767px) {
+  .school-homepage {
+    .landing-feature,
+    .landing-value-card,
+    .landing-feed-resources,
+    .landing-feed-announcements,
+    .landing-faq-list {
+      border-radius: 14px;
+    }
+  }
+}
+
+/* An open event feature breaks up the boxed hero and content cards. */
+.school-homepage {
+  .landing-feed-announcements.landing-card {
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  .landing-feed-announcements::before {
+    content: none;
+  }
+  .landing-feed-announcements > .landing-feed-heading {
+    padding: 0 0 20px;
+    gap: 10px;
+  }
+  .landing-feed-announcements .landing-feed-title {
+    font-size: 22px;
+  }
+  .landing-feed-announcements .landing-event {
+    padding: 0;
+    gap: clamp(28px, 4vw, 48px);
+    align-items: center;
+  }
+  .landing-feed-announcements .landing-event-media {
+    position: relative;
+    isolation: isolate;
+  }
+  .landing-feed-announcements .landing-event-media::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    inset: 18px -10px 30px 16px;
+    border-radius: 18px 18px 48px 18px;
+    background: #e9d5d7;
+    transform: rotate(-2deg);
+    pointer-events: none;
+  }
+  .landing-feed-announcements .landing-event-poster {
+    border-radius: 14px 14px 36px 14px;
+    box-shadow:
+      0 0 0 1px #d8cec4,
+      0 10px 24px #242c221c;
+  }
+  .landing-feed-announcements .landing-event-poster img {
+    border-radius: 10px 10px 32px 10px;
+  }
+  .landing-feed-announcements .landing-event-copy {
+    padding-block: 8px;
+  }
+  .landing-feed-announcements .landing-event-label::after {
+    content: "";
+    width: 40px;
+    height: 1px;
+    margin-left: 6px;
+    background: #c6a1a5;
+  }
+  .landing-feed-announcements .landing-event-inquiry {
+    border: 0;
+    border-left: 2px solid #a9616b;
+    border-radius: 0;
+    padding: 8px 0 8px 14px;
+    background: transparent;
+    box-shadow: none;
+  }
+  .landing-feed-announcements .landing-announcement-updates {
+    margin-top: 22px;
+  }
+  .landing-feed-announcements .landing-announcement-end {
+    padding: 12px 0 0;
+    text-align: left;
+    border-top: 1px solid #e0d3cb;
+    background: transparent;
+  }
+}
+@media (max-width: 767px) {
+  .school-homepage {
+    .landing-feed-announcements > .landing-feed-heading {
+      padding-bottom: 16px;
+    }
+    .landing-feed-announcements .landing-event {
+      gap: 20px;
+    }
+    .landing-feed-announcements .landing-event-media::before {
+      right: -5px;
+      left: 10px;
+    }
+    .landing-feed-announcements .landing-event-copy {
+      padding: 0;
+    }
+    .landing-feed-announcements .landing-feed-title {
+      font-size: 20px;
+    }
+  }
+}
+
+.school-homepage {
+  .landing-core-values-heading h2 {
+    color: #762a39;
+    text-shadow: 0 1px #fff;
+  }
+  .landing-core-values-heading::after {
+    content: "";
+    display: block;
+    width: 44px;
+    height: 3px;
+    margin: 12px auto 0;
+    border-radius: 3px;
+    background: linear-gradient(90deg, #903748, #c89b8a);
+  }
+  .landing-core-values .landing-value-card {
+    border-color: #d7b9bc;
+    border-top: 3px solid #a66370;
+    background: linear-gradient(145deg, #fffdfb 45%, #f7ebeb);
+    box-shadow:
+      inset 0 1px #fff,
+      0 5px 18px #6e26370e;
+  }
+  .landing-core-values .landing-value-icon {
+    color: #8a2539;
+    border-color: #dbb6bf;
+    background: #efdce1;
+  }
+  .landing-core-values .landing-value-card h3 {
+    color: #702d3b;
+  }
+}

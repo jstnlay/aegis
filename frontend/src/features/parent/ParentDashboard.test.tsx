@@ -185,6 +185,31 @@ describe("ParentDashboard", () => {
     expect(screen.getAllByText("Filipino").length).toBeGreaterThan(0)
   })
 
+  it("lets parents expand and collapse the subject list", async () => {
+    stubLoadedChild()
+    const data = mockedUseStudentDashboardData.getMockImplementation()!("")
+    mockedUseStudentDashboardData.mockReturnValue({
+      ...data,
+      grades: Array.from({ length: 5 }, (_, index) => ({
+        ...data.grades[0]!,
+        subject_name: `Subject ${index + 1}`,
+        subject_code: `SUB-${index + 1}`,
+      })),
+    })
+    renderWithClient(<ParentDashboard />)
+    fireEvent.click(await screen.findByRole("button", { name: /Ana Cruz/ }))
+    const toggle = await screen.findByRole("button", {
+      name: "View more subjects (2)",
+    })
+    expect(screen.queryByText("Subject 4")).not.toBeInTheDocument()
+    fireEvent.click(toggle)
+    expect(screen.getByText("Subject 5")).toBeInTheDocument()
+    expect(toggle).toHaveAttribute("aria-expanded", "true")
+    fireEvent.click(screen.getByRole("button", { name: "Show less" }))
+    expect(screen.queryByText("Subject 4")).not.toBeInTheDocument()
+    expect(toggle).toHaveAttribute("aria-expanded", "false")
+  })
+
   it("renders numeric scores with no letter-grade badges", async () => {
     stubLoadedChild()
     renderWithClient(<ParentDashboard />)

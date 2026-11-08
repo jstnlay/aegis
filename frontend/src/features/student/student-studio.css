@@ -1,0 +1,328 @@
+/* A clear reading order, with records first and supporting tools grouped below. */
+.app-shell[data-role="student"] .app-main .app-content .student-dashboard {
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+  > * {
+    margin-block: 0;
+  }
+  .student-dashboard-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+    align-items: start;
+  }
+  .student-dashboard-grid > * {
+    grid-column: 1 / -1;
+    min-width: 0;
+    margin: 0;
+  }
+  .student-overview {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+  .student-shortcuts {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    padding: 0;
+  }
+  .student-shortcut {
+    display: flex;
+    align-items: center;
+    min-height: 64px;
+    padding: 12px 16px;
+    gap: 12px;
+    border-radius: 15px;
+  }
+  .student-shortcut > svg:first-child {
+    flex: 0 0 32px;
+    width: 32px;
+    height: 32px;
+    padding: 6px;
+    border-radius: 10px;
+    background: #98191909;
+    color: var(--primary);
+  }
+  .student-shortcut > span {
+    flex: 1;
+    font-size: 14px;
+    font-weight: 650;
+  }
+  .student-shortcut > svg:last-child {
+    width: 16px;
+    height: 16px;
+    color: #99765e;
+  }
+  .student-progress > [data-slot="card-header"] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px 24px;
+  }
+  .student-progress-heading {
+    flex: 1;
+    min-width: min(100%, 240px);
+  }
+  .student-progress-heading [data-slot="card-description"] {
+    margin-top: 8px;
+  }
+  .student-progress-filter {
+    flex: 0 1 280px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+  .student-progress-filter label {
+    color: #68554b;
+    font-size: 12px;
+    font-weight: 650;
+  }
+  .student-progress-filter select {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    padding: 9px 12px;
+    border: 1px solid #b8968559;
+    border-radius: 11px;
+    background: #fffdf9b8;
+    color: #48352f;
+    font-size: 14px;
+  }
+  .student-subject-section-heading {
+    margin-bottom: 14px;
+  }
+  .student-subject-section-heading > p {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 14px;
+    font-weight: 700;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .student-subject-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+  }
+  .student-subject-card {
+    border-radius: 16px;
+  }
+  .student-subject-banner {
+    min-height: 130px;
+  }
+  .student-full-record {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 46px;
+    margin-top: 20px;
+    padding: 10px 16px;
+    border: 1px solid #b896854d;
+    border-radius: 12px;
+    background: #fffaf3a6;
+    font-size: 14px;
+    font-weight: 650;
+    text-decoration: none;
+  }
+  .student-trends-row,
+  .student-support-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: 24px;
+  }
+  .student-trends-row > [data-slot="card"],
+  .student-support-row > [data-slot="card"] {
+    grid-column: auto;
+    min-width: 0;
+    margin: 0;
+  }
+  .student-trends-row {
+    align-items: stretch;
+  }
+  .student-trends-row > [data-slot="card"] {
+    height: 100%;
+  }
+  .student-recommendation-list {
+    max-height: 420px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-right: 4px;
+    scrollbar-width: thin;
+  }
+  .student-family-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+  .student-family-fields > :nth-child(n + 3) {
+    grid-column: 1 / -1;
+  }
+}
+@media (min-width: 1100px) {
+  .app-shell[data-role="student"] .app-main .app-content .student-dashboard {
+    .student-support-row {
+      align-items: stretch;
+    }
+    .student-support-row > [data-slot="card"] {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+    .student-support-row > [data-slot="card"] > [data-slot="card-content"] {
+      flex: 1;
+    }
+  }
+}
+@media (max-width: 1099px) {
+  .app-shell[data-role="student"] .app-main .app-content .student-dashboard {
+    .student-subject-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .student-shortcut {
+      padding: 12px;
+      gap: 8px;
+    }
+    .student-shortcut > svg:last-child {
+      display: none;
+    }
+    .student-support-row {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+}
+@media (max-width: 639px) {
+  .app-shell[data-role="student"] .app-main .app-content .student-dashboard {
+    gap: 16px;
+    .student-recommendation-list {
+      max-height: none;
+      overflow: visible;
+      overscroll-behavior: auto;
+      padding-right: 0;
+    }
+    .student-dashboard-grid {
+      gap: 18px;
+    }
+    .student-overview {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .student-overview > .student-metric {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 8px;
+      height: auto;
+      min-height: 152px;
+      padding-block: 16px 26px;
+      border: 1px solid color-mix(in srgb, var(--metric-color) 30%, #ffffffa6);
+      border-radius: 16px;
+      -webkit-backdrop-filter: blur(16px);
+      backdrop-filter: blur(16px);
+    }
+    .student-overview > .student-metric:first-child {
+      grid-column: 1 / -1;
+    }
+    .student-metric [data-slot="card-header"] {
+      display: flex;
+      width: 100%;
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+    }
+    .student-metric [data-slot="card-content"] {
+      display: block;
+      width: 100%;
+      padding: 0 16px;
+    }
+    .student-metric [data-slot="card-title"] {
+      flex: 1;
+      min-width: 0;
+      grid-column: auto;
+      grid-row: auto;
+      white-space: normal;
+    }
+    .student-metric [data-slot="card-content"] > div {
+      text-align: left;
+    }
+    .student-metric [data-slot="card-header"] > svg {
+      grid-column: auto;
+      grid-row: auto;
+    }
+    .student-metric::after {
+      display: block;
+    }
+    .student-shortcuts {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .student-shortcut {
+      min-height: 56px;
+      padding: 10px 12px;
+    }
+    .student-shortcut > span {
+      font-size: 13px;
+    }
+    .student-progress > [data-slot="card-header"] {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 16px;
+    }
+    .student-progress-filter {
+      width: 100%;
+    }
+    .student-subject-grid {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 12px;
+    }
+    .student-subject-card {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 112px;
+    }
+    .student-subject-banner {
+      min-height: 112px;
+    }
+    .student-subject-card > .school-grade-meter {
+      grid-column: 1 / -1;
+      grid-row: 2;
+      align-self: center;
+      min-width: 0;
+      width: auto;
+      height: 8px;
+      margin: 12px;
+      border: 0;
+    }
+    .student-subject-card > .school-grade-meter > span {
+      max-width: 100%;
+      height: 100%;
+    }
+    .student-subject-result {
+      min-width: 0;
+    }
+    .student-trends-row,
+    .student-support-row {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 18px;
+    }
+    .student-family-fields {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .student-family-fields > * {
+      grid-column: 1;
+    }
+  }
+}

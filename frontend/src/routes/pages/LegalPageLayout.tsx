@@ -20,11 +20,13 @@ export function LegalPageLayout({
   intro,
   children,
   presentation = "page",
+  closeLabel = "Back to sign in",
 }: {
   title: string
   intro: string
   children: ReactNode
   presentation?: "page" | "dialog"
+  closeLabel?: string
 }) {
   useLayoutEffect(() => {
     if (presentation === "page") {
@@ -63,7 +65,7 @@ export function LegalPageLayout({
         <footer className="login-policy-footer">
           <p>His Care Christian Institute</p>
           <DialogClose asChild>
-            <Button>Back to sign in</Button>
+            <Button>{closeLabel}</Button>
           </DialogClose>
         </footer>
       </div>

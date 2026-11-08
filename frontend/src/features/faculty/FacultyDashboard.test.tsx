@@ -83,6 +83,15 @@ function renderWithClient(ui: React.ReactElement) {
 }
 
 describe("FacultyDashboard", () => {
+  it("greets faculty respectfully with first-name initials and their surname", () => {
+    renderWithClient(<FacultyDashboard />)
+    expect(
+      screen.getByRole("heading", { name: "Welcome back, Teacher J. Reyes" })
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole("heading", { name: "Faculty Dashboard" })
+    ).not.toBeInTheDocument()
+  })
   it("renders loading state", () => {
     renderWithClient(<FacultyDashboard />)
     // PH11.11: scoped to the heading. The tile now renders the phrase twice — its

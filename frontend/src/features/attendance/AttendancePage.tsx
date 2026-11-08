@@ -17,6 +17,7 @@ import {
   GRID_COLOR,
 } from "@/components/charts/chart-config"
 import { Button } from "@/components/ui/button"
+import { useDataTablePagination } from "@/components/ui/data-table-pagination"
 import { Badge } from "@/components/ui/badge"
 import {
   Card,
@@ -108,6 +109,11 @@ function StudentAttendance() {
   const studentId = profileQuery.data
   const recordsQuery = useAttendanceRecords({ student: studentId ?? undefined })
   const summaryQuery = useAttendanceSummary(studentId)
+  const { pagination, pageRows, totalPages } = useDataTablePagination(
+    recordsQuery.data ?? [],
+    10,
+    studentId ?? ""
+  )
 
   const loading = profileQuery.isLoading || recordsQuery.isLoading
 
@@ -249,7 +255,7 @@ function StudentAttendance() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(recordsQuery.data ?? []).map((r) => (
+                {pageRows.map((r) => (
                   <TableRow key={r.id}>
                     <TableCell className="whitespace-nowrap">
                       {r.date}
@@ -265,6 +271,44 @@ function StudentAttendance() {
               </TableBody>
             </Table>
           )}
+          {!loading && !recordsQuery.isError && pagination.totalCount > 0 ? (
+            <nav
+              aria-label="Attendance records pages"
+              className="mt-4 flex flex-wrap items-center justify-between gap-3"
+            >
+              <p className="text-xs text-muted-foreground" role="status">
+                Showing {(pagination.page - 1) * 10 + 1}–
+                {Math.min(pagination.page * 10, pagination.totalCount)} of{" "}
+                {pagination.totalCount}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={pagination.page === 1}
+                  onClick={() => pagination.onPageChange(pagination.page - 1)}
+                >
+                  Previous
+                </Button>
+                <span
+                  className="text-xs text-muted-foreground"
+                  aria-live="polite"
+                >
+                  {pagination.page} / {totalPages}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={pagination.page === totalPages}
+                  onClick={() => pagination.onPageChange(pagination.page + 1)}
+                >
+                  Next
+                </Button>
+              </div>
+            </nav>
+          ) : null}
         </CardContent>
       </Card>
     </div>
@@ -287,9 +331,9 @@ function attendanceRate(entry: AttendanceSummaryEntry): number {
 
 /** The same three series, and the same colours, as the school-wide trend. */
 const ATTENDANCE_SERIES = [
-  { key: "present", label: "Present", color: "var(--chart-2)" },
-  { key: "late", label: "Late", color: "var(--chart-4)" },
-  { key: "absent", label: "Absent", color: "var(--destructive)" },
+  { key: "present", label: "Present", color: "#718367" },
+  { key: "late", label: "Late", color: "#bf8d48" },
+  { key: "absent", label: "Absent", color: "#a13b48" },
 ] as const
 
 /**
@@ -514,9 +558,14 @@ function FacultyAttendance() {
         description="Record attendance in your authorized sections and review existing records."
       />
 
-      <Card>
+      <Card data-panel="attendance">
         <CardHeader>
-          <CardTitle>Take attendance</CardTitle>
+          <CardTitle>
+            <span className="faculty-panel-icon" aria-hidden="true">
+              <Calendar />
+            </span>
+            <span>Take attendance</span>
+          </CardTitle>
           <CardDescription>
             Creates one record per student per date. Future dates are rejected.
           </CardDescription>
@@ -650,9 +699,14 @@ function FacultyAttendance() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card data-panel="records">
         <CardHeader>
-          <CardTitle>Attendance records</CardTitle>
+          <CardTitle>
+            <span className="faculty-panel-icon" aria-hidden="true">
+              <Calendar />
+            </span>
+            <span>Attendance records</span>
+          </CardTitle>
           <CardDescription>
             Records in your authorized sections. Each row shows who recorded it.
           </CardDescription>

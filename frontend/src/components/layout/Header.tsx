@@ -1,9 +1,22 @@
-import { Bell, LogOut, Menu, Settings } from "lucide-react"
-import { useEffect, useMemo, useRef, useState } from "react"
+import {
+  Bell,
+  BellRing,
+  ArrowUpRight,
+  CalendarCheck,
+  Inbox,
+  ShieldAlert,
+  TriangleAlert,
+  BookOpen,
+  GraduationCap,
+  LayoutDashboard,
+  Menu,
+  ShieldCheck,
+  UsersRound,
+} from "lucide-react"
+import { useEffect, useId, useMemo, useRef, useState } from "react"
 import { Link, useLocation } from "react-router-dom"
 
 import { Button } from "@/components/ui/button"
-import { SignOutDialog } from "@/components/layout/SignOutDialog"
 import { useAuth } from "@/features/auth/AuthContext"
 import {
   NOTIFICATION_TYPE_LABELS,
@@ -11,16 +24,22 @@ import {
   sortNotifications,
   useMarkNotificationRead,
   useUnreadNotifications,
+  useNotifications,
   type Notification,
 } from "@/features/notifications/api"
+import { NotificationDetails } from "@/features/notifications/NotificationDetails"
 import { getPageTitle } from "@/lib/navigation"
-import { ROLE_LABELS, userDisplayName } from "@/lib/roles"
+import { normalizeApiError } from "@/lib/error"
+import "./header-account.css"
+import "./notification-menu.css"
+import { StudentNotebookArt } from "@/features/student/StudentJournalArtwork"
+import "@/features/parent/parent-editorial.css"
 
 /**
  * Shared application header (PH11.5).
  *
  * Shows the current page title (from the centralized navigation config),
- * the bell, and the account menu (Settings, Sign out).
+ * and the notification bell. Account actions live in the sidebar footer.
  *
  * The menu deliberately has no "Profile" entry: the app has no self-profile
  * page — the account surface is `GET/PATCH /accounts/me/`, which the Settings
@@ -50,26 +69,38 @@ export function NotificationSummary({
   notification: Notification
 }) {
   return (
-    <span className="block">
+    <span className="notification-summary block">
       <span
         className={
           notification.is_read
-            ? "block text-sm text-muted-foreground"
-            : "block text-sm font-medium text-foreground"
+            ? "notification-title block text-sm text-muted-foreground"
+            : "notification-title block text-sm font-medium text-foreground"
         }
       >
         {notification.title}
       </span>
-      <span className="block text-sm text-muted-foreground">
+      <span className="notification-message block text-sm text-muted-foreground">
         {notification.message}
       </span>
-      <span className="block text-xs text-muted-foreground">
+      <span className="notification-meta block text-xs text-muted-foreground">
         {NOTIFICATION_TYPE_LABELS[notification.notification_type]}
         {notification.sender_full_name
           ? ` · from ${notification.sender_full_name}`
           : ""}{" "}
-        · {new Date(notification.created_at).toLocaleString()}
       </span>
+      <time
+        className="notification-time block text-xs text-muted-foreground"
+        dateTime={notification.created_at}
+        title={new Date(notification.created_at).toLocaleString()}
+      >
+        {new Date(notification.created_at).toLocaleString(undefined, {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        })}
+      </time>
     </span>
   )
 }
@@ -77,47 +108,17 @@ export function NotificationSummary({
 function UserChip() {
   const { user } = useAuth()
   const unread = useUnreadNotifications()
+  const inbox = useNotifications()
+  const [selectedNotification, setSelectedNotification] =
+    useState<Notification | null>(null)
   const unreadCount = unread.data?.length ?? 0
   const markRead = useMarkNotificationRead()
   const role = user?.role ?? "student"
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [signOutOpen, setSignOutOpen] = useState(false)
-  const accountButtonRef = useRef<HTMLButtonElement>(null)
-  /*
-   * The bell opens a menu of unread notifications rather than jumping straight
-   * to the inbox (Cycle-3 TC-STU-08: a notification should open in full where
-   * it is read). Selecting one marks it read and, where the notification names
-   * a screen this role can actually open, follows it.
-   */
+  // Keep read updates in the menu; the unread query is only for the badge.
   const [bellOpen, setBellOpen] = useState(false)
   const bellRef = useRef<HTMLDivElement>(null)
-  const menuRef = useRef<HTMLDivElement>(null)
-  const name = userDisplayName(user)
-  const initials = name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? "")
-    .join("")
-
-  useEffect(() => {
-    if (!menuOpen) return
-    function onPointerDown(event: PointerEvent) {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setMenuOpen(false)
-      }
-    }
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setMenuOpen(false)
-    }
-    document.addEventListener("pointerdown", onPointerDown)
-    document.addEventListener("keydown", onKeyDown)
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown)
-      document.removeEventListener("keydown", onKeyDown)
-    }
-  }, [menuOpen])
-
+  const bellButtonRef = useRef<HTMLButtonElement>(null)
+  const menuId = useId()
   /*
    * Same dismissal contract as the account menu: click outside or Escape. Kept
    * as its own effect because the two panels have independent open state and a
@@ -131,7 +132,10 @@ function UserChip() {
       }
     }
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setBellOpen(false)
+      if (event.key === "Escape") {
+        setBellOpen(false)
+        bellButtonRef.current?.focus()
+      }
     }
     document.addEventListener("pointerdown", onPointerDown)
     document.addEventListener("keydown", onKeyDown)
@@ -142,14 +146,15 @@ function UserChip() {
   }, [bellOpen])
 
   const unreadNotifications = useMemo(
-    () => sortNotifications(unread.data ?? []),
-    [unread.data]
+    () => sortNotifications(inbox.data ?? []),
+    [inbox.data]
   )
 
   return (
-    <div className="flex items-center gap-1">
-      <div ref={bellRef} className="relative">
+    <div className="app-header-actions flex items-center gap-1">
+      <div ref={bellRef} className="notification-menu-anchor relative">
         <Button
+          ref={bellButtonRef}
           variant="ghost"
           size="icon"
           onClick={() => setBellOpen((open) => !open)}
@@ -160,137 +165,158 @@ function UserChip() {
           }
           aria-expanded={bellOpen}
           aria-haspopup="menu"
-          className="relative text-muted-foreground"
+          aria-controls={bellOpen ? menuId : undefined}
+          className="app-notification-trigger relative text-muted-foreground"
         >
           <Bell aria-hidden="true" />
           {unreadCount > 0 && (
-            <span
-              aria-hidden="true"
-              className="absolute top-1 right-1 size-2 rounded-full bg-destructive"
-            />
+            <span aria-hidden="true" className="app-notification-count">
+              {unreadCount > 99 ? "99+" : unreadCount}
+            </span>
           )}
         </Button>
 
         {bellOpen && (
           <div
             role="menu"
-            aria-label="Unread notifications"
-            className="absolute right-0 z-50 mt-2 max-h-96 w-80 overflow-y-auto rounded-md border border-border bg-popover py-1 shadow-md"
+            aria-label="Notifications"
+            id={menuId}
+            className="app-notification-menu"
           >
-            {unreadNotifications.length === 0 ? (
-              <p className="px-3 py-2 text-sm text-muted-foreground">
-                No unread notifications.
-              </p>
-            ) : (
-              unreadNotifications.map((notification) => {
-                const href = resolveNotificationHref(notification.link, role)
-                return (
+            <div className="notification-menu-heading">
+              <span className="notification-heading-icon" aria-hidden="true">
+                <BellRing />
+              </span>
+              <div>
+                <h2>Notifications</h2>
+                <p>Your latest school updates</p>
+              </div>
+              <span className="notification-unread-label">
+                {unreadCount} unread
+              </span>
+            </div>
+            <div className="notification-menu-list">
+              {inbox.isLoading ? (
+                <p role="status" className="notification-state">
+                  Loading notifications…
+                </p>
+              ) : inbox.isError ? (
+                <div className="notification-state">
+                  <p>Unable to load notifications.</p>
                   <button
-                    key={notification.id}
                     type="button"
-                    role="menuitem"
                     onClick={() => {
-                      markRead.mutate(notification.id)
-                      setBellOpen(false)
+                      void inbox.refetch()
                     }}
-                    className="block w-full px-3 py-2 text-left hover:bg-accent"
                   >
-                    <NotificationSummary notification={notification} />
-                    {href ? (
-                      <Link
-                        to={href}
-                        className="mt-1 inline-block text-xs font-medium text-primary underline"
-                      >
-                        Open the related page
-                      </Link>
-                    ) : null}
+                    Try again
                   </button>
-                )
-              })
-            )}
-            <div className="border-t border-border">
+                </div>
+              ) : unreadNotifications.length === 0 ? (
+                <div className="notification-empty">
+                  <span aria-hidden="true">
+                    <Inbox />
+                  </span>
+                  <strong>You're all caught up</strong>
+                  <p>No notifications yet.</p>
+                  <small>New school updates will appear here.</small>
+                </div>
+              ) : (
+                unreadNotifications.map((notification) => {
+                  const href = resolveNotificationHref(notification.link, role)
+                  const incident =
+                    notification.notification_type === "BEHAVIORAL_INCIDENT"
+                  const warning =
+                    notification.notification_type === "BEHAVIORAL_WARNING" ||
+                    notification.notification_type === "ATTENDANCE_THRESHOLD"
+                  const ItemIcon = incident
+                    ? ShieldAlert
+                    : warning
+                      ? notification.notification_type ===
+                        "ATTENDANCE_THRESHOLD"
+                        ? CalendarCheck
+                        : TriangleAlert
+                      : notification.notification_type === "GRADE_POSTED"
+                        ? BookOpen
+                        : Bell
+                  return (
+                    <div
+                      key={notification.id}
+                      className="notification-item"
+                      data-tone={
+                        incident ? "danger" : warning ? "warning" : "school"
+                      }
+                    >
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setSelectedNotification(notification)
+                          if (!notification.is_read)
+                            markRead.mutate(notification.id, {
+                              onSuccess: () =>
+                                setSelectedNotification((current) =>
+                                  current?.id === notification.id
+                                    ? { ...current, is_read: true }
+                                    : current
+                                ),
+                            })
+                          setBellOpen(false)
+                        }}
+                        className="notification-item-button"
+                      >
+                        <span
+                          className="notification-item-icon"
+                          aria-hidden="true"
+                        >
+                          <ItemIcon />
+                        </span>
+                        <NotificationSummary notification={notification} />
+                        <span className="text-xs font-medium">
+                          View · {notification.is_read ? "Read" : "Unread"}
+                        </span>
+                      </button>
+                      {href ? (
+                        <Link
+                          to={href}
+                          role="menuitem"
+                          onClick={() => {
+                            markRead.mutate(notification.id)
+                            setBellOpen(false)
+                          }}
+                          className="notification-related-link"
+                        >
+                          Open the related page{" "}
+                          <ArrowUpRight aria-hidden="true" />
+                        </Link>
+                      ) : null}
+                    </div>
+                  )
+                })
+              )}
+            </div>
+            <div className="notification-menu-footer">
               <Link
                 to="/app/notifications"
                 role="menuitem"
                 onClick={() => setBellOpen(false)}
-                className="block px-3 py-2 text-sm font-medium hover:bg-accent"
+                className="notification-inbox-link"
               >
-                Open the inbox
+                Open the inbox <ArrowUpRight aria-hidden="true" />
               </Link>
             </div>
           </div>
         )}
       </div>
-
-      <div ref={menuRef} className="relative">
-        <button
-          ref={accountButtonRef}
-          type="button"
-          onClick={() => setMenuOpen((open) => !open)}
-          aria-expanded={menuOpen}
-          aria-haspopup="menu"
-          aria-label="Account menu"
-          className="flex items-center gap-2 rounded-md px-1 py-1 hover:bg-accent"
-        >
-          <span className="hidden min-w-0 text-right sm:block">
-            <span className="block truncate text-sm leading-tight font-medium text-foreground">
-              {name || "Signed in"}
-            </span>
-            <span className="block truncate text-xs leading-tight text-muted-foreground">
-              {user ? ROLE_LABELS[user.role] : ""}
-            </span>
-          </span>
-          <span
-            aria-hidden="true"
-            className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground"
-          >
-            {initials || "—"}
-          </span>
-        </button>
-
-        {menuOpen && (
-          <div
-            role="menu"
-            aria-label="Account"
-            className="absolute right-0 z-50 mt-2 w-48 rounded-md border border-border bg-popover py-1 shadow-md"
-          >
-            <div className="px-3 py-2">
-              <p className="truncate text-sm font-medium">
-                {name || "Signed in"}
-              </p>
-              <p className="truncate text-xs text-muted-foreground">
-                {user ? ROLE_LABELS[user.role] : ""}
-              </p>
-            </div>
-            <Link
-              to="/app/account-settings"
-              role="menuitem"
-              onClick={() => setMenuOpen(false)}
-              className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent"
-            >
-              <Settings aria-hidden="true" className="size-4" />
-              Settings
-            </Link>
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                setMenuOpen(false)
-                setBellOpen(false)
-                setSignOutOpen(true)
-              }}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-accent"
-            >
-              <LogOut aria-hidden="true" className="size-4" />
-              Sign out
-            </button>
-          </div>
-        )}
-      </div>
-      <SignOutDialog
-        open={signOutOpen}
-        onOpenChange={setSignOutOpen}
-        returnFocusRef={accountButtonRef}
+      <NotificationDetails
+        key={selectedNotification?.id ?? "closed"}
+        notification={selectedNotification}
+        onClose={() => setSelectedNotification(null)}
+        readError={
+          markRead.isError
+            ? normalizeApiError(markRead.error).message
+            : undefined
+        }
       />
     </div>
   )
@@ -315,6 +341,50 @@ export function Header({
   const { user } = useAuth()
   const location = useLocation()
   const pageTitle = getPageTitle(location.pathname)
+  const dashboard = /^\/app\/dashboard(?:\/|$)/.test(location.pathname)
+  const firstName = user?.first_name?.trim() || ""
+  const teacherName = [
+    firstName
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((part) => `${Array.from(part)[0]}.`)
+      .join(" "),
+    user?.last_name?.trim(),
+  ]
+    .filter(Boolean)
+    .join(" ")
+  const welcomeName =
+    user?.role === "faculty"
+      ? teacherName
+        ? `Teacher ${teacherName}`
+        : "Teacher"
+      : firstName
+  const dashboardTitle =
+    user?.role === "admin"
+      ? "Administration overview"
+      : user?.role === "parent"
+        ? "Your family portal"
+        : `Welcome back${welcomeName ? `, ${welcomeName}` : ""}!`
+  const dashboardDescription =
+    user?.role === "faculty"
+      ? "Your classes, teaching tasks, and student progress—all in one place."
+      : user?.role === "guidance"
+        ? "An overview of student support activities and follow-ups."
+        : user?.role === "admin"
+          ? "School-wide aggregates. Individual student records are not shown here."
+          : user?.role === "parent"
+            ? "Follow your child's learning, attendance, and school support."
+            : "Keep up with your grades, attendance, and next steps."
+  const DashboardIcon =
+    user?.role === "faculty"
+      ? BookOpen
+      : user?.role === "guidance"
+        ? ShieldCheck
+        : user?.role === "admin"
+          ? LayoutDashboard
+          : user?.role === "parent"
+            ? UsersRound
+            : GraduationCap
   const headerRef = useRef<HTMLElement>(null)
   const [scrollState, setScrollState] = useState({
     pathname: location.pathname,
@@ -358,6 +428,7 @@ export function Header({
     <header
       ref={headerRef}
       data-hidden={hidden}
+      data-dashboard={dashboard}
       onFocusCapture={() =>
         setScrollState({ pathname: location.pathname, hidden: false })
       }
@@ -377,7 +448,7 @@ export function Header({
         ref={menuButtonRef}
         variant="ghost"
         size="icon"
-        className="lg:hidden"
+        className="app-navigation-trigger lg:hidden"
         onClick={onMenuClick}
         aria-label="Open navigation"
         aria-expanded={menuOpen}
@@ -402,10 +473,61 @@ export function Header({
         put it in this header with `overflow-hidden`, which clipped the account
         menu open state — the Sign out item was unreachable.
       */}
-      <h1 className="min-w-0 flex-1 truncate text-lg font-semibold tracking-wide text-primary uppercase">
-        {pageTitle}
-      </h1>
+      {dashboard ? (
+        <div className="app-dashboard-heading">
+          <span className="app-dashboard-heading-icon" aria-hidden="true">
+            <DashboardIcon />
+          </span>
+          <div className="app-dashboard-heading-copy">
+            <h1>
+              {user?.role === "faculty" ? (
+                <>
+                  Welcome back,{" "}
+                  <span className="app-dashboard-teacher-title">Teacher</span>
+                  {teacherName ? ` ${teacherName}` : ""}!
+                </>
+              ) : user?.role === "student" ? (
+                <>
+                  <span className="student-greeting-intro">Welcome back</span>
+                  {welcomeName ? (
+                    <>
+                      ,{" "}
+                      <span className="student-greeting-name">
+                        {welcomeName}!
+                      </span>
+                    </>
+                  ) : (
+                    "!"
+                  )}
+                </>
+              ) : (
+                dashboardTitle
+              )}
+            </h1>
+            <p>{dashboardDescription}</p>
+            {user?.role === "student" ? (
+              <p className="student-journal-motto">
+                One step at a time. Make today yours.
+              </p>
+            ) : null}
+          </div>
+        </div>
+      ) : (
+        <h1 className="min-w-0 flex-1 truncate text-lg font-semibold tracking-wide text-primary uppercase">
+          {pageTitle}
+        </h1>
+      )}
 
+      {dashboard && user?.role === "student" ? <StudentNotebookArt /> : null}
+      {dashboard && user?.role === "parent" ? (
+        <img
+          className="parent-portal-illustration"
+          src="/illustrations/parent-teen-portal.svg"
+          alt=""
+          aria-hidden="true"
+          draggable={false}
+        />
+      ) : null}
       <UserChip />
     </header>
   )
