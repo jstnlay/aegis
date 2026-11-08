@@ -4,7 +4,7 @@ Academics serializers.
 
 from rest_framework import serializers
 
-from apps.accounts.models import StudentProfile
+from apps.accounts.models import StudentProfile, User
 from apps.accounts.validators import validate_guardian_contact
 
 from .models import (
@@ -207,6 +207,75 @@ class StudentProfileManageSerializer(serializers.ModelSerializer):
         if value > timezone.localdate():
             raise serializers.ValidationError("Date of birth cannot be in the future.")
         return value
+
+
+class StudentProfileCreateSerializer(serializers.Serializer):
+    """
+    Faculty creation of an advisory student (FR-007 / TC-FAC-03).
+
+    A student profile is one record with its account, so the form carries the
+    identity fields as well. The account is created with an unusable password
+    and the usual set-password link; the faculty member never chooses or sees
+    a password.
+
+    `section` is checked against `allowed_section_ids` in the request context,
+    which the view fills with the sections the caller advises or teaches. That
+    keeps an out-of-scope section a named field error instead of a 404 or a
+    record in someone else's class.
+    """
+
+    first_name = serializers.CharField(max_length=150)
+    last_name = serializers.CharField(max_length=150)
+    email = serializers.EmailField()
+    student_id = serializers.CharField(max_length=20)
+    grade_level = serializers.PrimaryKeyRelatedField(
+        queryset=GradeLevel.objects.all()
+    )
+    section = serializers.PrimaryKeyRelatedField(queryset=Section.objects.all())
+    guardian_contact = serializers.CharField(
+        max_length=StudentProfile._meta.get_field("guardian_contact").max_length,
+        validators=[validate_guardian_contact],
+    )
+    date_of_birth = serializers.DateField()
+
+    def validate_email(self, value):
+        if User.objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError(
+                "An account already exists for that email address."
+            )
+        return value
+
+    def validate_student_id(self, value):
+        if StudentProfile.objects.filter(student_id__iexact=value).exists():
+            raise serializers.ValidationError(
+                "That student ID is already in use."
+            )
+        return value
+
+    def validate_date_of_birth(self, value):
+        from django.utils import timezone
+
+        if value > timezone.localdate():
+            raise serializers.ValidationError("Date of birth cannot be in the future.")
+        return value
+
+    def validate(self, data):
+        if data["section"].grade_level_id != data["grade_level"].id:
+            raise serializers.ValidationError(
+                {"section": "Section does not belong to the selected grade level."}
+            )
+
+        allowed = self.context.get("allowed_section_ids")
+        if allowed is not None and data["section"].id not in allowed:
+            raise serializers.ValidationError(
+                {
+                    "section": (
+                        "You can only add students to a section you advise or "
+                        "teach."
+                    )
+                }
+            )
+        return data
 
 
 class EnrollmentSerializer(serializers.ModelSerializer):

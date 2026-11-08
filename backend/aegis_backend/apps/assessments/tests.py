@@ -536,6 +536,52 @@ class AssessmentAPITests(AssessmentsTestBase):
         response = self.client.post("/api/v1/assessments/assessments/", data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_description_over_the_authoring_cap_is_rejected(self):
+        """TC-GUI-10: the brief is bounded, not an unbounded text field."""
+        self.client.force_authenticate(user=self.guidance_user)
+        response = self.client.post(
+            "/api/v1/assessments/assessments/",
+            {
+                "title": "Wellness Survey",
+                "assessment_type": "wellness",
+                "description": "x" * 2001,
+            },
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("description", response.data["error"]["details"])
+
+    def test_time_limit_outside_the_authoring_range_is_rejected(self):
+        """TC-GUI-10: 1-600 minutes, so no zero-length or 100-hour timer."""
+        self.client.force_authenticate(user=self.guidance_user)
+        for minutes in (0, 601):
+            response = self.client.post(
+                "/api/v1/assessments/assessments/",
+                {
+                    "title": "Wellness Survey",
+                    "assessment_type": "wellness",
+                    "time_limit_minutes": minutes,
+                },
+            )
+            self.assertEqual(
+                response.status_code, status.HTTP_400_BAD_REQUEST, minutes
+            )
+            self.assertIn(
+                "time_limit_minutes", response.data["error"]["details"]
+            )
+
+    def test_time_limit_at_the_upper_bound_is_accepted(self):
+        self.client.force_authenticate(user=self.guidance_user)
+        response = self.client.post(
+            "/api/v1/assessments/assessments/",
+            {
+                "title": "Wellness Survey",
+                "assessment_type": "wellness",
+                "time_limit_minutes": 600,
+            },
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+
     def test_faculty_sees_only_own_assessments(self):
         """Faculty see only their own academic assessments."""
         # Create assessments by different faculty

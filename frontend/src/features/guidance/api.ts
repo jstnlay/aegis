@@ -1423,7 +1423,7 @@ export function nextQuestionOrder(
  */
 export function useCreateAssessment() {
   const queryClient = useQueryClient()
-  return useMutation<unknown, Error, CreateAssessmentPayload>({
+  return useMutation<{ id: string }, Error, CreateAssessmentPayload>({
     mutationFn: async (payload) => {
       const { data } = await apiClient.post(
         "/assessments/assessments/",

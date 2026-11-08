@@ -343,6 +343,22 @@ DEFAULT_FROM_EMAIL = config(
     "DEFAULT_FROM_EMAIL", default="no-reply@localhost"
 )
 
+# Outgoing mail (password reset, invitations, verification links). The account
+# flows all depend on it, so the backend is env-driven: set EMAIL_BACKEND to
+# the SMTP backend plus the provider values on the host and mail is actually
+# delivered. The default is console output, which delivers nothing — that is
+# the local-development behaviour, and it is why a deployment that forgets the
+# env vars never sends a single mail while appearing to work.
+EMAIL_BACKEND = config(
+    "EMAIL_BACKEND",
+    default="django.core.mail.backends.console.EmailBackend",
+)
+EMAIL_HOST = config("EMAIL_HOST", default="localhost")
+EMAIL_PORT = config("EMAIL_PORT", default=25, cast=int)
+EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
+EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
+EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=False, cast=bool)
+
 # ---------------------------------------------------------------------------
 # CORS
 # ---------------------------------------------------------------------------

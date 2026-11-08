@@ -22,6 +22,7 @@ import {
 import { Field } from "@/components/ui/form-field"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import {
   Select,
   SelectContent,
@@ -218,6 +219,20 @@ function ConcernCategoryPicker({
           )
         })}
       </div>
+      {value.length > 0 ? (
+        <p className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+          Selected:
+          {value.map((category) => (
+            <Badge key={category} variant="secondary">
+              {CONCERN_CATEGORY_LABELS[category]}
+            </Badge>
+          ))}
+        </p>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          Optional. Select every category that applies.
+        </p>
+      )}
     </fieldset>
   )
 }
@@ -287,30 +302,14 @@ function NewConsultationDialog({
       ? new Date(`${sessionDate}T${sessionTime}`)
       : null
   const [submittedAt, setSubmittedAt] = useState<number | null>(null)
-  /*
-   * Two readings of the same rule, deliberately:
-   *
-   * - `futureSessionBlocked` is independent of `attempted` and is what disables
-   *   the submit. A future pair must not become submittable merely because the
-   *   reader has not pressed the button yet, and a disabled button cannot be
-   *   pressed to discover the rule.
-   * - `futureSessionError` is the message, shown only after an attempt.
-   */
-  const [now] = useState(() => new Date().getTime())
   const futureSessionError =
     attempted && submittedAt !== null
       ? futureSessionMessage(sessionAt, submittedAt)
       : null
-  const futureSessionBlocked =
-    futureSessionMessage(sessionAt, submittedAt ?? now) !== null
 
   /*
    * ISO `YYYY-MM-DD` sorts correctly as text, so no Date is needed. Equal dates
    * are allowed: a follow-up later the same day is unusual but not impossible.
-   *
-   * `nextBeforeSession` is the ungated form that disables the submit;
-   * `nextBeforeSessionError` is the same rule as a message, shown only after an
-   * attempt.
    */
   const nextBeforeSession = Boolean(
     sessionDate && nextSessionDate && nextSessionDate < sessionDate
@@ -319,6 +318,20 @@ function NewConsultationDialog({
     attempted && nextBeforeSession
       ? "Next session cannot be before the session date."
       : null
+
+  // Required-field errors. The submit stays enabled so pressing it explains
+  // what is missing; a disabled button cannot be pressed to discover why.
+  const studentError =
+    attempted && !studentId ? "Select a student." : null
+  const dateError = attempted
+    ? !sessionDate
+      ? "Choose the session date."
+      : futureSessionError
+    : null
+  const timeError =
+    attempted && !sessionTime ? "Choose the session time." : null
+  const notesError =
+    attempted && notesBlank ? "Session notes cannot be blank." : null
 
   function toggleConcern(category: ConcernCategory) {
     setConcerns((current) =>
@@ -330,7 +343,6 @@ function NewConsultationDialog({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!studentId || !sessionDate || !sessionTime || notesBlank) return
     setAttempted(true)
     /*
      * The attempt is stamped so the render compares against the moment the
@@ -339,6 +351,7 @@ function NewConsultationDialog({
      */
     const submittedAtMs = new Date().getTime()
     setSubmittedAt(submittedAtMs)
+    if (!studentId || !sessionDate || !sessionTime || notesBlank) return
     if (futureSessionMessage(sessionAt, submittedAtMs)) return
     if (nextBeforeSession) return
     try {
@@ -402,30 +415,33 @@ function NewConsultationDialog({
                 *
               </span>
             </div>
-            <Select
+            <SearchableSelect
+              id="consultation-student"
+              label="Student"
               value={studentId}
-              onValueChange={setStudentId}
+              onChange={setStudentId}
+              options={roster.map((entry) => ({
+                value: entry.id,
+                label: `${entry.name} — ${entry.code}`,
+              }))}
+              placeholder={
+                rosterQuery.isLoading
+                  ? "Loading students"
+                  : roster.length === 0
+                    ? "No students in roster"
+                    : "Select a student"
+              }
+              searchPlaceholder="Search by name or student number"
               disabled={rosterQuery.isLoading || roster.length === 0}
-            >
-              <SelectTrigger id="consultation-student" aria-required="true">
-                <SelectValue
-                  placeholder={
-                    rosterQuery.isLoading
-                      ? "Loading students"
-                      : roster.length === 0
-                        ? "No students in roster"
-                        : "Select a student"
-                  }
-                />
-              </SelectTrigger>
-              <SelectContent>
-                {roster.map((entry) => (
-                  <SelectItem key={entry.id} value={entry.id}>
-                    {entry.name} — {entry.code}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              emptyMessage="No student matches that search."
+              error={studentError}
+              required
+            />
+            {studentError ? (
+              <p id="consultation-student-error" className="text-xs text-destructive">
+                {studentError}
+              </p>
+            ) : null}
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
@@ -443,7 +459,8 @@ function NewConsultationDialog({
               required
               value={sessionDate}
               onChange={setSessionDate}
-              error={attempted ? futureSessionError : null}
+              error={dateError}
+              hint="Past dates are accepted: record the session after it happens."
             />
             {/*
               The session time stays hand-rolled: `Field` accepts only
@@ -465,34 +482,36 @@ function NewConsultationDialog({
                 type="time"
                 aria-required="true"
                 aria-invalid={
-                  attempted && futureSessionError ? "true" : undefined
+                  timeError || (attempted && futureSessionError)
+                    ? "true"
+                    : undefined
                 }
                 aria-describedby={
-                  attempted && futureSessionError
-                    ? "consultation-date-error"
-                    : undefined
+                  timeError
+                    ? "consultation-time-error"
+                    : attempted && futureSessionError
+                      ? "consultation-date-error"
+                      : undefined
                 }
                 value={sessionTime}
                 onChange={(event) => setSessionTime(event.target.value)}
               />
+              {timeError ? (
+                <p
+                  id="consultation-time-error"
+                  className="text-xs text-destructive"
+                >
+                  {timeError}
+                </p>
+              ) : null}
             </div>
           </div>
 
           {/*
-            The pair shares one error, so it is written once, under the row. The
-            node keeps `Field`'s derived id (`consultation-date-error`) so both
-            controls describe themselves by the message that already exists
-            rather than by a second copy of it.
+            The pair shares one message: it is rendered by the date `Field`
+            (`consultation-date-error`) and the time control describes itself by
+            that same id rather than by a second copy.
           */}
-          {attempted && futureSessionError ? (
-            <p
-              className="text-xs text-destructive"
-              data-testid="future-session-error"
-            >
-              A future session time is not accepted. Correct the date or time
-              above.
-            </p>
-          ) : null}
 
           <div className="space-y-1.5">
             <Label htmlFor="consultation-type">Session type</Label>
@@ -532,13 +551,26 @@ function NewConsultationDialog({
               id="consultation-notes"
               rows={4}
               aria-required="true"
+              aria-invalid={notesError ? "true" : undefined}
+              aria-describedby={
+                notesError ? "consultation-notes-error" : undefined
+              }
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring"
             />
-            <p className="text-xs text-muted-foreground">
-              Required. The server rejects blank notes.
-            </p>
+            {notesError ? (
+              <p
+                id="consultation-notes-error"
+                className="text-xs text-destructive"
+              >
+                {notesError}
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Required. The server rejects blank notes.
+              </p>
+            )}
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
@@ -605,16 +637,7 @@ function NewConsultationDialog({
             </Button>
             <Button
               type="submit"
-              disabled={
-                create.isPending ||
-                !studentId ||
-                !sessionDate ||
-                !sessionTime ||
-                notesBlank ||
-                futureSessionBlocked ||
-                nextBeforeSession ||
-                roster.length === 0
-              }
+              disabled={create.isPending || roster.length === 0}
             >
               {create.isPending ? "Creating…" : "Create consultation"}
             </Button>

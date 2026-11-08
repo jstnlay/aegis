@@ -1385,6 +1385,147 @@ class StudentProfileManageTest(AcademicsTestBase):
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
 
+class StudentProfileCreateTest(AcademicsTestBase):
+    """POST /api/v1/academics/student-profiles/ (FR-007 / TC-FAC-03)."""
+
+    URL = "/api/v1/academics/student-profiles/"
+
+    def payload(self, **overrides):
+        payload = {
+            "first_name": "New",
+            "last_name": "Student",
+            "email": "new_student_aca@test.com",
+            "student_id": "STU-NEW-001",
+            "grade_level": str(self.g7.id),
+            "section": str(self.section_a.id),
+            "guardian_contact": "0917-555-0199",
+            "date_of_birth": "2011-02-03",
+        }
+        payload.update(overrides)
+        return payload
+
+    def test_faculty_creates_the_account_profile_and_enrollment(self):
+        self.client.force_authenticate(user=self.faculty_user)
+        response = self.client.post(self.URL, data=self.payload(), format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["student_name"], "New Student")
+        self.assertEqual(response.data["student_id"], "STU-NEW-001")
+
+        profile = StudentProfile.objects.get(student_id="STU-NEW-001")
+        self.assertEqual(profile.user.role, "student")
+        self.assertEqual(profile.user.email, "new_student_aca@test.com")
+        # The faculty member never chooses a password; the student sets one
+        # from the emailed link.
+        self.assertFalse(profile.user.has_usable_password())
+        self.assertTrue(profile.user.must_change_password)
+        self.assertEqual(profile.section, self.section_a)
+        self.assertEqual(profile.guardian_contact, "0917-555-0199")
+
+        enrollment = Enrollment.objects.get(student=profile)
+        self.assertEqual(enrollment.section, self.section_a)
+        self.assertEqual(enrollment.academic_year, self.ay)
+        self.assertTrue(enrollment.is_active)
+
+    def test_duplicate_email_is_rejected(self):
+        self.client.force_authenticate(user=self.faculty_user)
+        response = self.client.post(
+            self.URL,
+            data=self.payload(email=self.student_user.email),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("email", response.data["error"]["details"])
+        self.assertFalse(
+            StudentProfile.objects.filter(student_id="STU-NEW-001").exists()
+        )
+
+    def test_duplicate_student_id_is_rejected(self):
+        self.client.force_authenticate(user=self.faculty_user)
+        response = self.client.post(
+            self.URL,
+            data=self.payload(student_id=self.student_profile.student_id),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("student_id", response.data["error"]["details"])
+        self.assertFalse(
+            User.objects.filter(email="new_student_aca@test.com").exists()
+        )
+
+    def test_section_outside_the_callers_scope_is_rejected(self):
+        self.client.force_authenticate(user=self.faculty_user)
+        response = self.client.post(
+            self.URL,
+            data=self.payload(
+                grade_level=str(self.g8.id), section=str(self.section_b.id)
+            ),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("section", response.data["error"]["details"])
+        self.assertFalse(
+            StudentProfile.objects.filter(student_id="STU-NEW-001").exists()
+        )
+
+    def test_section_must_belong_to_the_grade_level(self):
+        self.client.force_authenticate(user=self.faculty_user)
+        response = self.client.post(
+            self.URL,
+            data=self.payload(grade_level=str(self.g8.id)),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("section", response.data["error"]["details"])
+
+    def test_guardian_contact_must_be_a_phone_number(self):
+        self.client.force_authenticate(user=self.faculty_user)
+        response = self.client.post(
+            self.URL,
+            data=self.payload(guardian_contact="Call the office"),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("guardian_contact", response.data["error"]["details"])
+
+    def test_future_date_of_birth_is_rejected(self):
+        self.client.force_authenticate(user=self.faculty_user)
+        response = self.client.post(
+            self.URL,
+            data=self.payload(date_of_birth="2999-01-01"),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("date_of_birth", response.data["error"]["details"])
+
+    def test_non_faculty_roles_are_outside_the_surface(self):
+        for user in (
+            self.admin_user,
+            self.guidance_user,
+            self.student_user,
+            self.parent_user,
+        ):
+            self.client.force_authenticate(user=user)
+            response = self.client.post(
+                self.URL, data=self.payload(), format="json"
+            )
+            self.assertEqual(
+                response.status_code, status.HTTP_403_FORBIDDEN, user.email
+            )
+
+    def test_unauthenticated_access_is_rejected(self):
+        self.client.force_authenticate(user=None)
+        response = self.client.post(self.URL, data=self.payload(), format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
 
 # ===========================================================================
 # FR-011: faculty grade updates (TC-FAC-11 / TC-FAC-12)

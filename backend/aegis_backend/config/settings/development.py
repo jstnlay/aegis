@@ -27,8 +27,12 @@ REST_FRAMEWORK["DEFAULT_RENDERER_CLASSES"] = [  # noqa: F405
     "rest_framework.renderers.BrowsableAPIRenderer",
 ]
 
-# Email backend for development (console output)
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+# Email backend: the console default comes from base.py (no mail leaves a
+# local dev machine). A deployment that sets EMAIL_BACKEND plus the
+# EMAIL_HOST/PORT/USER/PASSWORD/USE_TLS values gets real delivery from the
+# same base code — the DEV/QA service deploys these settings, so
+# development.py must not hardcode the backend here or the provider config
+# would be silently ignored.
 
 # ---------------------------------------------------------------------------
 # Strapi CMS integration secrets (Phase 7)

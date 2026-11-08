@@ -205,3 +205,42 @@ export function useUpdateStudentProfile(studentId: string | null) {
     },
   })
 }
+
+/** The create payload of `StudentProfileCreateSerializer`. */
+export interface CreateStudentProfilePayload {
+  first_name: string
+  last_name: string
+  email: string
+  student_id: string
+  grade_level: string
+  section: string
+  guardian_contact: string
+  date_of_birth: string
+}
+
+/**
+ * Create an advisory student (`POST /academics/student-profiles/`).
+ *
+ * The server writes the account, profile and enrollment in one transaction,
+ * scoped to a section the caller advises or teaches. A duplicate email or
+ * student ID, an out-of-scope section, or a guardian contact that is not a
+ * phone number comes back as a field-keyed 400.
+ */
+export function useCreateStudentProfile() {
+  const queryClient = useQueryClient()
+  return useMutation<StudentProfileDetail, Error, CreateStudentProfilePayload>({
+    mutationFn: async (payload) => {
+      const { data } = await apiClient.post<StudentProfileDetail>(
+        "/academics/student-profiles/",
+        payload
+      )
+      return data
+    },
+    onSuccess: () => {
+      // The new student now has an enrollment, which is what the roster reads.
+      void queryClient.invalidateQueries({
+        queryKey: keys.advisoryEnrollments,
+      })
+    },
+  })
+}

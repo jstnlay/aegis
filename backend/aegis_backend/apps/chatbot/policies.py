@@ -157,6 +157,38 @@ GUIDANCE_HELP_PATTERNS = [
     r"\b(guidance|counseling|counselor)\b",
 ]
 
+# ---------------------------------------------------------------------------
+# Role-scoped domain summaries (PH11 Cycle 4)
+#
+# These are checked before the guidance block: "counseling session summary"
+# contains "counseling", and the summary reading is the one the counselor
+# meant. Each intent is then gated by role in `service.ALLOWED_INTENTS_BY_ROLE`,
+# so the pattern being broad does not widen who may ask.
+# ---------------------------------------------------------------------------
+
+AT_RISK_PATTERNS = [
+    r"\b(at[-\s]?risk)\b.*\b(student|students|learner|learners|pupil|pupils|list)\b",
+    r"\b(who|which|how many|ilan)\b.*\b(at[-\s]?risk)\b",
+    r"\brisk\s+(alert|alerts)\b",
+]
+
+CLASS_PERFORMANCE_PATTERNS = [
+    r"\b(class|advisory)\b.*\b(performance|average|averages|doing|performing)\b",
+    r"\b(performance|average)\b.*\b(of|in)\s+(my|the)\s+(class|advisory)\b",
+    r"\bhow\s+(is|are)\s+(my|the)\s+(class|advisory|students)\b",
+]
+
+CONSULTATION_SUMMARY_PATTERNS = [
+    r"\b(consultation|consultations|counseling\s+session|counseling\s+sessions)\b.*\b(summary|count|total|how many|this (week|month)|today)\b",
+    r"\b(summary|count|total|how many)\b.*\b(consultation|consultations)\b",
+]
+
+SCHOOL_SUMMARY_PATTERNS = [
+    r"\b(school|system)\b.*\b(summary|overview|statistics|stats|totals)\b",
+    r"\b(how many)\b.*\b(students|teachers|faculty|sections)\b.*\b(school|system)\b",
+    r"\b(school)\b.*\b(how many)\b",
+]
+
 # Express concern
 CONCERN_PATTERNS = [
     r"\b(concern|worr(y|ied)|nervous|anxious|stressed|stress)\b",
@@ -318,6 +350,17 @@ def classify_intent(text: str) -> ChatIntent:
     # Urgent concern has highest priority
     if detect_urgent(lower):
         return ChatIntent.URGENT_CONCERN
+
+    # Role-scoped domain summaries. Before the guidance block because a
+    # "counseling session summary" is a summary question, not a help request.
+    if any(re.search(p, lower) for p in AT_RISK_PATTERNS):
+        return ChatIntent.ASK_AT_RISK_STUDENTS
+    if any(re.search(p, lower) for p in CLASS_PERFORMANCE_PATTERNS):
+        return ChatIntent.ASK_CLASS_PERFORMANCE
+    if any(re.search(p, lower) for p in CONSULTATION_SUMMARY_PATTERNS):
+        return ChatIntent.ASK_CONSULTATION_SUMMARY
+    if any(re.search(p, lower) for p in SCHOOL_SUMMARY_PATTERNS):
+        return ChatIntent.ASK_SCHOOL_SUMMARY
 
     # Guidance / concern intents (COUNSELOR before GUIDANCE_HELP
     # because "counselor" also matches the guidance-help pattern)

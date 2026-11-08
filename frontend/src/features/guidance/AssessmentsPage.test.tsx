@@ -532,7 +532,7 @@ describe("assessment authoring", () => {
     const dialog = await screen.findByRole("dialog")
 
     expect(
-      within(dialog).getByRole("button", { name: "Ana Reyes" })
+      within(dialog).getByRole("checkbox", { name: /Ana Reyes/ })
     ).toBeInTheDocument()
     expect(
       within(dialog).getByText(/1 selected|0 selected/i)
@@ -1134,21 +1134,24 @@ describe("assessment authoring", () => {
   })
 
   /**
-   * FR-027 puts AI assistance on the *question* form, not on the assessment
-   * dialog: the title, type and targets of an assessment are the counselor's
-   * to state, and the generator drafts items, not documents. The assertions
-   * are scoped to the dialog because the question form behind it now does
-   * carry the drafting control — which is exactly where it belongs.
+   * PH11 Cycle 4 moves AI assistance into the new-assessment dialog: the
+   * counselor can draft items before the assessment exists, select the ones
+   * worth keeping, and the checked items are created as its first questions.
+   * Opening the dialog alone must still make no request.
    */
-  it("offers no AI drafting from the new-assessment dialog", async () => {
+  it("offers AI drafting from the new-assessment dialog", async () => {
     renderPage()
     await screen.findByText("Wellness Check-In")
 
     fireEvent.click(screen.getByRole("button", { name: /new assessment/i }))
     const dialog = await screen.findByRole("dialog")
 
-    expect(within(dialog).queryByText(/generat/i)).toBeNull()
-    expect(within(dialog).queryByText(/\bAI\b/i)).toBeNull()
+    expect(
+      within(dialog).getByText(/AI question drafts/i)
+    ).toBeInTheDocument()
+    expect(
+      within(dialog).getByRole("button", { name: /generate drafts/i })
+    ).toBeInTheDocument()
     // Opening the dialog alone must not make the drafting request either.
     expect(mockedPost).not.toHaveBeenCalled()
   })

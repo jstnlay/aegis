@@ -5,7 +5,10 @@ Provides scoped querysets per role and enforces both role-level
 and data-scope permissions as required by Phase 2 authorization rules.
 """
 
+import logging
+
 from django.db import transaction
+from django.utils import timezone
 from rest_framework import generics, viewsets, status
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
@@ -44,10 +47,13 @@ from .serializers import (
     GradingPeriodSerializer,
     ScheduleSerializer,
     SectionSerializer,
+    StudentProfileCreateSerializer,
     StudentProfileManageSerializer,
     SubjectAssignmentSerializer,
     SubjectSerializer,
 )
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -446,6 +452,101 @@ class StudentProfileManageView(generics.RetrieveUpdateAPIView):
                 models_Q_or_advisory_student_profiles(fp)
             ).distinct()
         return StudentProfile.objects.none()
+
+
+class StudentProfileCreateView(generics.CreateAPIView):
+    """
+    Create a student in one of the caller's advisory or subject sections
+    (FR-007 / TC-FAC-03).
+
+    The account, the profile, and the enrollment are one record for a student:
+    a profile with no user cannot sign in, and a profile with no enrollment is
+    not in any class. They are written in one transaction so a partial create
+    cannot leave a student who is neither.
+
+    Only a faculty member may call this. Administrators already create accounts
+    through `/accounts/users/create/`; keeping this surface faculty-only means
+    the scope check has one meaning — the caller must study the section.
+    """
+
+    serializer_class = StudentProfileCreateSerializer
+    permission_classes = [IsFacultyUser]
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        fp = _get_faculty_profile(self.request.user)
+        if fp is None:
+            context["allowed_section_ids"] = set()
+        else:
+            context["allowed_section_ids"] = set(
+                Section.objects.filter(
+                    models_Q_or_faculty_sections(fp)
+                ).values_list("id", flat=True)
+            )
+        return context
+
+    def create(self, request, *args, **kwargs):
+        from apps.accounts.models import StudentProfile, User
+        from apps.accounts.password_reset import (
+            SET_PASSWORD_LINK_MINUTES,
+            issue_reset_token,
+            send_set_password_email,
+        )
+        from apps.audit.services import record_audit
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        with transaction.atomic():
+            user = User(
+                email=data["email"],
+                username="",
+                first_name=data["first_name"],
+                last_name=data["last_name"],
+                role=User.Role.STUDENT,
+                is_active=True,
+                must_change_password=True,
+            )
+            user.set_unusable_password()
+            user.save()
+
+            profile = StudentProfile.objects.create(
+                user=user,
+                student_id=data["student_id"],
+                grade_level=data["grade_level"],
+                section=data["section"],
+                guardian_contact=data["guardian_contact"],
+                date_of_birth=data["date_of_birth"],
+                enrollment_date=timezone.localdate(),
+                is_active=True,
+            )
+            Enrollment.objects.create(
+                student=profile,
+                section=data["section"],
+                academic_year=data["section"].academic_year,
+                date_enrolled=timezone.localdate(),
+                is_active=True,
+            )
+
+        try:
+            record_audit(action="create", instance=user, user=request.user)
+        except Exception:
+            logger.exception("STUDENT_CREATED audit record failed")
+
+        try:
+            raw_token, _record = issue_reset_token(
+                user, lifetime_minutes=SET_PASSWORD_LINK_MINUTES
+            )
+            send_set_password_email(user, raw_token)
+        except Exception:
+            # The account exists; the student can still use "Forgot password".
+            logger.exception("Set-password email failed for a new student")
+
+        return Response(
+            StudentProfileManageSerializer(profile).data,
+            status=status.HTTP_201_CREATED,
+        )
 
 
 # ---------------------------------------------------------------------------

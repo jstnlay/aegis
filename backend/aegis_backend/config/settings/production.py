@@ -142,5 +142,6 @@ REST_FRAMEWORK["DEFAULT_RENDERER_CLASSES"] = [  # noqa: F405
     "rest_framework.renderers.JSONRenderer",
 ]
 
-# Email backend - override with actual provider in deployment
+# Email backend - the SMTP backend is the deployment default; the provider
+# account (host/port/user/password/TLS) comes from the environment in base.py.
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"

@@ -26,6 +26,8 @@ export function SearchableSelect({
   searchPlaceholder = "Search options",
   disabled = false,
   emptyMessage = "No matching options",
+  error = null,
+  required = false,
 }: {
   id: string
   label: string
@@ -36,6 +38,9 @@ export function SearchableSelect({
   searchPlaceholder?: string
   disabled?: boolean
   emptyMessage?: string
+  /** Message linked to the trigger by `aria-describedby`; render the node. */
+  error?: string | null
+  required?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
@@ -79,6 +84,9 @@ export function SearchableSelect({
         aria-haspopup="listbox"
         aria-controls={listId}
         aria-label={label}
+        aria-invalid={error ? "true" : undefined}
+        aria-describedby={error ? `${id}-error` : undefined}
+        aria-required={required || undefined}
         className="flex h-9 w-full items-center justify-between gap-1.5 rounded-sm border border-input bg-transparent py-2 pr-2 pl-3 text-sm whitespace-nowrap outline-none select-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
       >
         <span className="min-w-0 flex-1 truncate text-left data-[placeholder]:text-muted-foreground">
