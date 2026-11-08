@@ -103,6 +103,16 @@ implemented are re-tests, not code work.
   (`red-dbcgmsrrjlhs73bdqfjg`) and Strapi service (`aegis-cms`) are handled
   per `docs/backend/DEPLOYMENT.md` / `render.yaml`. `apps.accounts` (269
   tests, the mail flows) passes after the change.
+- Notification email (found while walking the manual QA steps): the spec
+  requires email dispatch for notifications (`E.8` `email_enabled`, `ASM-09`,
+  the `notifications` app table), but `dispatch_event()` only created in-app
+  rows and gated on `in_app_enabled`; `email_enabled` was stored and never
+  read. It now creates the in-app row and sends the event by the same
+  `send_mail` primitive the account mails use, gated independently on
+  `in_app_enabled` / `email_enabled`, with the frontend link appended from
+  `AEGIS_FRONTEND_URL`; a mail failure is logged, not raised, so it cannot roll
+  back the notification or the caller's transaction. Quiet hours are still
+  stored but not honoured. `apps.notifications` 73/73 pass.
 
 ## Blocked / manual-evidence items (Cycle 4 log)
 
