@@ -1,4 +1,4 @@
-/*  */import { useState } from "react"
+import { useState } from "react"
 import { ArrowLeft, FileText, ShieldCheck } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
