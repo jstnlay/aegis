@@ -560,8 +560,7 @@ function NewAssessmentDialog({ students }: { students: GuidanceStudent[] }) {
           {createdId && savedQuestionCount > 0 ? (
             <p role="status" className="text-sm text-muted-foreground">
               {savedQuestionCount} generated question
-              {savedQuestionCount === 1 ? "" : "s"} saved to the new
-              assessment.
+              {savedQuestionCount === 1 ? "" : "s"} saved to the new assessment.
             </p>
           ) : null}
 

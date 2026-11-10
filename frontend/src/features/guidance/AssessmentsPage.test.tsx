@@ -1146,9 +1146,7 @@ describe("assessment authoring", () => {
     fireEvent.click(screen.getByRole("button", { name: /new assessment/i }))
     const dialog = await screen.findByRole("dialog")
 
-    expect(
-      within(dialog).getByText(/AI question drafts/i)
-    ).toBeInTheDocument()
+    expect(within(dialog).getByText(/AI question drafts/i)).toBeInTheDocument()
     expect(
       within(dialog).getByRole("button", { name: /generate drafts/i })
     ).toBeInTheDocument()

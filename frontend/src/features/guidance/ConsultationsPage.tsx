@@ -321,8 +321,7 @@ function NewConsultationDialog({
 
   // Required-field errors. The submit stays enabled so pressing it explains
   // what is missing; a disabled button cannot be pressed to discover why.
-  const studentError =
-    attempted && !studentId ? "Select a student." : null
+  const studentError = attempted && !studentId ? "Select a student." : null
   const dateError = attempted
     ? !sessionDate
       ? "Choose the session date."
@@ -438,7 +437,10 @@ function NewConsultationDialog({
               required
             />
             {studentError ? (
-              <p id="consultation-student-error" className="text-xs text-destructive">
+              <p
+                id="consultation-student-error"
+                className="text-xs text-destructive"
+              >
                 {studentError}
               </p>
             ) : null}
