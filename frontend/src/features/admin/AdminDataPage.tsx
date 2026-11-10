@@ -275,7 +275,9 @@ function ImportsCard() {
                   onChange={(event) => setSheet(event.target.value)}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Optional. Leave blank when the workbook has one sheet.
+                  Optional. Leave blank when the workbook has one sheet. A DepEd
+                  form (SF2, SF9 or the school&apos;s Electronic Class Record)
+                  is recognised by its sheets and needs no name here.
                 </p>
               </div>
             </div>

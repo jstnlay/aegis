@@ -346,14 +346,16 @@ def _extract_rows(ws, headers):
 # ---------------------------------------------------------------------------
 
 
-def validate_raw_xlsx(uploaded_file, filename, size=None, sheet=None):
+def validate_raw_xlsx(uploaded_file, filename, size=None, sheet=None, import_type=None):
     """
     High-level XLSX validation + parse for an uploaded file.
 
     ``uploaded_file`` is file-like with ``read()``/``seek()``; ``filename``
     is the client-supplied name; ``size`` optionally overrides the byte
     size (falls back to seeking to end); ``sheet`` optionally names the
-    worksheet to import (title or 1-based visible position).
+    worksheet to import (title or 1-based visible position);
+    ``import_type`` is the dataset the upload asks for, which a workbook
+    carrying several of them needs.
 
     Returns a ``_XlsxResult``.  Raises ``XlsxValidationError`` on any
     whole-file problem.
@@ -390,10 +392,10 @@ def validate_raw_xlsx(uploaded_file, filename, size=None, sheet=None):
     # parse_xlsx_bytes opens the workbook with openpyxl; any structural
     # problem (renamed ZIP, corrupt archive, malformed OOXML) surfaces as
     # an INVALID_WORKBOOK whole-file error.
-    return parse_xlsx_bytes(content, sheet=sheet)
+    return parse_xlsx_bytes(content, sheet=sheet, import_type=import_type)
 
 
-def parse_xlsx_bytes(content, sheet=None):
+def parse_xlsx_bytes(content, sheet=None, import_type=None):
     """
     Parse raw XLSX bytes into headers + sanitized row dicts.
 
@@ -402,6 +404,10 @@ def parse_xlsx_bytes(content, sheet=None):
     1-based visible position), or the only visible one when ``sheet`` is
     ``None``, validates and normalizes headers, then extracts and sanitizes
     data rows.
+
+    ``import_type`` is handed to the DepEd-form reader: one workbook can
+    carry the roster, the grades and the remarks, and the type says which one
+    this upload is.
 
     No code is executed: openpyxl only reads stored XML cell data, and
     ``data_only=True`` reads cached formula results without evaluating them.
@@ -416,12 +422,12 @@ def parse_xlsx_bytes(content, sheet=None):
         )
 
     try:
-        # A DepEd SF2/SF9 workbook is recognised by its sheets and translated
-        # into the same flat rows a plain table would produce, so the importer
-        # validates a fill-in form exactly like a CSV export.
+        # A DepEd SF2/SF9/ECR workbook is recognised by its sheets and
+        # translated into the same flat rows a plain table would produce, so
+        # the importer validates a fill-in form exactly like a CSV export.
         if deped_forms.detect(wb.sheetnames):
             try:
-                headers, rows = deped_forms.read(wb)
+                headers, rows = deped_forms.read(wb, import_type)
             except deped_forms.DepedFormError as exc:
                 raise XlsxValidationError(exc.code, exc.message)
             return _XlsxResult(

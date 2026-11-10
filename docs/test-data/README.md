@@ -194,3 +194,10 @@ Export columns are not import columns: an attendance export carries the
 section *name*, a student name and other report columns, so an exported file
 is a report rather than a round-trip file (the extra columns are rejected as
 unknown).
+
+## Related
+
+The school's own workbooks are a different dataset with a different reader:
+`docs/client-datasets/README.md` covers the Electronic Class Record files
+(the roster, the grades and the teacher's remarks) and what they do not
+carry.

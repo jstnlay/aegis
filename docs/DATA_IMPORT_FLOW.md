@@ -43,4 +43,6 @@ guide only — headers, required flags and hints. They carry no rows and no
 formulas; the XLSX reader does not evaluate formulas either.
 
 Related: `GRADE_COLLECTION_FLOW.md` for the teacher-to-adviser side of the
-same data.
+same data, and `client-datasets/README.md` for the school's Electronic Class
+Record workbooks, which are recognised by their sheets and read into the
+roster, the grades or the remarks depending on the import type.

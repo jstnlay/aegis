@@ -203,7 +203,15 @@ class ImportJobViewSet(viewsets.ModelViewSet):
 
         try:
             if file_type == FileType.XLSX:
-                result = validate_raw_xlsx(uploaded_file, filename, sheet=sheet)
+                # The job already carries the import type, and a workbook may
+                # hold more than one dataset (the school's ECR holds the
+                # roster, the grades and the remarks).
+                result = validate_raw_xlsx(
+                    uploaded_file,
+                    filename,
+                    sheet=sheet,
+                    import_type=job.import_type,
+                )
             else:
                 result = validate_raw_csv(uploaded_file, filename)
         except (CsvValidationError, XlsxValidationError) as exc:
