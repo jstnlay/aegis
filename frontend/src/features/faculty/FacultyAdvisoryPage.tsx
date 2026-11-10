@@ -191,6 +191,16 @@ function RosterCard({
       cell: (entry) => entry.section_name,
     },
     {
+      key: "grade_level_name",
+      header: "Year level",
+      cell: (entry) => entry.grade_level_name || "—",
+    },
+    {
+      key: "age",
+      header: "Age",
+      cell: (entry) => (entry.age === null ? "—" : String(entry.age)),
+    },
+    {
       key: "actions",
       header: "Profile",
       headerClassName: "whitespace-nowrap",
@@ -463,7 +473,9 @@ function AddStudentDialog({
 
           {createStudent.isError &&
           (!fieldErrors || Object.keys(fieldErrors).length === 0) ? (
-            <ErrorNote message={normalizeApiError(createStudent.error).message} />
+            <ErrorNote
+              message={normalizeApiError(createStudent.error).message}
+            />
           ) : null}
         </form>
 

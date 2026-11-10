@@ -861,8 +861,46 @@ export function useSchoolWideAttendanceTrend(range?: {
   })
 }
 
-/** The grading periods, in academic order. */
-export function useGradingPeriodOrder() {
+/**
+ * A projection of a monthly series. `GET /analytics/forecast/`.
+ *
+ * The predictive mode of the analytics dashboard. `estimate` is `null` and
+ * `insufficient_data` is true when the series has too little monthly
+ * coverage — the screen says "no estimate yet" rather than drawing a line
+ * from noise.
+ */
+export interface ForecastResult {
+  metric: ForecastMetric
+  months: number
+  unit: "percent" | "count"
+  estimate: number | null
+  insufficient_data: boolean
+  trend: "up" | "down" | "flat" | "unknown"
+  reason: string | null
+  coverage: {
+    points: number
+    from: string | null
+    to: string | null
+  }
+  series: { month: string; value: number }[]
+}
+
+export type ForecastMetric = "grade_average" | "attendance_rate" | "risk_alerts"
+
+export function useForecast(metric: ForecastMetric, months: number) {
+  return useQuery<ForecastResult, Error>({
+    queryKey: ["analytics", "forecast", metric, months],
+    queryFn: async () => {
+      const { data } = await apiClient.get<{
+        status: string
+        data: ForecastResult
+      }>(`/analytics/forecast/?metric=${metric}&months=${months}`)
+      return data.data
+    },
+  })
+}
+
+/** The grading periods, in academic order. */ export function useGradingPeriodOrder() {
   const { list } = useAdminResource<GradingPeriod>({
     resource: "grading-periods",
     queryKey: ["admin", "grading-periods"],
@@ -1178,6 +1216,7 @@ export interface CmsAnnouncement {
   target_sections: string[]
   published_at: string
   expires_at: string | null
+  cover_image: string | null
 }
 
 export interface CmsResource {

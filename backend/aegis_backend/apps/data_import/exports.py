@@ -325,10 +325,18 @@ def _grades_queryset_for(user):
         # Matches the existing full-read guidance behavior.
         return _ordered_grades(qs)
     if user.role == "faculty":
+        from django.db.models import Q
+
         fp = _profile(user)
         if fp is None:
             return Grade.objects.none()
-        return _ordered_grades(qs.filter(subject_assignment__faculty=fp))
+        # Adviser reads every subject grade of advisees, not only their own.
+        return _ordered_grades(
+            qs.filter(
+                Q(subject_assignment__faculty=fp)
+                | Q(student__section__adviser=fp)
+            ).distinct()
+        )
     if user.role == "student":
         sp = _profile(user)
         if sp is None:

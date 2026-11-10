@@ -447,6 +447,32 @@ export interface ParentBehavioralNote {
   date_recorded: string
 }
 
+/**
+ * The caller's own sign-in history.
+ *
+ * `GET /accounts/me/activity/` is scoped server-side to `request.user`, so
+ * this can only ever return the parent's own rows.
+ */
+export interface AccountActivity {
+  id: string
+  action: string
+  timestamp: string
+  ip_address: string | null
+  user_agent: string | null
+}
+
+export function useMyActivity() {
+  return useQuery<AccountActivity[], Error>({
+    queryKey: ["parent", "activity"],
+    queryFn: async () => {
+      const { results } = await fetchAllPages<AccountActivity>(
+        "/accounts/me/activity/"
+      )
+      return results
+    },
+  })
+}
+
 /** Risk alerts for linked children. Read-only: the view returns 403 on writes. */
 export function useChildRiskAlerts(studentId: string | null) {
   return useQuery<ParentRiskAlert[], Error>({

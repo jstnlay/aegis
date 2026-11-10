@@ -1764,15 +1764,15 @@ class QuestionDraftAPITests(AssessmentsTestBase):
 
         self.assertEqual(first.data, second.data)
 
-    def test_only_guidance_may_draft(self):
+    def test_only_guidance_and_faculty_may_draft(self):
         """
-        FR-027/028/029 sit in the Guidance Module. A faculty academic assessment
-        is a different document, and `Assessment.clean()` already refuses a
-        wellness assessment whose creator is not a guidance user — so letting
-        anyone else generate would only produce drafts they could never add.
+        FR-027/028/029 sit in the Guidance Module, and the faculty module
+        now drafts academic items for the assessments a teacher authors.
+        Every other role is refused: a draft they could never add would only
+        produce work in vain (`Assessment.clean()` ties `creator_role` to
+        `assessment_type`).
         """
         for user in (
-            self.faculty_user,
             self.student_user,
             self.parent_user,
             self.admin_user,
@@ -1784,6 +1784,14 @@ class QuestionDraftAPITests(AssessmentsTestBase):
                 status.HTTP_403_FORBIDDEN,
                 f"{user.role} must not be able to draft questions",
             )
+
+    def test_faculty_drafts_come_from_the_academic_bank(self):
+        self.client.force_authenticate(user=self.faculty_user)
+        response = self._post()
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["family"], "academic")
+        self.assertEqual(len(response.data["drafts"]), 3)
 
     def test_anonymous_is_rejected(self):
         self.assertEqual(self._post().status_code, status.HTTP_401_UNAUTHORIZED)

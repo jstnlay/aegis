@@ -458,11 +458,83 @@ class FacultyScopedQuerysetTest(AcademicsTestBase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertGreaterEqual(response.data["count"], 1)
 
+    def test_advisory_roster_shows_year_level_and_age(self):
+        from datetime import date
+
+        self.student_profile.date_of_birth = date(2012, 5, 10)
+        self.student_profile.save(update_fields=["date_of_birth"])
+
+        response = self.client.get("/api/v1/academics/enrollments/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        row = next(
+            r
+            for r in response.data["results"]
+            if str(r["student"]) == str(self.student_profile.id)
+        )
+        self.assertEqual(row["grade_level_name"], "Grade 7")
+        today = date.today()
+        expected_age = today.year - 2012 - ((today.month, today.day) < (5, 10))
+        self.assertEqual(row["age"], expected_age)
+
+
+class AdviserGradeScopeTest(AcademicsTestBase):
+    """
+    An adviser reads every subject grade of their advisees, not only the
+    subjects they teach themselves.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.sa_science_b = SubjectAssignment.objects.create(
+            subject=self.science, faculty=self.faculty2_profile,
+            section=self.section_b, academic_year=self.ay,
+        )
+        # A colleague's grade for an advisee.
+        self.grade_advisee = Grade.objects.create(
+            student=self.student_profile, subject_assignment=self.sa_science,
+            grading_period=self.gp1, score=Decimal("90.00"),
+            encoded_by=self.faculty2_profile, status=Grade.StatusChoices.DRAFT,
+        )
+        # A grade for a student in a section this faculty member does not advise.
+        self.grade_other = Grade.objects.create(
+            student=self.student2_profile, subject_assignment=self.sa_science_b,
+            grading_period=self.gp1, score=Decimal("70.00"),
+            encoded_by=self.faculty2_profile, status=Grade.StatusChoices.DRAFT,
+        )
+        self.client = APIClient()
+
+    @staticmethod
+    def _get_token(user):
+        from rest_framework_simplejwt.tokens import RefreshToken
+        return str(RefreshToken.for_user(user).access_token)
+
+    def test_adviser_sees_colleague_grade_for_advisee(self):
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {self._get_token(self.faculty_user)}"
+        )
+        response = self.client.get("/api/v1/academics/grades/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        ids = [r["id"] for r in response.data["results"]]
+        self.assertIn(str(self.grade_advisee.id), ids)
+        self.assertIn(str(self.grade1.id), ids)
+        self.assertNotIn(str(self.grade_other.id), ids)
+
+    def test_non_adviser_does_not_see_advisee_grade(self):
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {self._get_token(self.faculty2_user)}"
+        )
+        response = self.client.get("/api/v1/academics/grades/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        ids = [r["id"] for r in response.data["results"]]
+        # faculty2 teaches science, so its own grade is visible; the maths
+        # grade of the same student is not.
+        self.assertIn(str(self.grade_advisee.id), ids)
+        self.assertNotIn(str(self.grade1.id), ids)
+
 
 # ===========================================================================
 # API tests — Student scoped queryset
 # ===========================================================================
-
 
 class StudentScopedQuerysetTest(AcademicsTestBase):
     def setUp(self):

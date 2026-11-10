@@ -8,6 +8,7 @@ import {
   FileText,
   LayoutDashboard,
   MessageSquare,
+  Megaphone,
   Settings,
   Shield,
   Upload,
@@ -339,6 +340,29 @@ const STUDENT_ASSESSMENTS: NavItem = {
   status: "available",
 }
 
+/**
+ * School announcements for students and parents (objective 2.2.1).
+ *
+ * `GET /cms/announcements/` is role-filtered server-side by `target_roles`,
+ * so the same screen shows each caller only the announcements addressed to
+ * their role. Two entries exist because the route prefix is role-specific.
+ */
+const STUDENT_ANNOUNCEMENTS: NavItem = {
+  route: "student/announcements",
+  label: "Announcements",
+  icon: Megaphone,
+  allowedRoles: ["student"],
+  status: "available",
+}
+
+const PARENT_ANNOUNCEMENTS: NavItem = {
+  route: "parent/announcements",
+  label: "Announcements",
+  icon: Megaphone,
+  allowedRoles: ["parent"],
+  status: "available",
+}
+
 /** PH11.8: the guidance assessments surface, backed by a real route. */
 const GUIDANCE_ASSESSMENTS: NavItem = {
   route: "assessments",
@@ -524,7 +548,14 @@ const STUDENT_NAVIGATION: readonly NavGroup[] = [
   OVERVIEW_GROUP,
   {
     heading: "Learning",
-    items: [ACADEMICS, SCHEDULE, ATTENDANCE, STUDENT_ASSESSMENTS, REPORTS],
+    items: [
+      ACADEMICS,
+      SCHEDULE,
+      ATTENDANCE,
+      STUDENT_ASSESSMENTS,
+      STUDENT_ANNOUNCEMENTS,
+      REPORTS,
+    ],
   },
 ]
 
@@ -545,7 +576,13 @@ const PARENT_NAVIGATION: readonly NavGroup[] = [
      * parent's linked-children scope, so the page compiles exactly the
      * downloads the caller is authorized for.
      */
-    items: [PARENT_ACADEMICS, PARENT_ASSESSMENTS, PARENT_SUPPORT, REPORTS],
+    items: [
+      PARENT_ACADEMICS,
+      PARENT_ASSESSMENTS,
+      PARENT_SUPPORT,
+      PARENT_ANNOUNCEMENTS,
+      REPORTS,
+    ],
   },
 ]
 

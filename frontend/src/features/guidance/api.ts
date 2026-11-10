@@ -1035,6 +1035,13 @@ export interface InterventionFilters {
   status?: InterventionStatus | "all"
   studentId?: string | null
   search?: string
+  /**
+   * Student UUID -> school ID code.
+   *
+   * The table shows the code under the student's name, so a search that only
+   * matched the name could never find the row the reader was looking at.
+   */
+  studentCodes?: Record<string, string>
 }
 
 export function filterInterventions(
@@ -1053,8 +1060,11 @@ export function filterInterventions(
     if (filters.studentId && intervention.student !== filters.studentId)
       return false
     if (needle) {
-      if (!intervention.student_name.toLowerCase().includes(needle))
-        return false
+      const name = intervention.student_name.toLowerCase()
+      const code = (
+        filters.studentCodes?.[intervention.student] ?? ""
+      ).toLowerCase()
+      if (!name.includes(needle) && !code.includes(needle)) return false
     }
     return true
   })

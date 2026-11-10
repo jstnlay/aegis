@@ -27,6 +27,12 @@ class QuestionDraftSerializer(serializers.Serializer):
         choices=AssessmentQuestion.QuestionType.choices
     )
     count = serializers.IntegerField(min_value=1, max_value=MAX_DRAFTS, default=1)
+    # Optional: the kind of assessment being authored. It selects the item
+    # bank, so a teacher authoring an academic assessment gets academic
+    # stems instead of whatever a chat-trained classifier guesses.
+    assessment_type = serializers.ChoiceField(
+        choices=Assessment.AssessmentType.choices, required=False
+    )
 
 
 class AssessmentQuestionSerializer(serializers.ModelSerializer):

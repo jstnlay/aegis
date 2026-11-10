@@ -15,6 +15,7 @@ remains authoritative. The LLM never decides permissions.
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from apps.chatbot.policies import parse_message
@@ -72,6 +73,9 @@ ALLOWED_INTENTS_BY_ROLE = {
         ChatIntent.UNKNOWN,
         ChatIntent.ASK_AT_RISK_STUDENTS,
         ChatIntent.ASK_CLASS_PERFORMANCE,
+        # A teacher authors academic assessments; the chatbot drafts the
+        # items for them (FR-027).
+        ChatIntent.ASK_ASSESSMENT,
     },
     "guidance": {
         ChatIntent.GREETING,
@@ -81,6 +85,9 @@ ALLOWED_INTENTS_BY_ROLE = {
         ChatIntent.ASK_AT_RISK_STUDENTS,
         ChatIntent.ASK_CLASS_PERFORMANCE,
         ChatIntent.ASK_CONSULTATION_SUMMARY,
+        # A counselor authors wellness/behavioral assessments; the chatbot
+        # drafts the items for them (FR-027).
+        ChatIntent.ASK_ASSESSMENT,
     },
     "admin": {
         ChatIntent.GREETING,
@@ -562,6 +569,53 @@ class ChatbotResponse:
         }
 
 
+def _assessment_topic(message: str, entities) -> str | None:
+    """
+    The topic an assessment request is about.
+
+    A keyword topic entity wins when the message names one of the known
+    topics; otherwise the phrase after "about/on/for" is used, trimmed of the
+    words that name the artifact ("quiz", "test", "assessment").
+    """
+    for entity in entities:
+        if entity.entity_type == "topic":
+            return entity.value
+
+    match = re.search(
+        r"\b(?:about|on|regarding|for)\s+(?:a|an|the)?\s*([a-z][a-z\s\-]{2,40})",
+        message,
+        re.IGNORECASE,
+    )
+    if not match:
+        return None
+    topic = re.split(
+        r"\b(?:quiz|test|assessment|question|questions|item|items)\b",
+        match.group(1),
+        flags=re.IGNORECASE,
+    )[0].strip()
+    return topic if len(topic) >= 3 else None
+
+
+def _draft_assessment_items(user, topic: str) -> list[dict]:
+    """Draft assessment items for `topic` in the caller's item bank."""
+    from apps.chatbot.question_generator import (
+        QuestionGenerationError,
+        generate_question_drafts,
+    )
+
+    family = "academic" if user.role == "faculty" else "concern"
+    try:
+        result = generate_question_drafts(
+            topic=topic,
+            question_type="essay",
+            count=3,
+            family=family,
+        )
+    except QuestionGenerationError:
+        return []
+    return result["drafts"]
+
+
 def _deterministic_reply(user, intent: ChatIntent, entities, context, data=None) -> str:
     """Generate a deterministic reply for supported intents."""
     from apps.chatbot.taxonomy import ChatEntity
@@ -685,6 +739,28 @@ def _deterministic_reply(user, intent: ChatIntent, entities, context, data=None)
             f"{summary['faculty']} faculty, {summary['guidance']} guidance "
             f"counselor(s), and {summary['sections']} section(s)."
         )
+    if intent == ChatIntent.ASK_ASSESSMENT and user.role in ("faculty", "guidance"):
+        drafts = data.get("assessment_drafts") or []
+        if not drafts:
+            return (
+                "I can draft assessment items for you. Tell me the topic, for "
+                "example “draft a quiz about study habits”."
+            )
+        topic = data.get("assessment_topic", "")
+        listed = "\n".join(
+            f"{index}. {draft['question_text']}"
+            for index, draft in enumerate(drafts, start=1)
+        )
+        where = (
+            "Faculty > Assessments"
+            if user.role == "faculty"
+            else "Guidance > Assessments"
+        )
+        return (
+            f"Here are {len(drafts)} draft item(s) for “{topic}”:\n{listed}\n"
+            f"Open {where} and use “Generate draft” to fill them in — nothing "
+            "is saved until you add the question."
+        )
     return "I can help you with that. What would you like to know?"
 
 
@@ -785,6 +861,18 @@ def handle_message(
         summary = get_school_summary(user)
         if summary is not None:
             data["school_summary"] = summary
+    elif intent == ChatIntent.ASK_ASSESSMENT and user.role in (
+        "faculty",
+        "guidance",
+    ):
+        # A teacher or counselor asking for an assessment gets drafted items
+        # for the topic they named. Nothing is written: the drafts are
+        # proposals, and only the assessments module saves a question.
+        topic = _assessment_topic(message, entities)
+        drafts = _draft_assessment_items(user, topic) if topic else []
+        if drafts:
+            data["assessment_drafts"] = drafts
+            data["assessment_topic"] = topic
 
     # LLM path (optional, structured, validated) — deterministic fallback otherwise
     if use_llm and llm_result and llm_result.get("valid"):

@@ -64,4 +64,11 @@ urlpatterns = [
         views.LowPerformanceView.as_view(),
         name="analytics-low-performance",
     ),
+    # Predictive mode of the analytics dashboard: a projection of a monthly
+    # series, with the coverage it was drawn from.
+    path(
+        "forecast/",
+        views.ForecastView.as_view(),
+        name="analytics-forecast",
+    ),
 ]

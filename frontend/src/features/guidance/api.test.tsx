@@ -7,6 +7,7 @@ import {
   atRiskStudentsFrom,
   countAlertsByStatus,
   filterConsultations,
+  filterInterventions,
   filterRiskAlerts,
   normalizeDecimal,
   openRiskAlerts,
@@ -18,6 +19,7 @@ import {
   useRiskAlerts,
   useStudentRoster,
   type Consultation,
+  type Intervention,
   type RiskAlert,
   type RiskFactor,
 } from "@/features/guidance/api"
@@ -690,6 +692,46 @@ describe("filterRiskAlerts with object-shaped factors", () => {
     ).toEqual(["ra-obj", "ra-other"])
     expect(
       filterRiskAlerts([...alerts, ...others], { search: "attendance_rate" })
+    ).toHaveLength(1)
+  })
+
+  it("matches an intervention by the student code the table shows", () => {
+    const interventions: Intervention[] = [
+      {
+        id: "iv-1",
+        student: "sp-1",
+        student_name: "Ana Cruz",
+        risk_alert: null,
+        risk_alert_student: null,
+        assigned_counselor: "gp-1",
+        assigned_counselor_name: "Counselor",
+        plan_start_date: "2026-01-10",
+        target_review_date: null,
+        status: "active",
+        created_at: "2026-01-10T00:00:00Z",
+        updated_at: "2026-01-10T00:00:00Z",
+      },
+    ]
+
+    // The table shows the school ID code under the name, so a search for the
+    // code has to find the row the reader was looking at.
+    expect(
+      filterInterventions(interventions, {
+        search: "STU-001",
+        studentCodes: { "sp-1": "STU-001" },
+      })
+    ).toHaveLength(1)
+    expect(
+      filterInterventions(interventions, {
+        search: "STU-001",
+        studentCodes: {},
+      })
+    ).toHaveLength(0)
+    expect(
+      filterInterventions(interventions, {
+        search: "ana",
+        studentCodes: { "sp-1": "STU-001" },
+      })
     ).toHaveLength(1)
   })
 })

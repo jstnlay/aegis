@@ -240,6 +240,7 @@ def generate_question_drafts(
     topic: str,
     question_type: str,
     count: int,
+    family: str | None = None,
 ) -> dict:
     """
     Draft `count` candidate questions about `topic`.
@@ -248,6 +249,13 @@ def generate_question_drafts(
     ``{"question_text", "options", "correct_answer"}`` — shaped exactly like a
     ``POST /assessments/assessment-questions/`` body minus ``assessment`` and
     ``order``, so the caller can hand a draft straight to the form.
+
+    ``family`` names the item bank to draw from. It is optional: without it the
+    bank is chosen by the intent classifier, which is what a counselor wants
+    for a free-form topic. A caller that already knows the kind of assessment
+    it is authoring passes the bank instead — a teacher authoring an academic
+    assessment passes ``"academic"`` rather than letting a chat-trained
+    classifier guess.
 
     Raises :class:`QuestionGenerationError` for a type this generator will not
     draft or a count outside 1..MAX_DRAFTS.
@@ -276,7 +284,18 @@ def generate_question_drafts(
         )
 
     shape, scale = _SHAPE_BY_TYPE[question_type]
-    family, confidence = select_family(cleaned_topic)
+    if family is None:
+        family, confidence = select_family(cleaned_topic)
+    elif family in _ITEM_BANKS:
+        # An explicitly chosen bank needs no classifier, and the confidence is
+        # reported as 1.0 because the caller made the choice, not the model.
+        confidence = 1.0
+    else:
+        raise QuestionGenerationError(
+            "QUESTION_FAMILY_INVALID",
+            "Unknown item bank. Use one of: "
+            + ", ".join(sorted(_ITEM_BANKS)),
+        )
 
     drafts: list[dict] = []
     seen: set[str] = set()

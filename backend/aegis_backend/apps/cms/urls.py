@@ -2,10 +2,12 @@ from django.urls import path
 
 from .views import (
     CmsAnnouncementDetail,
+    CmsAnnouncementImageDownload,
     CmsAnnouncementList,
     CmsResourceDetail,
     CmsResourceFileDownload,
     CmsResourceList,
+    PublicCmsAnnouncementImageDownload,
     PublicCmsAnnouncementList,
     PublicCmsResourceList,
     SystemSettingDetail,
@@ -23,11 +25,21 @@ urlpatterns = [
         name="cms-announcement-public-list",
     ),
     path(
+        "announcements/public/<str:document_id>/image/",
+        PublicCmsAnnouncementImageDownload.as_view(),
+        name="cms-announcement-public-image",
+    ),
+    path(
         "resources/public/",
         PublicCmsResourceList.as_view(),
         name="cms-resource-public-list",
     ),
     path("announcements/", CmsAnnouncementList.as_view(), name="cms-announcement-list"),
+    path(
+        "announcements/<str:document_id>/image/",
+        CmsAnnouncementImageDownload.as_view(),
+        name="cms-announcement-image",
+    ),
     path(
         "announcements/<str:document_id>/",
         CmsAnnouncementDetail.as_view(),

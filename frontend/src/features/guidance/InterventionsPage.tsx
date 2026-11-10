@@ -892,12 +892,21 @@ export function InterventionsPage() {
   )
 
   const visible = useMemo(() => {
-    const filtered = filterInterventions(interventions, { status, search })
+    // `InterventionSerializer` carries no student ID code, so the enrollment
+    // roster is the only verified source for the code the table shows.
+    const studentCodes: Record<string, string> = {}
+    for (const entry of rosterQuery.data ?? [])
+      studentCodes[entry.id] = entry.code
+    const filtered = filterInterventions(interventions, {
+      status,
+      search,
+      studentCodes,
+    })
     // Archive: completed plans stay on the server; this only hides them.
     return hideCompleted
       ? filtered.filter((row) => row.status !== "completed")
       : filtered
-  }, [interventions, status, search, hideCompleted])
+  }, [interventions, status, search, hideCompleted, rosterQuery.data])
 
   const counts = useMemo(
     () => countInterventionsByStatus(interventions),
@@ -1021,7 +1030,7 @@ export function InterventionsPage() {
               id="intervention-search"
               type="search"
               value={search}
-              placeholder="Student name"
+              placeholder="Student name or ID"
               onChange={(event) => setSearch(event.target.value)}
             />
           </div>
@@ -1054,7 +1063,9 @@ export function InterventionsPage() {
             loadingLabel="Loading interventions"
             emptyMessage={
               isFiltered
-                ? "No interventions match the current filters."
+                ? hideCompleted
+                  ? "No interventions match the current filters. Completed plans are archived — untick “Hide completed” to include them."
+                  : "No interventions match the current filters."
                 : "You have not opened any intervention plans yet."
             }
             pagination={pagination}

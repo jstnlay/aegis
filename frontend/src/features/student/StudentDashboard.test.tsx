@@ -56,6 +56,13 @@ vi.mock("@/features/student/api", async (importOriginal) => {
     ...actual,
     useStudentProfileId: vi.fn(),
     useStudentDashboardData: vi.fn(),
+    // The "My information" card reads the active enrollment; it is stubbed
+    // so the test never reaches the network for it.
+    useStudentEnrollment: vi.fn(() => ({
+      data: null,
+      isLoading: false,
+      isError: false,
+    })),
   }
 })
 
@@ -105,12 +112,15 @@ describe("StudentDashboard", () => {
     // `getAllByRole` because three tiles plus the progress section are all pending
     // at once, and each is its own live region — four separate announcements of
     // four separate things, which is the intent.
-    const pending = screen.getAllByRole("status")
+    const pending = screen
+      .getAllByRole("status")
+      .filter((region) => region.getAttribute("aria-busy") === "true")
     expect(pending.length).toBeGreaterThan(0)
-    for (const region of pending) {
-      expect(region).toHaveAttribute("aria-busy", "true")
-    }
-    expect(pending[0]).toHaveTextContent(/Average Grade/i)
+    // The "My information" card is also pending while it loads, so the
+    // average-grade region is looked up by name rather than by position.
+    expect(
+      pending.find((region) => /Average Grade/i.test(region.textContent ?? ""))
+    ).toBeDefined()
   })
 
   it("describes Total Subjects as subjects with finalized grades, not assessments", () => {

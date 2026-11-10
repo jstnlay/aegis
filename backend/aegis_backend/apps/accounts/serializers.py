@@ -111,6 +111,16 @@ class AdminUserUpdateSerializer(serializers.ModelSerializer):
         fields = ("role", "is_active")
 
 
+class ActivitySerializer(serializers.Serializer):
+    """One sign-in event from the caller's own activity trail."""
+
+    id = serializers.UUIDField()
+    action = serializers.CharField()
+    timestamp = serializers.DateTimeField()
+    ip_address = serializers.IPAddressField(allow_null=True, required=False)
+    user_agent = serializers.CharField(allow_null=True, required=False)
+
+
 class UserProfileSerializer(serializers.ModelSerializer):
     """
     Self-service serializer for GET/PATCH /api/v1/accounts/me/.

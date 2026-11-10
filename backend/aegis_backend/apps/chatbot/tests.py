@@ -741,3 +741,54 @@ class ChatbotPolicyTest(ChatbotAPIBase):
         self.assertFalse(check_intent_allowed("faculty", ChatIntent.ASK_GRADE))
         # Guidance can help seeker
         self.assertTrue(check_intent_allowed("student", ChatIntent.REQUEST_COUNSELOR))
+
+
+class ChatbotAssessmentDraftTest(ChatbotAPIBase):
+    """
+    The chatbot drafts assessment items for the staff who author them.
+
+    A teacher asks for an assessment about a topic and gets proposed items
+    back. Nothing is written: the drafts are proposals, and only the
+    assessments module saves a question.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.guidance_user = User.objects.create_user(
+            email="chat_guidance_draft@test.com", password="pass12345",
+            first_name="Chat", last_name="Counselor", role="guidance",
+        )
+        self.guidance_profile = GuidanceProfile.objects.create(
+            user=self.guidance_user, employee_id="CHATG002"
+        )
+
+    def test_faculty_gets_drafted_items_for_their_topic(self):
+        resp = self.post_message(
+            "Draft a quiz about study habits", self.faculty_user
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["intent"], "ask_assessment")
+        drafts = resp.data["data"]["assessment_drafts"]
+        self.assertEqual(len(drafts), 3)
+        self.assertIn("study habits", drafts[0]["question_text"])
+        self.assertIn("Faculty > Assessments", resp.data["reply"])
+
+    def test_guidance_gets_drafted_items(self):
+        resp = self.post_message(
+            "Create an assessment about study habits", self.guidance_user
+        )
+
+        self.assertEqual(resp.data["intent"], "ask_assessment")
+        drafts = resp.data["data"]["assessment_drafts"]
+        self.assertEqual(len(drafts), 3)
+        self.assertIn("study habits", drafts[0]["question_text"])
+        self.assertIn("Guidance > Assessments", resp.data["reply"])
+
+    def test_student_never_gets_drafts(self):
+        resp = self.post_message(
+            "Draft a quiz about study habits", self.student_user
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertNotIn("assessment_drafts", resp.data["data"])

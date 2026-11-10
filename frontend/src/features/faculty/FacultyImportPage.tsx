@@ -28,6 +28,7 @@ import {
   type FacultyImportJob,
   type FacultyImportType,
 } from "@/features/faculty/api"
+import { useProfileReferenceData } from "@/features/faculty/advisory-api"
 import { normalizeApiError } from "@/lib/error"
 import {
   downloadExport,
@@ -358,12 +359,23 @@ function ExportsCard() {
   const [format, setFormat] = useState<ExportFormat>("csv")
   const [pendingKind, setPendingKind] = useState<ExportKind | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [sectionId, setSectionId] = useState("")
+  const { sections } = useProfileReferenceData()
 
   const run = async (kind: ExportKind) => {
     setPendingKind(kind)
     setError(null)
     try {
-      await downloadExport(kind, format)
+      // The section filter narrows the file to one section; the server still
+      // intersects it with the caller's own scope.
+      await downloadExport(
+        kind,
+        format,
+        "standard",
+        kind === "grades" && sectionId && sectionId !== "all"
+          ? { section: sectionId }
+          : {}
+      )
     } catch (caught) {
       setError(normalizeApiError(caught).message)
     } finally {
@@ -399,6 +411,23 @@ function ExportsCard() {
             <SelectContent>
               <SelectItem value="csv">CSV</SelectItem>
               <SelectItem value="xlsx">Excel (XLSX)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1.5 sm:max-w-xs">
+          <Label htmlFor="faculty-export-section">Section (grades only)</Label>
+          <Select value={sectionId} onValueChange={setSectionId}>
+            <SelectTrigger id="faculty-export-section">
+              <SelectValue placeholder="All my sections" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All my sections</SelectItem>
+              {sections.map((section) => (
+                <SelectItem key={section.id} value={section.id}>
+                  {section.name}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>

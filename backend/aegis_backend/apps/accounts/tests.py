@@ -3163,3 +3163,91 @@ class StaffSetPasswordLinkTest(TestCase):
         user = User.objects.get(email="new.teacher@example.com")
         self.assertTrue(user.check_password("chosenpass123"))
         self.assertEqual(len(mail.outbox), 0)
+
+
+class MyActivityTest(TestCase):
+    """
+    GET /api/v1/accounts/me/activity/ — the caller's own sign-in history.
+
+    The parent's account surface shows when their account was used. The
+    endpoint is scoped to `request.user`, so it can never surface another
+    account's activity, and the full audit log stays admin-only.
+    """
+
+    def setUp(self):
+        from apps.audit.models import AuditLog
+        from django.utils import timezone
+
+        self.client = APIClient()
+        self.parent = User.objects.create_user(
+            email="act_parent@example.com", password="pass12345",
+            first_name="Act", last_name="Parent", role="parent",
+        )
+        self.other = User.objects.create_user(
+            email="act_other@example.com", password="pass12345",
+            first_name="Act", last_name="Other", role="parent",
+        )
+        AuditLog.objects.create(
+            user=self.parent, action=AuditLog.Action.LOGIN,
+            model_name="accounts.User", object_id=self.parent.id,
+            object_repr="parent", timestamp=timezone.now(),
+        )
+        AuditLog.objects.create(
+            user=self.other, action=AuditLog.Action.LOGIN,
+            model_name="accounts.User", object_id=self.other.id,
+            object_repr="other", timestamp=timezone.now(),
+        )
+
+    def test_returns_only_the_callers_own_rows(self):
+        self.client.force_authenticate(user=self.parent)
+        response = self.client.get("/api/v1/accounts/me/activity/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        rows = response.data.get("results", response.data)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["action"], "login")
+
+    def test_requires_authentication(self):
+        anon = APIClient()
+        response = anon.get("/api/v1/accounts/me/activity/")
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_admin_audit_log_is_still_admin_only(self):
+        self.client.force_authenticate(user=self.parent)
+        response = self.client.get("/api/v1/audit/logs/")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class AdminCanCreateAnotherAdminTest(TestCase):
+    """
+    The administrator surface includes "add an administrator".
+
+    `POST /api/v1/accounts/users/create/` accepts every role, admin included,
+    and the New User dialog on the Users screen offers "Administrator" in its
+    role picker. This is the regression test for that path.
+    """
+
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = User.objects.create_superuser(
+            email="admin_of_admins@example.com", password="adminpass123",
+            first_name="Admin", last_name="OfAdmins",
+        )
+        self.client.force_authenticate(user=self.admin)
+
+    def test_an_admin_can_create_another_admin(self):
+        response = self.client.post(
+            "/api/v1/accounts/users/create/",
+            {
+                "email": "second_admin@example.com",
+                "username": "",
+                "first_name": "Second",
+                "last_name": "Admin",
+                "role": "admin",
+                "password": "secondpass123",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        created = User.objects.get(email="second_admin@example.com")
+        self.assertEqual(created.role, "admin")

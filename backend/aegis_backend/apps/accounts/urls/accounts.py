@@ -10,6 +10,7 @@ from ..views import (
     ConsentListView,
     ConsentRevokeView,
     CurrentUserView,
+    MyActivityView,
     FacultyProfileListView,
     ParentInvitationAcceptView,
     ParentInvitationCreateView,
@@ -35,6 +36,11 @@ urlpatterns = [
         name="faculty-profile-list",
     ),
     path("me/", CurrentUserView.as_view(), name="current-user"),
+    path(
+        "me/activity/",
+        MyActivityView.as_view(),
+        name="current-user-activity",
+    ),
     path("password/change/", PasswordChangeView.as_view(), name="password-change"),
     # Password recovery. Both are anonymous: the reset token is the
     # credential, so neither needs a session.

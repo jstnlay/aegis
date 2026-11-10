@@ -57,15 +57,18 @@ export type ExportFormat = "csv" | "xlsx"
 export async function downloadExport(
   kind: ExportKind,
   format: ExportFormat,
-  schema: ExportSchema = "standard"
+  schema: ExportSchema = "standard",
+  filters: Record<string, string> = {}
 ): Promise<void> {
   const response = await apiClient.get(
     `/data-import/exports/${EXPORT_PATH[kind]}/`,
     {
-      params:
-        schema === "reimport"
+      params: {
+        ...(schema === "reimport"
           ? { file_format: format, schema }
-          : { file_format: format },
+          : { file_format: format }),
+        ...filters,
+      },
       responseType: "blob",
     }
   )

@@ -354,3 +354,54 @@ class LowPerformanceView(APIView):
             threshold = 75.0
         result = services.low_performance_students(threshold=threshold)
         return Response({"status": "ok", "data": result})
+
+
+class ForecastView(APIView):
+    """
+    GET /api/v1/analytics/forecast/?metric=&months=
+
+    The predictive mode of the analytics dashboard. Projects a monthly
+    series `months` months ahead. A series with too little coverage answers
+    with `insufficient_data` and no estimate rather than a projection drawn
+    from noise.
+    """
+
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        metric = request.query_params.get("metric", "grade_average")
+        if metric not in services.FORECAST_METRICS:
+            return Response(
+                {
+                    "status": "error",
+                    "error": {
+                        "code": "INVALID_METRIC",
+                        "message": (
+                            "Unknown metric. Use one of: "
+                            + ", ".join(sorted(services.FORECAST_METRICS))
+                            + "."
+                        ),
+                    },
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        raw_months = request.query_params.get("months", "6")
+        try:
+            months = int(raw_months)
+        except (TypeError, ValueError):
+            months = 6
+        if months not in services.FORECAST_HORIZONS:
+            return Response(
+                {
+                    "status": "error",
+                    "error": {
+                        "code": "INVALID_HORIZON",
+                        "message": "Forecast range must be 1, 3, 6 or 12 months.",
+                    },
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        result = services.forecast(metric, months)
+        return Response({"status": "ok", "data": result})

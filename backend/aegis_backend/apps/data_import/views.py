@@ -15,6 +15,8 @@ PH8.4 adds XLSX support: the view detects the actual file type from
 content bytes (ZIP magic), not the client-supplied extension alone.
 """
 
+from uuid import UUID
+
 from django.db import transaction
 from django.http import HttpResponse
 from rest_framework import status, viewsets
@@ -346,6 +348,36 @@ class ExportViewMixin(APIView):
     def _param(self, name, default=None):
         return self.request.query_params.get(name, default)
 
+    def _apply_filters(self, qs):
+        """
+        Narrow the export scope with optional query parameters.
+
+        A filter only narrows the caller's already-authorized queryset, so it
+        can never widen access: a faculty member asking for another section
+        still gets the intersection of the filter and their own scope.
+        """
+        if self.export_type != ExportType.GRADES:
+            return qs
+
+        filters = (
+            ("section", "subject_assignment__section_id"),
+            ("subject", "subject_assignment__subject_id"),
+            ("grading_period", "grading_period_id"),
+        )
+        for param, lookup in filters:
+            value = self._param(param)
+            if not value:
+                continue
+            try:
+                parsed = UUID(value)
+            except (ValueError, AttributeError, TypeError):
+                raise ExportError(
+                    ExportErrorCode.INVALID_FILTER,
+                    f"Invalid {param.replace('_', ' ')} filter.",
+                )
+            qs = qs.filter(**{lookup: parsed})
+        return qs
+
     def get(self, request, *args, **kwargs):
         file_format = (self._param("file_format") or "").lower()
         if file_format not in ExportFormat.ALL:
@@ -391,6 +423,11 @@ class ExportViewMixin(APIView):
                     "The export could not be generated.",
                 )
             )
+
+        try:
+            qs = self._apply_filters(qs)
+        except ExportError as exc:
+            return self._export_error(exc)
 
         try:
             rows = rows_for_queryset(self.export_type, qs, reimport=reimport)

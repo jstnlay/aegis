@@ -67,6 +67,9 @@ describe("role navigation configuration", () => {
       "faculty/advisory",
       // Student assessments, likewise
       "student/assessments",
+      // School announcements for students and parents (objective 2.2.1)
+      "student/announcements",
+      "parent/announcements",
       // Student class schedule (TC-STU-04), backed by the `schedule` route
       "schedule",
       // Reports compiles the controlled exports each role is authorized for
@@ -138,6 +141,7 @@ describe("role navigation configuration", () => {
       "dashboard",
       "reports",
       "schedule",
+      "student/announcements",
       "student/assessments",
     ])
   })
@@ -214,6 +218,7 @@ describe("role navigation configuration", () => {
         "parent/academics",
         "parent/assessments",
         "parent/support",
+        "parent/announcements",
       ]) {
         expect(available, `${role} / ${route}`).not.toContain(route)
       }
@@ -427,6 +432,7 @@ describe("route visibility", () => {
         "parent/academics",
         "parent/assessments",
         "parent/support",
+        "parent/announcements",
       ]) {
         expect(available, `${role} / ${route}`).not.toContain(route)
       }

@@ -526,6 +526,44 @@ class RecipientResolutionTest(CmsTestBase):
         self.assertNotIn(self.student2_user.id, ids)
 
 
+class AnnouncementImageProxyTest(CmsTestBase):
+    """
+    SEC-007 for announcement cover images.
+
+    The bytes are reachable only through Django, and only by a caller who may
+    see the announcement itself. A direct Strapi media URL is never handed out.
+    """
+
+    def setUp(self):
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.student_user)
+
+    def test_anonymous_cannot_fetch_the_image(self):
+        anon = APIClient()
+        response = anon.get("/api/v1/cms/announcements/doc-abc123/image/")
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_image_is_hidden_from_a_non_target_role(self):
+        with mock.patch("apps.cms.views.StrapiClient") as mock_client:
+            mock_client.return_value.get_announcement.return_value = (
+                canonical_announcement(target_roles=["parent"])
+            )
+            response = self.client.get(
+                "/api/v1/cms/announcements/doc-abc123/image/"
+            )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_announcement_without_an_image_answers_not_found(self):
+        with mock.patch("apps.cms.views.StrapiClient") as mock_client:
+            mock_client.return_value.get_announcement.return_value = (
+                canonical_announcement()
+            )
+            response = self.client.get(
+                "/api/v1/cms/announcements/doc-abc123/image/"
+            )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
 # ---------------------------------------------------------------------------
 # Normalization unit tests
 # ---------------------------------------------------------------------------
@@ -561,6 +599,37 @@ class NormalizationTest(TestCase):
         self.assertEqual(result["target_sections"], [])
         self.assertEqual(result["priority"], "normal")
         self.assertIsNone(result["published_at"])
+        self.assertIsNone(result["cover_image"])
+
+    def test_uploaded_cover_image_becomes_authorized_proxy_path(self):
+        result = normalize_announcement(
+            {
+                "documentId": "doc-img",
+                "title": "T",
+                "content": "C",
+                "announcement_type": "news",
+                "cover_image": {"url": "/uploads/cover.jpg"},
+            }
+        )
+        self.assertEqual(
+            result["cover_image"], "/api/v1/cms/announcements/doc-img/image/"
+        )
+        self.assertEqual(result["cover_image_source"], "proxy")
+        self.assertEqual(result["cover_image_path"], "/uploads/cover.jpg")
+
+    def test_external_cover_image_passes_through(self):
+        result = normalize_announcement(
+            {
+                "documentId": "doc-cdn",
+                "title": "T",
+                "content": "C",
+                "announcement_type": "news",
+                "cover_image": {"url": "https://cdn.example.com/cover.jpg"},
+            }
+        )
+        self.assertEqual(result["cover_image"], "https://cdn.example.com/cover.jpg")
+        self.assertEqual(result["cover_image_source"], "external")
+        self.assertIsNone(result["cover_image_path"])
 
     def test_missing_required_enum_rejected(self):
         with self.assertRaises(ValueError):

@@ -364,7 +364,7 @@ class EnrollmentViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         qs = Enrollment.objects.select_related(
-            "student__user", "section", "academic_year"
+            "student__user", "section", "section__grade_level", "academic_year"
         ).all()
 
         if user.role == "admin":
@@ -648,10 +648,17 @@ class GradeViewSet(viewsets.ModelViewSet):
         if user.role == "guidance":
             return qs
         if user.role == "faculty":
+            from django.db.models import Q
+
             fp = _get_faculty_profile(user)
             if fp is None:
                 return Grade.objects.none()
-            return qs.filter(subject_assignment__faculty=fp)
+            # A subject teacher sees grades they encoded; an adviser also sees
+            # every subject grade of the students in their advisory section.
+            return qs.filter(
+                Q(subject_assignment__faculty=fp)
+                | Q(student__section__adviser=fp)
+            ).distinct()
         if user.role == "student":
             sp = _get_student_profile(user)
             if sp is None:

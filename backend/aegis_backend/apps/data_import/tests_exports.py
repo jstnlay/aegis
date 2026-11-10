@@ -140,6 +140,7 @@ def _domain(suffix=""):
         "s_foreign": s_foreign,
         "section_name": f"S-7A{suffix}",
         "subject_a_code": f"MG7A{suffix}",
+        "subject_b_code": f"SG7B{suffix}",
     }
 
 
@@ -361,7 +362,7 @@ class ExportRoleScopeTest(ExportApiBase):
         rows = self._csv_rows(resp)[1:]
         self.assertEqual(len(rows), 3)  # all grades
 
-    def test_faculty_grades_only_own_subject(self):
+    def test_adviser_sees_every_subject_grade_of_their_advisees(self):
         resp = self._get(
             "/api/v1/data-import/exports/grades/", self.dom["fp_own"].user, file_format="csv"
         )
@@ -369,11 +370,36 @@ class ExportRoleScopeTest(ExportApiBase):
         rows = self._csv_rows(resp)[1:]
         ids = {r[0] for r in rows}
         codes = {r[4] for r in rows}
-        self.assertEqual(len(rows), 1)
-        # fp_own only owns the Math subject on the shared section.
+        # fp_own teaches Math and advises the section, so both subject grades
+        # of their advisee are in scope; the other section's student is not.
+        self.assertEqual(len(rows), 2)
         self.assertIn(self.dom["s1"].student_id, ids)
         self.assertNotIn(self.dom["s_foreign"].student_id, ids)
-        self.assertEqual(codes, {self.dom["subject_a_code"]})
+        self.assertEqual(
+            codes, {self.dom["subject_a_code"], self.dom["subject_b_code"]}
+        )
+
+    def test_grades_export_section_filter_narrows_the_file(self):
+        resp = self._get(
+            "/api/v1/data-import/exports/grades/",
+            self.dom["fp_own"].user,
+            file_format="csv",
+            section=str(self.dom["section"].id),
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        rows = self._csv_rows(resp)[1:]
+        self.assertEqual(len(rows), 2)
+        sections = {r[3] for r in rows}
+        self.assertEqual(sections, {self.dom["section_name"]})
+
+    def test_grades_export_invalid_section_filter_is_rejected(self):
+        resp = self._get(
+            "/api/v1/data-import/exports/grades/",
+            self.dom["fp_own"].user,
+            file_format="csv",
+            section="not-a-uuid",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_faculty_attendance_only_permitted_sections(self):
         resp = self._get(

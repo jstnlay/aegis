@@ -136,6 +136,8 @@ export interface Enrollment {
   student_id: string
   section: string
   section_name: string
+  grade_level_name: string
+  age: number | null
   academic_year: string
   academic_year_name: string
   date_enrolled: string | null
