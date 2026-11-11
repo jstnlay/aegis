@@ -188,9 +188,13 @@ function buildUrl(filters: NotificationFilters): string {
   return query ? `/notifications/?${query}` : "/notifications/"
 }
 
-export function useNotifications(filters: NotificationFilters = {}) {
+export function useNotifications(
+  filters: NotificationFilters = {},
+  refetchInterval: number | false = false
+) {
   const url = buildUrl(filters)
   return useQuery({
+    refetchInterval,
     queryKey: [KEY, "list", filters.isRead ?? null, filters.type ?? null],
     queryFn: async ({ signal }) => {
       const { results } = await fetchAllPages<Notification>(url, { signal })

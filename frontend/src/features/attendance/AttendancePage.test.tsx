@@ -317,7 +317,7 @@ describe("AttendancePage (faculty)", () => {
 
     await waitFor(() => {
       const urls = mockedFetchAllPages.mock.calls.map((c) => String(c[0]))
-      expect(urls).toContain("/academics/enrollments/")
+      expect(urls).toContain("/academics/enrollments/?surname_order=asc")
     })
 
     await openSearchSelect(screen.getByRole("button", { name: "Student" }))
@@ -482,6 +482,25 @@ describe("AttendancePage (faculty)", () => {
     expect(
       screen.queryByRole("button", { name: /Delete/i })
     ).not.toBeInTheDocument()
+  })
+
+  it("shows 15 records per page and supports next and previous", async () => {
+    routePagedRequests({
+      records: Array.from({ length: 16 }, (_, index) =>
+        record({ id: `record-${index}`, student_name: `Learner ${index + 1}` })
+      ),
+    })
+    renderPage()
+
+    expect(await screen.findByText("Learner 15")).toBeInTheDocument()
+    expect(screen.queryByText("Learner 16")).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled()
+    fireEvent.click(screen.getByRole("button", { name: "Next" }))
+    expect(screen.getByText("Learner 16")).toBeInTheDocument()
+    expect(screen.queryByText("Learner 15")).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled()
+    fireEvent.click(screen.getByRole("button", { name: "Previous" }))
+    expect(screen.getByText("Learner 15")).toBeInTheDocument()
   })
 
   it("has no Actions column at all", async () => {

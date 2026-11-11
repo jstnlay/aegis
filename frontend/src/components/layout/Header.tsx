@@ -1,5 +1,6 @@
 import {
   Bell,
+  CheckCheck,
   BellRing,
   ArrowUpRight,
   CalendarCheck,
@@ -23,6 +24,7 @@ import {
   resolveNotificationHref,
   sortNotifications,
   useMarkNotificationRead,
+  useMarkAllNotificationsRead,
   useUnreadNotifications,
   useNotifications,
   type Notification,
@@ -113,6 +115,10 @@ function UserChip() {
     useState<Notification | null>(null)
   const unreadCount = unread.data?.length ?? 0
   const markRead = useMarkNotificationRead()
+  const markAllRead = useMarkAllNotificationsRead()
+  const [notificationFilter, setNotificationFilter] = useState<
+    "all" | "unread" | "alerts"
+  >("all")
   const role = user?.role ?? "student"
   // Keep read updates in the menu; the unread query is only for the badge.
   const [bellOpen, setBellOpen] = useState(false)
@@ -148,6 +154,19 @@ function UserChip() {
   const unreadNotifications = useMemo(
     () => sortNotifications(inbox.data ?? []),
     [inbox.data]
+  )
+  const isAlert = (notification: Notification) =>
+    [
+      "BEHAVIORAL_INCIDENT",
+      "BEHAVIORAL_WARNING",
+      "ATTENDANCE_THRESHOLD",
+    ].includes(notification.notification_type)
+  const visibleNotifications = unreadNotifications.filter((notification) =>
+    notificationFilter === "unread"
+      ? !notification.is_read
+      : notificationFilter === "alerts"
+        ? isAlert(notification)
+        : true
   )
 
   return (
@@ -191,10 +210,48 @@ function UserChip() {
                 <h2>Notifications</h2>
                 <p>Your latest school updates</p>
               </div>
-              <span className="notification-unread-label">
-                {unreadCount} unread
-              </span>
+              <button
+                type="button"
+                role="menuitem"
+                className="notification-mark-all"
+                disabled={unreadCount === 0 || markAllRead.isPending}
+                onClick={() => markAllRead.mutate()}
+              >
+                <CheckCheck aria-hidden="true" />
+                {markAllRead.isPending ? "Marking…" : "Mark all as read"}
+              </button>
             </div>
+            <div
+              className="notification-filters"
+              role="group"
+              aria-label="Filter notifications"
+            >
+              {(
+                [
+                  ["all", "All", unreadNotifications.length],
+                  ["unread", "Unread", unreadCount],
+                  [
+                    "alerts",
+                    "Alerts",
+                    unreadNotifications.filter(isAlert).length,
+                  ],
+                ] as const
+              ).map(([filter, label, count]) => (
+                <button
+                  type="button"
+                  key={filter}
+                  aria-pressed={notificationFilter === filter}
+                  onClick={() => setNotificationFilter(filter)}
+                >
+                  {label} <span>{count}</span>
+                </button>
+              ))}
+            </div>
+            {markAllRead.isError ? (
+              <p role="alert" className="notification-state">
+                {normalizeApiError(markAllRead.error).message}
+              </p>
+            ) : null}
             <div className="notification-menu-list">
               {inbox.isLoading ? (
                 <p role="status" className="notification-state">
@@ -212,17 +269,23 @@ function UserChip() {
                     Try again
                   </button>
                 </div>
-              ) : unreadNotifications.length === 0 ? (
+              ) : visibleNotifications.length === 0 ? (
                 <div className="notification-empty">
                   <span aria-hidden="true">
                     <Inbox />
                   </span>
                   <strong>You're all caught up</strong>
-                  <p>No notifications yet.</p>
+                  <p>
+                    {notificationFilter === "all"
+                      ? "No notifications yet."
+                      : notificationFilter === "unread"
+                        ? "No unread notifications."
+                        : "No alerts yet."}
+                  </p>
                   <small>New school updates will appear here.</small>
                 </div>
               ) : (
-                unreadNotifications.map((notification) => {
+                visibleNotifications.map((notification) => {
                   const href = resolveNotificationHref(notification.link, role)
                   const incident =
                     notification.notification_type === "BEHAVIORAL_INCIDENT"
@@ -243,6 +306,7 @@ function UserChip() {
                     <div
                       key={notification.id}
                       className="notification-item"
+                      data-read={notification.is_read}
                       data-tone={
                         incident ? "danger" : warning ? "warning" : "school"
                       }
@@ -272,8 +336,14 @@ function UserChip() {
                           <ItemIcon />
                         </span>
                         <NotificationSummary notification={notification} />
-                        <span className="text-xs font-medium">
-                          View · {notification.is_read ? "Read" : "Unread"}
+                        <span
+                          className="notification-read-status"
+                          data-read={notification.is_read}
+                        >
+                          {notification.is_read ? "Read" : "Unread"}
+                        </span>
+                        <span className="notification-view-details">
+                          View details <ArrowUpRight aria-hidden="true" />
                         </span>
                       </button>
                       {href ? (
@@ -301,8 +371,9 @@ function UserChip() {
                 role="menuitem"
                 onClick={() => setBellOpen(false)}
                 className="notification-inbox-link"
+                aria-label="View all notifications, open the inbox"
               >
-                Open the inbox <ArrowUpRight aria-hidden="true" />
+                View all notifications <ArrowUpRight aria-hidden="true" />
               </Link>
             </div>
           </div>

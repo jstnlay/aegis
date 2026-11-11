@@ -1,0 +1,294 @@
+.notification-previews {
+  position: fixed;
+  z-index: 90;
+  right: max(20px, env(safe-area-inset-right));
+  top: max(88px, calc(env(safe-area-inset-top) + 76px));
+  max-height: calc(100svh - 112px);
+  overflow-y: auto;
+  padding: 12px 4px 16px;
+  width: min(390px, calc(100vw - 32px));
+  display: grid;
+  gap: 10px;
+  pointer-events: none;
+}
+.notification-previews-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  padding: 5px 10px;
+  border: 1px solid #e5d6cf;
+  border-radius: 20px;
+  background: #fffdfa;
+  color: #7d202b;
+  font-size: 11px;
+  font-weight: 600;
+  box-shadow: 0 2px 8px #42242c0a;
+}
+.notification-previews-heading svg {
+  width: 13px;
+  height: 13px;
+}
+.notification-previews-count {
+  color: #79685f;
+  font-weight: 400;
+}
+.notification-preview {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 19px 16px 16px;
+  border: 1px solid #ddc6c4;
+  border-left: 3px solid #963c48;
+  border-radius: 15px;
+  background: linear-gradient(120deg, #fffdfa, #f7ece9);
+  color: #402c2d;
+  box-shadow: 0 12px 32px -12px #54263238;
+  pointer-events: auto;
+}
+.notification-preview-copy {
+  min-width: 0;
+  flex: 1;
+}
+.notification-preview h2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.5;
+  padding-right: 12px;
+}
+.notification-preview p {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  margin-top: 5px;
+  color: #7b625d;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.notification-preview-close {
+  position: absolute;
+  right: 0;
+  top: -10px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid #ddc6c4;
+  border-radius: 50%;
+  background: #fffdfa;
+  color: #8a3441;
+  cursor: pointer;
+}
+.notification-preview-close svg {
+  width: 14px;
+  height: 14px;
+}
+.notification-preview-view {
+  flex-shrink: 0;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 9px;
+  background: #812937;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.notification-preview-view:hover {
+  background: #67202b;
+}
+.notification-preview-close:hover {
+  background: #f7ece9;
+}
+.notification-preview button:focus-visible {
+  outline: 2px solid #963c48;
+  outline-offset: 3px;
+}
+@keyframes notification-preview-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .notification-preview {
+    animation: notification-preview-enter 220ms ease-out;
+  }
+}
+@media (max-width: 640px) {
+  .notification-previews {
+    right: max(12px, env(safe-area-inset-right));
+    width: min(360px, calc(100vw - 24px));
+    gap: 12px;
+  }
+  .notification-preview {
+    padding: 15px 12px 12px;
+    gap: 8px;
+  }
+  .notification-preview-close {
+    width: 44px;
+    height: 44px;
+    top: -17px;
+    right: -4px;
+    border-color: transparent;
+    background: transparent;
+  }
+  .notification-preview-close svg {
+    padding: 3px;
+    width: 23px;
+    height: 23px;
+    border: 1px solid #ddc6c4;
+    border-radius: 50%;
+    background: #fffdfa;
+  }
+}
+@media (max-height: 500px) {
+  .notification-previews {
+    top: max(64px, env(safe-area-inset-top));
+    max-height: 70svh;
+    overflow-y: auto;
+    padding: 12px 4px;
+  }
+}
+/* Clear typography and porcelain surfaces for floating school updates. */
+.notification-previews {
+  width: min(410px, calc(100vw - 24px));
+  gap: 12px;
+  scrollbar-width: none;
+}
+.notification-previews-heading {
+  padding: 7px 12px;
+  border-color: #e7dcd7;
+  background: #fffdfa;
+  color: #65313b;
+  box-shadow: 0 3px 12px #3c202914;
+  letter-spacing: 0.01em;
+}
+.notification-preview {
+  align-items: flex-end;
+  padding: 18px;
+  gap: 14px;
+  border: 1px solid #e2d4d3;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #fffefd 45%, #f8eff0);
+  box-shadow:
+    0 16px 40px -16px #4d263d40,
+    0 3px 8px #4d263d09,
+    inset 0 1px 0 #fff;
+}
+.notification-preview::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 24px;
+  bottom: 24px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: #963c48;
+}
+.notification-preview-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 24px;
+  color: #8a4552;
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.035em;
+  line-height: 1.5;
+}
+.notification-preview-eyebrow svg {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+}
+.notification-preview h2 {
+  margin-top: 7px;
+  padding: 0;
+  color: #382b32;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.45;
+}
+.notification-preview p {
+  color: #695e63;
+  font-size: 12px;
+  line-height: 1.65;
+  margin-top: 7px;
+}
+.notification-preview-time {
+  display: block;
+  margin-top: 10px;
+  color: #85767c;
+  font-size: 10px;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+}
+.notification-preview-close {
+  top: 2px;
+  right: 2px;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: #89747b;
+}
+.notification-preview-close:hover {
+  background: #81293708;
+  color: #812937;
+}
+.notification-preview-close svg {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.notification-preview-view {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 44px;
+  padding: 0 12px;
+  background: #812937;
+  box-shadow:
+    inset 0 1px #ffffff24,
+    0 3px 8px #81293715;
+  border: 1px solid #752332;
+  border-radius: 11px;
+}
+.notification-preview-view svg {
+  width: 13px;
+  height: 13px;
+}
+@media (max-width: 640px) {
+  .notification-preview {
+    padding: 16px 14px;
+    gap: 10px;
+    border-radius: 16px;
+  }
+  .notification-preview h2 {
+    font-size: 13px;
+  }
+  .notification-preview-eyebrow {
+    font-size: 9px;
+  }
+  .notification-preview-view {
+    padding-inline: 10px;
+  }
+}

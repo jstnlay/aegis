@@ -4,6 +4,7 @@ import { Outlet, useLocation } from "react-router-dom"
 
 import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { Header } from "@/components/layout/Header"
+import { NotificationPreviews } from "@/features/notifications/NotificationPreviews"
 import { PageLoading } from "@/components/layout/LoadingScreen"
 import { Sidebar } from "@/components/layout/Sidebar"
 import { SkipLink } from "@/components/layout/SkipLink"
@@ -23,6 +24,7 @@ import "./dashboard-header.css"
 import "./glass-surfaces.css"
 import "@/features/student/student-studio.css"
 import "./workspace-clarity.css"
+import "@/features/notifications/notification-finish.css"
 
 /**
  * Shared application shell for all five roles (admin, faculty, guidance,
@@ -122,6 +124,7 @@ export function AppShell() {
       data-dashboard={/^\/app\/dashboard(?:\/|$)/.test(location.pathname)}
     >
       <SkipLink />
+      <NotificationPreviews />
 
       <Sidebar
         open={menuOpen}
