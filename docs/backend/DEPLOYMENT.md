@@ -90,6 +90,32 @@ enough.
    `no-reply@mail.<your-domain>`. An unverified from-address is silently
    dropped by Resend, and the parent never receives the invitation.
 
+### Mail goes over HTTPS, not SMTP
+
+The free compute plan **blocks outbound traffic on the SMTP ports** (25, 465
+and 587), so an SMTP connection from this deployment never completes: the
+request hangs until the platform's proxy gives up and answers 500, and the
+password reset never arrives. Two ways out:
+
+- **Free plan (current):** use the HTTP API. Set
+
+  | Variable | Value |
+  | --- | --- |
+  | `EMAIL_BACKEND` | `core.email.ResendEmailBackend` |
+  | `RESEND_API_KEY` | the `re_...` key |
+  | `DEFAULT_FROM_EMAIL` | a verified address, or `onboarding@resend.dev` |
+
+  `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD` and
+  `EMAIL_USE_TLS` are then unused.
+- **Paid plan:** Django's own SMTP backend works. Set `EMAIL_BACKEND` to
+  `django.core.mail.backends.smtp.EmailBackend` with `EMAIL_HOST=smtp.resend.com`,
+  `EMAIL_PORT=587`, `EMAIL_HOST_USER=resend`, `EMAIL_HOST_PASSWORD` the key
+  and `EMAIL_USE_TLS=True`.
+
+`EMAIL_TIMEOUT` (default 10 seconds) bounds the attempt either way. Django's
+own default is no timeout at all, which is what let a blocked connect hold the
+request open until the platform killed it.
+
 ## Why the Redis instance exists
 
 The rate limits (login, refresh, import, export, password change,

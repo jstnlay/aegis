@@ -13,10 +13,13 @@ a client error.
 
 from unittest import mock
 
+import contextlib
+
 from django.core.cache import cache
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.mail import EmailMessage
 from django.db.utils import OperationalError
-from django.test import RequestFactory, SimpleTestCase, TestCase
+from django.test import RequestFactory, SimpleTestCase, TestCase, override_settings
 from rest_framework import status
 from rest_framework.exceptions import (
     NotFound,
@@ -29,6 +32,7 @@ from rest_framework.test import APIClient
 from rest_framework.views import APIView
 
 from core.client_ip import client_address, throttle_identity
+from core.email import RESEND_ENDPOINT, ResendEmailBackend
 from core.exceptions import custom_exception_handler, drf_validation_error_from
 from core.throttling import LoginRateThrottle
 
@@ -336,6 +340,102 @@ class ThrottleCountsTheClientTest(SimpleTestCase):
         other = self._get("198.51.100.7", "10.0.0.1")
 
         self.assertEqual(other.status_code, 200)
+
+
+class ResendEmailBackendTests(SimpleTestCase):
+    """
+    The provider's HTTP API, not SMTP.
+
+    The platform's free plan blocks the SMTP ports, so the send has to go
+    over HTTPS - and it has to fail fast and loudly enough that a caller can
+    catch it and still answer the request.
+    """
+
+    @contextlib.contextmanager
+    def _post(self, status_code=200):
+        response = mock.MagicMock()
+        response.raise_for_status.return_value = None
+        response.status_code = status_code
+        with mock.patch(
+            "core.email.requests.post", return_value=response
+        ) as post:
+            yield post
+
+    @override_settings(RESEND_API_KEY="re_test_key")
+    def test_the_message_is_posted_to_the_provider(self):
+        with self._post() as post:
+            sent = ResendEmailBackend().send_messages([
+                EmailMessage(
+                    subject="Your reset link",
+                    body="Open the link.",
+                    from_email="no-reply@example.com",
+                    to=["learner@example.com"],
+                )
+            ])
+
+        self.assertEqual(sent, 1)
+        url = post.call_args.args[0]
+        self.assertEqual(url, RESEND_ENDPOINT)
+        payload = post.call_args.kwargs["json"]
+        self.assertEqual(payload["from"], "no-reply@example.com")
+        self.assertEqual(payload["to"], ["learner@example.com"])
+        self.assertEqual(payload["subject"], "Your reset link")
+        self.assertEqual(payload["text"], "Open the link.")
+        self.assertEqual(
+            post.call_args.kwargs["headers"]["Authorization"], "Bearer re_test_key"
+        )
+
+    @override_settings(RESEND_API_KEY="re_test_key")
+    def test_the_request_is_bounded_by_a_timeout(self):
+        with self._post() as post:
+            ResendEmailBackend().send_messages([
+                EmailMessage(
+                    subject="s", body="b", from_email="no-reply@example.com",
+                    to=["learner@example.com"],
+                )
+            ])
+
+        self.assertIsNotNone(post.call_args.kwargs["timeout"])
+
+    @override_settings(RESEND_API_KEY="re_test_key")
+    def test_a_failure_raises_when_the_caller_wants_to_know(self):
+        with mock.patch(
+            "core.email.requests.post", side_effect=RuntimeError("no route")
+        ):
+            with self.assertRaises(RuntimeError):
+                ResendEmailBackend().send_messages([
+                    EmailMessage(
+                        subject="s", body="b", from_email="no-reply@example.com",
+                        to=["learner@example.com"],
+                    )
+                ])
+
+    @override_settings(RESEND_API_KEY="re_test_key")
+    def test_a_failure_is_swallowed_when_the_caller_asked_for_silence(self):
+        with mock.patch(
+            "core.email.requests.post", side_effect=RuntimeError("no route")
+        ):
+            sent = ResendEmailBackend(fail_silently=True).send_messages([
+                EmailMessage(
+                    subject="s", body="b", from_email="no-reply@example.com",
+                    to=["learner@example.com"],
+                )
+            ])
+
+        self.assertEqual(sent, 0)
+
+    @override_settings(RESEND_API_KEY="")
+    def test_without_a_key_nothing_is_sent(self):
+        with mock.patch("core.email.requests.post") as post:
+            with self.assertRaises(RuntimeError):
+                ResendEmailBackend().send_messages([
+                    EmailMessage(
+                        subject="s", body="b", from_email="no-reply@example.com",
+                        to=["learner@example.com"],
+                    )
+                ])
+
+        post.assert_not_called()
 
 
 class HealthProbeTests(TestCase):

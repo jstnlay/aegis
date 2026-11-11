@@ -366,6 +366,17 @@ EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
 EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=False, cast=bool)
 
+#: How long a mail connection may take before it is given up on. Django's
+#: own default is None - no timeout at all - and an unreachable SMTP server
+#: then holds the request open until the platform's proxy kills it, which
+#: turns a password reset into a 500 instead of an answer. Ten seconds is
+#: long enough for a provider that is up and short enough to stay under the
+#: platform's request limit.
+EMAIL_TIMEOUT = config("EMAIL_TIMEOUT", default=10, cast=int)
+
+#: The key for the provider's HTTP API. Used by ``core.email.ResendEmailBackend``.
+RESEND_API_KEY = config("RESEND_API_KEY", default="")
+
 # ---------------------------------------------------------------------------
 # CORS
 # ---------------------------------------------------------------------------

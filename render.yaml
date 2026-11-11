@@ -122,10 +122,10 @@ services:
         sync: false
 
       # Shared throttle cache and outgoing mail (see docs/backend/DEPLOYMENT.md).
-      # REDIS_URL points at the Render Redis service; without it the rate
-      # limits are enforced per gunicorn worker. The EMAIL_* set is the Resend
-      # SMTP configuration; without EMAIL_BACKEND the service only prints mail
-      # to its logs and no invitation, reset or verification link is delivered.
+      # REDIS_URL points at the Render Redis service; without it the rate limits
+      # are enforced per gunicorn worker. The EMAIL_* set is the SMTP
+      # configuration; without EMAIL_BACKEND the service only prints mail to
+      # its logs and no invitation, reset or verification link is delivered.
       # Declared without values so the required set is discoverable; the values
       # live in the Render dashboard only.
       - key: REDIS_URL
@@ -144,7 +144,13 @@ services:
         sync: false
       - key: EMAIL_USE_TLS
         sync: false
+      - key: EMAIL_TIMEOUT
+        sync: false
       - key: DEFAULT_FROM_EMAIL
+        sync: false
+      # Key for the provider's HTTP API. The free compute plan blocks the
+      # outbound SMTP ports, so mail goes over HTTPS through this key.
+      - key: RESEND_API_KEY
         sync: false
 
       - key: JWT_ACCESS_LIFETIME_MINUTES

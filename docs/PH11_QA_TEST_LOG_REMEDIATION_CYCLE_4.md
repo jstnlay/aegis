@@ -135,6 +135,16 @@ implemented are re-tests, not code work.
   then the last forwarded hop, then the socket address - and every throttle
   class counts against it. `core` tests cover the resolution and the bucket
   behaviour.
+- **Mail could not be sent from the deployment, and the endpoint broke while
+  trying.** With the SMTP settings in place, a password reset for an existing
+  account took 31 seconds and answered 500 while the same request for an
+  unknown account answered 202 in 0.2s. Two causes: Render's free compute
+  plan blocks outbound traffic on the SMTP ports (25, 465, 587), so the
+  connect never completed, and Django's `EMAIL_TIMEOUT` default is `None`,
+  so nothing gave up on it - the request rode into the platform's 30-second
+  proxy timeout. Fixed with `core.email.ResendEmailBackend` (the provider's
+  HTTP API on 443, which the platform allows) and an explicit
+  `EMAIL_TIMEOUT` of 10 seconds for the SMTP path.
 - **The audit trail recorded the CDN's edge, not the client.** `REMOTE_ADDR`
   behind Cloudflare is Cloudflare's address, so the audit's IP column named
   the same edge for every request and identified nobody. The audit now
