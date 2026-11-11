@@ -252,25 +252,39 @@ class HealthProbeTests(TestCase):
         self.assertEqual(response.json(), {"status": "ok"})
 
     def test_readiness_reports_the_database(self):
-        response = self.client.get("/api/v1/ready/")
+        with self.settings(REDIS_URL=""):
+            response = self.client.get("/api/v1/ready/")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(
-            response.json(), {"status": "ok", "database": True, "cache": True}
+            response.json(), {"status": "ok", "database": True, "cache": "local"}
         )
 
-    def test_readiness_reports_a_cache_that_does_not_round_trip(self):
-        """A cache that cannot be reached is reported, not silently ignored."""
+    def test_readiness_reports_a_broken_shared_cache(self):
+        """A shared cache that cannot be reached is reported, not ignored."""
         broken = mock.MagicMock()
         broken.get.return_value = None
 
         with mock.patch("core.health.default_cache", broken):
-            response = self.client.get("/api/v1/ready/")
+            with self.settings(REDIS_URL="redis://red-example:6379"):
+                response = self.client.get("/api/v1/ready/")
 
         # The process can still serve, so it stays ready. It only says so.
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(
-            response.json(), {"status": "ok", "database": True, "cache": False}
+            response.json(), {"status": "ok", "database": True, "cache": "broken"}
+        )
+
+    def test_readiness_reports_a_working_shared_cache(self):
+        working = mock.MagicMock()
+        working.get.return_value = "ok"
+
+        with mock.patch("core.health.default_cache", working):
+            with self.settings(REDIS_URL="redis://red-example:6379"):
+                response = self.client.get("/api/v1/ready/")
+
+        self.assertEqual(
+            response.json(), {"status": "ok", "database": True, "cache": "shared"}
         )
 
     def test_readiness_fails_when_the_database_does_not_answer(self):
@@ -278,13 +292,14 @@ class HealthProbeTests(TestCase):
         broken.cursor.side_effect = OperationalError("no route to host")
 
         with mock.patch("core.health.connection", broken):
-            response = self.client.get("/api/v1/ready/")
+            with self.settings(REDIS_URL=""):
+                response = self.client.get("/api/v1/ready/")
 
         self.assertEqual(
             response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE
         )
         self.assertEqual(
-            response.json(), {"status": "unavailable", "database": False, "cache": True}
+            response.json(), {"status": "unavailable", "database": False, "cache": "local"}
         )
 
     def test_probe_failure_does_not_leak_the_database_error(self):

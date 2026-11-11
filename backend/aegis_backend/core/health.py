@@ -17,11 +17,13 @@ Both report a status and a boolean. Neither reports the database host, the
 driver version, the schema version, the exception, or anything else that
 would help someone map the deployment.
 
-Readiness also reports whether the cache round-trips. The cache is where the
-rate limits are counted, and a misconfigured shared cache is indistinguishable
-from a working one from the outside - every limit is simply not enforced.
+    Readiness also reports which cache the rate limits are counted in: a
+    shared cache, a per-process one, or a shared one that does not answer. A
+    misconfigured shared cache is indistinguishable from a working one from
+    the outside - every limit is simply not enforced - so it has to be said.
 """
 
+from django.conf import settings
 from django.core.cache import cache as default_cache
 from django.db import connection
 from django.db.utils import OperationalError
@@ -51,6 +53,27 @@ def cache_round_trips() -> bool:
         return default_cache.get(key) == "ok"
     except Exception:
         return False
+
+
+def cache_mode() -> str:
+    """
+    Which cache the rate limits are counted in: "shared", "local" or "broken".
+
+    The three states need three different answers, and a boolean cannot tell
+    them apart:
+
+    - "shared"  - a shared cache is configured and answers. One limit for the
+      whole deployment, whatever the worker count.
+    - "local"   - the per-process cache is in use. Every limit is multiplied
+      by the number of workers, and the deployment has no shared history.
+    - "broken"  - a shared cache is configured but does not answer. The
+      client treats it as empty, so no limit is enforced at all.
+
+    It names a topology, not a host, a port or a credential.
+    """
+    if not getattr(settings, "REDIS_URL", ""):
+        return "local"
+    return "shared" if cache_round_trips() else "broken"
 
 
 class HealthRateThrottle(AnonRateThrottle):
@@ -96,10 +119,10 @@ def ready(request):
             cursor.fetchone()
     except OperationalError:
         return Response(
-            {"status": "unavailable", "database": False, "cache": cache_round_trips()},
+            {"status": "unavailable", "database": False, "cache": cache_mode()},
             status=status.HTTP_503_SERVICE_UNAVAILABLE,
         )
 
     return Response(
-        {"status": "ok", "database": True, "cache": cache_round_trips()}
+        {"status": "ok", "database": True, "cache": cache_mode()}
     )

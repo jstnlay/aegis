@@ -15,7 +15,7 @@ have nothing to configure.
 After the redeploy:
 
 - `GET https://aegis-0pav.onrender.com/health/` → `{"status":"ok"}`
-- `GET https://aegis-0pav.onrender.com/ready/` → `{"status":"ok","database":true,"cache":true}`
+- `GET https://aegis-0pav.onrender.com/ready/` → `{"status":"ok","database":true,"cache":"shared"}`
 - `GET https://aegis-0pav.onrender.com/admin/` → 404 (the admin site is off
   in production; it was published before this change)
 
@@ -107,10 +107,15 @@ system down.
 
 1. `GET https://aegis-0pav.onrender.com/health/` → 200
 2. `GET https://aegis-0pav.onrender.com/ready/` → 200 with `"database":true`
-   and `"cache":true`. `"cache":false` means the shared cache the rate limits
-   are counted in does not round-trip: the limits are not being enforced, and
-   the API is still serving. Check `REDIS_URL` and that the Redis instance
-   and the API service share a region.
+   and `"cache":"shared"`. The cache field says which cache the rate limits
+   are counted in:
+   - `"shared"` — Redis is configured and answers. One limit for the whole
+     deployment.
+   - `"local"` — the per-process cache is in use. Every limit is multiplied by
+     the number of workers.
+   - `"broken"` — Redis is configured but does not answer. The client treats
+     it as empty, so no limit is enforced at all. Check `REDIS_URL` and that
+     the Redis instance and the API service share a region.
 3. From one machine, make 16 failed sign-in requests to
    `POST https://aegis-0pav.onrender.com/api/v1/auth/login/`. The 16th must
    answer **429** with a `Retry-After` header. If it answers 401, the limit is
