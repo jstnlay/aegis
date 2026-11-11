@@ -113,20 +113,23 @@ fires. That is not a hypothetical: it is what this deployment did until the
 identity was fixed, and the symptom is a login endpoint that answers 401
 forever.
 
-`core.throttling.client_ident` resolves the client in this order:
+`core.client_ip` resolves the client address in two ways, because the two
+consumers need different things:
 
-1. `CF-Connecting-IP` - the header Cloudflare writes on every request it
-   forwards, naming the client as Cloudflare sees it. Cloudflare overwrites
-   it, so a client cannot choose it.
-2. The last hop of `X-Forwarded-For` - the address the outermost proxy
-   observed.
-3. `REMOTE_ADDR` - the socket address, used when nothing is in front.
+- **Rate limits** (`throttle_identity`) — the CDN's client-IP header first
+  (Cloudflare overwrites it, so a client cannot choose it), then the last hop
+  of `X-Forwarded-For`, then the socket address. A limit needs one bucket per
+  client, and behind a proxy the socket address is the proxy's.
+- **The audit trail** (`client_address`) — the CDN's client-IP header, then
+  the socket address. `X-Forwarded-For` is never used there: it is a header
+  the client writes, and the audit must not record a value the actor chose.
+  Without the CDN header the recorded address would be Cloudflare's edge,
+  which is the same for every request and identifies nobody.
 
 Note that the origin is also reachable directly, without Cloudflare, and a
-direct request can set that header itself. The rate limits are a
-defense-in-depth layer on top of password hashing and account state, not the
-only protection, and the audit trail records the socket address rather than
-any forwarded value.
+direct request can set the CDN header itself. Both are therefore best-effort
+against an actor who bypasses the CDN; the socket address remains the value
+that cannot be chosen.
 
 ## Verifying it
 

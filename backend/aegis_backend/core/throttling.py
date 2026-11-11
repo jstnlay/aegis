@@ -18,53 +18,24 @@ which is indistinguishable from having no limit at all. That is not a
 hypothetical - it is what happened to this deployment, where the CDN sits in
 front of the app server and the whole chain changed on every request.
 
-So the identity is resolved here, once, in ``client_ident``: the CDN's own
-client-IP header first (the CDN overwrites it on every request, so it names
-the client and is not under the client's control), then the last forwarded
-hop, then the socket address.
+So the identity is resolved here, once, in ``core.client_ip.throttle_identity``:
+the CDN's own client-IP header first (the CDN overwrites it on every request,
+so it names the client and is not under the client's control), then the last
+forwarded hop, then the socket address.
 """
 
 from rest_framework.throttling import AnonRateThrottle, SimpleRateThrottle
 
 import hashlib
 
-#: The header Cloudflare sets on every request it forwards to an origin. It
-#: names the client as the CDN sees it and is overwritten on every request,
-#: so a client cannot choose it. The deployment's public URL is served
-#: through Cloudflare, which is why this header exists here at all.
-CDN_CLIENT_IP_HEADER = "HTTP_CF_CONNECTING_IP"
-
-
-def client_ident(request) -> str:
-    """
-    The client address a rate limit is counted against.
-
-    Ordered by how much the value can be trusted:
-
-    1. the CDN's client-IP header - written by the CDN, not the client;
-    2. the last hop of ``X-Forwarded-For`` - the address the outermost proxy
-       observed, appended by that proxy;
-    3. the socket address - always present, and the only one available
-       without a proxy in front.
-    """
-    value = request.META.get(CDN_CLIENT_IP_HEADER)
-    if value:
-        return value.strip()
-
-    forwarded = request.META.get("HTTP_X_FORWARDED_FOR")
-    if forwarded:
-        hops = [hop.strip() for hop in forwarded.split(",") if hop.strip()]
-        if hops:
-            return hops[-1]
-
-    return request.META.get("REMOTE_ADDR", "")
+from core.client_ip import throttle_identity
 
 
 class ClientIdentMixin:
     """Counts a limit against the project client identity, not the chain."""
 
     def get_ident(self, request):
-        return client_ident(request)
+        return throttle_identity(request)
 
 
 class LoginRateThrottle(ClientIdentMixin, AnonRateThrottle):

@@ -28,8 +28,9 @@ from rest_framework.response import Response
 from rest_framework.test import APIClient
 from rest_framework.views import APIView
 
+from core.client_ip import client_address, throttle_identity
 from core.exceptions import custom_exception_handler, drf_validation_error_from
-from core.throttling import LoginRateThrottle, client_ident
+from core.throttling import LoginRateThrottle
 
 
 class DjangoValidationErrorTranslationTests(SimpleTestCase):
@@ -240,7 +241,7 @@ class ErrorMessageSummaryTests(SimpleTestCase):
         self.assertEqual(response.data["error"]["message"], "order: Already used.")
 
 class ClientIdentTests(SimpleTestCase):
-    """Which address a rate limit is counted against."""
+    """Which address a rate limit is counted against, and which is audited."""
 
     def setUp(self):
         self.factory = RequestFactory()
@@ -253,7 +254,8 @@ class ClientIdentTests(SimpleTestCase):
             REMOTE_ADDR="10.0.0.1",
         )
 
-        self.assertEqual(client_ident(request), "203.0.113.5")
+        self.assertEqual(throttle_identity(request), "203.0.113.5")
+        self.assertEqual(client_address(request), "203.0.113.5")
 
     def test_the_last_forwarded_hop_is_used_without_a_cdn_header(self):
         request = self.factory.get(
@@ -262,12 +264,23 @@ class ClientIdentTests(SimpleTestCase):
             REMOTE_ADDR="10.0.0.1",
         )
 
-        self.assertEqual(client_ident(request), "2.2.2.2")
+        self.assertEqual(throttle_identity(request), "2.2.2.2")
+
+    def test_the_audit_ignores_the_forwarded_chain(self):
+        """The audit must not record a value the client chose."""
+        request = self.factory.get(
+            "/",
+            HTTP_X_FORWARDED_FOR="1.1.1.1, 2.2.2.2",
+            REMOTE_ADDR="10.0.0.1",
+        )
+
+        self.assertEqual(client_address(request), "10.0.0.1")
 
     def test_the_socket_address_is_the_fallback(self):
         request = self.factory.get("/", REMOTE_ADDR="10.0.0.1")
 
-        self.assertEqual(client_ident(request), "10.0.0.1")
+        self.assertEqual(throttle_identity(request), "10.0.0.1")
+        self.assertEqual(client_address(request), "10.0.0.1")
 
 
 class _ThrottledView(APIView):

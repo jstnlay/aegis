@@ -384,6 +384,25 @@ class MiddlewareCaptureTest(TestCase):
         observed = self._run(request)
         self.assertEqual(observed["ip"], "203.0.113.9")
 
+    def test_the_cdn_client_address_is_recorded(self):
+        """Behind the CDN the socket address is the CDN's edge, not a client."""
+        request = RequestFactory().get(
+            "/x/",
+            REMOTE_ADDR="203.0.113.9",
+            HTTP_CF_CONNECTING_IP="198.51.100.4",
+        )
+        observed = self._run(request)
+        self.assertEqual(observed["ip"], "198.51.100.4")
+
+    def test_a_client_cannot_choose_the_recorded_address_with_x_forwarded_for(self):
+        request = RequestFactory().get(
+            "/x/",
+            REMOTE_ADDR="203.0.113.9",
+            HTTP_X_FORWARDED_FOR="6.6.6.6",
+        )
+        observed = self._run(request)
+        self.assertNotEqual(observed["ip"], "6.6.6.6")
+
     def test_ipv6_passthrough(self):
         request = RequestFactory().get("/x/", REMOTE_ADDR="2001:db8::42")
         observed = self._run(request)

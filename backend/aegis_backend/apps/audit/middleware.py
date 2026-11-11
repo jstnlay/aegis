@@ -30,13 +30,18 @@ Guarantees
 - The context token returned by ``ContextVar.set()`` is reset in a
   ``finally`` block, so normal responses, exceptions, and downstream
   middleware failures all tear the context down.
-- Only ``REMOTE_ADDR`` is trusted for the client IP.  ``X-Forwarded-For``
-  and other proxy headers are ignored.
+- Only the client address is recorded for the IP, and never a value the
+  client chose. ``X-Forwarded-For`` is ignored: it is a header the client
+  writes. The CDN's own client-IP header is used when it is present,
+  because the CDN overwrites it on every request it forwards - without it
+  the recorded address would be the CDN's edge, which is the same for every
+  request and identifies nobody.
 - The request object is not stored: only a weak reference feeds the lazy
   actor cell, and IP / user-agent are captured as plain values.
 """
 
 from apps.audit.context import AuditContext, _LazyUser, set_audit_context, reset_audit_context
+from core.client_ip import client_address
 
 
 class AuditContextMiddleware:
@@ -59,11 +64,8 @@ class AuditContextMiddleware:
 
 
 def _ip_address(request):
-    """Direct client address only.  Proxy headers are never trusted."""
-    address = request.META.get("REMOTE_ADDR")
-    if not address:
-        return None
-    return address
+    """The client address. Proxy headers written by the client are never trusted."""
+    return client_address(request) or None
 
 
 def _user_agent(request):

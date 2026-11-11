@@ -131,10 +131,17 @@ implemented are re-tests, not code work.
   chain that ends in a proxy hop which changes from request to request, so
   every request landed in its own throttle bucket: 130 consecutive failed
   logins answered 401 and never the 429 the 15/min limit owes. The identity
-  is now resolved in `core.throttling.client_ident` (the CDN's own client-IP
-  header first, then the last forwarded hop, then the socket address) and
-  every throttle class counts against it. `core` tests cover the resolution
-  and the bucket behaviour.
+  is now resolved in `core.client_ip` - the CDN's own client-IP header first,
+  then the last forwarded hop, then the socket address - and every throttle
+  class counts against it. `core` tests cover the resolution and the bucket
+  behaviour.
+- **The audit trail recorded the CDN's edge, not the client.** `REMOTE_ADDR`
+  behind Cloudflare is Cloudflare's address, so the audit's IP column named
+  the same edge for every request and identified nobody. The audit now
+  records the CDN's client-IP header, which the CDN overwrites on every
+  request, and still ignores `X-Forwarded-For` - a header the client writes,
+  which the audit must never record. The resolver lives in `core.client_ip`
+  with the throttle's, and the two trust rules are deliberately different.
 
 - **TC-SYS-03** — the harness did not exist; it now does:
   `backend/scripts/loadtest.js` (k6: login + health + an authenticated read,
