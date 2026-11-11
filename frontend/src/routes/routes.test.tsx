@@ -360,7 +360,10 @@ describe("PH11.8 guidance routes", () => {
       marker: /Students with guidance activity/i,
     },
     { path: "/app/assessments", marker: /assessments you created/i },
-    { path: "/app/account-settings", marker: /cannot be changed here/i },
+    {
+      path: "/app/account-settings",
+      marker: /School records and account access are managed by the school/i,
+    },
   ]
 
   it.each(GUIDANCE_CASES)(
