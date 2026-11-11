@@ -24,9 +24,11 @@ type Segment =
 /**
  * Where the bytes for an image live.
  *
- * An absolute URL is an authored external link and is used as it is. Anything
- * else is a file on the CMS, which Django serves through its proxy: the
- * public route for the landing page, the signed-in route everywhere else.
+ * An absolute URL that is not a CMS upload is an authored external link
+ * (a CDN, or Supabase Storage) and is used as it is. A CMS upload - a
+ * path under `/uploads/` - is served by Django's proxy for that
+ * announcement, because uploaded CMS media is never fetched from the CMS
+ * origin directly (SEC-007).
  */
 function imageSrc(
   url: string | undefined,
@@ -34,7 +36,11 @@ function imageSrc(
   isPublic: boolean
 ): string | null {
   if (!url) return null
-  if (/^https?:\/\//i.test(url)) return url
+  const isAbsolute = /^https?:\/\//i.test(url)
+  const isCmsUpload = isAbsolute
+    ? new URL(url).pathname.startsWith("/uploads/")
+    : url.startsWith("/uploads/")
+  if (isAbsolute && !isCmsUpload) return url
   if (!documentId) return null
   const path = isPublic
     ? `announcements/public/${encodeURIComponent(documentId)}/image/`

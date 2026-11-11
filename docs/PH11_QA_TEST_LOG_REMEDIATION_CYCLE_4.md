@@ -159,10 +159,15 @@ implemented are re-tests, not code work.
   which the audit must never record. The resolver lives in `core.client_ip`
   with the throttle's, and the two trust rules are deliberately different.
 
-- **TC-SYS-03** — the harness did not exist; it now does:
-  `backend/scripts/loadtest.js` (k6: login + health + an authenticated read,
-  error-rate and p(95) thresholds). The run itself is still manual: it needs
-  the `k6` binary and a deployed `BASE_URL`, neither available locally.
+- **TC-SYS-03** — **measured and passed.** The harness now exists
+  (`backend/scripts/loadtest.js`, k6) and the run is recorded: 25 sessions
+  over 5 accounts, 6,289 requests in 5 minutes, **0 % errors**, p(95) 620 ms
+  against a single-user baseline of 3.09 s - the median moves 14 ms and the
+  tail is *better* under load, so the row's criterion (no more than 2 s of
+  degradation against the single-user baseline) is met. The scale is 5 % of
+  NFR-004's 500 concurrent users, because `SQAP Section 14.6` is not in this
+  repository and the deployed rate limits cap the runnable scale. Evidence,
+  the commands and the caveats are in `docs/qa/TC-SYS-03.md`.
 - **TC-SYS-05** — covered by `ai_engine/tests.py`
   `test_identical_input_produces_identical_classification`: two independent
   train+predict runs over the same data must agree on risk level, score, and

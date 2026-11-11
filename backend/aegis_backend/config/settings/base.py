@@ -240,6 +240,53 @@ MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 # ---------------------------------------------------------------------------
+# Media storage
+# ---------------------------------------------------------------------------
+#
+# Uploads (profile photos) are written to the service's own disk by default.
+# The free Render plan has no persistent disk, so those files are lost on the
+# next redeploy. When the Supabase Storage variables below are set, uploads
+# go to that bucket instead and the URLs point at it, so they survive.
+#
+# The bucket is public: the browser loads the object directly, which is the
+# same rule the CMS already follows for media on a foreign host (SEC-007).
+# Profile photos are not role-scoped in the same way as CMS media - every
+# signed-in user can already see another user's picture in the sidebar.
+SUPABASE_S3_ENDPOINT = config("SUPABASE_S3_ENDPOINT", default="")
+SUPABASE_S3_BUCKET = config("SUPABASE_S3_BUCKET", default="")
+SUPABASE_S3_REGION = config("SUPABASE_S3_REGION", default="ap-southeast-1")
+SUPABASE_S3_ACCESS_KEY = config("SUPABASE_S3_ACCESS_KEY", default="")
+SUPABASE_S3_SECRET_KEY = config("SUPABASE_S3_SECRET_KEY", default="")
+#: The public base URL of the bucket. Derived from the endpoint when it is
+#: left empty, so only the endpoint, bucket and the two keys are needed.
+SUPABASE_S3_PUBLIC_URL = config("SUPABASE_S3_PUBLIC_URL", default="")
+
+if SUPABASE_S3_BUCKET and SUPABASE_S3_ACCESS_KEY and SUPABASE_S3_SECRET_KEY:
+    STORAGES = {
+        "default": {"BACKEND": "storages.backends.s3.S3Storage"},
+    }
+    AWS_ACCESS_KEY_ID = SUPABASE_S3_ACCESS_KEY
+    AWS_SECRET_ACCESS_KEY = SUPABASE_S3_SECRET_KEY
+    AWS_STORAGE_BUCKET_NAME = SUPABASE_S3_BUCKET
+    AWS_S3_ENDPOINT_URL = SUPABASE_S3_ENDPOINT or None
+    AWS_S3_REGION_NAME = SUPABASE_S3_REGION
+    # Supabase's S3 endpoint is addressed path-style.
+    AWS_S3_ADDRESSING_STYLE = "path"
+    # The bucket is public, so the object URL needs no signature.
+    AWS_QUERYSTRING_AUTH = False
+    AWS_DEFAULT_ACL = None
+    # A new photo must not overwrite the previous one.
+    AWS_S3_FILE_OVERWRITE = False
+
+    if SUPABASE_S3_PUBLIC_URL:
+        MEDIA_URL = SUPABASE_S3_PUBLIC_URL.rstrip("/") + "/"
+    elif "/storage/v1/s3" in SUPABASE_S3_ENDPOINT:
+        MEDIA_URL = (
+            SUPABASE_S3_ENDPOINT.split("/storage/v1/s3")[0]
+            + f"/storage/v1/object/public/{SUPABASE_S3_BUCKET}/"
+        )
+
+# ---------------------------------------------------------------------------
 # Upload limits (Phase 8: data import)
 #
 # Uploaded files are untrusted input. DATA_UPLOAD_MAX_MEMORY_SIZE bounds the

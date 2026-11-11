@@ -33,6 +33,18 @@ const deniedExecutableTypes = [
  * filesystem provider, so an unconfigured deployment still boots and
  * existing local files keep serving. No provider is switched
  * unconditionally, and nothing deletes or rewrites existing files.
+ *
+ * Two details are specific to Supabase and were the reason an upload with
+ * a complete configuration still failed with a 500:
+ *
+ * - the endpoint is addressed path-style, not virtual-host style;
+ * - the bucket rejects the ACL header the provider sends by default, so
+ *   `ACL` is present and undefined, which makes the provider leave the
+ *   header off.
+ *
+ * The public base URL is what the stored file URL is built from, so the
+ * browser loads the object straight from the bucket. It is derived from
+ * the endpoint and can be overridden with SUPABASE_S3_PUBLIC_URL.
  */
 const s3ProviderOptions = ({
   env,
@@ -46,14 +58,33 @@ const s3ProviderOptions = ({
   }
   return {
     credentials: { accessKeyId, secretAccessKey },
-    region: env('SUPABASE_S3_REGION', 'us-east-1'),
+    region: env('SUPABASE_S3_REGION', 'ap-southeast-1'),
     endpoint,
-    params: { Bucket: bucket },
+    forcePathStyle: true,
+    requestChecksumCalculation: 'WHEN_REQUIRED',
+    params: { Bucket: bucket, ACL: undefined },
   };
+};
+
+/** The public URL the bucket serves its objects from. */
+const s3PublicUrl = ({
+  env,
+}: Core.Config.Shared.ConfigParams): string | undefined => {
+  const endpoint = env('SUPABASE_S3_ENDPOINT', '');
+  const bucket = env('SUPABASE_S3_BUCKET', '');
+  const explicit = env('SUPABASE_S3_PUBLIC_URL', '');
+  if (explicit) {
+    return explicit.replace(/\/+$/, '');
+  }
+  if (!endpoint || !bucket) {
+    return undefined;
+  }
+  return `${endpoint.replace(/\/+$/, '').replace(/\/storage\/v1\/s3$/, '/storage/v1/object/public')}/${bucket}`;
 };
 
 const config = ({ env }: Core.Config.Shared.ConfigParams): Core.Config.Plugin => {
   const providerOptions = s3ProviderOptions({ env });
+  const publicUrl = s3PublicUrl({ env });
   return {
     'users-permissions': {
       config: {
@@ -72,6 +103,7 @@ const config = ({ env }: Core.Config.Shared.ConfigParams): Core.Config.Plugin =>
           ? {
               provider: 'aws-s3',
               providerOptions: {
+                ...(publicUrl ? { baseUrl: publicUrl } : {}),
                 s3Options: providerOptions,
               },
             }
