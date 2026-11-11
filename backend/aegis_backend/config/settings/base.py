@@ -173,6 +173,13 @@ def _default_cache():
                 "LOCATION": REDIS_URL,
                 "OPTIONS": {
                     "CLIENT_CLASS": "django_redis.client.DefaultClient",
+                    # Fail fast instead of hanging: a wrong host or an
+                    # unreachable instance must cost a second, not the
+                    # request. The rate limits depend on this cache, and a
+                    # cache that answers slowly would slow every endpoint
+                    # that reads it.
+                    "SOCKET_CONNECT_TIMEOUT": 2,
+                    "SOCKET_TIMEOUT": 2,
                     # A Redis outage must not take the API down with it. With
                     # this, a cache that cannot be reached is treated as an
                     # empty cache: the request is served, and the rate limit

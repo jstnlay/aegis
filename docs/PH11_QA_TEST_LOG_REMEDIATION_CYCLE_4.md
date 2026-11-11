@@ -116,6 +116,17 @@ implemented are re-tests, not code work.
 
 ## Blocked / manual-evidence items (Cycle 4 log)
 
+- **Redis shared cache (SEC-002 in the deployed environment)** — a 40-attempt
+  probe of `POST /api/v1/auth/login/` against the deployed service returned
+  401 every time and never the 429 the 15/min limit owes. `REDIS_URL` is set,
+  but the Redis client is configured with `IGNORE_EXCEPTIONS`, so an
+  unreachable cache behaves as an empty one: every rate limit is silently off
+  and nothing says so. `/ready/` now reports a `cache` boolean from a real
+  cache round-trip, the Redis client fails fast (2s socket timeouts), and
+  `docs/backend/DEPLOYMENT.md` records the check. Cause is still dashboard
+  side: `REDIS_URL` value or a region mismatch between the API service and the
+  Redis instance.
+
 - **TC-SYS-03** — the harness did not exist; it now does:
   `backend/scripts/loadtest.js` (k6: login + health + an authenticated read,
   error-rate and p(95) thresholds). The run itself is still manual: it needs

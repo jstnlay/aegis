@@ -255,7 +255,23 @@ class HealthProbeTests(TestCase):
         response = self.client.get("/api/v1/ready/")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.json(), {"status": "ok", "database": True})
+        self.assertEqual(
+            response.json(), {"status": "ok", "database": True, "cache": True}
+        )
+
+    def test_readiness_reports_a_cache_that_does_not_round_trip(self):
+        """A cache that cannot be reached is reported, not silently ignored."""
+        broken = mock.MagicMock()
+        broken.get.return_value = None
+
+        with mock.patch("core.health.default_cache", broken):
+            response = self.client.get("/api/v1/ready/")
+
+        # The process can still serve, so it stays ready. It only says so.
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.json(), {"status": "ok", "database": True, "cache": False}
+        )
 
     def test_readiness_fails_when_the_database_does_not_answer(self):
         broken = mock.MagicMock()
@@ -268,7 +284,7 @@ class HealthProbeTests(TestCase):
             response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE
         )
         self.assertEqual(
-            response.json(), {"status": "unavailable", "database": False}
+            response.json(), {"status": "unavailable", "database": False, "cache": True}
         )
 
     def test_probe_failure_does_not_leak_the_database_error(self):
