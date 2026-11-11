@@ -131,6 +131,43 @@ What each role can reach with the client data:
 Attendance, counseling and Terms 2-3 stay on the synthetic data described
 below: the client workbooks carry none of them.
 
+### Against the deployed DEV/QA service
+
+The credentials from the local run exist only in the local database. The
+Render build creates the QA accounts and the synthetic dataset
+(`render.yaml`), but it never runs the client import, so the deployed
+service has no client learner, no client section and no parent login yet.
+A learner email from the local CSV therefore answers "No active account
+found with the given credentials".
+
+Load the client data into the deployed database once, from this checkout,
+by pointing the settings at it. Take the host, user and password from the
+Render service's `DATABASE_*` variables (the user carries the Supabase
+project ref):
+
+```powershell
+cd backend/aegis_backend
+$env:DATABASE_HOST = "aws-0-ap-southeast-1.pooler.supabase.com"
+$env:DATABASE_USER = "postgres.<project-ref>"
+$env:DATABASE_PASSWORD = "<password>"
+
+python manage.py provision_client_school
+python manage.py import_client_datasets
+python manage.py provision_client_access --finalize-grades --output C:\temp\client-credentials.csv
+python manage.py run_risk_computation
+```
+
+Environment variables win over `.env`, so the local database is not
+touched. Keep the order: the school structure first, the roster before the
+grades, credentials and publication last. Do not re-run
+`import_client_datasets` after `--finalize-grades`: the importer refuses to
+overwrite a finalized grade, so the second import reports those rows as
+errors.
+
+This is a one-time load. The Render build does not import the workbooks on
+purpose -- every deploy would hit the finalized-grade lock once the grades
+are published.
+
 ## What the workbooks do not carry
 
 | Missing | Where the evidence lives instead |
