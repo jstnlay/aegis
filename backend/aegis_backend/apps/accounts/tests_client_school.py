@@ -34,6 +34,7 @@ from apps.accounts.management.commands.provision_qa_accounts import PASSWORD_ENV
 from apps.academics.models import (
     AcademicYear,
     GradeLevel,
+    GradingPeriod,
     Section,
     Subject,
     SubjectAssignment,
@@ -146,6 +147,18 @@ class ClientSchoolStructureTest(ClientSchoolTestCase):
                 GradeLevel.objects.filter(level_number=level_number).exists()
             )
         self.assertTrue(AcademicYear.objects.filter(name="2026-2027").exists())
+
+    def test_it_creates_the_grading_periods_the_import_needs(self):
+        """A grade import resolves Term 1 by name; it has to exist."""
+        run_provision(stdout=io.StringIO())
+
+        academic_year = AcademicYear.objects.get(name="2026-2027")
+        names = set(
+            GradingPeriod.objects.filter(academic_year=academic_year).values_list(
+                "name", flat=True
+            )
+        )
+        self.assertEqual(names, {"Term 1", "Term 2", "Term 3"})
 
 
 class ClientSchoolLoginTest(ClientSchoolTestCase):

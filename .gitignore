@@ -43,6 +43,9 @@ htmlcov/
 
 # Local development artifacts
 *.local
+
+# Plaintext credentials written by `manage.py provision_client_access`
+client-credentials*.csv
 local_settings.py
 
 # Strapi CMS (Phase 7)

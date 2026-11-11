@@ -15,9 +15,9 @@ nothing -- and it never writes a learner record.
 
 What it writes
 --------------
-* the academic year, the grade levels and the eight learning areas per level
-  (reused from the QA seed: the codes are what the ECR reader emits, e.g.
-  ``FIL-7``);
+* the academic year, its three grading periods, the grade levels and the eight
+  learning areas per level (reused from the QA seed: the codes are what the
+  ECR reader emits, e.g. ``FIL-7``);
 * one faculty account per client section, with the adviser the workbook
   names;
 * one section per client class, with that adviser;
@@ -47,6 +47,7 @@ from django.db import transaction
 from apps.academics.models import (
     AcademicYear,
     GradeLevel,
+    GradingPeriod,
     Section,
     Subject,
     SubjectAssignment,
@@ -56,6 +57,7 @@ from apps.accounts.management.commands.seed_qa_dataset import (
     ACADEMIC_YEAR_END,
     ACADEMIC_YEAR_NAME,
     ACADEMIC_YEAR_START,
+    GRADING_PERIODS,
     LEARNING_AREAS,
 )
 from apps.accounts.models import FacultyProfile
@@ -89,6 +91,7 @@ class Command(BaseCommand):
 
         with transaction.atomic():
             academic_year = self._ensure_academic_year()
+            self._ensure_grading_periods(academic_year)
             grade_levels = self._ensure_grade_levels()
             subjects = self._ensure_subjects(grade_levels)
 
@@ -141,6 +144,17 @@ class Command(BaseCommand):
             f"{'CREATED' if created else 'EXISTS '} academic_year={year.name}"
         )
         return year
+
+    def _ensure_grading_periods(self, academic_year):
+        for name, order, start, end in GRADING_PERIODS:
+            period, created = GradingPeriod.objects.get_or_create(
+                academic_year=academic_year,
+                name=name,
+                defaults={"order": order, "start_date": start, "end_date": end},
+            )
+            self.stdout.write(
+                f"{'CREATED' if created else 'EXISTS '} grading_period={period.name}"
+            )
 
     def _ensure_grade_levels(self):
         grade_levels = {}

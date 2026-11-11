@@ -24,6 +24,7 @@ PH9.5: Notification integration.
 from __future__ import annotations
 
 import logging
+from decimal import Decimal, ROUND_HALF_UP
 
 from django.utils import timezone
 
@@ -125,11 +126,20 @@ def integrate_risk_result(
     now = timezone.now()
     computed_status = prediction.get("computation_status", "ready")
 
+    # The model predicts a float; RiskScore stores two decimal places. A float
+    # such as 66.67 is 66.669999... as a Decimal, which the field rejects, so
+    # round through the string form before persisting.
+    stored_score = prediction.get("risk_score")
+    if stored_score is not None:
+        stored_score = Decimal(str(stored_score)).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
+
     # --- Always store RiskScore (history) ---
     risk_score_obj = RiskScore.objects.create(
         student=student_profile,
         computation_status=computed_status,
-        risk_score=prediction.get("risk_score"),
+        risk_score=stored_score,
         risk_level=prediction.get("risk_level"),
         model_version=model_version,
         feature_snapshot=feature_snapshot or {},
