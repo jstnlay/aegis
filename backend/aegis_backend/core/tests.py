@@ -35,8 +35,10 @@ from core.client_ip import client_address, throttle_identity
 from core.email import (
     BREVO_ENDPOINT,
     RESEND_ENDPOINT,
+    SMTP2GO_ENDPOINT,
     BrevoEmailBackend,
     ResendEmailBackend,
+    Smtp2GoEmailBackend,
 )
 from core.exceptions import custom_exception_handler, drf_validation_error_from
 from core.throttling import LoginRateThrottle
@@ -449,6 +451,55 @@ class ResendEmailBackendTests(HttpApiEmailBackendTestsMixin, SimpleTestCase):
         self.assertEqual(
             post.call_args.kwargs["headers"]["Authorization"], "Bearer re_test_key"
         )
+
+
+class Smtp2GoEmailBackendTests(HttpApiEmailBackendTestsMixin, SimpleTestCase):
+    backend_class = Smtp2GoEmailBackend
+    endpoint = SMTP2GO_ENDPOINT
+    key_setting = "SMTP2GO_API_KEY"
+    key_value = "api-test-key"
+
+    def test_the_payload_and_the_api_key_header(self):
+        with self._key_override(self.key_value):
+            with self._post() as post:
+                Smtp2GoEmailBackend().send_messages([self._message()])
+
+        payload = post.call_args.kwargs["json"]
+        self.assertEqual(payload["sender"], "no-reply@example.com")
+        self.assertEqual(payload["to"], ["learner@example.com"])
+        self.assertEqual(payload["text_body"], "Open the link.")
+        self.assertIn("Open the link.", payload["html_body"])
+        self.assertEqual(
+            post.call_args.kwargs["headers"]["X-Smtp2go-Api-Key"], "api-test-key"
+        )
+
+    def test_a_send_that_reached_nobody_is_a_failure(self):
+        """The provider answers 200 even when it delivered nothing."""
+        response = mock.MagicMock()
+        response.raise_for_status.return_value = None
+        response.json.return_value = {
+            "data": {"succeeded": 0, "failed": 1, "failures": ["bad address"]}
+        }
+
+        with self._key_override(self.key_value):
+            with mock.patch(
+                "core.email.requests.post", return_value=response
+            ):
+                with self.assertRaises(RuntimeError):
+                    Smtp2GoEmailBackend().send_messages([self._message()])
+
+    def test_a_send_that_reached_somebody_is_a_success(self):
+        response = mock.MagicMock()
+        response.raise_for_status.return_value = None
+        response.json.return_value = {"data": {"succeeded": 1, "failed": 0}}
+
+        with self._key_override(self.key_value):
+            with mock.patch(
+                "core.email.requests.post", return_value=response
+            ):
+                sent = Smtp2GoEmailBackend().send_messages([self._message()])
+
+        self.assertEqual(sent, 1)
 
 
 class BrevoEmailBackendTests(HttpApiEmailBackendTestsMixin, SimpleTestCase):

@@ -382,6 +382,11 @@ RESEND_API_KEY = config("RESEND_API_KEY", default="")
 #: works for a deployment without a domain of its own.
 BREVO_API_KEY = config("BREVO_API_KEY", default="")
 
+#: The key for the third provider's HTTP API. Used by
+#: ``core.email.Smtp2GoEmailBackend``, which also accepts a single verified
+#: email address as a sender.
+SMTP2GO_API_KEY = config("SMTP2GO_API_KEY", default="")
+
 # ---------------------------------------------------------------------------
 # CORS
 # ---------------------------------------------------------------------------

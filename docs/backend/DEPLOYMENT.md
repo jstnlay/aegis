@@ -91,8 +91,9 @@ password reset never arrives. Two ways out:
 
   | Variable | Value |
   | --- | --- |
-  | `EMAIL_BACKEND` | `core.email.BrevoEmailBackend` (or `core.email.ResendEmailBackend`) |
+  | `EMAIL_BACKEND` | `core.email.BrevoEmailBackend`, `core.email.Smtp2GoEmailBackend` or `core.email.ResendEmailBackend` |
   | `BREVO_API_KEY` | the Brevo key, for the Brevo backend |
+  | `SMTP2GO_API_KEY` | the SMTP2GO key, for the SMTP2GO backend |
   | `RESEND_API_KEY` | the Resend key, for the Resend backend |
   | `DEFAULT_FROM_EMAIL` | a verified sender address |
 
@@ -101,9 +102,9 @@ password reset never arrives. Two ways out:
 
   The two providers differ in one way that matters here. **Resend** needs a
   verified *domain* to send to anyone; until one is verified it delivers only
-  to the address on the Resend account. **Brevo** needs a verified *email
-  address*, which is enough to send to anyone - so a deployment without a
-  domain of its own can still deliver.
+  to the address on the Resend account. **Brevo** and **SMTP2GO** need a
+  verified *email address*, which is enough to send to anyone - so a
+  deployment without a domain of its own can still deliver.
 - **Paid plan:** Django's own SMTP backend works. Set `EMAIL_BACKEND` to
   `django.core.mail.backends.smtp.EmailBackend` with `EMAIL_HOST=smtp.resend.com`,
   `EMAIL_PORT=587`, `EMAIL_HOST_USER=resend`, `EMAIL_HOST_PASSWORD` the key
@@ -139,6 +140,22 @@ request open until the platform killed it.
    key, and `DEFAULT_FROM_EMAIL` to the verified address.
 5. Free tier: 300 mails a day, which is far beyond what a school needs in a
    day of testing.
+
+### SMTP2GO, step by step (also no domain)
+
+1. Sign up at **smtp2go.com**. The free plan is 1,000 mails a month, no card
+   needed. Note that the signup form asks for a *work* address and rejects
+   public domains such as Gmail or Yahoo.
+2. **Sending → Verified Senders** → **Add single sender email** → the address
+   the school sends from → a confirmation by email. A domain can be
+   authenticated instead, which is better but needs DNS access.
+3. **Sending → API Keys** → create a key. It is 32 characters with an `api-`
+   prefix, and it goes into the `X-Smtp2go-Api-Key` header.
+4. Set `EMAIL_BACKEND=core.email.Smtp2GoEmailBackend`, `SMTP2GO_API_KEY` to
+   that key, and `DEFAULT_FROM_EMAIL` to the verified address.
+5. The provider answers 200 even when it delivered to nobody, so the backend
+   reads the body and treats "succeeded: 0" as a failure - the caller then
+   logs it instead of believing the mail went out.
 
 ## Why the Redis instance exists
 

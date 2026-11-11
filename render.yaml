@@ -156,6 +156,10 @@ services:
       # email address, so it is the one that works without a domain.
       - key: BREVO_API_KEY
         sync: false
+      # Key for the third provider's HTTP API. Also accepts a single verified
+      # email address as a sender.
+      - key: SMTP2GO_API_KEY
+        sync: false
 
       - key: JWT_ACCESS_LIFETIME_MINUTES
         value: "30"

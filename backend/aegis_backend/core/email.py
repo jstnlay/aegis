@@ -15,12 +15,16 @@ Two providers are supported, because they solve different problems:
 * **Brevo** needs a verified *email address*, which is enough to send to
   anyone - so a deployment without a domain can still deliver.
 
+A third, **SMTP2GO**, also accepts a single verified email address as a
+sender and is in the same shape as the other two.
+
 Which one is used is the ``EMAIL_BACKEND`` setting; the provider's key is
-read from the environment. Both keep Django's contract: ``send_messages``
-returns the number of messages the provider accepted, and a failure raises
-unless the caller asked for silence. The callers in this project send mail
-from a request handler, so the failure is caught and logged there - a mail
-that cannot be sent must not turn a password reset into a server error.
+read from the environment. All of them keep Django's contract:
+``send_messages`` returns the number of messages the provider accepted, and a
+failure raises unless the caller asked for silence. The callers in this
+project send mail from a request handler, so the failure is caught and logged
+there - a mail that cannot be sent must not turn a password reset into a
+server error.
 """
 
 import logging
@@ -37,6 +41,7 @@ logger = logging.getLogger(__name__)
 #: allows and the payload is not in the clear.
 RESEND_ENDPOINT = "https://api.resend.com/emails"
 BREVO_ENDPOINT = "https://api.brevo.com/v3/smtp/email"
+SMTP2GO_ENDPOINT = "https://api.smtp2go.com/v3/email/send"
 
 
 class HttpApiEmailBackend(BaseEmailBackend):
@@ -85,6 +90,8 @@ class HttpApiEmailBackend(BaseEmailBackend):
             timeout=settings.EMAIL_TIMEOUT,
         )
         response.raise_for_status()
+        #: The provider's answer, for a subclass that reads its body.
+        self.last_response = response
 
     def payload(self, message):
         raise NotImplementedError
@@ -109,6 +116,44 @@ class ResendEmailBackend(HttpApiEmailBackend):
 
     def headers(self, api_key):
         return {"Authorization": f"Bearer {api_key}"}
+
+
+class Smtp2GoEmailBackend(HttpApiEmailBackend):
+    """Sends mail through the SMTP2GO HTTP API."""
+
+    endpoint = SMTP2GO_ENDPOINT
+    key_setting = "SMTP2GO_API_KEY"
+
+    def payload(self, message):
+        sender = message.from_email or settings.DEFAULT_FROM_EMAIL
+        _, address = parseaddr(sender)
+        body = message.body or ""
+        return {
+            "sender": address,
+            "to": list(message.to),
+            "subject": message.subject or "",
+            "text_body": body,
+            "html_body": escape(body).replace("\n", "<br>"),
+        }
+
+    def headers(self, api_key):
+        return {"X-Smtp2go-Api-Key": api_key}
+
+    def _send(self, message):
+        super()._send(message)
+
+        # The provider answers 200 even when it could not deliver to every
+        # recipient, reporting the outcome in the body. A send that reached
+        # nobody is a failure, and the caller has to hear about it.
+        try:
+            data = self.last_response.json()
+        except Exception:
+            return
+        outcome = data.get("data") if isinstance(data, dict) else None
+        if isinstance(outcome, dict) and outcome.get("succeeded") == 0:
+            raise RuntimeError(
+                f"The provider delivered no message: {outcome.get('failures')}"
+            )
 
 
 class BrevoEmailBackend(HttpApiEmailBackend):
