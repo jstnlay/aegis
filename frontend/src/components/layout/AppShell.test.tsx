@@ -62,6 +62,7 @@ function makeUser(role: Role): User {
     first_name: "Ana",
     last_name: "Cruz",
     role,
+    profile_photo: null,
     phone_number: null,
     address: null,
     language_preference: null,

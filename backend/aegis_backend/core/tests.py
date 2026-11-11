@@ -13,18 +13,35 @@ a client error.
 
 from unittest import mock
 
+import contextlib
+
+from django.core.cache import cache
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.mail import EmailMessage
 from django.db.utils import OperationalError
-from django.test import RequestFactory, SimpleTestCase, TestCase
+from django.test import RequestFactory, SimpleTestCase, TestCase, override_settings
 from rest_framework import status
 from rest_framework.exceptions import (
     NotFound,
     PermissionDenied,
     ValidationError as DRFValidationError,
 )
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
 from rest_framework.test import APIClient
+from rest_framework.views import APIView
 
+from core.client_ip import client_address, throttle_identity
+from core.email import (
+    BREVO_ENDPOINT,
+    RESEND_ENDPOINT,
+    SMTP2GO_ENDPOINT,
+    BrevoEmailBackend,
+    ResendEmailBackend,
+    Smtp2GoEmailBackend,
+)
 from core.exceptions import custom_exception_handler, drf_validation_error_from
+from core.throttling import LoginRateThrottle
 
 
 class DjangoValidationErrorTranslationTests(SimpleTestCase):
@@ -234,6 +251,301 @@ class ErrorMessageSummaryTests(SimpleTestCase):
         )
         self.assertEqual(response.data["error"]["message"], "order: Already used.")
 
+class ClientIdentTests(SimpleTestCase):
+    """Which address a rate limit is counted against, and which is audited."""
+
+    def setUp(self):
+        self.factory = RequestFactory()
+
+    def test_the_cdn_header_names_the_client(self):
+        request = self.factory.get(
+            "/",
+            HTTP_CF_CONNECTING_IP="203.0.113.5",
+            HTTP_X_FORWARDED_FOR="1.1.1.1, 2.2.2.2",
+            REMOTE_ADDR="10.0.0.1",
+        )
+
+        self.assertEqual(throttle_identity(request), "203.0.113.5")
+        self.assertEqual(client_address(request), "203.0.113.5")
+
+    def test_the_last_forwarded_hop_is_used_without_a_cdn_header(self):
+        request = self.factory.get(
+            "/",
+            HTTP_X_FORWARDED_FOR="1.1.1.1, 2.2.2.2",
+            REMOTE_ADDR="10.0.0.1",
+        )
+
+        self.assertEqual(throttle_identity(request), "2.2.2.2")
+
+    def test_the_audit_ignores_the_forwarded_chain(self):
+        """The audit must not record a value the client chose."""
+        request = self.factory.get(
+            "/",
+            HTTP_X_FORWARDED_FOR="1.1.1.1, 2.2.2.2",
+            REMOTE_ADDR="10.0.0.1",
+        )
+
+        self.assertEqual(client_address(request), "10.0.0.1")
+
+    def test_the_socket_address_is_the_fallback(self):
+        request = self.factory.get("/", REMOTE_ADDR="10.0.0.1")
+
+        self.assertEqual(throttle_identity(request), "10.0.0.1")
+        self.assertEqual(client_address(request), "10.0.0.1")
+
+
+class _ThrottledView(APIView):
+    """A view with the login throttle attached, for bucket behaviour."""
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    throttle_classes = [LoginRateThrottle]
+
+    def get(self, request):
+        return Response({"ok": True})
+
+
+@mock.patch.dict("core.throttling.LoginRateThrottle.THROTTLE_RATES", {"login": "2/min"})
+class ThrottleCountsTheClientTest(SimpleTestCase):
+    """
+    One client, many hops, one bucket.
+
+    Behind a CDN the socket address and the forwarded chain both change from
+    request to request. A limit keyed on either of them gives every request
+    its own bucket, and the limit never fires - which is how the deployed
+    environment ended up with no login limit at all.
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.factory = RequestFactory()
+
+    def tearDown(self):
+        cache.clear()
+
+    def _get(self, cdn_ip, peer):
+        request = self.factory.get(
+            "/",
+            HTTP_CF_CONNECTING_IP=cdn_ip,
+            HTTP_X_FORWARDED_FOR=f"203.0.113.9, {peer}",
+            REMOTE_ADDR=peer,
+        )
+        return _ThrottledView.as_view()(request)
+
+    def test_two_hops_from_one_client_share_the_bucket(self):
+        self.assertEqual(self._get("203.0.113.5", "10.0.0.1").status_code, 200)
+        self.assertEqual(self._get("203.0.113.5", "10.0.0.2").status_code, 200)
+
+        blocked = self._get("203.0.113.5", "10.0.0.3")
+
+        self.assertEqual(blocked.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+    def test_two_clients_do_not_share_a_bucket(self):
+        self.assertEqual(self._get("203.0.113.5", "10.0.0.1").status_code, 200)
+        self.assertEqual(self._get("203.0.113.5", "10.0.0.2").status_code, 200)
+
+        other = self._get("198.51.100.7", "10.0.0.1")
+
+        self.assertEqual(other.status_code, 200)
+
+
+class HttpApiEmailBackendTestsMixin:
+    """
+    The provider's HTTP API, not SMTP.
+
+    The platform's free plan blocks the SMTP ports, so the send has to go
+    over HTTPS - and it has to fail fast and loudly enough that a caller can
+    catch it and still answer the request.
+    """
+
+    #: The backend under test, the endpoint it posts to, and the key it reads.
+    backend_class = None
+    endpoint = ""
+    key_setting = ""
+    key_value = ""
+
+    def _backend(self, **kwargs):
+        return self.backend_class(**kwargs)
+
+    def _message(self):
+        return EmailMessage(
+            subject="Your reset link",
+            body="Open the link.",
+            from_email="no-reply@example.com",
+            to=["learner@example.com"],
+        )
+
+    @contextlib.contextmanager
+    def _post(self, status_code=200):
+        response = mock.MagicMock()
+        response.raise_for_status.return_value = None
+        response.status_code = status_code
+        with mock.patch(
+            "core.email.requests.post", return_value=response
+        ) as post:
+            yield post
+
+    def _key_override(self, value):
+        return override_settings(**{self.key_setting: value})
+
+    def test_the_message_is_posted_to_the_provider(self):
+        with self._key_override(self.key_value):
+            with self._post() as post:
+                sent = self._backend().send_messages([self._message()])
+
+        self.assertEqual(sent, 1)
+        self.assertEqual(post.call_args.args[0], self.endpoint)
+        payload = post.call_args.kwargs["json"]
+        self.assertEqual(payload["subject"], "Your reset link")
+
+    def test_the_request_is_bounded_by_a_timeout(self):
+        with self._key_override(self.key_value):
+            with self._post() as post:
+                self._backend().send_messages([self._message()])
+
+        self.assertIsNotNone(post.call_args.kwargs["timeout"])
+
+    def test_a_failure_raises_when_the_caller_wants_to_know(self):
+        with self._key_override(self.key_value):
+            with mock.patch(
+                "core.email.requests.post", side_effect=RuntimeError("no route")
+            ):
+                with self.assertRaises(RuntimeError):
+                    self._backend().send_messages([self._message()])
+
+    def test_a_failure_is_swallowed_when_the_caller_asked_for_silence(self):
+        with self._key_override(self.key_value):
+            with mock.patch(
+                "core.email.requests.post", side_effect=RuntimeError("no route")
+            ):
+                sent = self._backend(fail_silently=True).send_messages(
+                    [self._message()]
+                )
+
+        self.assertEqual(sent, 0)
+
+    def test_without_a_key_nothing_is_sent(self):
+        with self._key_override(""):
+            with mock.patch("core.email.requests.post") as post:
+                with self.assertRaises(RuntimeError):
+                    self._backend().send_messages([self._message()])
+
+        post.assert_not_called()
+
+
+class ResendEmailBackendTests(HttpApiEmailBackendTestsMixin, SimpleTestCase):
+    backend_class = ResendEmailBackend
+    endpoint = RESEND_ENDPOINT
+    key_setting = "RESEND_API_KEY"
+    key_value = "re_test_key"
+
+    def test_the_payload_and_the_authorization_header(self):
+        with self._key_override(self.key_value):
+            with self._post() as post:
+                ResendEmailBackend().send_messages([self._message()])
+
+        payload = post.call_args.kwargs["json"]
+        self.assertEqual(payload["from"], "no-reply@example.com")
+        self.assertEqual(payload["to"], ["learner@example.com"])
+        self.assertEqual(payload["text"], "Open the link.")
+        self.assertEqual(
+            post.call_args.kwargs["headers"]["Authorization"], "Bearer re_test_key"
+        )
+
+
+class Smtp2GoEmailBackendTests(HttpApiEmailBackendTestsMixin, SimpleTestCase):
+    backend_class = Smtp2GoEmailBackend
+    endpoint = SMTP2GO_ENDPOINT
+    key_setting = "SMTP2GO_API_KEY"
+    key_value = "api-test-key"
+
+    def test_the_payload_and_the_api_key_header(self):
+        with self._key_override(self.key_value):
+            with self._post() as post:
+                Smtp2GoEmailBackend().send_messages([self._message()])
+
+        payload = post.call_args.kwargs["json"]
+        self.assertEqual(payload["sender"], "no-reply@example.com")
+        self.assertEqual(payload["to"], ["learner@example.com"])
+        self.assertEqual(payload["text_body"], "Open the link.")
+        self.assertIn("Open the link.", payload["html_body"])
+        self.assertEqual(
+            post.call_args.kwargs["headers"]["X-Smtp2go-Api-Key"], "api-test-key"
+        )
+
+    def test_a_send_that_reached_nobody_is_a_failure(self):
+        """The provider answers 200 even when it delivered nothing."""
+        response = mock.MagicMock()
+        response.raise_for_status.return_value = None
+        response.json.return_value = {
+            "data": {"succeeded": 0, "failed": 1, "failures": ["bad address"]}
+        }
+
+        with self._key_override(self.key_value):
+            with mock.patch(
+                "core.email.requests.post", return_value=response
+            ):
+                with self.assertRaises(RuntimeError):
+                    Smtp2GoEmailBackend().send_messages([self._message()])
+
+    def test_a_send_that_reached_somebody_is_a_success(self):
+        response = mock.MagicMock()
+        response.raise_for_status.return_value = None
+        response.json.return_value = {"data": {"succeeded": 1, "failed": 0}}
+
+        with self._key_override(self.key_value):
+            with mock.patch(
+                "core.email.requests.post", return_value=response
+            ):
+                sent = Smtp2GoEmailBackend().send_messages([self._message()])
+
+        self.assertEqual(sent, 1)
+
+
+class BrevoEmailBackendTests(HttpApiEmailBackendTestsMixin, SimpleTestCase):
+    backend_class = BrevoEmailBackend
+    endpoint = BREVO_ENDPOINT
+    key_setting = "BREVO_API_KEY"
+    key_value = "xkeysib-test-key"
+
+    def test_the_payload_and_the_api_key_header(self):
+        with self._key_override(self.key_value):
+            with self._post() as post:
+                BrevoEmailBackend().send_messages([self._message()])
+
+        payload = post.call_args.kwargs["json"]
+        self.assertEqual(
+            payload["sender"],
+            {"name": "no-reply@example.com", "email": "no-reply@example.com"},
+        )
+        self.assertEqual(payload["to"], [{"email": "learner@example.com"}])
+        self.assertEqual(payload["textContent"], "Open the link.")
+        self.assertIn("Open the link.", payload["htmlContent"])
+        self.assertEqual(
+            post.call_args.kwargs["headers"]["api-key"], "xkeysib-test-key"
+        )
+
+    def test_a_named_sender_is_split_into_name_and_address(self):
+        message = EmailMessage(
+            subject="s",
+            body="b",
+            from_email="His Care Christian Institute <no-reply@example.com>",
+            to=["learner@example.com"],
+        )
+        with self._key_override(self.key_value):
+            with self._post() as post:
+                BrevoEmailBackend().send_messages([message])
+
+        payload = post.call_args.kwargs["json"]
+        self.assertEqual(
+            payload["sender"],
+            {
+                "name": "His Care Christian Institute",
+                "email": "no-reply@example.com",
+            },
+        )
+
+
 class HealthProbeTests(TestCase):
     """
     The probes a deployment calls without a token.
@@ -252,23 +564,54 @@ class HealthProbeTests(TestCase):
         self.assertEqual(response.json(), {"status": "ok"})
 
     def test_readiness_reports_the_database(self):
-        response = self.client.get("/api/v1/ready/")
+        with self.settings(REDIS_URL=""):
+            response = self.client.get("/api/v1/ready/")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.json(), {"status": "ok", "database": True})
+        self.assertEqual(
+            response.json(), {"status": "ok", "database": True, "cache": "local"}
+        )
+
+    def test_readiness_reports_a_broken_shared_cache(self):
+        """A shared cache that cannot be reached is reported, not ignored."""
+        broken = mock.MagicMock()
+        broken.get.return_value = None
+
+        with mock.patch("core.health.default_cache", broken):
+            with self.settings(REDIS_URL="redis://red-example:6379"):
+                response = self.client.get("/api/v1/ready/")
+
+        # The process can still serve, so it stays ready. It only says so.
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.json(), {"status": "ok", "database": True, "cache": "broken"}
+        )
+
+    def test_readiness_reports_a_working_shared_cache(self):
+        working = mock.MagicMock()
+        working.get.return_value = "ok"
+
+        with mock.patch("core.health.default_cache", working):
+            with self.settings(REDIS_URL="redis://red-example:6379"):
+                response = self.client.get("/api/v1/ready/")
+
+        self.assertEqual(
+            response.json(), {"status": "ok", "database": True, "cache": "shared"}
+        )
 
     def test_readiness_fails_when_the_database_does_not_answer(self):
         broken = mock.MagicMock()
         broken.cursor.side_effect = OperationalError("no route to host")
 
         with mock.patch("core.health.connection", broken):
-            response = self.client.get("/api/v1/ready/")
+            with self.settings(REDIS_URL=""):
+                response = self.client.get("/api/v1/ready/")
 
         self.assertEqual(
             response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE
         )
         self.assertEqual(
-            response.json(), {"status": "unavailable", "database": False}
+            response.json(), {"status": "unavailable", "database": False, "cache": "local"}
         )
 
     def test_probe_failure_does_not_leak_the_database_error(self):

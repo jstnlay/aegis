@@ -35,5 +35,10 @@ urlpatterns = [
 if getattr(settings, "ENABLE_ADMIN_SITE", True):
     urlpatterns.insert(0, path("admin/", admin.site.urls))
 
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+# shortcut: uploaded files (profile photos) are served from the service's own
+# disk because no object storage is configured. Serving them in production is
+# not the usual advice for `static()`, but the disk is ephemeral anyway: a
+# redeploy loses the files, and the alternative is a 404 for every photo the
+# client uploads during a visit. Move to object storage when uploads must
+# survive a deploy.
+urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

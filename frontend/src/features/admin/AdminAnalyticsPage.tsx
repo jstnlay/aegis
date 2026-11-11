@@ -6,6 +6,7 @@ import {
   RefreshCw,
 } from "lucide-react"
 import { useState } from "react"
+import { Link } from "react-router-dom"
 
 import { ErrorNote } from "@/components/feedback/Feedback"
 import { Button } from "@/components/ui/button"
@@ -20,7 +21,9 @@ import { MetricCard } from "@/components/ui/metric-card"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Tabs } from "@/components/ui/tabs"
 import { ChartState } from "@/components/charts/ChartCard"
+import { ForecastChart } from "@/components/charts/ForecastChart"
 import { GradeLevelPerformanceChart } from "@/components/charts/GradeLevelPerformanceChart"
+import { RiskAlertTrendChart } from "@/components/charts/RiskAlertTrend"
 import { RiskDistributionChart } from "@/components/charts/RiskDistributionChart"
 import { RoleDistributionChart } from "@/components/charts/RoleDistributionChart"
 import { SectionPerformanceChart } from "@/components/charts/SectionPerformanceChart"
@@ -57,10 +60,11 @@ import { formatCount, formatPercent } from "@/lib/metric-format"
  * mode.
  *
  * - Descriptive: what has happened (the historical charts).
- * - Predictive: a straight-line projection of a monthly series, with the
- *   coverage it was drawn from. A thin series answers "no estimate yet"
- *   rather than a projection drawn from noise.
- * - Prescriptive: what to do next, as links into the surfaces that act.
+ * - Predictive: the recorded monthly series plus a dashed straight-line
+ *   projection, with the coverage it was drawn from. A thin series answers
+ *   "no estimate yet" rather than a projection drawn from noise.
+ * - Prescriptive: live risk counts and the alert trend, with the follow-up
+ *   actions those numbers call for.
  * - Surveillance: the health of the school right now (risk distribution and
  *   open alerts).
  *
@@ -248,25 +252,31 @@ export function AdminAnalyticsPage() {
             <ErrorNote message="Unable to load the forecast. Please try again." />
           ) : forecastQuery.isLoading ? (
             <p className="text-sm text-muted-foreground">Loading forecast…</p>
-          ) : forecastQuery.data?.insufficient_data ? (
-            <div className="space-y-1">
-              <p className="text-sm font-medium">No estimate yet</p>
-              <p className="text-sm text-muted-foreground">
-                {forecastQuery.data.reason ??
-                  "Not enough months on record to project from."}
-              </p>
-            </div>
           ) : (
             <>
+              {forecastQuery.data?.insufficient_data ? (
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">No estimate yet</p>
+                  <p className="text-sm text-muted-foreground">
+                    {forecastQuery.data.reason ??
+                      "Not enough months on record to project from."}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    The recorded months are still plotted below.
+                  </p>
+                </div>
+              ) : null}
               <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">
                 <MetricCard
                   title={`${METRIC_LABEL[metric]} in ${months} month${months === 1 ? "" : "s"}`}
                   hint={
-                    forecastQuery.data?.trend === "up"
-                      ? "Trending up over the recorded months"
-                      : forecastQuery.data?.trend === "down"
-                        ? "Trending down over the recorded months"
-                        : "Flat over the recorded months"
+                    forecastQuery.data?.insufficient_data
+                      ? "No estimate is offered for a series this thin"
+                      : forecastQuery.data?.trend === "up"
+                        ? "Trending up over the recorded months"
+                        : forecastQuery.data?.trend === "down"
+                          ? "Trending down over the recorded months"
+                          : "Flat over the recorded months"
                   }
                   icon={ChartNoAxesColumn}
                   isLoading={forecastQuery.isLoading}
@@ -299,16 +309,13 @@ export function AdminAnalyticsPage() {
                 </MetricCard>
               </div>
 
-              {forecastQuery.data && forecastQuery.data.series.length > 0 ? (
-                <ul className="space-y-1 text-sm text-muted-foreground">
-                  {forecastQuery.data.series.map((point) => (
-                    <li key={point.month}>
-                      <span className="font-mono">{point.month}</span> —{" "}
-                      {point.value.toFixed(2)}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
+              <ForecastChart
+                data={forecastQuery.data}
+                isLoading={forecastQuery.isLoading}
+                // This branch only renders after the query succeeded; a later
+                // refetch failure flips the branch above to its error note.
+                error={null}
+              />
             </>
           )}
         </CardContent>
@@ -316,40 +323,135 @@ export function AdminAnalyticsPage() {
     </div>
   )
 
+  const distribution = riskQuery.data?.distribution
+  const flagged = distribution
+    ? distribution.high + distribution.moderate
+    : null
+  const alertsLast30 = (riskQuery.data?.alert_trend ?? []).reduce(
+    (total, point) => total + point.count,
+    0
+  )
+
   const prescriptiveContent = (
-    <Card>
-      <CardHeader>
-        <CardTitle>What to do next</CardTitle>
-        <CardDescription>
-          The screens where each follow-up is actually carried out. Nothing on
-          this list names a student: the actions are the ones the school already
-          owns.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <ul className="space-y-2 text-sm">
-          <li>
-            <span className="font-medium">Check the at-risk picture.</span> Risk
-            distribution and open alerts are in the Risk &amp; well-being tab;
-            the Guidance Office owns the follow-up on each alert.
-          </li>
-          <li>
-            <span className="font-medium">Compare sections.</span> Section
-            performance in the Sections tab shows where a grade average is
-            unusual.
-          </li>
-          <li>
-            <span className="font-medium">Export the records.</span> Imports
-            &amp; Exports produces the grade and attendance files the school
-            reconciles against.
-          </li>
-          <li>
-            <span className="font-medium">Review who changed what.</span> The
-            Audit Log records every administrative action on student records.
-          </li>
-        </ul>
-      </CardContent>
-    </Card>
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
+        <MetricCard
+          title="High-risk learners"
+          hint="Latest computed score is high"
+          icon={ChartNoAxesColumn}
+          isLoading={riskQuery.isLoading}
+          isError={riskQuery.isError}
+        >
+          {formatCount(distribution?.high ?? null)}
+        </MetricCard>
+        <MetricCard
+          title="Moderate-risk learners"
+          hint="Latest computed score is moderate"
+          icon={GraduationCap}
+          isLoading={riskQuery.isLoading}
+          isError={riskQuery.isError}
+        >
+          {formatCount(distribution?.moderate ?? null)}
+        </MetricCard>
+        <MetricCard
+          title="Active alerts"
+          hint="Alerts active or under monitoring"
+          icon={Layers}
+          isLoading={riskQuery.isLoading}
+          isError={riskQuery.isError}
+        >
+          {formatCount(riskQuery.data?.active_alerts ?? null)}
+        </MetricCard>
+        <MetricCard
+          title="Awaiting a score"
+          hint="Too little data to compute risk"
+          icon={ChartNoAxesColumn}
+          isLoading={riskQuery.isLoading}
+          isError={riskQuery.isError}
+        >
+          {formatCount(distribution?.insufficient_data ?? null)}
+        </MetricCard>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <RiskDistributionChart />
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Follow-up plan</CardTitle>
+            <CardDescription>
+              Each action is derived from the counts beside it. No learner is
+              named here.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ChartState
+              isLoading={riskQuery.isLoading}
+              error={riskQuery.isError ? riskQuery.error : null}
+              loadingLabel="Loading follow-up priorities"
+              isEmpty={!distribution}
+              emptyMessage="No risk scores have been computed yet, so there is no follow-up list to rank."
+            >
+              <ol className="space-y-5 text-sm">
+                <li className="space-y-2">
+                  <p>
+                    <span className="font-medium">
+                      Review {formatCount(flagged)} flagged learner
+                      {flagged === 1 ? "" : "s"}.
+                    </span>{" "}
+                    Check the finalized grades and attendance behind each risk
+                    score before the Guidance Office case conference.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button asChild variant="outline" size="sm">
+                      <Link to="/app/admin/grades">Open grades</Link>
+                    </Button>
+                    <Button asChild variant="outline" size="sm">
+                      <Link to="/app/admin/attendance">Open attendance</Link>
+                    </Button>
+                  </div>
+                </li>
+                <li className="space-y-2">
+                  <p>
+                    <span className="font-medium">
+                      Close the data gap for{" "}
+                      {formatCount(distribution?.insufficient_data ?? null)}{" "}
+                      learner
+                      {(distribution?.insufficient_data ?? 0) === 1 ? "" : "s"}.
+                    </span>{" "}
+                    A learner without enough finalized grades or attendance
+                    records cannot be scored.
+                  </p>
+                  <Button asChild variant="outline" size="sm">
+                    <Link to="/app/admin/data">Open imports &amp; exports</Link>
+                  </Button>
+                </li>
+                <li className="space-y-2">
+                  <p>
+                    <span className="font-medium">
+                      Check {formatCount(alertsLast30)} alert
+                      {alertsLast30 === 1 ? "" : "s"} opened in the last 30
+                      days.
+                    </span>{" "}
+                    Confirm the record trail for each change before acting on
+                    it.
+                  </p>
+                  <Button asChild variant="outline" size="sm">
+                    <Link to="/app/admin/audit">Open audit logs</Link>
+                  </Button>
+                </li>
+              </ol>
+            </ChartState>
+          </CardContent>
+        </Card>
+      </div>
+
+      <RiskAlertTrendChart
+        points={riskQuery.data?.alert_trend ?? []}
+        isLoading={riskQuery.isLoading}
+        error={riskQuery.isError ? riskQuery.error : null}
+      />
+    </div>
   )
 
   const surveillanceContent = (

@@ -173,6 +173,13 @@ def _default_cache():
                 "LOCATION": REDIS_URL,
                 "OPTIONS": {
                     "CLIENT_CLASS": "django_redis.client.DefaultClient",
+                    # Fail fast instead of hanging: a wrong host or an
+                    # unreachable instance must cost a second, not the
+                    # request. The rate limits depend on this cache, and a
+                    # cache that answers slowly would slow every endpoint
+                    # that reads it.
+                    "SOCKET_CONNECT_TIMEOUT": 2,
+                    "SOCKET_TIMEOUT": 2,
                     # A Redis outage must not take the API down with it. With
                     # this, a cache that cannot be reached is treated as an
                     # empty cache: the request is served, and the rate limit
@@ -358,6 +365,27 @@ EMAIL_PORT = config("EMAIL_PORT", default=25, cast=int)
 EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
 EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=False, cast=bool)
+
+#: How long a mail connection may take before it is given up on. Django's
+#: own default is None - no timeout at all - and an unreachable SMTP server
+#: then holds the request open until the platform's proxy kills it, which
+#: turns a password reset into a 500 instead of an answer. Ten seconds is
+#: long enough for a provider that is up and short enough to stay under the
+#: platform's request limit.
+EMAIL_TIMEOUT = config("EMAIL_TIMEOUT", default=10, cast=int)
+
+#: The key for the provider's HTTP API. Used by ``core.email.ResendEmailBackend``.
+RESEND_API_KEY = config("RESEND_API_KEY", default="")
+
+#: The key for the provider's HTTP API. Used by ``core.email.BrevoEmailBackend``.
+#: Brevo sends from a verified email address, so it is the provider that
+#: works for a deployment without a domain of its own.
+BREVO_API_KEY = config("BREVO_API_KEY", default="")
+
+#: The key for the third provider's HTTP API. Used by
+#: ``core.email.Smtp2GoEmailBackend``, which also accepts a single verified
+#: email address as a sender.
+SMTP2GO_API_KEY = config("SMTP2GO_API_KEY", default="")
 
 # ---------------------------------------------------------------------------
 # CORS

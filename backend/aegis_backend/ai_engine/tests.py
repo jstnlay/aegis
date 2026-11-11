@@ -764,6 +764,25 @@ class RiskServiceTest(AIEngineTestBase):
         # No RiskAlert should exist
         self.assertEqual(RiskAlert.objects.filter(source="decision_tree").count(), 0)
 
+    def test_fractional_risk_score_is_stored_with_two_decimals(self):
+        """
+        A model probability rarely lands on a whole number.
+
+        ``predict_single`` returns a float such as 66.67; persisting the raw
+        float made ``RiskScore.full_clean`` reject the row ("no more than 2
+        decimal places") and aborted the whole batch. The client cohort hit
+        this on the first real computation.
+        """
+        from ai_engine.risk_service import integrate_risk_result
+
+        result = integrate_risk_result(
+            self.student_profile,
+            self.prediction(level="moderate", score=66.67),
+        )
+
+        result.risk_score_obj.refresh_from_db()
+        self.assertEqual(result.risk_score_obj.risk_score, Decimal("66.67"))
+
     def test_new_alerts_created_on_state_change(self):
         """First computation creates an actionable RiskAlert."""
         from ai_engine.risk_service import integrate_risk_result

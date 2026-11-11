@@ -4,6 +4,7 @@ import { AxiosError } from "axios"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { GradeLevelPerformanceChart } from "./GradeLevelPerformanceChart"
+import { ForecastChart } from "./ForecastChart"
 import { RiskDistributionChart } from "./RiskDistributionChart"
 import { RoleDistributionChart } from "./RoleDistributionChart"
 import { SubjectTrendChart } from "./SubjectTrendChart"
@@ -730,5 +731,79 @@ describe("SectionPerformanceChart", () => {
       await screen.findByText(/No finalized grades are recorded for this/i)
     ).toBeInTheDocument()
     expect(screen.queryByRole("img")).not.toBeInTheDocument()
+  })
+})
+
+describe("ForecastChart", () => {
+  const forecast = {
+    metric: "attendance_rate" as const,
+    months: 3,
+    unit: "percent" as const,
+    estimate: 72.5,
+    insufficient_data: false,
+    trend: "down" as const,
+    reason: null,
+    coverage: { points: 3, from: "2026-01", to: "2026-03" },
+    series: [
+      { month: "2026-01", value: 80 },
+      { month: "2026-02", value: 75 },
+      { month: "2026-03", value: 70 },
+    ],
+  }
+
+  it("describes the recorded series and the projected month", async () => {
+    renderChart(
+      <ForecastChart data={forecast} isLoading={false} error={null} />
+    )
+
+    expect(
+      await screen.findByText(/3 recorded months from 2026-01 to 2026-03/i)
+    ).toBeInTheDocument()
+
+    // The projected point is labelled with the month it actually lands in,
+    // not a generic "future" label, so a reader can audit the arithmetic.
+    const label =
+      (await screen.findByRole("img")).getAttribute("aria-label") ?? ""
+    expect(label).toContain("2026-01: 80.0%")
+    expect(label).toContain("2026-06 (3 months ahead): 72.5%")
+  })
+
+  it("renders a failed request as an error, never an empty chart", async () => {
+    renderChart(
+      <ForecastChart
+        data={undefined}
+        isLoading={false}
+        error={apiFailure("Forecast unavailable")}
+      />
+    )
+
+    expect(await screen.findByText("Forecast unavailable")).toBeInTheDocument()
+    expect(screen.queryByRole("img")).not.toBeInTheDocument()
+  })
+
+  it("still plots the recorded months when no estimate can be drawn", async () => {
+    renderChart(
+      <ForecastChart
+        data={{
+          ...forecast,
+          estimate: null,
+          insufficient_data: true,
+          trend: "unknown",
+          reason: "Not enough months on record to project from.",
+          coverage: { points: 2, from: "2026-01", to: "2026-02" },
+          series: forecast.series.slice(0, 2),
+        }}
+        isLoading={false}
+        error={null}
+      />
+    )
+
+    expect(
+      await screen.findByText(/No projection is offered for this series/i)
+    ).toBeInTheDocument()
+    const label =
+      (await screen.findByRole("img")).getAttribute("aria-label") ?? ""
+    expect(label).toContain("2026-02: 75.0%")
+    expect(label).toContain("No projection is offered.")
   })
 })

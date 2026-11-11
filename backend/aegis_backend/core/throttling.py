@@ -5,29 +5,52 @@ Rates are configured once in settings via REST_FRAMEWORK["DEFAULT_THROTTLE_RATES
 keyed by each class's ``scope``. Throttling is an additional defense-in-depth
 layer on top of authentication/authorization, never a replacement.
 
-Login throttling keys on client IP (AnonRateThrottle.get_ident), NOT on the
-submitted email, so attackers cannot rotate usernames to evade the limit.
-Throttle responses never reveal whether an account exists.
+Login throttling keys on client IP, NOT on the submitted email, so attackers
+cannot rotate usernames to evade the limit. Throttle responses never reveal
+whether an account exists.
+
+Which address counts as "the client"
+-----------------------------------
+Behind a CDN the socket address is the CDN's edge and the forwarded chain
+ends in a proxy hop that differs from request to request. Key a limit on
+either and every request lands in its own bucket: the limit never fires,
+which is indistinguishable from having no limit at all. That is not a
+hypothetical - it is what happened to this deployment, where the CDN sits in
+front of the app server and the whole chain changed on every request.
+
+So the identity is resolved here, once, in ``core.client_ip.throttle_identity``:
+the CDN's own client-IP header first (the CDN overwrites it on every request,
+so it names the client and is not under the client's control), then the last
+forwarded hop, then the socket address.
 """
 
 from rest_framework.throttling import AnonRateThrottle, SimpleRateThrottle
 
 import hashlib
 
+from core.client_ip import throttle_identity
 
-class LoginRateThrottle(AnonRateThrottle):
+
+class ClientIdentMixin:
+    """Counts a limit against the project client identity, not the chain."""
+
+    def get_ident(self, request):
+        return throttle_identity(request)
+
+
+class LoginRateThrottle(ClientIdentMixin, AnonRateThrottle):
     """Per-client-IP cap on login attempts (scope: "login")."""
 
     scope = "login"
 
 
-class TokenRefreshRateThrottle(AnonRateThrottle):
+class TokenRefreshRateThrottle(ClientIdentMixin, AnonRateThrottle):
     """Per-client-IP cap on JWT refresh requests (scope: "token_refresh")."""
 
     scope = "token_refresh"
 
 
-class WebhookRateThrottle(SimpleRateThrottle):
+class WebhookRateThrottle(ClientIdentMixin, SimpleRateThrottle):
     """
     Per-source-IP request cap on the Strapi webhook receiver
     (scope: "webhook").
@@ -47,7 +70,7 @@ class WebhookRateThrottle(SimpleRateThrottle):
         }
 
 
-class DataImportRateThrottle(SimpleRateThrottle):
+class DataImportRateThrottle(ClientIdentMixin, SimpleRateThrottle):
     """
     Per-client-IP cap on data-import job uploads (scope: "data_import").
 
@@ -71,7 +94,7 @@ class DataImportRateThrottle(SimpleRateThrottle):
         }
 
 
-class ExportRateThrottle(SimpleRateThrottle):
+class ExportRateThrottle(ClientIdentMixin, SimpleRateThrottle):
     """
     Per-client-IP cap on controlled-export file downloads (scope: "data_export").
 
@@ -93,7 +116,7 @@ class ExportRateThrottle(SimpleRateThrottle):
         }
 
 
-class PasswordChangeRateThrottle(SimpleRateThrottle):
+class PasswordChangeRateThrottle(ClientIdentMixin, SimpleRateThrottle):
     """
     Per-account cap on self-service password changes (scope: "password_change").
 
@@ -123,7 +146,7 @@ class PasswordChangeRateThrottle(SimpleRateThrottle):
         }
 
 
-class PasswordForgotRateThrottle(SimpleRateThrottle):
+class PasswordForgotRateThrottle(ClientIdentMixin, SimpleRateThrottle):
     """
     Per-client-IP cap on password reset requests (scope: "password_forgot").
 
@@ -141,7 +164,7 @@ class PasswordForgotRateThrottle(SimpleRateThrottle):
         }
 
 
-class PasswordResetRateThrottle(SimpleRateThrottle):
+class PasswordResetRateThrottle(ClientIdentMixin, SimpleRateThrottle):
     """
     Per-token cap on password reset redemptions (scope: "password_reset").
 
@@ -169,7 +192,7 @@ class PasswordResetRateThrottle(SimpleRateThrottle):
         }
 
 
-class RegistrationRateThrottle(SimpleRateThrottle):
+class RegistrationRateThrottle(ClientIdentMixin, SimpleRateThrottle):
     """
     Per-client-IP cap on registration submissions (scope: "registration").
 
@@ -187,7 +210,7 @@ class RegistrationRateThrottle(SimpleRateThrottle):
         }
 
 
-class ParentInvitationRateThrottle(SimpleRateThrottle):
+class ParentInvitationRateThrottle(ClientIdentMixin, SimpleRateThrottle):
     """
     Per-client-IP cap on parent nominations (scope: "parent_invitation").
 

@@ -116,6 +116,49 @@ implemented are re-tests, not code work.
 
 ## Blocked / manual-evidence items (Cycle 4 log)
 
+- **Redis shared cache (SEC-002 in the deployed environment)** — `/ready/`
+  reports `"cache":"shared"`, so Redis is configured and answers; the cause of
+  the missing limits was elsewhere. The Redis client still fails fast (2s
+  socket timeouts) and the client is configured with `IGNORE_EXCEPTIONS`, so
+  an unreachable cache behaves as an empty one: every rate limit silently off
+  and nothing saying so. `/ready/` reports the cache the rate limits are
+  counted in as `"shared"` / `"local"` / `"broken"` from a real cache
+  round-trip, and `docs/backend/DEPLOYMENT.md` records the check and the
+  three states.
+
+- **Rate limits were not firing at all in the deployed environment.** The
+  public URL is served through Cloudflare; the app server sees a forwarded
+  chain that ends in a proxy hop which changes from request to request, so
+  every request landed in its own throttle bucket: 130 consecutive failed
+  logins answered 401 and never the 429 the 15/min limit owes. The identity
+  is now resolved in `core.client_ip` - the CDN's own client-IP header first,
+  then the last forwarded hop, then the socket address - and every throttle
+  class counts against it. `core` tests cover the resolution and the bucket
+  behaviour.
+- **Mail could not be sent from the deployment, and the endpoint broke while
+  trying.** With the SMTP settings in place, a password reset for an existing
+  account took 31 seconds and answered 500 while the same request for an
+  unknown account answered 202 in 0.2s. Two causes: Render's free compute
+  plan blocks outbound traffic on the SMTP ports (25, 465, 587), so the
+  connect never completed, and Django's `EMAIL_TIMEOUT` default is `None`,
+  so nothing gave up on it - the request rode into the platform's 30-second
+  proxy timeout. Fixed with `core.email.ResendEmailBackend` (the provider's
+  HTTP API on 443, which the platform allows) and an explicit
+  `EMAIL_TIMEOUT` of 10 seconds for the SMTP path.
+- **Provider choice.** Resend needs a verified *domain* to send to anyone;
+  without one it delivers only to the address on the Resend account, so the
+  seeded `*.qa@aegis.local` accounts can never receive mail. Brevo needs a
+  verified *email address* only, so it is the provider that works for a
+  deployment without a domain. `core.email` now holds one HTTP backend with
+  a provider-specific endpoint, key header and payload.
+- **The audit trail recorded the CDN's edge, not the client.** `REMOTE_ADDR`
+  behind Cloudflare is Cloudflare's address, so the audit's IP column named
+  the same edge for every request and identified nobody. The audit now
+  records the CDN's client-IP header, which the CDN overwrites on every
+  request, and still ignores `X-Forwarded-For` - a header the client writes,
+  which the audit must never record. The resolver lives in `core.client_ip`
+  with the throttle's, and the two trust rules are deliberately different.
+
 - **TC-SYS-03** — the harness did not exist; it now does:
   `backend/scripts/loadtest.js` (k6: login + health + an authenticated read,
   error-rate and p(95) thresholds). The run itself is still manual: it needs

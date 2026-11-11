@@ -52,8 +52,9 @@ python manage.py provision_client_school
 ```
 
 That creates the four sections, the adviser of each class (the names are the
-ones the workbooks carry) and one subject assignment per learning area per
-section. It is idempotent and writes no learner record.
+ones the workbooks carry), the academic year with its three grading periods,
+and one subject assignment per learning area per section. It is idempotent
+and writes no learner record.
 
 Then load the workbooks:
 
@@ -75,6 +76,98 @@ The imported grades land as `draft`, like every import: finalizing is an
 administrator action (`POST /api/v1/academics/grades/{id}/finalize/`), and
 the risk engine reads finalized grades only.
 
+## Signing in as each role
+
+The import creates the learner accounts but discards their generated
+passwords, and the adviser accounts get a password only when
+`QA_SHARED_PASSWORD` is set. *Admin -> Users -> New account* cannot fill the
+gap: the 97 learner emails already exist, the form sends a set-password link
+to an address the school does not own (`@students.aegis.local`), and a user
+made there has no `StudentProfile`, no `Enrollment` and no section.
+
+Prepare the existing accounts for a test instead:
+
+```powershell
+python manage.py provision_client_access
+python manage.py provision_client_access --finalize-grades
+```
+
+The first form sets a fresh random password on every learner in the four
+client sections and on their four advisers, clears the forced
+initial-password change, and creates one linked parent login per learner
+(`parent.{LRN}@parents.aegis.local`). It writes `client-credentials.csv` in
+the current directory -- one row per role, with name, email, password,
+section and student ID. The file is gitignored; hand it out and delete it.
+Running the command again rotates every password, which makes it the reset
+path too. It never prints a password.
+
+`--finalize-grades` publishes the imported Term 1 grades (draft ->
+finalized) so the risk and recommendation surfaces read them. It bypasses
+the normal admin finalize action and its notifications, so use it on a test
+deployment only. Finalizing is not enough on its own: the risk scores are a
+separate computation, so run it once after the import:
+
+```powershell
+python manage.py train_risk_model
+python manage.py run_risk_computation
+```
+
+The first command stores the decision-tree model in the database, so it
+survives a redeploy; the second scores every active learner. The learners
+with Term 1 rows score `low` (no mark in the set is below 80). The rest have
+no finalized grade, so they score `insufficient_data` -- the engine refuses
+to invent a risk level.
+
+What each role can reach with the client data:
+
+| Role | Sign in as | Sees |
+| --- | --- | --- |
+| Student | `{LRN}@students.aegis.local` | own Term 1 grades, remarks, schedule |
+| Parent | `parent.{LRN}@parents.aegis.local` | that learner's grades and remarks |
+| Faculty | the four adviser emails in the CSV | their own class roster and grades |
+| Admin | existing administrator account | all 97 learners, the import record |
+| Guidance | existing counselor account | all learners, case load |
+
+Attendance, counseling and Terms 2-3 stay on the synthetic data described
+below: the client workbooks carry none of them.
+
+### Against the deployed DEV/QA service
+
+The credentials from the local run exist only in the local database. The
+Render build creates the QA accounts and the synthetic dataset
+(`render.yaml`), but it never runs the client import, so the deployed
+service has no client learner, no client section and no parent login yet.
+A learner email from the local CSV therefore answers "No active account
+found with the given credentials".
+
+Load the client data into the deployed database once, from this checkout,
+by pointing the settings at it. Take the host, user and password from the
+Render service's `DATABASE_*` variables (the user carries the Supabase
+project ref):
+
+```powershell
+cd backend/aegis_backend
+$env:DATABASE_HOST = "aws-0-ap-southeast-1.pooler.supabase.com"
+$env:DATABASE_USER = "postgres.<project-ref>"
+$env:DATABASE_PASSWORD = "<password>"
+
+python manage.py provision_client_school
+python manage.py import_client_datasets
+python manage.py provision_client_access --finalize-grades --output C:\temp\client-credentials.csv
+python manage.py run_risk_computation
+```
+
+Environment variables win over `.env`, so the local database is not
+touched. Keep the order: the school structure first, the roster before the
+grades, credentials and publication last. Do not re-run
+`import_client_datasets` after `--finalize-grades`: the importer refuses to
+overwrite a finalized grade, so the second import reports those rows as
+errors.
+
+This is a one-time load. The Render build does not import the workbooks on
+purpose -- every deploy would hit the finalized-grade lock once the grades
+are published.
+
 ## What the workbooks do not carry
 
 | Missing | Where the evidence lives instead |
@@ -82,6 +175,7 @@ the risk engine reads finalized grades only.
 | Daily attendance marks | `docs/test-data/attendance-sf2-*.xlsm` (the DepEd SF2 form) |
 | Counseling sessions | `docs/test-data/guidance-import.xlsx` |
 | Term 2 and Term 3 grades | `docs/test-data/grades-sf9-terms-1-2-*.xlsx` |
+| Class timetable | not in the ECR; the schedule list is empty for these learners |
 | Learners below the passing mark | the synthetic QA cohort in `seed_qa_dataset` |
 
 `ATTENDANCE RECORD SUMMARY` in the ECR lists the roster and the school days
