@@ -43,6 +43,7 @@ function makeUser(role: Role, id = `u-${role}`): User {
     first_name: "Test",
     last_name: role,
     role,
+    profile_photo: null,
     phone_number: null,
     address: null,
     language_preference: null,

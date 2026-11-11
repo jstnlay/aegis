@@ -1,38 +1,58 @@
 """
-Outgoing mail through the Resend HTTP API.
+Outgoing mail over a provider's HTTP API.
 
 Why not SMTP
 ------------
 Render's free compute plan blocks outbound traffic on the SMTP ports (25,
 465 and 587), so an SMTP connection from this deployment never completes:
 the request hangs until the platform's proxy gives up and answers 500. The
-HTTP API is on 443, which is open.
+HTTP APIs are on 443, which is open.
 
-The backend keeps Django's contract: ``send_messages`` returns the number of
-messages handed to the provider, and a failure raises unless the caller asked
-for silence. The callers in this project send mail from a request handler,
-so the failure is caught and logged there - a mail that cannot be sent must
-not turn a password reset into a server error.
+Two providers are supported, because they solve different problems:
 
-A paid plan may still use Django's SMTP backend; the choice is the
-``EMAIL_BACKEND`` setting, and this backend is one value of it.
+* **Resend** needs a verified *domain* to send to anyone, and until then it
+  only delivers to the address on the Resend account.
+* **Brevo** needs a verified *email address*, which is enough to send to
+  anyone - so a deployment without a domain can still deliver.
+
+Which one is used is the ``EMAIL_BACKEND`` setting; the provider's key is
+read from the environment. Both keep Django's contract: ``send_messages``
+returns the number of messages the provider accepted, and a failure raises
+unless the caller asked for silence. The callers in this project send mail
+from a request handler, so the failure is caught and logged there - a mail
+that cannot be sent must not turn a password reset into a server error.
 """
 
 import logging
+from email.utils import parseaddr
 
 import requests
 from django.conf import settings
 from django.core.mail.backends.base import BaseEmailBackend
+from django.utils.html import escape
 
 logger = logging.getLogger(__name__)
 
-#: The provider's send endpoint. HTTPS, so it is on a port the platform
+#: The provider's send endpoints. HTTPS, so they are on a port the platform
 #: allows and the payload is not in the clear.
 RESEND_ENDPOINT = "https://api.resend.com/emails"
+BREVO_ENDPOINT = "https://api.brevo.com/v3/smtp/email"
 
 
-class ResendEmailBackend(BaseEmailBackend):
-    """Sends mail through the Resend HTTP API."""
+class HttpApiEmailBackend(BaseEmailBackend):
+    """
+    Sends mail through a provider's HTTP API.
+
+    A provider differs in its endpoint, its authentication header and its
+    payload shape, so a subclass supplies those three things. Everything else
+    - Django's contract, the timeout, the failure behaviour - lives here.
+    """
+
+    #: Where the message is posted.
+    endpoint = ""
+
+    #: The setting that holds the provider's key.
+    key_setting = ""
 
     def send_messages(self, email_messages):
         """Send each message; return how many the provider accepted."""
@@ -46,29 +66,70 @@ class ResendEmailBackend(BaseEmailBackend):
             except Exception:
                 if not self.fail_silently:
                     raise
-                logger.exception("Resend email could not be sent")
+                logger.exception("Mail could not be sent")
                 continue
             sent += 1
         return sent
 
     def _send(self, message):
-        api_key = getattr(settings, "RESEND_API_KEY", "")
+        api_key = getattr(settings, self.key_setting, "")
         if not api_key:
             raise RuntimeError(
-                "RESEND_API_KEY is not set, so no mail can be sent."
+                f"{self.key_setting} is not set, so no mail can be sent."
             )
 
-        payload = {
+        response = requests.post(
+            self.endpoint,
+            json=self.payload(message),
+            headers=self.headers(api_key),
+            timeout=settings.EMAIL_TIMEOUT,
+        )
+        response.raise_for_status()
+
+    def payload(self, message):
+        raise NotImplementedError
+
+    def headers(self, api_key):
+        raise NotImplementedError
+
+
+class ResendEmailBackend(HttpApiEmailBackend):
+    """Sends mail through the Resend HTTP API."""
+
+    endpoint = RESEND_ENDPOINT
+    key_setting = "RESEND_API_KEY"
+
+    def payload(self, message):
+        return {
             "from": message.from_email or settings.DEFAULT_FROM_EMAIL,
             "to": list(message.to),
             "subject": message.subject or "",
             "text": message.body or "",
         }
 
-        response = requests.post(
-            RESEND_ENDPOINT,
-            json=payload,
-            headers={"Authorization": f"Bearer {api_key}"},
-            timeout=settings.EMAIL_TIMEOUT,
-        )
-        response.raise_for_status()
+    def headers(self, api_key):
+        return {"Authorization": f"Bearer {api_key}"}
+
+
+class BrevoEmailBackend(HttpApiEmailBackend):
+    """Sends mail through the Brevo HTTP API."""
+
+    endpoint = BREVO_ENDPOINT
+    key_setting = "BREVO_API_KEY"
+
+    def payload(self, message):
+        sender = message.from_email or settings.DEFAULT_FROM_EMAIL
+        name, address = parseaddr(sender)
+        body = message.body or ""
+        return {
+            "sender": {"name": name or address, "email": address},
+            "to": [{"email": recipient} for recipient in message.to],
+            "subject": message.subject or "",
+            "textContent": body,
+            # The provider wants a content field, so the plain text is
+            # rendered as minimal HTML - the same words, escaped.
+            "htmlContent": escape(body).replace("\n", "<br>"),
+        }
+
+    def headers(self, api_key):
+        return {"api-key": api_key}

@@ -32,6 +32,7 @@ const user = {
   first_name: "Robin",
   last_name: "Vega",
   role: "guidance",
+  profile_photo: null,
   phone_number: "+1-555-0100",
   address: "12 Willow Lane",
   language_preference: "en",
@@ -96,8 +97,9 @@ describe("AccountSettingsPage", () => {
     expect(mockedGet).toHaveBeenCalledWith("/accounts/me/")
 
     expect(await screen.findByText("robin.vega@aegis.edu")).toBeInTheDocument()
-    expect(screen.getByText("rvega")).toBeInTheDocument()
     expect(screen.getByText("guidance")).toBeInTheDocument()
+    // The username is a server-generated login detail and is not shown.
+    expect(screen.queryByText("rvega")).toBeNull()
   })
 
   it("does not offer inputs for server-controlled fields", async () => {
@@ -108,6 +110,45 @@ describe("AccountSettingsPage", () => {
     expect(screen.queryByLabelText(/email/i)).toBeNull()
     expect(screen.queryByLabelText(/username/i)).toBeNull()
     expect(screen.queryByLabelText(/^role$/i)).toBeNull()
+  })
+
+  it("offers an editable profile photo", async () => {
+    renderPage()
+    await waitFor(() =>
+      expect(screen.getByLabelText("First name")).toHaveValue("Robin")
+    )
+
+    expect(
+      screen.getByRole("heading", { name: "Profile photo" })
+    ).toBeInTheDocument()
+    expect(screen.getByLabelText("Choose an image")).toHaveAttribute(
+      "type",
+      "file"
+    )
+  })
+
+  it("uploads a chosen photo as multipart", async () => {
+    renderPage()
+    await waitFor(() =>
+      expect(screen.getByLabelText("First name")).toHaveValue("Robin")
+    )
+
+    const file = new File(["gif-bytes"], "avatar.gif", { type: "image/gif" })
+    fireEvent.change(screen.getByLabelText("Choose an image"), {
+      target: { files: [file] },
+    })
+    fireEvent.click(screen.getByRole("button", { name: /upload photo/i }))
+
+    await waitFor(() => {
+      expect(mockedPatch).toHaveBeenCalledWith(
+        "/accounts/me/",
+        expect.any(FormData)
+      )
+    })
+
+    const form = mockedPatch.mock.calls[0]?.[1] as FormData
+    expect(form.get("profile_photo")).toBe(file)
+    expect(await screen.findByText("Profile photo saved.")).toBeInTheDocument()
   })
 
   it("seeds the editable fields from the loaded account", async () => {

@@ -32,7 +32,12 @@ from rest_framework.test import APIClient
 from rest_framework.views import APIView
 
 from core.client_ip import client_address, throttle_identity
-from core.email import RESEND_ENDPOINT, ResendEmailBackend
+from core.email import (
+    BREVO_ENDPOINT,
+    RESEND_ENDPOINT,
+    BrevoEmailBackend,
+    ResendEmailBackend,
+)
 from core.exceptions import custom_exception_handler, drf_validation_error_from
 from core.throttling import LoginRateThrottle
 
@@ -342,7 +347,7 @@ class ThrottleCountsTheClientTest(SimpleTestCase):
         self.assertEqual(other.status_code, 200)
 
 
-class ResendEmailBackendTests(SimpleTestCase):
+class HttpApiEmailBackendTestsMixin:
     """
     The provider's HTTP API, not SMTP.
 
@@ -350,6 +355,23 @@ class ResendEmailBackendTests(SimpleTestCase):
     over HTTPS - and it has to fail fast and loudly enough that a caller can
     catch it and still answer the request.
     """
+
+    #: The backend under test, the endpoint it posts to, and the key it reads.
+    backend_class = None
+    endpoint = ""
+    key_setting = ""
+    key_value = ""
+
+    def _backend(self, **kwargs):
+        return self.backend_class(**kwargs)
+
+    def _message(self):
+        return EmailMessage(
+            subject="Your reset link",
+            body="Open the link.",
+            from_email="no-reply@example.com",
+            to=["learner@example.com"],
+        )
 
     @contextlib.contextmanager
     def _post(self, status_code=200):
@@ -361,81 +383,116 @@ class ResendEmailBackendTests(SimpleTestCase):
         ) as post:
             yield post
 
-    @override_settings(RESEND_API_KEY="re_test_key")
+    def _key_override(self, value):
+        return override_settings(**{self.key_setting: value})
+
     def test_the_message_is_posted_to_the_provider(self):
-        with self._post() as post:
-            sent = ResendEmailBackend().send_messages([
-                EmailMessage(
-                    subject="Your reset link",
-                    body="Open the link.",
-                    from_email="no-reply@example.com",
-                    to=["learner@example.com"],
-                )
-            ])
+        with self._key_override(self.key_value):
+            with self._post() as post:
+                sent = self._backend().send_messages([self._message()])
 
         self.assertEqual(sent, 1)
-        url = post.call_args.args[0]
-        self.assertEqual(url, RESEND_ENDPOINT)
+        self.assertEqual(post.call_args.args[0], self.endpoint)
+        payload = post.call_args.kwargs["json"]
+        self.assertEqual(payload["subject"], "Your reset link")
+
+    def test_the_request_is_bounded_by_a_timeout(self):
+        with self._key_override(self.key_value):
+            with self._post() as post:
+                self._backend().send_messages([self._message()])
+
+        self.assertIsNotNone(post.call_args.kwargs["timeout"])
+
+    def test_a_failure_raises_when_the_caller_wants_to_know(self):
+        with self._key_override(self.key_value):
+            with mock.patch(
+                "core.email.requests.post", side_effect=RuntimeError("no route")
+            ):
+                with self.assertRaises(RuntimeError):
+                    self._backend().send_messages([self._message()])
+
+    def test_a_failure_is_swallowed_when_the_caller_asked_for_silence(self):
+        with self._key_override(self.key_value):
+            with mock.patch(
+                "core.email.requests.post", side_effect=RuntimeError("no route")
+            ):
+                sent = self._backend(fail_silently=True).send_messages(
+                    [self._message()]
+                )
+
+        self.assertEqual(sent, 0)
+
+    def test_without_a_key_nothing_is_sent(self):
+        with self._key_override(""):
+            with mock.patch("core.email.requests.post") as post:
+                with self.assertRaises(RuntimeError):
+                    self._backend().send_messages([self._message()])
+
+        post.assert_not_called()
+
+
+class ResendEmailBackendTests(HttpApiEmailBackendTestsMixin, SimpleTestCase):
+    backend_class = ResendEmailBackend
+    endpoint = RESEND_ENDPOINT
+    key_setting = "RESEND_API_KEY"
+    key_value = "re_test_key"
+
+    def test_the_payload_and_the_authorization_header(self):
+        with self._key_override(self.key_value):
+            with self._post() as post:
+                ResendEmailBackend().send_messages([self._message()])
+
         payload = post.call_args.kwargs["json"]
         self.assertEqual(payload["from"], "no-reply@example.com")
         self.assertEqual(payload["to"], ["learner@example.com"])
-        self.assertEqual(payload["subject"], "Your reset link")
         self.assertEqual(payload["text"], "Open the link.")
         self.assertEqual(
             post.call_args.kwargs["headers"]["Authorization"], "Bearer re_test_key"
         )
 
-    @override_settings(RESEND_API_KEY="re_test_key")
-    def test_the_request_is_bounded_by_a_timeout(self):
-        with self._post() as post:
-            ResendEmailBackend().send_messages([
-                EmailMessage(
-                    subject="s", body="b", from_email="no-reply@example.com",
-                    to=["learner@example.com"],
-                )
-            ])
 
-        self.assertIsNotNone(post.call_args.kwargs["timeout"])
+class BrevoEmailBackendTests(HttpApiEmailBackendTestsMixin, SimpleTestCase):
+    backend_class = BrevoEmailBackend
+    endpoint = BREVO_ENDPOINT
+    key_setting = "BREVO_API_KEY"
+    key_value = "xkeysib-test-key"
 
-    @override_settings(RESEND_API_KEY="re_test_key")
-    def test_a_failure_raises_when_the_caller_wants_to_know(self):
-        with mock.patch(
-            "core.email.requests.post", side_effect=RuntimeError("no route")
-        ):
-            with self.assertRaises(RuntimeError):
-                ResendEmailBackend().send_messages([
-                    EmailMessage(
-                        subject="s", body="b", from_email="no-reply@example.com",
-                        to=["learner@example.com"],
-                    )
-                ])
+    def test_the_payload_and_the_api_key_header(self):
+        with self._key_override(self.key_value):
+            with self._post() as post:
+                BrevoEmailBackend().send_messages([self._message()])
 
-    @override_settings(RESEND_API_KEY="re_test_key")
-    def test_a_failure_is_swallowed_when_the_caller_asked_for_silence(self):
-        with mock.patch(
-            "core.email.requests.post", side_effect=RuntimeError("no route")
-        ):
-            sent = ResendEmailBackend(fail_silently=True).send_messages([
-                EmailMessage(
-                    subject="s", body="b", from_email="no-reply@example.com",
-                    to=["learner@example.com"],
-                )
-            ])
+        payload = post.call_args.kwargs["json"]
+        self.assertEqual(
+            payload["sender"],
+            {"name": "no-reply@example.com", "email": "no-reply@example.com"},
+        )
+        self.assertEqual(payload["to"], [{"email": "learner@example.com"}])
+        self.assertEqual(payload["textContent"], "Open the link.")
+        self.assertIn("Open the link.", payload["htmlContent"])
+        self.assertEqual(
+            post.call_args.kwargs["headers"]["api-key"], "xkeysib-test-key"
+        )
 
-        self.assertEqual(sent, 0)
+    def test_a_named_sender_is_split_into_name_and_address(self):
+        message = EmailMessage(
+            subject="s",
+            body="b",
+            from_email="His Care Christian Institute <no-reply@example.com>",
+            to=["learner@example.com"],
+        )
+        with self._key_override(self.key_value):
+            with self._post() as post:
+                BrevoEmailBackend().send_messages([message])
 
-    @override_settings(RESEND_API_KEY="")
-    def test_without_a_key_nothing_is_sent(self):
-        with mock.patch("core.email.requests.post") as post:
-            with self.assertRaises(RuntimeError):
-                ResendEmailBackend().send_messages([
-                    EmailMessage(
-                        subject="s", body="b", from_email="no-reply@example.com",
-                        to=["learner@example.com"],
-                    )
-                ])
-
-        post.assert_not_called()
+        payload = post.call_args.kwargs["json"]
+        self.assertEqual(
+            payload["sender"],
+            {
+                "name": "His Care Christian Institute",
+                "email": "no-reply@example.com",
+            },
+        )
 
 
 class HealthProbeTests(TestCase):

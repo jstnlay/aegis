@@ -692,6 +692,38 @@ class SEC001SelfServicePrivilegeEscalationTest(TestCase):
         self.assertEqual(detail_response.status_code, status.HTTP_200_OK)
         self.assertEqual(detail_response.data["role"], "student")
 
+    def test_profile_photo_can_be_uploaded_via_me(self):
+        """The profile photo is a self-service field, not an admin one."""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        # A 1x1 GIF: Pillow validates the content, so the bytes must be a real
+        # image rather than a renamed text file.
+        gif = (
+            b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff"
+            b"!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01"
+            b"\x00\x00\x02\x02D\x01\x00;"
+        )
+        user = self.users["student"]
+        self._authenticate(user)
+
+        with tempfile.TemporaryDirectory() as media_root, override_settings(
+            MEDIA_ROOT=media_root
+        ):
+            response = self.client.patch(
+                self.me_url,
+                {
+                    "profile_photo": SimpleUploadedFile(
+                        "avatar.gif", gif, content_type="image/gif"
+                    )
+                },
+                format="multipart",
+            )
+
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+            user.refresh_from_db()
+            self.assertTrue(user.profile_photo.name.startswith("profile_photos/"))
+            self.assertIn("profile_photos/", response.data["profile_photo"])
+
 
 # ---------------------------------------------------------------------------
 # SEC-002 regression tests: authentication throttling

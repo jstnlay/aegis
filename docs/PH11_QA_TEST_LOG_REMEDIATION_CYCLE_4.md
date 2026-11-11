@@ -145,6 +145,12 @@ implemented are re-tests, not code work.
   proxy timeout. Fixed with `core.email.ResendEmailBackend` (the provider's
   HTTP API on 443, which the platform allows) and an explicit
   `EMAIL_TIMEOUT` of 10 seconds for the SMTP path.
+- **Provider choice.** Resend needs a verified *domain* to send to anyone;
+  without one it delivers only to the address on the Resend account, so the
+  seeded `*.qa@aegis.local` accounts can never receive mail. Brevo needs a
+  verified *email address* only, so it is the provider that works for a
+  deployment without a domain. `core.email` now holds one HTTP backend with
+  a provider-specific endpoint, key header and payload.
 - **The audit trail recorded the CDN's edge, not the client.** `REMOTE_ADDR`
   behind Cloudflare is Cloudflare's address, so the audit's IP column named
   the same edge for every request and identified nobody. The audit now

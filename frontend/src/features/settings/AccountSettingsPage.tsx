@@ -1,5 +1,5 @@
 import { Settings } from "lucide-react"
-import { useState, type FormEvent } from "react"
+import { useEffect, useRef, useState, type FormEvent } from "react"
 import { Link } from "react-router-dom"
 
 import { Badge } from "@/components/ui/badge"
@@ -21,11 +21,13 @@ import {
   useNotificationPreference,
   useUpdateNotificationPreference,
   useUpdateProfile,
+  useUploadProfilePhoto,
   optionalText,
   type CurrentUser,
   type NotificationPreference,
 } from "@/features/settings/api"
 import { normalizeApiError } from "@/lib/error"
+import { profilePhotoSrc } from "@/lib/profile-photo"
 import { CONTACT } from "@/lib/school-content"
 
 /**
@@ -83,13 +85,111 @@ function SuccessNote({ message }: { message: string }) {
   )
 }
 
-/**
- * Profile form.
- *
- * Seeds from `useCurrentUser`. The seed runs once per loaded user identity
- * rather than on every render, so an in-progress edit is not clobbered by a
- * background refetch of the same account.
- */
+function initials(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .filter((_, index, parts) => index === 0 || index === parts.length - 1)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase()
+}
+
+/** Editable profile picture, uploaded to `PATCH /accounts/me/` as multipart. */
+function ProfilePhotoCard({ user }: { user: CurrentUser }) {
+  const upload = useUploadProfilePhoto()
+  const inputRef = useRef<HTMLInputElement>(null)
+  const previewRef = useRef<string | null>(null)
+  const [file, setFile] = useState<File | null>(null)
+  const [preview, setPreview] = useState<string | null>(null)
+
+  function chooseFile(next: File | null) {
+    if (previewRef.current) URL.revokeObjectURL(previewRef.current)
+    previewRef.current = next ? URL.createObjectURL(next) : null
+    setPreview(previewRef.current)
+    setFile(next)
+  }
+
+  useEffect(
+    () => () => {
+      if (previewRef.current) URL.revokeObjectURL(previewRef.current)
+    },
+    []
+  )
+
+  const name = `${user.first_name} ${user.last_name}`.trim()
+  const image = preview ?? profilePhotoSrc(user.profile_photo)
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!file) return
+    try {
+      await upload.mutateAsync(file)
+      chooseFile(null)
+      if (inputRef.current) inputRef.current.value = ""
+    } catch {
+      // Surfaced from `upload.isError` below.
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="space-y-1">
+          <CardTitle>Profile photo</CardTitle>
+          <CardDescription>
+            Shown beside your name in the app. Optional.
+          </CardDescription>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="flex flex-wrap items-center gap-4">
+            <span className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-muted text-lg font-semibold text-muted-foreground">
+              {image ? (
+                <img
+                  src={image}
+                  alt={`${name || "Your"} profile photo`}
+                  className="size-full object-cover"
+                />
+              ) : (
+                <span aria-hidden="true">{initials(name) || "?"}</span>
+              )}
+            </span>
+            <div className="min-w-0 flex-1 space-y-1.5">
+              <Label htmlFor="profile-photo">Choose an image</Label>
+              <Input
+                id="profile-photo"
+                ref={inputRef}
+                type="file"
+                accept="image/*"
+                onChange={(event) => {
+                  upload.reset()
+                  chooseFile(event.target.files?.[0] ?? null)
+                }}
+              />
+              <p className="text-xs text-muted-foreground">
+                JPG, PNG or GIF. The file is stored with your account.
+              </p>
+            </div>
+          </div>
+
+          {upload.isError ? (
+            <ErrorNote message={normalizeApiError(upload.error).message} />
+          ) : null}
+          {upload.isSuccess ? (
+            <SuccessNote message="Profile photo saved." />
+          ) : null}
+
+          <Button type="submit" disabled={upload.isPending || !file}>
+            {upload.isPending ? "Uploading…" : "Upload photo"}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
+  )
+}
+
 /**
  * The seeded profile form.
  *
@@ -229,7 +329,12 @@ function ProfileSection() {
   const user = userQuery.data
   if (!user) return null
 
-  return <ProfileForm key={user.id} user={user} />
+  return (
+    <div className="space-y-4">
+      <ProfilePhotoCard user={user} />
+      <ProfileForm key={user.id} user={user} />
+    </div>
+  )
 }
 
 /** Read-only identity summary. Nothing here is writable through `/accounts/me/`. */
@@ -266,12 +371,6 @@ function IdentityCard() {
             <div className="text-xs text-muted-foreground">Email</div>
             <div className="text-sm" data-account-field="email">
               {user.email}
-            </div>
-          </div>
-          <div className="space-y-1">
-            <div className="text-xs text-muted-foreground">Username</div>
-            <div className="text-sm" data-account-field="username">
-              {user.username}
             </div>
           </div>
         </div>

@@ -14,6 +14,7 @@ vi.mock("@/features/auth/AuthContext", () => ({
       first_name: "Admin",
       last_name: "User",
       role: "admin",
+      profile_photo: null,
       phone_number: null,
       address: null,
       language_preference: null,

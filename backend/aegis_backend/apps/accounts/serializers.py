@@ -125,8 +125,9 @@ class UserProfileSerializer(serializers.ModelSerializer):
     """
     Self-service serializer for GET/PATCH /api/v1/accounts/me/.
 
-    Writable: genuine profile fields only — names, contact details and
-    language preference, matching the specification's own-profile scope.
+    Writable: genuine profile fields only — names, profile photo, contact
+    details and language preference, matching the specification's own-profile
+    scope.
 
     Server-controlled (read-only): the login identity (email is the
     USERNAME_FIELD, username defaults server-side) and account state
@@ -139,8 +140,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
         model = User
         fields = (
             "id", "email", "username", "first_name", "last_name",
-            "role", "phone_number", "address", "language_preference",
-            "is_active", "created_at", "updated_at",
+            "role", "profile_photo", "phone_number", "address",
+            "language_preference", "is_active", "created_at", "updated_at",
         )
         read_only_fields = (
             "id", "email", "username", "role",

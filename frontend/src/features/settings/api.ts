@@ -26,8 +26,8 @@ import { apiClient } from "@/lib/api"
  *   - `role` and `is_active` are account state.
  *
  * None of those can be written through this serializer, so no mutation in this
- * module ever sends them. The four writable fields are the only ones the
- * settings form offers.
+ * module ever sends them. The profile photo and the four text fields are the
+ * only ones the settings form offers.
  */
 export interface CurrentUser {
   id: string
@@ -36,6 +36,7 @@ export interface CurrentUser {
   first_name: string
   last_name: string
   role: string
+  profile_photo: string | null
   phone_number: string | null
   address: string | null
   /**
@@ -185,6 +186,28 @@ export function useUpdateProfile() {
         "/accounts/me/",
         payload
       )
+      return data
+    },
+    onSuccess: (user) => {
+      queryClient.setQueryData(CURRENT_USER_KEY, user)
+    },
+  })
+}
+
+/**
+ * `PATCH /accounts/me/` with `profile_photo` as multipart.
+ *
+ * Sent as `FormData` rather than JSON because the field is an `ImageField`; the
+ * browser sets the multipart boundary. The response is the full user, so the
+ * cache is replaced with the server's URL for the stored file.
+ */
+export function useUploadProfilePhoto() {
+  const queryClient = useQueryClient()
+  return useMutation<CurrentUser, Error, File>({
+    mutationFn: async (file) => {
+      const form = new FormData()
+      form.append("profile_photo", file)
+      const { data } = await apiClient.patch<CurrentUser>("/accounts/me/", form)
       return data
     },
     onSuccess: (user) => {

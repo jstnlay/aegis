@@ -152,6 +152,10 @@ services:
       # outbound SMTP ports, so mail goes over HTTPS through this key.
       - key: RESEND_API_KEY
         sync: false
+      # Key for the other provider's HTTP API. Brevo sends from a verified
+      # email address, so it is the one that works without a domain.
+      - key: BREVO_API_KEY
+        sync: false
 
       - key: JWT_ACCESS_LIFETIME_MINUTES
         value: "30"

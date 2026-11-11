@@ -78,7 +78,42 @@ Add it for **Preview** too if preview deployments should reach the API, then
 **Redeploy**. A Vite build bakes the value in, so saving the variable is not
 enough.
 
-## Resend, step by step
+## Outgoing mail
+
+### Mail goes over HTTPS, not SMTP
+
+The free compute plan **blocks outbound traffic on the SMTP ports** (25, 465
+and 587), so an SMTP connection from this deployment never completes: the
+request hangs until the platform's proxy gives up and answers 500, and the
+password reset never arrives. Two ways out:
+
+- **Free plan (current):** use a provider's HTTP API.
+
+  | Variable | Value |
+  | --- | --- |
+  | `EMAIL_BACKEND` | `core.email.BrevoEmailBackend` (or `core.email.ResendEmailBackend`) |
+  | `BREVO_API_KEY` | the Brevo key, for the Brevo backend |
+  | `RESEND_API_KEY` | the Resend key, for the Resend backend |
+  | `DEFAULT_FROM_EMAIL` | a verified sender address |
+
+  `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD` and
+  `EMAIL_USE_TLS` are then unused.
+
+  The two providers differ in one way that matters here. **Resend** needs a
+  verified *domain* to send to anyone; until one is verified it delivers only
+  to the address on the Resend account. **Brevo** needs a verified *email
+  address*, which is enough to send to anyone - so a deployment without a
+  domain of its own can still deliver.
+- **Paid plan:** Django's own SMTP backend works. Set `EMAIL_BACKEND` to
+  `django.core.mail.backends.smtp.EmailBackend` with `EMAIL_HOST=smtp.resend.com`,
+  `EMAIL_PORT=587`, `EMAIL_HOST_USER=resend`, `EMAIL_HOST_PASSWORD` the key
+  and `EMAIL_USE_TLS=True`.
+
+`EMAIL_TIMEOUT` (default 10 seconds) bounds the attempt either way. Django's
+own default is no timeout at all, which is what let a blocked connect hold the
+request open until the platform killed it.
+
+### Resend, step by step
 
 1. Resend dashboard → **API Keys** → **Create API Key**, name it `AEGIS`.
    Copy the key (it starts with `re_`). It is shown once.
@@ -90,31 +125,20 @@ enough.
    `no-reply@mail.<your-domain>`. An unverified from-address is silently
    dropped by Resend, and the parent never receives the invitation.
 
-### Mail goes over HTTPS, not SMTP
+### Brevo, step by step (no domain needed)
 
-The free compute plan **blocks outbound traffic on the SMTP ports** (25, 465
-and 587), so an SMTP connection from this deployment never completes: the
-request hangs until the platform's proxy gives up and answers 500, and the
-password reset never arrives. Two ways out:
-
-- **Free plan (current):** use the HTTP API. Set
-
-  | Variable | Value |
-  | --- | --- |
-  | `EMAIL_BACKEND` | `core.email.ResendEmailBackend` |
-  | `RESEND_API_KEY` | the `re_...` key |
-  | `DEFAULT_FROM_EMAIL` | a verified address, or `onboarding@resend.dev` |
-
-  `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD` and
-  `EMAIL_USE_TLS` are then unused.
-- **Paid plan:** Django's own SMTP backend works. Set `EMAIL_BACKEND` to
-  `django.core.mail.backends.smtp.EmailBackend` with `EMAIL_HOST=smtp.resend.com`,
-  `EMAIL_PORT=587`, `EMAIL_HOST_USER=resend`, `EMAIL_HOST_PASSWORD` the key
-  and `EMAIL_USE_TLS=True`.
-
-`EMAIL_TIMEOUT` (default 10 seconds) bounds the attempt either way. Django's
-own default is no timeout at all, which is what let a blocked connect hold the
-request open until the platform killed it.
+1. Sign up at **brevo.com** and confirm the account email.
+2. **Senders & Domains** → **Verify a new email address** → add the address
+   the school wants to send from (for example `aegisofficialsupport@gmail.com`).
+   Brevo emails a confirmation link; the address is unusable until that link
+   is clicked. A *domain* can be authenticated instead, which is better for
+   a school's mail but needs DNS access.
+3. **SMTP & API** → **API Keys** → **Generate a new API key** → name it
+   `AEGIS`. The key starts with `xkeysib-` and is shown once.
+4. Set `EMAIL_BACKEND=core.email.BrevoEmailBackend`, `BREVO_API_KEY` to that
+   key, and `DEFAULT_FROM_EMAIL` to the verified address.
+5. Free tier: 300 mails a day, which is far beyond what a school needs in a
+   day of testing.
 
 ## Why the Redis instance exists
 

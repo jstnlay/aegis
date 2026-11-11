@@ -3,6 +3,7 @@ import { DropdownMenu } from "radix-ui"
 import { ChevronUp, LogOut, Settings } from "lucide-react"
 import { Link } from "react-router-dom"
 import { useAuth } from "@/features/auth/AuthContext"
+import { profilePhotoSrc } from "@/lib/profile-photo"
 import { ROLE_LABELS, userDisplayName } from "@/lib/roles"
 import { SignOutDialog } from "./SignOutDialog"
 import "./sidebar-account.css"
@@ -20,6 +21,7 @@ export function SidebarAccount({
   const trigger = useRef<HTMLButtonElement>(null)
   const [signOutOpen, setSignOutOpen] = useState(false)
   const name = userDisplayName(user) || "Signed in"
+  const photo = profilePhotoSrc(user?.profile_photo)
   const initials = name
     .split(/\s+/)
     .filter(Boolean)
@@ -39,7 +41,15 @@ export function SidebarAccount({
           title={`${name}${user?.email ? ` · ${user.email}` : ""}`}
         >
           <span className="app-sidebar-user-avatar" aria-hidden="true">
-            {initials}
+            {photo ? (
+              <img
+                src={photo}
+                alt=""
+                className="app-sidebar-user-avatar-image"
+              />
+            ) : (
+              initials
+            )}
           </span>
           <span className="app-sidebar-user-copy">
             <span className="sidebar-account-role">

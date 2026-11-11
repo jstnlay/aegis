@@ -24,6 +24,7 @@ export interface User {
   first_name: string
   last_name: string
   role: Role
+  profile_photo: string | null
   phone_number: string | null
   address: string | null
   language_preference: string | null

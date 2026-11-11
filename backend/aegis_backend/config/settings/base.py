@@ -377,6 +377,11 @@ EMAIL_TIMEOUT = config("EMAIL_TIMEOUT", default=10, cast=int)
 #: The key for the provider's HTTP API. Used by ``core.email.ResendEmailBackend``.
 RESEND_API_KEY = config("RESEND_API_KEY", default="")
 
+#: The key for the provider's HTTP API. Used by ``core.email.BrevoEmailBackend``.
+#: Brevo sends from a verified email address, so it is the provider that
+#: works for a deployment without a domain of its own.
+BREVO_API_KEY = config("BREVO_API_KEY", default="")
+
 # ---------------------------------------------------------------------------
 # CORS
 # ---------------------------------------------------------------------------

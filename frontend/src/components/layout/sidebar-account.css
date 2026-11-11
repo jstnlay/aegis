@@ -180,3 +180,9 @@
 .sidebar-account-menu .sidebar-account-sign-out small {
   color: #b12030;
 }
+.app-sidebar-user-avatar-image {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
