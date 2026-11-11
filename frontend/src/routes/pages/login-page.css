@@ -281,8 +281,8 @@
 }
 .school-login-support {
   margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px solid color-mix(in srgb, var(--primary) 12%, var(--card));
+  padding-top: 0;
+  border-top: 0;
 }
 .school-login-register {
   color: #68554b;
@@ -477,9 +477,9 @@
     background: #7c202d;
   }
   .school-login-support {
-    margin-top: 18px;
-    padding-top: 14px;
-    border-top-color: #e8ded6;
+    margin-top: 14px;
+    padding-top: 0;
+    border-top: 0;
   }
   .school-login-return {
     margin-top: 12px;
@@ -526,8 +526,8 @@
       gap: 18px;
     }
     .school-login-support {
-      margin-top: 12px;
-      padding-top: 10px;
+      margin-top: 14px;
+      padding-top: 0;
     }
     .school-login-return {
       margin-top: 6px;
@@ -564,16 +564,33 @@
     color: #8a2330;
   }
   .school-login-help {
-    margin-bottom: 10px;
+    margin-bottom: 8px;
     text-align: center;
-    font-size: 12px;
+    font-size: 11px;
     line-height: 1.5;
     color: #857269;
   }
   .school-login-help a {
-    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    vertical-align: baseline;
+    white-space: nowrap;
+    color: #982a43;
+    font-weight: 500;
+    padding: 2px 5px;
+    line-height: 1.5;
+    border-radius: 4px;
+    background: #f5d5de;
+    transition:
+      color 140ms ease,
+      background-color 140ms ease;
     text-decoration: underline;
-    text-decoration-color: #cdb4ab;
+    text-underline-offset: 3px;
+    text-decoration-color: #cc7f94;
+  }
+  .school-login-help a:hover {
+    color: #822d3e;
+    background-color: #efc7d2;
   }
 }
 @keyframes login-form-enter {
@@ -751,8 +768,8 @@
     font-size: 12px;
   }
   .school-login-page .school-login-support {
-    margin-top: 20px;
-    padding-top: 16px;
+    margin-top: 14px;
+    padding-top: 0;
   }
 }
 @media (max-width: 1103px) and (max-height: 740px) {
@@ -769,7 +786,7 @@
   }
   .school-login-page .school-login-support {
     margin-top: 14px;
-    padding-top: 12px;
+    padding-top: 0;
   }
 }
 /* Architectural arcs and a satin color field frame the sign-in composition. */

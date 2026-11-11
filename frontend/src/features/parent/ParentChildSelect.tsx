@@ -56,7 +56,18 @@ export function ParentChildSelect({
         <Label htmlFor={id}>{label}</Label>
         <Select value={selectedId} onValueChange={onSelect}>
           <SelectTrigger id={id}>
-            <SelectValue placeholder="Choose a student" />
+            <SelectValue placeholder="Choose a student">
+              {child ? (
+                <span className="parent-child-selection">
+                  <span className="parent-child-selection-name">
+                    {child.student_name}
+                  </span>
+                  <span className="parent-child-selection-section">
+                    {child.section_name || "Section not assigned"}
+                  </span>
+                </span>
+              ) : undefined}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             {linked.map((student) => (

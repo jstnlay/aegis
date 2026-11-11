@@ -102,15 +102,33 @@
     display: inline-flex;
   }
   [role="tab"]:hover {
-    color: var(--primary);
-    background: color-mix(in srgb, var(--primary) 5%, var(--card));
+    color: #842b3c;
+    background: #f7e9ec;
+    border-color: #e4bcc6;
   }
   [role="tab"][aria-selected="true"] {
-    color: var(--primary-foreground);
-    background: var(--primary);
+    color: #842b3c;
+    background: linear-gradient(180deg, #f9eaee, #f1d7df);
+    border-color: #d6a2b0;
     box-shadow:
-      inset 0 1px #ffffff24,
-      0 3px 8px color-mix(in srgb, var(--primary) 16%, transparent);
+      inset 0 1px #fff,
+      inset 0 -2px #ac536b,
+      0 2px 6px #7c2d4210;
+  }
+  [role="tab"][aria-selected="true"]:hover {
+    color: #742234;
+    background: linear-gradient(180deg, #f8e5eb, #edcdd7);
+  }
+  [role="tab"] {
+    transition:
+      background-color 150ms ease,
+      border-color 150ms ease,
+      color 150ms ease;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    [role="tab"] {
+      transition: none;
+    }
   }
   > [role="tabpanel"] > [data-slot="card"] {
     gap: 0;

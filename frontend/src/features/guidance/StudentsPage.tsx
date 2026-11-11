@@ -39,10 +39,10 @@ type ActivityFilter = NonNullable<GuidanceStudentFilters["activity"]>
 const NO_CODE = "—"
 
 /** Rows per page for a list that can reach the size of a school cohort. */
-const PAGE_SIZE = 25
+const PAGE_SIZE = 10
 
 /** Page sizes offered for this list. */
-const PAGE_SIZE_OPTIONS = [25, 50, 100] as const
+const PAGE_SIZE_OPTIONS = [5, 10, 25, 50] as const
 
 function PageHeading() {
   return (
@@ -211,7 +211,7 @@ export function StudentsPage() {
           <div className="space-y-1">
             <CardTitle>Students with guidance activity</CardTitle>
             <CardDescription>
-              Showing {visible.length} of {students.length} · {atRiskCount} at
+              Showing {pageRows.length} of {visible.length} · {atRiskCount} at
               risk
             </CardDescription>
           </div>

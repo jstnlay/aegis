@@ -56,8 +56,9 @@ export function RiskLevelBars({ alerts }: { alerts: readonly RiskAlert[] }) {
           />
           <Bar
             dataKey="count"
-            barSize={14}
-            radius={[0, 3, 3, 0]}
+            barSize={16}
+            radius={[0, 6, 6, 0]}
+            background={{ fill: "#f2ebea", radius: 6 }}
             isAnimationActive={false}
           >
             {rows.map((row) => (

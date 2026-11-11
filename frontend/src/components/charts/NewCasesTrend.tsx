@@ -6,7 +6,9 @@ import {
   Tooltip,
   XAxis,
   YAxis,
+  LabelList,
 } from "recharts"
+import { useId } from "react"
 
 import { ChartFrame } from "@/components/charts/ChartCard"
 import {
@@ -30,17 +32,20 @@ import type { RiskAlert } from "@/features/guidance/api"
  */
 export function NewCasesTrendChart({
   alerts,
+  height = 150,
 }: {
   alerts: readonly RiskAlert[]
+  height?: number | string
 }) {
   const months = newCasesPerMonth(alerts)
+  const gradientId = useId().replace(/:/g, "")
   const total = months.reduce((sum, month) => sum + month.count, 0)
 
   if (!hasRecentCaseHistory(alerts)) return null
 
   return (
     <ChartFrame
-      height={150}
+      height={height}
       label={`Bar chart of new cases per month over the last six months: ${months
         .map((month) => `${month.label} ${month.count}`)
         .join(", ")}.`}
@@ -48,12 +53,18 @@ export function NewCasesTrendChart({
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
           data={months}
-          margin={{ top: 8, right: 4, bottom: 0, left: -18 }}
+          margin={{ top: 28, right: 12, bottom: 8, left: -12 }}
         >
+          <defs>
+            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#dc7184" />
+              <stop offset="100%" stopColor="#992b46" />
+            </linearGradient>
+          </defs>
           <CartesianGrid
             vertical={false}
             stroke={GRID_COLOR}
-            strokeDasharray="3 3"
+            strokeDasharray="2 5"
           />
           <XAxis
             dataKey="label"
@@ -86,11 +97,20 @@ export function NewCasesTrendChart({
           />
           <Bar
             dataKey="count"
-            fill="var(--risk-moderate)"
-            radius={[3, 3, 0, 0]}
-            maxBarSize={26}
+            fill={`url(#${gradientId})`}
+            radius={[7, 7, 0, 0]}
+            maxBarSize={38}
             isAnimationActive={false}
-          />
+          >
+            <LabelList
+              dataKey="count"
+              position="top"
+              formatter={(value: unknown) =>
+                Number(value) > 0 ? formatCountValue(Number(value)) : ""
+              }
+              className="fill-foreground text-xs font-semibold"
+            />
+          </Bar>
         </BarChart>
       </ResponsiveContainer>
       {/* Spoken once for the whole plot: the bars carry no per-point text. */}

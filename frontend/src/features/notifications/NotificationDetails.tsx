@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { BellRing } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 import { Link } from "react-router-dom"
 import { Button } from "@/components/ui/button"
@@ -68,6 +69,9 @@ export function NotificationDetails({
     >
       <DialogContent className="notification-details-dialog max-h-[85svh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
+          <span className="notification-details-emblem" aria-hidden="true">
+            <BellRing />
+          </span>
           <DialogTitle className="pr-8 leading-snug">
             {notification?.title}
           </DialogTitle>
@@ -79,7 +83,7 @@ export function NotificationDetails({
         </DialogHeader>
         {notification ? (
           <>
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <div className="notification-details-meta flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               <Badge variant="outline">
                 {notification.is_read ? "Read" : "Unread"}
               </Badge>
@@ -92,7 +96,7 @@ export function NotificationDetails({
                 From {notification.sender_full_name}
               </p>
             ) : null}
-            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+            <p className="notification-details-message whitespace-pre-wrap break-words text-sm leading-relaxed">
               {notification.message}
             </p>
             {noteId && user?.role === "guidance" ? (
@@ -170,7 +174,7 @@ export function NotificationDetails({
                 Delete this notification from your inbox?
               </p>
             ) : null}
-            <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
+            <div className="notification-details-actions flex flex-wrap justify-end gap-2 border-t pt-4">
               {href ? (
                 <Button asChild variant="outline">
                   <Link to={href} onClick={onClose}>

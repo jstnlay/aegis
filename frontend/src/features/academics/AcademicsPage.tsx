@@ -311,6 +311,8 @@ function StudentAcademics() {
   const gradesQuery = useStudentGrades(studentId)
 
   const grades = useMemo(() => gradesQuery.data ?? [], [gradesQuery.data])
+  const { pagination, pageRows, totalPages, setPageSize } =
+    useDataTablePagination(grades, 5, studentId ?? "")
 
   const average = useMemo(() => {
     const scored = grades
@@ -336,14 +338,14 @@ function StudentAcademics() {
       ) : null}
 
       <div className="student-academic-metrics grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-2">
-        <Card>
+        <Card data-metric="true">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">
               Average of recorded scores
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-2xl font-bold tabular-nums">
               {loading ? (
                 // PH11.11: announced placeholder. This skeleton was grey, silent
                 // and stateless — a reader heard the page title and nothing about
@@ -369,14 +371,14 @@ function StudentAcademics() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card data-metric="true">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">
               Finalized grades
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-2xl font-bold tabular-nums">
               {loading ? (
                 <PendingMetric label="Finalized grades" className="h-8 w-16" />
               ) : gradesQuery.isError ? (
@@ -414,10 +416,71 @@ function StudentAcademics() {
           ) : grades.length === 0 ? (
             <EmptyState message="No finalized grades yet." />
           ) : (
-            <GradeTable
-              grades={grades}
-              caption="Finalized grades, most recent grading period last."
-            />
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
+                <span>
+                  Showing {(pagination.page - 1) * pagination.pageSize + 1}?
+                  {Math.min(
+                    pagination.page * pagination.pageSize,
+                    grades.length
+                  )}{" "}
+                  of {grades.length} records
+                </span>
+                <label
+                  htmlFor="student-grades-page-size"
+                  className="flex items-center gap-2"
+                >
+                  Rows per page
+                  <select
+                    id="student-grades-page-size"
+                    value={pagination.pageSize}
+                    onChange={(event) =>
+                      setPageSize(Number(event.target.value))
+                    }
+                    className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                  >
+                    {[5, 10, 25].map((size) => (
+                      <option key={size} value={size}>
+                        {size}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <GradeTable
+                grades={pageRows}
+                caption="Finalized grades, most recent grading period last."
+              />
+              <nav
+                aria-label="Student grade record pages"
+                className="flex flex-wrap items-center justify-between gap-2"
+              >
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={pagination.page === 1}
+                  onClick={() => pagination.onPageChange(pagination.page - 1)}
+                >
+                  Previous
+                </Button>
+                <span
+                  className="text-xs text-muted-foreground"
+                  aria-live="polite"
+                >
+                  Page {pagination.page} of {totalPages}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={pagination.page === totalPages}
+                  onClick={() => pagination.onPageChange(pagination.page + 1)}
+                >
+                  Next
+                </Button>
+              </nav>
+            </div>
           )}
         </CardContent>
       </Card>

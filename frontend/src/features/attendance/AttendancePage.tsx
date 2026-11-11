@@ -392,7 +392,7 @@ function SectionAttendanceChart({
             <CartesianGrid
               vertical={false}
               stroke={GRID_COLOR}
-              strokeDasharray="3 3"
+              strokeDasharray="2 5"
             />
             <XAxis
               dataKey="name"

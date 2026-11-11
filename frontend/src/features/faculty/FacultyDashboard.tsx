@@ -432,10 +432,10 @@ function FacultyDashboard() {
                         {NOTE_TYPE_LABELS[note.note_type]}
                       </Badge>
                     </div>
-                    <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                    <p className="faculty-note-preview text-xs text-muted-foreground">
                       {note.note_text}
                     </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
+                    <p className="faculty-note-date text-xs text-muted-foreground">
                       {note.date_recorded}
                     </p>
                   </li>
@@ -495,7 +495,7 @@ function PendingGradesChart({
           <CartesianGrid
             vertical={false}
             stroke={GRID_COLOR}
-            strokeDasharray="3 3"
+            strokeDasharray="2 5"
           />
           <XAxis
             dataKey="name"
@@ -530,7 +530,7 @@ function PendingGradesChart({
             dataKey="count"
             name="Pending"
             fill={`url(#${gradientId})`}
-            radius={[4, 4, 0, 0]}
+            radius={[6, 6, 0, 0]}
             // Two bars in a full-width frame would each sprawl across half the
             // card; capped, they read as two columns instead of two walls.
             maxBarSize={120}

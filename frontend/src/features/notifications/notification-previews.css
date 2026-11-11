@@ -1,294 +1,303 @@
 .notification-previews {
   position: fixed;
   z-index: 90;
-  right: max(20px, env(safe-area-inset-right));
-  top: max(88px, calc(env(safe-area-inset-top) + 76px));
-  max-height: calc(100svh - 112px);
+  top: var(--preview-top, 88px);
+  right: var(--preview-right, 20px);
+  width: min(400px, calc(100vw - 24px));
+  max-height: calc(100dvh - var(--preview-top, 88px) - 20px);
   overflow-y: auto;
-  padding: 12px 4px 16px;
-  width: min(390px, calc(100vw - 32px));
-  display: grid;
-  gap: 10px;
+  padding: 4px 8px 24px;
+  border: 0;
+  background: transparent;
   pointer-events: none;
+  scrollbar-width: thin;
+  scrollbar-color: #c7b5c5 transparent;
+  font-family: "Inter Variable", sans-serif;
+}
+.notification-preview-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0 12px;
 }
 .notification-previews-heading {
   display: flex;
   align-items: center;
-  gap: 6px;
-  width: fit-content;
-  padding: 5px 10px;
-  border: 1px solid #e5d6cf;
-  border-radius: 20px;
-  background: #fffdfa;
-  color: #7d202b;
-  font-size: 11px;
-  font-weight: 600;
-  box-shadow: 0 2px 8px #42242c0a;
+  flex-wrap: wrap;
+  gap: 7px;
+  color: #672c3a;
+  font-size: 12px;
+  font-weight: 650;
+  padding: 8px 11px;
+  border: 1px solid #e7dbe3;
+  border-radius: 24px;
+  background: #f8dfe5f2;
+  box-shadow: 0 3px 12px #42243c0c;
 }
-.notification-previews-heading svg {
-  width: 13px;
-  height: 13px;
+.notification-previews-heading > svg {
+  width: 16px;
+  height: 16px;
+  color: #a52840;
 }
 .notification-previews-count {
-  color: #79685f;
-  font-weight: 400;
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: #efcbd4;
+  color: #904052;
+  font-size: 10px;
+  font-weight: 500;
 }
-.notification-preview {
-  position: relative;
+.notification-preview-clear {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 19px 16px 16px;
-  border: 1px solid #ddc6c4;
-  border-left: 3px solid #963c48;
-  border-radius: 15px;
-  background: linear-gradient(120deg, #fffdfa, #f7ece9);
-  color: #402c2d;
-  box-shadow: 0 12px 32px -12px #54263238;
+  gap: 5px;
+  flex-shrink: 0;
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 1px solid #e7dbe3;
+  background: #f9e5e9f2;
+  border-radius: 24px;
+  box-shadow: 0 3px 12px #42243c0c;
   pointer-events: auto;
+  color: #7b687a;
+  font-size: 11px;
+  cursor: pointer;
+}
+.notification-preview-clear svg {
+  width: 12px;
+  height: 12px;
+}
+.notification-preview-clear:hover {
+  background: #e5dce8;
+  color: #56384f;
+}
+.notification-preview {
+  --preview-accent: #a52840;
+  --preview-tint: #f5ced7;
+  position: relative;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px 13px;
+  margin-bottom: 14px;
+  padding: 19px 17px 15px;
+  border: 1px solid #dfd0dc;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #fff0f1, #f3d1d9 70%, #f7dfe1);
+  color: #392e3e;
+  box-shadow:
+    0 18px 36px -14px #70263740,
+    0 3px 8px #40203b0c,
+    inset 0 1px #fff;
+  pointer-events: auto;
+}
+.notification-preview:last-child {
+  margin-bottom: 0;
+}
+/* Keep an opaque fallback when backdrop filtering is unavailable. */
+@supports (
+  (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))
+) {
+  .notification-preview {
+    background:
+      radial-gradient(ellipse at 0% 0%, #ffffffad, transparent 60%),
+      linear-gradient(135deg, #fce6e9dc, #efbccad9 70%, #f6d6dbde);
+    -webkit-backdrop-filter: blur(24px) saturate(150%);
+    backdrop-filter: blur(24px) saturate(150%);
+    border-color: #fff3f4ed;
+    box-shadow:
+      0 18px 36px -14px #70263740,
+      0 3px 8px #40203b0c,
+      inset 0 1px #fff,
+      inset 0 -1px #ffffff75;
+  }
+  .notification-previews-heading,
+  .notification-preview-clear {
+    background: #f7dce2e8;
+    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px);
+    border-color: #fff0f2e6;
+  }
+}
+.notification-preview[data-tone="warning"] {
+  --preview-accent: #976315;
+  --preview-tint: #fbf2dd;
+}
+.notification-preview[data-tone="danger"] {
+  --preview-accent: #b23c50;
+  --preview-tint: #fce8ec;
+}
+.notification-preview-emblem {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #fff, var(--preview-tint));
+  border: 1px solid color-mix(in srgb, var(--preview-accent) 18%, white);
+  box-shadow:
+    0 3px 8px #60345908,
+    inset 0 1px #fff;
+  color: var(--preview-accent);
+}
+.notification-preview-emblem svg {
+  width: 19px;
+  height: 19px;
+  stroke-width: 1.7;
 }
 .notification-preview-copy {
   min-width: 0;
-  flex: 1;
+}
+.notification-preview-eyebrow {
+  padding-right: 23px;
+  font-size: 9px;
+  line-height: 1.5;
+  letter-spacing: 0.05em;
+  font-weight: 650;
+  text-transform: uppercase;
+  color: var(--preview-accent);
 }
 .notification-preview h2 {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  overflow-wrap: anywhere;
-  font-size: 13px;
-  font-weight: 650;
-  line-height: 1.5;
-  padding-right: 12px;
-}
-.notification-preview p {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
   overflow-wrap: anywhere;
   margin-top: 5px;
-  color: #7b625d;
+  padding-right: 9px;
+  font-size: 14px;
+  line-height: 1.45;
+  letter-spacing: -0.02em;
+  font-weight: 650;
+  color: #352c3d;
+}
+.notification-preview p {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  margin-top: 6px;
   font-size: 12px;
-  line-height: 1.6;
+  line-height: 1.65;
+  color: #7a6b7e;
+}
+.notification-preview-time {
+  display: block;
+  margin-top: 10px;
+  font-size: 10px;
+  color: #817084;
+  font-variant-numeric: tabular-nums;
 }
 .notification-preview-close {
   position: absolute;
-  right: 0;
-  top: -10px;
+  top: 6px;
+  right: 6px;
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
-  border: 1px solid #ddc6c4;
+  width: 30px;
+  height: 30px;
+  border: 0;
   border-radius: 50%;
-  background: #fffdfa;
-  color: #8a3441;
+  background: transparent;
+  color: #a28e9f;
   cursor: pointer;
 }
 .notification-preview-close svg {
   width: 14px;
   height: 14px;
 }
+.notification-preview-close:hover {
+  background: #f4eef4;
+  color: #7e4162;
+}
 .notification-preview-view {
-  flex-shrink: 0;
-  min-height: 44px;
-  padding: 0 12px;
-  border-radius: 9px;
-  background: #812937;
+  grid-column: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: end;
+  gap: 6px;
+  margin-top: 2px;
+  min-height: 34px;
+  padding: 0 11px;
+  border: 1px solid color-mix(in srgb, var(--preview-accent) 90%, #322035);
+  border-radius: 10px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--preview-accent) 85%, #e86b7e),
+    var(--preview-accent)
+  );
   color: #fff;
-  font-size: 12px;
+  box-shadow:
+    0 3px 7px #60345916,
+    inset 0 1px #ffffff26;
+  font-size: 11px;
   font-weight: 600;
   cursor: pointer;
 }
+.notification-preview-view svg {
+  width: 13px;
+  height: 13px;
+}
 .notification-preview-view:hover {
-  background: #67202b;
+  background: color-mix(in srgb, var(--preview-accent) 85%, #241329);
 }
-.notification-preview-close:hover {
-  background: #f7ece9;
+.notification-previews button:focus-visible {
+  outline: 2px solid #8e4b70;
+  outline-offset: 2px;
 }
-.notification-preview button:focus-visible {
-  outline: 2px solid #963c48;
-  outline-offset: 3px;
+@media (prefers-reduced-motion: no-preference) {
+  .notification-preview {
+    animation: preview-arrive 320ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+    transition:
+      transform 180ms ease,
+      border-color 160ms,
+      box-shadow 160ms;
+  }
+  .notification-preview:nth-of-type(2) {
+    animation-delay: 65ms;
+  }
+  @media (hover: hover) {
+    .notification-preview:hover {
+      transform: translateY(-2px);
+    }
+  }
+  .notification-preview:hover {
+    border-color: #d6bfd1;
+    box-shadow:
+      0 18px 32px -12px #40203b40,
+      0 4px 10px #40203b10;
+  }
+  .notification-preview-view svg {
+    transition: transform 160ms;
+  }
+  .notification-preview-view:hover svg {
+    transform: translate(2px, -2px);
+  }
 }
-@keyframes notification-preview-enter {
+@keyframes preview-arrive {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(8px) scale(0.99);
   }
   to {
     opacity: 1;
     transform: none;
   }
 }
-@media (prefers-reduced-motion: no-preference) {
-  .notification-preview {
-    animation: notification-preview-enter 220ms ease-out;
-  }
-}
 @media (max-width: 640px) {
   .notification-previews {
-    right: max(12px, env(safe-area-inset-right));
-    width: min(360px, calc(100vw - 24px));
-    gap: 12px;
-  }
-  .notification-preview {
-    padding: 15px 12px 12px;
-    gap: 8px;
+    right: 12px;
   }
   .notification-preview-close {
-    width: 44px;
-    height: 44px;
-    top: -17px;
-    right: -4px;
-    border-color: transparent;
-    background: transparent;
-  }
-  .notification-preview-close svg {
-    padding: 3px;
-    width: 23px;
-    height: 23px;
-    border: 1px solid #ddc6c4;
-    border-radius: 50%;
-    background: #fffdfa;
-  }
-}
-@media (max-height: 500px) {
-  .notification-previews {
-    top: max(64px, env(safe-area-inset-top));
-    max-height: 70svh;
-    overflow-y: auto;
-    padding: 12px 4px;
-  }
-}
-/* Clear typography and porcelain surfaces for floating school updates. */
-.notification-previews {
-  width: min(410px, calc(100vw - 24px));
-  gap: 12px;
-  scrollbar-width: none;
-}
-.notification-previews-heading {
-  padding: 7px 12px;
-  border-color: #e7dcd7;
-  background: #fffdfa;
-  color: #65313b;
-  box-shadow: 0 3px 12px #3c202914;
-  letter-spacing: 0.01em;
-}
-.notification-preview {
-  align-items: flex-end;
-  padding: 18px;
-  gap: 14px;
-  border: 1px solid #e2d4d3;
-  border-radius: 18px;
-  background: linear-gradient(135deg, #fffefd 45%, #f8eff0);
-  box-shadow:
-    0 16px 40px -16px #4d263d40,
-    0 3px 8px #4d263d09,
-    inset 0 1px 0 #fff;
-}
-.notification-preview::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 24px;
-  bottom: 24px;
-  width: 3px;
-  border-radius: 0 3px 3px 0;
-  background: #963c48;
-}
-.notification-preview-eyebrow {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding-right: 24px;
-  color: #8a4552;
-  font-size: 10px;
-  font-weight: 650;
-  letter-spacing: 0.035em;
-  line-height: 1.5;
-}
-.notification-preview-eyebrow svg {
-  width: 13px;
-  height: 13px;
-  flex-shrink: 0;
-}
-.notification-preview h2 {
-  margin-top: 7px;
-  padding: 0;
-  color: #382b32;
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: -0.015em;
-  line-height: 1.45;
-}
-.notification-preview p {
-  color: #695e63;
-  font-size: 12px;
-  line-height: 1.65;
-  margin-top: 7px;
-}
-.notification-preview-time {
-  display: block;
-  margin-top: 10px;
-  color: #85767c;
-  font-size: 10px;
-  line-height: 1.4;
-  font-variant-numeric: tabular-nums;
-}
-.notification-preview-close {
-  top: 2px;
-  right: 2px;
-  width: 44px;
-  height: 44px;
-  border: 0;
-  border-radius: 12px;
-  background: transparent;
-  color: #89747b;
-}
-.notification-preview-close:hover {
-  background: #81293708;
-  color: #812937;
-}
-.notification-preview-close svg {
-  width: 16px;
-  height: 16px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-}
-.notification-preview-view {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  min-height: 44px;
-  padding: 0 12px;
-  background: #812937;
-  box-shadow:
-    inset 0 1px #ffffff24,
-    0 3px 8px #81293715;
-  border: 1px solid #752332;
-  border-radius: 11px;
-}
-.notification-preview-view svg {
-  width: 13px;
-  height: 13px;
-}
-@media (max-width: 640px) {
-  .notification-preview {
-    padding: 16px 14px;
-    gap: 10px;
-    border-radius: 16px;
-  }
-  .notification-preview h2 {
-    font-size: 13px;
-  }
-  .notification-preview-eyebrow {
-    font-size: 9px;
+    width: 36px;
+    height: 36px;
+    top: 2px;
+    right: 2px;
   }
   .notification-preview-view {
-    padding-inline: 10px;
+    min-height: 40px;
   }
 }

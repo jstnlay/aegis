@@ -103,7 +103,7 @@ export function SectionPerformanceChart({
               <CartesianGrid
                 vertical={false}
                 stroke={GRID_COLOR}
-                strokeDasharray="3 3"
+                strokeDasharray="2 5"
               />
               <XAxis
                 dataKey="name"
@@ -148,7 +148,7 @@ export function SectionPerformanceChart({
                 dataKey="average"
                 name="Average score"
                 fill="var(--primary)"
-                radius={[4, 4, 0, 0]}
+                radius={[6, 6, 0, 0]}
                 isAnimationActive={false}
               >
                 {/*

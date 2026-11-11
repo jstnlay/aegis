@@ -239,6 +239,32 @@ beforeEach(() => {
 })
 
 describe("FacultyAdvisoryPage roster", () => {
+  it("pages through recorded behavioral notes", async () => {
+    const notes = Array.from({ length: 11 }, (_, index) => ({
+      ...savedNote,
+      id: `paged-note-${index}`,
+      note_text: `Recorded observation ${index + 1}`,
+    }))
+    mockedFetchAllPages.mockImplementation(async (url: string) => {
+      if (url === "/guidance/behavioral-notes/") {
+        return { count: notes.length, results: notes }
+      }
+      return { count: 0, results: [] }
+    })
+    renderPage()
+    expect(
+      await screen.findByText("Recorded observation 1")
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText("Recorded observation 11")
+    ).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "Next" }))
+    expect(screen.getByText("Recorded observation 11")).toBeInTheDocument()
+    expect(screen.queryByText("Recorded observation 1")).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "Previous" }))
+    expect(screen.getByText("Recorded observation 1")).toBeInTheDocument()
+  })
+
   it("lists the scoped active enrollments and the saved notes", async () => {
     renderPage()
 

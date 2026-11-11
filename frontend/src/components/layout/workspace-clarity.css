@@ -9,7 +9,7 @@
     color: #302b28;
   }
   .app-main > .landing-background-art {
-    opacity: 0.3;
+    opacity: 0.18;
   }
   .app-header[data-dashboard="true"] {
     background: linear-gradient(110deg, #fffdfa, #f7ece6);
@@ -19,19 +19,20 @@
   .app-main .app-content {
     [data-slot="card"],
     [data-slot="card"]:not(:has(> [data-slot="card-content"] > .tabular-nums)) {
-      border: 1px solid #dacec4;
+      border: 1px solid
+        color-mix(in srgb, var(--panel-accent, #986d65) 38%, #e8dfda);
       border-radius: 18px;
       background: linear-gradient(
         135deg,
         #fffefd,
-        color-mix(in srgb, var(--panel-tint, #fcf8f3) 36%, #fffdfa)
+        color-mix(in srgb, var(--panel-tint, #fcf8f3) 24%, #fffdfa)
       );
       -webkit-backdrop-filter: none;
       backdrop-filter: none;
       box-shadow:
         inset 0 1px 0 #fff,
-        0 3px 7px #644b3505,
-        0 9px 23px #644b350a;
+        0 3px 7px #644b3508,
+        0 9px 23px #644b3510;
       color: #302b28;
     }
     [data-slot="card"]:not(:has(> [data-slot="card-content"] > .tabular-nums))
@@ -41,7 +42,11 @@
         color-mix(in srgb, var(--panel-tint, #f5eae3) 60%, #fffdfa),
         #fcf8f3
       );
-      border-bottom-color: #e6dcd4;
+      border-bottom-color: color-mix(
+        in srgb,
+        var(--panel-accent, #986d65) 22%,
+        #e8dfda
+      );
     }
     [data-slot="card-title"] {
       color: #44352f;
@@ -57,12 +62,12 @@
       ) {
       background: linear-gradient(
         125deg,
-        color-mix(in srgb, var(--surface-accent, var(--primary)) 9%, #fffdfa),
+        color-mix(in srgb, var(--surface-accent, var(--primary)) 6%, #fffdfa),
         #fffdfa 72%
       );
       border-color: color-mix(
         in srgb,
-        var(--surface-accent, var(--primary)) 24%,
+        var(--surface-accent, var(--primary)) 38%,
         #e1d8d0
       );
       isolation: isolate;

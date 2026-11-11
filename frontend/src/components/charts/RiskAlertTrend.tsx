@@ -67,7 +67,7 @@ export function RiskAlertTrendChart({
               <CartesianGrid
                 vertical={false}
                 stroke={GRID_COLOR}
-                strokeDasharray="3 3"
+                strokeDasharray="2 5"
               />
               <XAxis
                 dataKey="date"
@@ -103,7 +103,7 @@ export function RiskAlertTrendChart({
                 dataKey="count"
                 name="Alerts opened"
                 stroke="var(--risk-high)"
-                strokeWidth={2}
+                strokeWidth={3}
                 dot={false}
                 isAnimationActive={false}
               />

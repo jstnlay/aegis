@@ -1,4 +1,5 @@
 import { useId, type ReactNode } from "react"
+import "./chart-polish.css"
 
 import { ErrorNote, LoadingState } from "@/components/feedback/Feedback"
 import {
@@ -125,13 +126,18 @@ export function ChartFrame({
   label,
   children,
 }: {
-  height?: number
+  height?: number | string
   /** What the plot shows, for a reader who cannot see it. */
   label: string
   children: ReactNode
 }) {
   return (
-    <div role="img" aria-label={label} style={{ height }} className="w-full">
+    <div
+      role="img"
+      aria-label={label}
+      style={{ height }}
+      className="chart-frame w-full"
+    >
       {children}
     </div>
   )

@@ -92,7 +92,7 @@ export function AcademicTrendChart() {
               <CartesianGrid
                 vertical={false}
                 stroke={GRID_COLOR}
-                strokeDasharray="3 3"
+                strokeDasharray="2 5"
               />
               <XAxis
                 dataKey="period"
@@ -135,7 +135,7 @@ export function AcademicTrendChart() {
                 dataKey="average"
                 name="Average score"
                 stroke="var(--primary)"
-                strokeWidth={2}
+                strokeWidth={3}
                 dot={{ r: 4 }}
                 // A period with no scores stays a gap; a straight line across it
                 // would imply a measurement that does not exist.
@@ -199,7 +199,7 @@ export function AttendanceTrendChart({
               <CartesianGrid
                 vertical={false}
                 stroke={GRID_COLOR}
-                strokeDasharray="3 3"
+                strokeDasharray="2 5"
               />
               <XAxis
                 dataKey="date"

@@ -1,3 +1,4 @@
+import { SchoolRecordCard } from "./SchoolRecordCard"
 import { Settings } from "lucide-react"
 import { useState, type FormEvent } from "react"
 import { Link } from "react-router-dom"
@@ -54,8 +55,8 @@ function PageHeading() {
         <h2 className="text-2xl font-bold text-foreground">Account settings</h2>
       </div>
       <p className="text-sm text-muted-foreground">
-        Your own profile and password. Role, status, and sign-in identity are
-        managed by an administrator and cannot be changed here.
+        Manage your personal details, password, and notification preferences.
+        School records and account access are managed by the school.
       </p>
     </div>
   )
@@ -671,12 +672,22 @@ function YourDataSection() {
   )
 }
 
+function SchoolRecordSection() {
+  const { data: user } = useCurrentUser()
+  return user?.role === "student" ? <SchoolRecordCard /> : null
+}
+
 export function AccountSettingsPage() {
   return (
     <div className="space-y-6">
       <PageHeading />
-      <IdentityCard />
-      <ProfileSection />
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+        <div className="space-y-6">
+          <IdentityCard />
+          <SchoolRecordSection />
+        </div>
+        <ProfileSection />
+      </div>
       <Separator />
       <PasswordForm />
       <Separator />

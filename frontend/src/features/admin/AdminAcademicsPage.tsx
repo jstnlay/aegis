@@ -334,6 +334,11 @@ function AcademicYearsCard() {
   const canSubmit =
     form.name.trim() !== "" && form.start_date !== "" && form.end_date !== ""
 
+  const { pagination, pageRows, setPageSize } = useDataTablePagination(
+    list.data ?? [],
+    PAGE_SIZE
+  )
+
   const columns: readonly DataTableColumn<AcademicYear>[] = [
     {
       key: "name",
@@ -448,7 +453,10 @@ function AcademicYearsCard() {
           <DataTable
             caption="Academic years"
             columns={columns}
-            rows={list.data ?? []}
+            rows={pageRows}
+            pagination={pagination}
+            pageSizeOptions={PAGE_SIZE_OPTIONS}
+            onPageSizeChange={setPageSize}
             rowKey={(row) => row.id}
             isLoading={list.isLoading}
             error={list.isError ? normalizeApiError(list.error).message : null}
@@ -466,6 +474,11 @@ function GradeLevelsCard() {
   const [form, setForm] = useState({ name: "", level_number: "" })
   const fieldErrors = useFieldErrors(create.error)
   const canSubmit = form.name.trim() !== "" && form.level_number !== ""
+
+  const { pagination, pageRows, setPageSize } = useDataTablePagination(
+    list.data ?? [],
+    PAGE_SIZE
+  )
 
   const columns: readonly DataTableColumn<GradeLevel>[] = [
     {
@@ -556,7 +569,10 @@ function GradeLevelsCard() {
           <DataTable
             caption="Grade levels"
             columns={columns}
-            rows={list.data ?? []}
+            rows={pageRows}
+            pagination={pagination}
+            pageSizeOptions={PAGE_SIZE_OPTIONS}
+            onPageSizeChange={setPageSize}
             rowKey={(row) => row.id}
             isLoading={list.isLoading}
             error={list.isError ? normalizeApiError(list.error).message : null}
@@ -596,6 +612,11 @@ function SectionsCard() {
     form.name.trim() !== "" &&
     form.grade_level !== "" &&
     form.academic_year !== ""
+
+  const { pagination, pageRows, setPageSize } = useDataTablePagination(
+    list.data ?? [],
+    PAGE_SIZE
+  )
 
   const columns: readonly DataTableColumn<Section>[] = [
     {
@@ -735,7 +756,10 @@ function SectionsCard() {
           <DataTable
             caption="Sections"
             columns={columns}
-            rows={list.data ?? []}
+            rows={pageRows}
+            pagination={pagination}
+            pageSizeOptions={PAGE_SIZE_OPTIONS}
+            onPageSizeChange={setPageSize}
             rowKey={(row) => row.id}
             isLoading={list.isLoading}
             error={list.isError ? normalizeApiError(list.error).message : null}
@@ -757,6 +781,11 @@ function SubjectsCard() {
     form.name.trim() !== "" &&
     form.code.trim() !== "" &&
     form.grade_level !== ""
+
+  const { pagination, pageRows, setPageSize } = useDataTablePagination(
+    list.data ?? [],
+    PAGE_SIZE
+  )
 
   const columns: readonly DataTableColumn<Subject>[] = [
     {
@@ -867,7 +896,10 @@ function SubjectsCard() {
           <DataTable
             caption="Subjects"
             columns={columns}
-            rows={list.data ?? []}
+            rows={pageRows}
+            pagination={pagination}
+            pageSizeOptions={PAGE_SIZE_OPTIONS}
+            onPageSizeChange={setPageSize}
             rowKey={(row) => row.id}
             isLoading={list.isLoading}
             error={list.isError ? normalizeApiError(list.error).message : null}
@@ -905,6 +937,11 @@ function SubjectAssignmentsCard() {
     form.section !== "" &&
     form.academic_year !== "" &&
     form.faculty !== ""
+
+  const { pagination, pageRows, setPageSize } = useDataTablePagination(
+    list.data ?? [],
+    PAGE_SIZE
+  )
 
   const columns: readonly DataTableColumn<SubjectAssignment>[] = [
     {
@@ -1057,7 +1094,10 @@ function SubjectAssignmentsCard() {
           <DataTable
             caption="Subject assignments"
             columns={columns}
-            rows={list.data ?? []}
+            rows={pageRows}
+            pagination={pagination}
+            pageSizeOptions={PAGE_SIZE_OPTIONS}
+            onPageSizeChange={setPageSize}
             rowKey={(row) => row.id}
             isLoading={list.isLoading}
             error={list.isError ? normalizeApiError(list.error).message : null}
@@ -1087,6 +1127,11 @@ function GradingPeriodsCard() {
     form.start_date !== "" &&
     form.end_date !== "" &&
     form.academic_year !== ""
+
+  const { pagination, pageRows, setPageSize } = useDataTablePagination(
+    list.data ?? [],
+    PAGE_SIZE
+  )
 
   const columns: readonly DataTableColumn<GradingPeriod>[] = [
     {
@@ -1229,7 +1274,10 @@ function GradingPeriodsCard() {
           <DataTable
             caption="Grading periods"
             columns={columns}
-            rows={list.data ?? []}
+            rows={pageRows}
+            pagination={pagination}
+            pageSizeOptions={PAGE_SIZE_OPTIONS}
+            onPageSizeChange={setPageSize}
             rowKey={(row) => row.id}
             isLoading={list.isLoading}
             error={list.isError ? normalizeApiError(list.error).message : null}

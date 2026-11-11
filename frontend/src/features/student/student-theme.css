@@ -1269,3 +1269,312 @@
     translate: none;
   }
 }
+
+/* Keep academic summary values aligned on narrow screens. */
+@media (max-width: 640px) {
+  .app-shell[data-role]
+    .app-main
+    .app-content
+    .student-academics
+    .student-academic-metrics {
+    gap: 10px;
+    > [data-slot="card"][data-metric="true"] {
+      min-width: 0;
+      gap: 10px;
+      padding-block: 16px 22px;
+      border-radius: 16px;
+    }
+    > [data-slot="card"] > [data-slot="card-header"] {
+      padding: 0 14px;
+      background: transparent;
+      border: 0;
+    }
+    > [data-slot="card"] > [data-slot="card-header"]::after {
+      display: none;
+    }
+    [data-slot="card-title"] {
+      min-height: 40px;
+      font-size: 13px;
+      line-height: 20px;
+      font-weight: 600;
+    }
+    [data-slot="card-content"] {
+      padding: 0 14px;
+    }
+    .tabular-nums {
+      font-size: 26px;
+      line-height: 1.2;
+      overflow-wrap: anywhere;
+    }
+    [data-slot="card-content"] > p {
+      margin-top: 8px;
+      font-size: 11px;
+      line-height: 1.5;
+    }
+  }
+}
+
+/* Each mobile grade row is its own card; the table wrapper is structural only. */
+@media (max-width: 640px) {
+  .app-shell[data-role]
+    .app-main
+    .app-content
+    .student-academics
+    .student-grade-record {
+    [data-slot="table-container"] {
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+      padding: 0;
+      overflow: visible;
+    }
+    .student-record-table {
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+    }
+    .student-record-table tbody {
+      border: 0;
+      background: transparent;
+      gap: 12px;
+    }
+    .student-record-table tbody tr {
+      box-shadow: 0 3px 9px #653b3008;
+    }
+  }
+}
+
+/* Weekly planner: clear times, subject identity, then practical class details. */
+.app-shell[data-role] .app-main .app-content .student-schedule {
+  .student-schedule-day[data-slot="card"]:not(
+      :has(> [data-slot="card-content"] > .tabular-nums)
+    ) {
+    border-color: #d9bcb6;
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow:
+      inset 0 1px #fff,
+      0 7px 22px #6242360c;
+  }
+  .student-schedule-day > [data-slot="card-header"] {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding-block: 18px;
+  }
+  .student-schedule-day > [data-slot="card-header"]::after {
+    display: none;
+  }
+  .student-schedule-day [data-slot="card-title"] {
+    font-size: 19px;
+    letter-spacing: -0.025em;
+  }
+  .student-schedule-day [data-slot="card-description"] {
+    margin: 0;
+    padding: 5px 9px;
+    border: 1px solid #e5cfc7;
+    border-radius: 20px;
+    background: #fffaf7;
+    font-size: 11px;
+    color: #856254;
+  }
+  .student-schedule-row {
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+    padding: 16px;
+    border: 1px solid color-mix(in srgb, var(--subject-color) 26%, #eee6df);
+    border-left: 3px solid var(--subject-color);
+    border-radius: 13px;
+    background: linear-gradient(
+      120deg,
+      color-mix(in srgb, var(--subject-tint) 70%, white),
+      #fffdfa
+    );
+    box-shadow:
+      inset 0 1px #fff,
+      0 2px 6px #62423605;
+  }
+  .student-schedule-time {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--subject-color);
+  }
+  .student-schedule-time > svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+  }
+  .schedule-subject-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 7px 12px;
+    width: 100%;
+  }
+  .schedule-subject-heading h4 {
+    flex: 1;
+    min-width: 130px;
+    font-size: 15px;
+    line-height: 1.5;
+    font-weight: 600;
+    color: #3e332f;
+    overflow-wrap: anywhere;
+  }
+  .schedule-subject-code {
+    font-size: 10px;
+    padding: 3px 7px;
+    border-radius: 6px;
+    color: var(--subject-color);
+    background: color-mix(in srgb, var(--subject-tint) 80%, white);
+    border: 1px solid color-mix(in srgb, var(--subject-color) 15%, white);
+    white-space: nowrap;
+  }
+  .schedule-class-details {
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    width: 100%;
+    border-top: 1px solid color-mix(in srgb, var(--subject-color) 12%, #eee6df);
+    padding-top: 10px;
+  }
+  .schedule-class-details > span {
+    display: flex;
+    align-items: flex-start;
+    gap: 5px;
+    color: #7a6b62;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .schedule-class-details svg {
+    width: 13px;
+    height: 13px;
+    flex-shrink: 0;
+    margin-top: 2px;
+    opacity: 0.75;
+  }
+  .schedule-room {
+    white-space: nowrap;
+  }
+}
+@media (max-width: 640px) {
+  .app-shell[data-role] .app-main .app-content .student-schedule {
+    .student-schedule-row {
+      padding: 13px;
+      gap: 9px;
+    }
+    .student-schedule-day > [data-slot="card-header"] {
+      padding-block: 15px;
+    }
+    .schedule-class-details {
+      flex-direction: column;
+      gap: 6px;
+    }
+  }
+}
+
+/* A little more color and movement for the weekly planner. */
+.app-shell[data-role] .app-main .app-content .student-schedule {
+  .student-schedule-day {
+    --day-accent: #a54762;
+    --day-tint: #f5dee6;
+  }
+  .student-schedule-day:nth-child(2n) {
+    --day-accent: #477c83;
+    --day-tint: #dcedeb;
+  }
+  .student-schedule-day:nth-child(3n) {
+    --day-accent: #977035;
+    --day-tint: #f5e8ce;
+  }
+  .student-schedule-day:nth-child(4n) {
+    --day-accent: #79629c;
+    --day-tint: #ebe1f5;
+  }
+  .student-schedule-day[data-slot="card"]:not(
+      :has(> [data-slot="card-content"] > .tabular-nums)
+    )
+    > [data-slot="card-header"] {
+    background: linear-gradient(
+      115deg,
+      var(--day-tint),
+      color-mix(in srgb, var(--day-tint) 30%, #fffdfa)
+    );
+    border-bottom-color: color-mix(in srgb, var(--day-accent) 30%, #e8dfda);
+  }
+  .student-schedule-day [data-slot="card-title"] {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .schedule-day-emblem {
+    display: grid;
+    place-items: center;
+    width: 35px;
+    height: 35px;
+    flex-shrink: 0;
+    border: 1px solid color-mix(in srgb, var(--day-accent) 25%, white);
+    border-radius: 11px;
+    background: linear-gradient(145deg, white, var(--day-tint));
+    color: var(--day-accent);
+    box-shadow:
+      inset 0 1px #fff,
+      0 3px 7px #6444350a;
+  }
+  .schedule-day-emblem svg {
+    width: 18px;
+    height: 18px;
+    stroke-width: 1.7;
+  }
+  .student-schedule-row {
+    background: linear-gradient(
+      120deg,
+      var(--subject-tint),
+      color-mix(in srgb, var(--subject-tint) 25%, #fffdfa)
+    );
+    border-left-width: 4px;
+  }
+  .student-schedule-time {
+    padding: 4px 8px;
+    border-radius: 7px;
+    background: #ffffff9c;
+    border: 1px solid color-mix(in srgb, var(--subject-color) 15%, white);
+  }
+  .schedule-subject-code {
+    color: var(--subject-color);
+    font-weight: 600;
+    background: #ffffffa6;
+  }
+}
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .app-shell[data-role]
+    .app-main
+    .app-content
+    .student-schedule
+    .student-schedule-row {
+    transition:
+      transform 180ms ease,
+      box-shadow 180ms ease;
+  }
+  .app-shell[data-role]
+    .app-main
+    .app-content
+    .student-schedule
+    .student-schedule-row:hover {
+    transform: translateY(-2px);
+    box-shadow:
+      inset 0 1px #fff,
+      0 6px 16px #64443512;
+  }
+}

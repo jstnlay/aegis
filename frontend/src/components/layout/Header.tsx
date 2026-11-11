@@ -218,7 +218,11 @@ function UserChip() {
                 onClick={() => markAllRead.mutate()}
               >
                 <CheckCheck aria-hidden="true" />
-                {markAllRead.isPending ? "Marking…" : "Mark all as read"}
+                {markAllRead.isPending
+                  ? "Marking…"
+                  : unreadCount === 0
+                    ? "All caught up"
+                    : "Mark all as read"}
               </button>
             </div>
             <div

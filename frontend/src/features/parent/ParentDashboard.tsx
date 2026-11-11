@@ -395,9 +395,9 @@ function ParentDashboard() {
 
             <Card data-panel="records" className="parent-recent-grades">
               <CardHeader>
-                <CardTitle>Recent Grades</CardTitle>
+                <CardTitle>Grade records</CardTitle>
                 <CardDescription>
-                  Finalized grade entries across grading periods.
+                  Latest recorded entries across all grading periods.
                 </CardDescription>
               </CardHeader>
               <CardContent>

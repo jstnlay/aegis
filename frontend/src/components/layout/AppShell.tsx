@@ -200,7 +200,7 @@ export function AppShell() {
           {chatOpen && (
             <div
               id="chatbot-panel"
-              className="app-assistant-panel w-[min(24rem,calc(100vw-2rem))] max-h-[70vh] overflow-y-auto"
+              className="app-assistant-panel w-[min(27rem,calc(100vw-2rem))]"
             >
               <ChatbotPanel
                 open={chatOpen}
@@ -221,8 +221,8 @@ export function AppShell() {
             className="app-assistant-launcher flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg hover:opacity-90"
           >
             {schoolTheme && !chatOpen ? (
-              <span className="app-assistant-hint" aria-hidden="true">
-                Need help?
+              <span className="app-assistant-label" aria-hidden="true">
+                Ask AEGIS <span>School assistant</span>
               </span>
             ) : null}
             <span className="app-assistant-avatar" aria-hidden="true">

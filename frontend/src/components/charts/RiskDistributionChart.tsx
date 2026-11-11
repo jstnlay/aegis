@@ -126,9 +126,10 @@ export function RiskDistributionChart() {
                 data={slices}
                 dataKey="value"
                 nameKey="name"
-                innerRadius="55%"
-                outerRadius="80%"
-                paddingAngle={1}
+                innerRadius="60%"
+                outerRadius="82%"
+                cornerRadius={4}
+                paddingAngle={2}
                 stroke="var(--background)"
                 isAnimationActive={false}
               >

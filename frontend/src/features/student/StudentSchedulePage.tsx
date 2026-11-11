@@ -1,4 +1,4 @@
-import { CalendarDays } from "lucide-react"
+import { CalendarDays, Clock3, MapPin, UserRound } from "lucide-react"
 import { useMemo } from "react"
 
 import {
@@ -63,26 +63,33 @@ function ScheduleRow({ entry }: { entry: ScheduleEntry }) {
         detail.subject_code
       )}
     >
-      <span className="student-schedule-time min-w-32 font-medium tabular-nums">
-        {formatScheduleTime(entry.start_time)} –{" "}
-        {formatScheduleTime(entry.end_time)}
-      </span>
-      <span className="font-semibold">{detail.subject_name}</span>
-      {detail.subject_code ? (
-        <span className="text-xs text-muted-foreground">
-          {detail.subject_code}
+      <div className="student-schedule-time">
+        <Clock3 aria-hidden="true" />
+        <span>
+          {formatScheduleTime(entry.start_time)} &ndash;{" "}
+          {formatScheduleTime(entry.end_time)}
         </span>
-      ) : null}
-      {detail.faculty_name ? (
-        <span className="text-sm text-muted-foreground">
-          {detail.faculty_name}
-        </span>
-      ) : null}
-      {entry.room ? (
-        <span className="ml-auto text-sm text-muted-foreground">
-          Room {entry.room}
-        </span>
-      ) : null}
+      </div>
+      <div className="schedule-subject-heading">
+        <h4>{detail.subject_name}</h4>
+        {detail.subject_code ? (
+          <span className="schedule-subject-code">{detail.subject_code}</span>
+        ) : null}
+      </div>
+      <div className="schedule-class-details">
+        {detail.faculty_name ? (
+          <span>
+            <UserRound aria-hidden="true" />
+            <span>{detail.faculty_name}</span>
+          </span>
+        ) : null}
+        {entry.room ? (
+          <span className="schedule-room">
+            <MapPin aria-hidden="true" />
+            <span>Room {entry.room}</span>
+          </span>
+        ) : null}
+      </div>
     </li>
   )
 }
@@ -120,9 +127,15 @@ export function StudentSchedulePage() {
           {visibleDays.map((day) => (
             <Card key={day} className="student-schedule-day">
               <CardHeader data-day={day.toUpperCase()}>
-                <CardTitle as="h3">{SCHEDULE_DAY_LABELS[day]}</CardTitle>
+                <CardTitle as="h3">
+                  <span className="schedule-day-emblem" aria-hidden="true">
+                    <CalendarDays />
+                  </span>
+                  {SCHEDULE_DAY_LABELS[day]}
+                </CardTitle>
                 <CardDescription>
-                  {byDay.get(day)?.length} class periods
+                  {byDay.get(day)?.length} class{" "}
+                  {(byDay.get(day)?.length ?? 0) === 1 ? "period" : "periods"}
                 </CardDescription>
               </CardHeader>
               <CardContent>

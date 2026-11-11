@@ -11,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table"
+import { useDataTablePagination } from "@/components/ui/data-table-pagination"
 import { ErrorNote } from "@/components/feedback/Feedback"
 import { ChoiceField, Field } from "@/components/ui/form-field"
 import { Input } from "@/components/ui/input"
@@ -712,6 +713,10 @@ function ClassSummaryCard() {
 function NotesCard() {
   const rosterQuery = useAdvisoryEnrollments()
   const notesQuery = useBehavioralNotes()
+  const { pageRows, pagination, setPageSize } = useDataTablePagination(
+    notesQuery.data ?? [],
+    10
+  )
   const createNote = useCreateBehavioralNote()
   const [student, setStudent] = useState("")
   const [noteType, setNoteType] = useState<BehavioralNoteType>("positive")
@@ -759,6 +764,7 @@ function NotesCard() {
         onSuccess: () => {
           setNoteText("")
           setBlankRejected(false)
+          pagination.onPageChange(1)
         },
       }
     )
@@ -903,7 +909,10 @@ function NotesCard() {
         <DataTable
           caption="Behavioral notes you have recorded"
           columns={columns}
-          rows={notesQuery.data ?? []}
+          rows={pageRows}
+          pagination={pagination}
+          pageSizeOptions={[5, 10, 20]}
+          onPageSizeChange={setPageSize}
           rowKey={(note) => note.id}
           isLoading={notesQuery.isLoading}
           error={
