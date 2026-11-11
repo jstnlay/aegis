@@ -251,25 +251,31 @@ export function AdminAnalyticsPage() {
             <ErrorNote message="Unable to load the forecast. Please try again." />
           ) : forecastQuery.isLoading ? (
             <p className="text-sm text-muted-foreground">Loading forecast…</p>
-          ) : forecastQuery.data?.insufficient_data ? (
-            <div className="space-y-1">
-              <p className="text-sm font-medium">No estimate yet</p>
-              <p className="text-sm text-muted-foreground">
-                {forecastQuery.data.reason ??
-                  "Not enough months on record to project from."}
-              </p>
-            </div>
           ) : (
             <>
+              {forecastQuery.data?.insufficient_data ? (
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">No estimate yet</p>
+                  <p className="text-sm text-muted-foreground">
+                    {forecastQuery.data.reason ??
+                      "Not enough months on record to project from."}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    The recorded months are still plotted below.
+                  </p>
+                </div>
+              ) : null}
               <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">
                 <MetricCard
                   title={`${METRIC_LABEL[metric]} in ${months} month${months === 1 ? "" : "s"}`}
                   hint={
-                    forecastQuery.data?.trend === "up"
-                      ? "Trending up over the recorded months"
-                      : forecastQuery.data?.trend === "down"
-                        ? "Trending down over the recorded months"
-                        : "Flat over the recorded months"
+                    forecastQuery.data?.insufficient_data
+                      ? "No estimate is offered for a series this thin"
+                      : forecastQuery.data?.trend === "up"
+                        ? "Trending up over the recorded months"
+                        : forecastQuery.data?.trend === "down"
+                          ? "Trending down over the recorded months"
+                          : "Flat over the recorded months"
                   }
                   icon={ChartNoAxesColumn}
                   isLoading={forecastQuery.isLoading}

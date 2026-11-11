@@ -70,6 +70,7 @@ export function ForecastChart({
   }))
   const projectedMonth =
     last && estimate !== null ? addMonths(last.month, data?.months ?? 0) : null
+  const hasProjection = projectedMonth !== null && estimate !== null
   if (projectedMonth !== null && estimate !== null) {
     points.push({
       month: projectedMonth,
@@ -83,14 +84,22 @@ export function ForecastChart({
 
   return (
     <ChartCard
-      title="Recorded months and the projected point"
+      title={
+        hasProjection
+          ? "Recorded months and the projected point"
+          : "Recorded months"
+      }
       description={
         data
           ? `${series.length} recorded month${
               series.length === 1 ? "" : "s"
-            } from ${data.coverage.from ?? "—"} to ${
-              data.coverage.to ?? "—"
-            }, extended ${data.months} month${data.months === 1 ? "" : "s"} ahead.`
+            } from ${data.coverage.from ?? "—"} to ${data.coverage.to ?? "—"}.${
+              hasProjection
+                ? ` Extended ${data.months} month${
+                    data.months === 1 ? "" : "s"
+                  } ahead.`
+                : " No projection is offered for this series."
+            }`
           : "A monthly series and its projection."
       }
       footer={
@@ -114,9 +123,13 @@ export function ForecastChart({
           height={260}
           label={`Line chart of ${data?.metric ?? "the metric"} per month. ${series
             .map((point) => `${point.month}: ${formatValue(point.value)}`)
-            .join(", ")}. Projected ${projectedMonth ?? "not available"} (${
-            data?.months ?? 0
-          } months ahead): ${formatValue(estimate)}.`}
+            .join(", ")}.${
+            hasProjection
+              ? ` Projected ${projectedMonth} (${
+                  data?.months ?? 0
+                } months ahead): ${formatValue(estimate)}.`
+              : " No projection is offered."
+          }`}
         >
           <ResponsiveContainer width="100%" height="100%">
             <LineChart
@@ -166,7 +179,9 @@ export function ForecastChart({
                   )
                 }}
               />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
+              {hasProjection ? (
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+              ) : null}
               <Line
                 type="monotone"
                 dataKey="recorded"
@@ -177,17 +192,19 @@ export function ForecastChart({
                 connectNulls={false}
                 isAnimationActive={false}
               />
-              <Line
-                type="monotone"
-                dataKey="projected"
-                name="Projected"
-                stroke="var(--chart-2)"
-                strokeWidth={2}
-                strokeDasharray="6 4"
-                dot={{ r: 3 }}
-                connectNulls={false}
-                isAnimationActive={false}
-              />
+              {hasProjection ? (
+                <Line
+                  type="monotone"
+                  dataKey="projected"
+                  name="Projected"
+                  stroke="var(--chart-2)"
+                  strokeWidth={2}
+                  strokeDasharray="6 4"
+                  dot={{ r: 3 }}
+                  connectNulls={false}
+                  isAnimationActive={false}
+                />
+              ) : null}
             </LineChart>
           </ResponsiveContainer>
         </ChartFrame>

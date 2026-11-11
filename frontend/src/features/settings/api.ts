@@ -207,7 +207,11 @@ export function useUploadProfilePhoto() {
     mutationFn: async (file) => {
       const form = new FormData()
       form.append("profile_photo", file)
-      const { data } = await apiClient.patch<CurrentUser>("/accounts/me/", form)
+      const { data } = await apiClient.patch<CurrentUser>(
+        "/accounts/me/",
+        form,
+        { headers: { "Content-Type": "multipart/form-data" } }
+      )
       return data
     },
     onSuccess: (user) => {

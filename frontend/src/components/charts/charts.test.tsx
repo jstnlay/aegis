@@ -780,4 +780,30 @@ describe("ForecastChart", () => {
     expect(await screen.findByText("Forecast unavailable")).toBeInTheDocument()
     expect(screen.queryByRole("img")).not.toBeInTheDocument()
   })
+
+  it("still plots the recorded months when no estimate can be drawn", async () => {
+    renderChart(
+      <ForecastChart
+        data={{
+          ...forecast,
+          estimate: null,
+          insufficient_data: true,
+          trend: "unknown",
+          reason: "Not enough months on record to project from.",
+          coverage: { points: 2, from: "2026-01", to: "2026-02" },
+          series: forecast.series.slice(0, 2),
+        }}
+        isLoading={false}
+        error={null}
+      />
+    )
+
+    expect(
+      await screen.findByText(/No projection is offered for this series/i)
+    ).toBeInTheDocument()
+    const label =
+      (await screen.findByRole("img")).getAttribute("aria-label") ?? ""
+    expect(label).toContain("2026-02: 75.0%")
+    expect(label).toContain("No projection is offered.")
+  })
 })

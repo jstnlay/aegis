@@ -142,7 +142,8 @@ describe("AccountSettingsPage", () => {
     await waitFor(() => {
       expect(mockedPatch).toHaveBeenCalledWith(
         "/accounts/me/",
-        expect.any(FormData)
+        expect.any(FormData),
+        { headers: { "Content-Type": "multipart/form-data" } }
       )
     })
 
