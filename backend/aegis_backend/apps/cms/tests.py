@@ -526,6 +526,80 @@ class RecipientResolutionTest(CmsTestBase):
         self.assertNotIn(self.student2_user.id, ids)
 
 
+class StrapiMediaPopulationTest(TestCase):
+    """
+    Strapi only returns a media field when the request asks for it.
+
+    Without `populate[cover_image]` the announcement payload carries no
+    picture at all, and the landing page shows an announcement with no
+    cover - which is what happened for every announcement the school
+    published.
+    """
+
+    def _client(self):
+        return StrapiClient(base_url="http://localhost:1337", api_token="t")
+
+    def test_announcements_are_listed_with_the_cover_populated(self):
+        payload = {
+            "data": [
+                {
+                    "documentId": "doc1",
+                    "title": "Welcome",
+                    "content": "Body",
+                    "announcement_type": "news",
+                    "priority": "normal",
+                    "target_roles": ["all"],
+                    "target_sections": [],
+                    "publishedAt": "2026-08-22T01:00:00.000Z",
+                    "cover_image": {
+                        "url": "https://cdn.example.com/cover.png",
+                    },
+                }
+            ]
+        }
+        with mock.patch(
+            "apps.cms.services.strapi_client.requests.get"
+        ) as fake_get:
+            fake_get.return_value = mock.Mock(
+                status_code=200, json=lambda: payload
+            )
+            results = self._client().list_announcements()
+
+        params = fake_get.call_args.kwargs["params"]
+        self.assertEqual(params["populate[cover_image]"], "true")
+        # A picture on a foreign host is an authored external link and is
+        # passed through unchanged.
+        self.assertEqual(results[0]["cover_image"], "https://cdn.example.com/cover.png")
+        self.assertEqual(results[0]["cover_image_source"], "external")
+
+    def test_resources_are_listed_with_the_file_populated(self):
+        payload = {
+            "data": [
+                {
+                    "documentId": "r1",
+                    "title": "Handbook",
+                    "resource_type": "document",
+                    "file": {"url": "https://cdn.example.com/handbook.pdf"},
+                    "target_audience": ["all"],
+                    "is_active": True,
+                }
+            ]
+        }
+        with mock.patch(
+            "apps.cms.services.strapi_client.requests.get"
+        ) as fake_get:
+            fake_get.return_value = mock.Mock(
+                status_code=200, json=lambda: payload
+            )
+            results = self._client().list_resources()
+
+        params = fake_get.call_args.kwargs["params"]
+        self.assertEqual(params["populate[file]"], "true")
+        self.assertEqual(
+            results[0]["file_or_url"], "https://cdn.example.com/handbook.pdf"
+        )
+
+
 class AnnouncementImageProxyTest(CmsTestBase):
     """
     SEC-007 for announcement cover images.

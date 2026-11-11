@@ -339,7 +339,10 @@ class StrapiClient:
 
     def get_announcement(self, document_id):
         """Fetch one announcement by documentId and normalize it."""
-        payload = self._get(f"/api/announcements/{document_id}")
+        payload = self._get(
+            f"/api/announcements/{document_id}",
+            params={"populate[cover_image]": "true"},
+        )
         raw = self._unwrap_single(payload)
         if not raw:
             raise StrapiNotFoundError(f"Announcement {document_id} not found")
@@ -350,7 +353,10 @@ class StrapiClient:
 
     def get_resource(self, document_id):
         """Fetch one resource by documentId and normalize it."""
-        payload = self._get(f"/api/resources/{document_id}")
+        payload = self._get(
+            f"/api/resources/{document_id}",
+            params={"populate[file]": "true"},
+        )
         raw = self._unwrap_single(payload)
         if not raw:
             raise StrapiNotFoundError(f"Resource {document_id} not found")
@@ -361,7 +367,10 @@ class StrapiClient:
 
     def list_announcements(self):
         """List all published announcements, normalized."""
-        payload = self._get("/api/announcements", params={"pagination[pageSize]": 100})
+        payload = self._get(
+            "/api/announcements",
+            params={"pagination[pageSize]": 100, "populate[cover_image]": "true"},
+        )
         results = []
         for raw in self._unwrap_list(payload):
             try:
@@ -372,7 +381,10 @@ class StrapiClient:
 
     def list_resources(self):
         """List all resources, normalized."""
-        payload = self._get("/api/resources", params={"pagination[pageSize]": 100})
+        payload = self._get(
+            "/api/resources",
+            params={"pagination[pageSize]": 100, "populate[file]": "true"},
+        )
         results = []
         for raw in self._unwrap_list(payload):
             try:
