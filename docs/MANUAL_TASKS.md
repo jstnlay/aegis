@@ -53,16 +53,16 @@ photos, and its settings switch to the bucket on the same variables.
 
 **Do this**
 
-1. In Supabase (same project as the CMS database): create a **public** bucket,
-   e.g. `cms-uploads`, and create an S3 access key pair
-   (Project Settings → API Keys → S3 keys). The endpoint is
+1. The bucket `cms-upload` already exists in the CMS project and is public.
+   What is missing is an S3 access key pair (Project Settings → API Keys →
+   S3 keys). The endpoint is
    `https://<project-ref>.supabase.co/storage/v1/s3`.
 2. Render dashboard → the **aegis-cms** service → **Environment** → add:
 
    | Key | Value |
    |---|---|
    | `SUPABASE_S3_ENDPOINT` | `https://<project-ref>.supabase.co/storage/v1/s3` |
-   | `SUPABASE_S3_BUCKET` | `cms-uploads` |
+   | `SUPABASE_S3_BUCKET` | `cms-upload` |
    | `SUPABASE_S3_REGION` | the bucket's region, e.g. `ap-southeast-1` |
    | `SUPABASE_S3_ACCESS_KEY` | from step 1 |
    | `SUPABASE_S3_SECRET_KEY` | from step 1 |
