@@ -116,17 +116,25 @@ implemented are re-tests, not code work.
 
 ## Blocked / manual-evidence items (Cycle 4 log)
 
-- **Redis shared cache (SEC-002 in the deployed environment)** — a 40-attempt
-  probe of `POST /api/v1/auth/login/` against the deployed service returned
-  401 every time and never the 429 the 15/min limit owes. `REDIS_URL` is set,
-  but the Redis client is configured with `IGNORE_EXCEPTIONS`, so an
-  unreachable cache behaves as an empty one: every rate limit is silently off
-  and nothing says so. `/ready/` now reports the cache the rate limits are
-  counted in as `"shared"` / `"local"` / `"broken"`, from a real cache
-  round-trip; the Redis client fails fast (2s socket timeouts), and
-  `docs/backend/DEPLOYMENT.md` records the check and the three states. Cause
-  is still dashboard side: `REDIS_URL` value or a region mismatch between the
-  API service and the Redis instance.
+- **Redis shared cache (SEC-002 in the deployed environment)** — `/ready/`
+  reports `"cache":"shared"`, so Redis is configured and answers; the cause of
+  the missing limits was elsewhere. The Redis client still fails fast (2s
+  socket timeouts) and the client is configured with `IGNORE_EXCEPTIONS`, so
+  an unreachable cache behaves as an empty one: every rate limit silently off
+  and nothing saying so. `/ready/` reports the cache the rate limits are
+  counted in as `"shared"` / `"local"` / `"broken"` from a real cache
+  round-trip, and `docs/backend/DEPLOYMENT.md` records the check and the
+  three states.
+
+- **Rate limits were not firing at all in the deployed environment.** The
+  public URL is served through Cloudflare; the app server sees a forwarded
+  chain that ends in a proxy hop which changes from request to request, so
+  every request landed in its own throttle bucket: 130 consecutive failed
+  logins answered 401 and never the 429 the 15/min limit owes. The identity
+  is now resolved in `core.throttling.client_ident` (the CDN's own client-IP
+  header first, then the last forwarded hop, then the socket address) and
+  every throttle class counts against it. `core` tests cover the resolution
+  and the bucket behaviour.
 
 - **TC-SYS-03** — the harness did not exist; it now does:
   `backend/scripts/loadtest.js` (k6: login + health + an authenticated read,

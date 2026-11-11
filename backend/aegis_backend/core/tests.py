@@ -13,6 +13,7 @@ a client error.
 
 from unittest import mock
 
+from django.core.cache import cache
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.utils import OperationalError
 from django.test import RequestFactory, SimpleTestCase, TestCase
@@ -22,9 +23,13 @@ from rest_framework.exceptions import (
     PermissionDenied,
     ValidationError as DRFValidationError,
 )
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
 from rest_framework.test import APIClient
+from rest_framework.views import APIView
 
 from core.exceptions import custom_exception_handler, drf_validation_error_from
+from core.throttling import LoginRateThrottle, client_ident
 
 
 class DjangoValidationErrorTranslationTests(SimpleTestCase):
@@ -233,6 +238,92 @@ class ErrorMessageSummaryTests(SimpleTestCase):
             response.data["error"]["details"], {"order": ["Already used."]}
         )
         self.assertEqual(response.data["error"]["message"], "order: Already used.")
+
+class ClientIdentTests(SimpleTestCase):
+    """Which address a rate limit is counted against."""
+
+    def setUp(self):
+        self.factory = RequestFactory()
+
+    def test_the_cdn_header_names_the_client(self):
+        request = self.factory.get(
+            "/",
+            HTTP_CF_CONNECTING_IP="203.0.113.5",
+            HTTP_X_FORWARDED_FOR="1.1.1.1, 2.2.2.2",
+            REMOTE_ADDR="10.0.0.1",
+        )
+
+        self.assertEqual(client_ident(request), "203.0.113.5")
+
+    def test_the_last_forwarded_hop_is_used_without_a_cdn_header(self):
+        request = self.factory.get(
+            "/",
+            HTTP_X_FORWARDED_FOR="1.1.1.1, 2.2.2.2",
+            REMOTE_ADDR="10.0.0.1",
+        )
+
+        self.assertEqual(client_ident(request), "2.2.2.2")
+
+    def test_the_socket_address_is_the_fallback(self):
+        request = self.factory.get("/", REMOTE_ADDR="10.0.0.1")
+
+        self.assertEqual(client_ident(request), "10.0.0.1")
+
+
+class _ThrottledView(APIView):
+    """A view with the login throttle attached, for bucket behaviour."""
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    throttle_classes = [LoginRateThrottle]
+
+    def get(self, request):
+        return Response({"ok": True})
+
+
+@mock.patch.dict("core.throttling.LoginRateThrottle.THROTTLE_RATES", {"login": "2/min"})
+class ThrottleCountsTheClientTest(SimpleTestCase):
+    """
+    One client, many hops, one bucket.
+
+    Behind a CDN the socket address and the forwarded chain both change from
+    request to request. A limit keyed on either of them gives every request
+    its own bucket, and the limit never fires - which is how the deployed
+    environment ended up with no login limit at all.
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.factory = RequestFactory()
+
+    def tearDown(self):
+        cache.clear()
+
+    def _get(self, cdn_ip, peer):
+        request = self.factory.get(
+            "/",
+            HTTP_CF_CONNECTING_IP=cdn_ip,
+            HTTP_X_FORWARDED_FOR=f"203.0.113.9, {peer}",
+            REMOTE_ADDR=peer,
+        )
+        return _ThrottledView.as_view()(request)
+
+    def test_two_hops_from_one_client_share_the_bucket(self):
+        self.assertEqual(self._get("203.0.113.5", "10.0.0.1").status_code, 200)
+        self.assertEqual(self._get("203.0.113.5", "10.0.0.2").status_code, 200)
+
+        blocked = self._get("203.0.113.5", "10.0.0.3")
+
+        self.assertEqual(blocked.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+    def test_two_clients_do_not_share_a_bucket(self):
+        self.assertEqual(self._get("203.0.113.5", "10.0.0.1").status_code, 200)
+        self.assertEqual(self._get("203.0.113.5", "10.0.0.2").status_code, 200)
+
+        other = self._get("198.51.100.7", "10.0.0.1")
+
+        self.assertEqual(other.status_code, 200)
+
 
 class HealthProbeTests(TestCase):
     """

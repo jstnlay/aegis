@@ -103,6 +103,31 @@ unreachable cache as empty rather than to fail the request: the API stays up
 and that window's limit is not enforced. An outage should not take the
 system down.
 
+## Which address the rate limits count
+
+The public URL is served through Cloudflare, and the app server behind it sees
+a forwarded chain that ends in a proxy hop - and that hop is not the same on
+every request. A limit keyed on the socket address or on the whole forwarded
+chain therefore gives every request its own bucket, and the limit never
+fires. That is not a hypothetical: it is what this deployment did until the
+identity was fixed, and the symptom is a login endpoint that answers 401
+forever.
+
+`core.throttling.client_ident` resolves the client in this order:
+
+1. `CF-Connecting-IP` - the header Cloudflare writes on every request it
+   forwards, naming the client as Cloudflare sees it. Cloudflare overwrites
+   it, so a client cannot choose it.
+2. The last hop of `X-Forwarded-For` - the address the outermost proxy
+   observed.
+3. `REMOTE_ADDR` - the socket address, used when nothing is in front.
+
+Note that the origin is also reachable directly, without Cloudflare, and a
+direct request can set that header itself. The rate limits are a
+defense-in-depth layer on top of password hashing and account state, not the
+only protection, and the audit trail records the socket address rather than
+any forwarded value.
+
 ## Verifying it
 
 1. `GET https://aegis-0pav.onrender.com/health/` → 200
