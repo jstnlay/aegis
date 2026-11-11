@@ -58,6 +58,7 @@ import {
   type FacultyAssessmentResult,
   type FacultyTargetStudent,
 } from "@/features/faculty/assessments-api"
+import { useGenerateQuestionDrafts } from "@/features/guidance/api"
 import { normalizeApiError } from "@/lib/error"
 
 /**
@@ -310,6 +311,7 @@ function AddQuestionForm({
   questions: FacultyAssessmentQuestion[]
 }) {
   const create = useCreateFacultyAssessmentQuestion()
+  const generate = useGenerateQuestionDrafts()
 
   const [questionText, setQuestionText] = useState("")
   const [questionType, setQuestionType] =
@@ -317,6 +319,7 @@ function AddQuestionForm({
   const [order, setOrder] = useState<string>("")
   const [options, setOptions] = useState<string>("")
   const [correctAnswer, setCorrectAnswer] = useState("")
+  const [draftTopic, setDraftTopic] = useState("")
 
   const derivedOrder = nextQuestionOrder(questions)
   const effectiveOrder = order.trim() === "" ? derivedOrder : Number(order)
@@ -354,6 +357,25 @@ function AddQuestionForm({
     }
   }
 
+  async function handleGenerate() {
+    const topic = draftTopic.trim()
+    if (topic.length < 3) return
+    try {
+      const result = await generate.mutateAsync({
+        topic,
+        question_type: questionType,
+        count: 1,
+      })
+      const draft = result.drafts[0]
+      if (!draft) return
+      setQuestionText(draft.question_text)
+      setOptions(draft.options ? draft.options.join("\n") : "")
+      setCorrectAnswer(draft.correct_answer ?? "")
+    } catch {
+      // Surfaced from `generate.isError`.
+    }
+  }
+
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
       <Field
@@ -363,6 +385,43 @@ function AddQuestionForm({
         value={questionText}
         onChange={setQuestionText}
       />
+
+      {/*
+        AI draft (FR-027, now in the faculty module). The generator fills the
+        fields with one proposed item for the selected question type; it is
+        still only a proposal, and nothing reaches the assessment until
+        "Add question" has passed the item through `AssessmentQuestion.clean()`.
+      */}
+      <div className="space-y-1.5 rounded-md border border-dashed border-border p-3">
+        <Label htmlFor={`faculty-draft-topic-${assessment.id}`}>AI draft</Label>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Input
+            id={`faculty-draft-topic-${assessment.id}`}
+            value={draftTopic}
+            placeholder="e.g. study habits for the unit test"
+            onChange={(event) => setDraftTopic(event.target.value)}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={generate.isPending || draftTopic.trim().length < 3}
+            onClick={() => {
+              void handleGenerate()
+            }}
+          >
+            {generate.isPending ? "Drafting…" : "Generate draft"}
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Fills the fields with one item for the selected question type. A
+          teacher&rsquo;s drafts come from the academic item bank. Nothing is
+          saved until you press Add question.
+        </p>
+        {generate.isError ? (
+          <ErrorNote message={normalizeApiError(generate.error).message} />
+        ) : null}
+      </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">

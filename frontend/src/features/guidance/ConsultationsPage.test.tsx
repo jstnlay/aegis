@@ -169,6 +169,20 @@ async function openSelect(trigger: HTMLElement) {
   fireEvent.keyDown(trigger, { key: "ArrowDown" })
 }
 
+/**
+ * Pick a student in the new-consultation dialog.
+ *
+ * The student field is the shared `SearchableSelect`, which is a button with
+ * `aria-haspopup="listbox"`, not a Radix combobox: click it, then click the
+ * option in the listbox it opens.
+ */
+async function chooseStudent(dialog: HTMLElement, name: string | RegExp) {
+  const trigger = within(dialog).getByRole("button", { name: "Student" })
+  await waitFor(() => expect(trigger).toBeEnabled())
+  fireEvent.click(trigger)
+  fireEvent.click(await within(dialog).findByRole("option", { name }))
+}
+
 function rowFor(name: string): HTMLElement {
   const row = screen.getByText(name).closest("tr")
   if (!row) throw new Error(`No row found for ${name}`)
@@ -355,8 +369,7 @@ describe("ConsultationsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /new consultation/i }))
     const dialog = await screen.findByRole("dialog")
 
-    await openSelect(within(dialog).getByRole("combobox", { name: /student/i }))
-    fireEvent.click(await screen.findByRole("option", { name: /Ana Reyes/ }))
+    await chooseStudent(dialog, /Ana Reyes/)
 
     fireEvent.change(within(dialog).getByLabelText("Session date"), {
       target: { value: "2025-03-04" },
@@ -399,8 +412,7 @@ describe("ConsultationsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /new consultation/i }))
     const dialog = await screen.findByRole("dialog")
 
-    await openSelect(within(dialog).getByRole("combobox", { name: /student/i }))
-    fireEvent.click(await screen.findByRole("option", { name: /Ana Reyes/ }))
+    await chooseStudent(dialog, /Ana Reyes/)
 
     fireEvent.change(within(dialog).getByLabelText("Session date"), {
       target: { value: "2025-03-04" },
@@ -429,14 +441,15 @@ describe("ConsultationsPage", () => {
   })
 
   it("blocks submission until the required session notes are non-blank", async () => {
+    mockedPost.mockResolvedValue({ data: makeConsultation() } as never)
+
     renderPage()
     await screen.findByText("Ana Reyes")
 
     fireEvent.click(screen.getByRole("button", { name: /new consultation/i }))
     const dialog = await screen.findByRole("dialog")
 
-    await openSelect(within(dialog).getByRole("combobox", { name: /student/i }))
-    fireEvent.click(await screen.findByRole("option", { name: /Ana Reyes/ }))
+    await chooseStudent(dialog, /Ana Reyes/)
 
     fireEvent.change(within(dialog).getByLabelText("Session date"), {
       target: { value: "2025-03-04" },
@@ -445,20 +458,32 @@ describe("ConsultationsPage", () => {
       target: { value: "10:15" },
     })
 
+    /*
+     * The submit stays enabled so pressing it can explain what is missing; a
+     * disabled button cannot be pressed to discover why.
+     */
     const submit = within(dialog).getByRole("button", {
       name: "Create consultation",
     })
-    expect(submit).toBeDisabled()
+    expect(submit).toBeEnabled()
+
+    fireEvent.click(submit)
+    expect(
+      await within(dialog).findByText(/session notes cannot be blank/i)
+    ).toBeInTheDocument()
+    expect(mockedPost).not.toHaveBeenCalled()
 
     fireEvent.change(within(dialog).getByLabelText(/session notes/i), {
       target: { value: "   " },
     })
-    expect(submit).toBeDisabled()
+    fireEvent.click(submit)
+    expect(mockedPost).not.toHaveBeenCalled()
 
     fireEvent.change(within(dialog).getByLabelText(/session notes/i), {
       target: { value: "Real notes." },
     })
-    expect(submit).toBeEnabled()
+    fireEvent.click(submit)
+    await waitFor(() => expect(mockedPost).toHaveBeenCalled())
   })
 
   it("refuses a session dated in the future and names the reason (TC-GUI-13)", async () => {
@@ -470,8 +495,7 @@ describe("ConsultationsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /new consultation/i }))
     const dialog = await screen.findByRole("dialog")
 
-    await openSelect(within(dialog).getByRole("combobox", { name: /student/i }))
-    fireEvent.click(await screen.findByRole("option", { name: /Ana Reyes/ }))
+    await chooseStudent(dialog, /Ana Reyes/)
 
     /*
      * A date one day ahead cannot collide with the recorded sessions, and the
@@ -495,22 +519,23 @@ describe("ConsultationsPage", () => {
       target: { value: "Notes." },
     })
 
-    // The message is not shown before the first submit attempt.
+    /*
+     * The message is not shown before the first submit attempt. The submit
+     * stays enabled; pressing it is what reveals the rule and blocks the call.
+     */
     expect(
       within(dialog).queryByText(/cannot be in the future/i)
     ).not.toBeInTheDocument()
 
-    /*
-     * The submit is disabled while the pair is in the future, and a disabled
-     * button fires no click, so the guard cannot be driven past the render that
-     * exposes it. What is proven here is therefore the submitted payload: the
-     * invalid pair never reaches the API.
-     */
     const submit = within(dialog).getByRole("button", {
       name: "Create consultation",
     })
-    expect(submit).toBeDisabled()
+    expect(submit).toBeEnabled()
     fireEvent.click(submit)
+
+    expect(
+      await within(dialog).findByText(/cannot be in the future/i)
+    ).toBeInTheDocument()
     expect(mockedPost).not.toHaveBeenCalled()
   })
 
@@ -523,8 +548,7 @@ describe("ConsultationsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /new consultation/i }))
     const dialog = await screen.findByRole("dialog")
 
-    await openSelect(within(dialog).getByRole("combobox", { name: /student/i }))
-    fireEvent.click(await screen.findByRole("option", { name: /Ana Reyes/ }))
+    await chooseStudent(dialog, /Ana Reyes/)
 
     fireEvent.change(within(dialog).getByLabelText("Session date"), {
       target: { value: "2025-03-04" },
@@ -539,9 +563,17 @@ describe("ConsultationsPage", () => {
       target: { value: "2025-03-03" },
     })
 
+    const submit = within(dialog).getByRole("button", {
+      name: "Create consultation",
+    })
+    expect(submit).toBeEnabled()
+    fireEvent.click(submit)
+
     expect(
-      within(dialog).getByRole("button", { name: "Create consultation" })
-    ).toBeDisabled()
+      await within(dialog).findByText(
+        /next session cannot be before the session date/i
+      )
+    ).toBeInTheDocument()
     expect(mockedPost).not.toHaveBeenCalled()
   })
 
@@ -554,8 +586,7 @@ describe("ConsultationsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /new consultation/i }))
     const dialog = await screen.findByRole("dialog")
 
-    await openSelect(within(dialog).getByRole("combobox", { name: /student/i }))
-    fireEvent.click(await screen.findByRole("option", { name: /Ana Reyes/ }))
+    await chooseStudent(dialog, /Ana Reyes/)
 
     fireEvent.change(within(dialog).getByLabelText("Session date"), {
       target: { value: "2024-01-15" },
@@ -674,8 +705,7 @@ describe("ConsultationsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /new consultation/i }))
     const dialog = await screen.findByRole("dialog")
 
-    await openSelect(within(dialog).getByRole("combobox", { name: /student/i }))
-    fireEvent.click(await screen.findByRole("option", { name: /Ana Reyes/ }))
+    await chooseStudent(dialog, /Ana Reyes/)
 
     fireEvent.change(within(dialog).getByLabelText("Session date"), {
       target: { value: "2025-03-04" },

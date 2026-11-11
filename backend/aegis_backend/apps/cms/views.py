@@ -373,6 +373,85 @@ class CmsResourceFileDownload(APIView):
         return response
 
 
+class CmsAnnouncementImageDownload(APIView):
+    """
+    GET /api/v1/cms/announcements/<document_id>/image/
+
+    SEC-007: authorized proxy for an announcement cover image. Visibility is
+    the same `_visible_announcements` check as the metadata, so a user who
+    cannot see the announcement cannot reach its image bytes.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get_visible(self, items):
+        return _visible_announcements(items, self.request.user)
+
+    def get(self, request, document_id):
+        client = StrapiClient()
+        try:
+            announcement = client.get_announcement(document_id)
+            visible = self.get_visible([announcement])
+        except StrapiNotFoundError:
+            raise NotFound("Announcement not found.")
+        except StrapiUnavailableError:
+            return _cms_unavailable_response()
+        except StrapiError:
+            return _cms_unavailable_response()
+
+        if not visible:
+            raise NotFound("Announcement not found.")
+        announcement = visible[0]
+
+        if (
+            announcement.get("cover_image_source") != "proxy"
+            or not announcement.get("cover_image_path")
+        ):
+            raise NotFound("Announcement image not available.")
+
+        try:
+            upstream = client.get_media_stream(announcement["cover_image_path"])
+        except StrapiNotFoundError:
+            raise NotFound("Announcement image not available.")
+        except StrapiUnavailableError:
+            return _cms_unavailable_response()
+        except StrapiError:
+            return _cms_unavailable_response()
+
+        upstream_type = (upstream.headers.get("Content-Type") or "").split(";")[0].strip()
+        # Only raster images render inline. Anything else is forced to a
+        # download so an uploaded SVG can never execute in the API origin.
+        inline_types = {
+            "image/jpeg",
+            "image/png",
+            "image/webp",
+            "image/gif",
+            "image/avif",
+        }
+        if upstream_type in inline_types:
+            content_type = upstream_type
+            disposition = "inline"
+        else:
+            content_type = "application/octet-stream"
+            disposition = 'attachment; filename="cover-image"'
+
+        response = StreamingHttpResponse(
+            _stream_and_close(upstream), content_type=content_type
+        )
+        response["Content-Disposition"] = disposition
+        return response
+
+
+class PublicCmsAnnouncementImageDownload(CmsAnnouncementImageDownload):
+    """Anonymous cover image for a public (`target_roles=["all"]`) announcement."""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get_visible(self, items):
+        return _public_announcements(items)
+
+
 def _cms_unavailable_response():
     return Response(
         {"detail": "Content service is temporarily unavailable."},
@@ -384,6 +463,7 @@ __all__ = [
     "StrapiAnnouncementWebhookView",
     "CmsAnnouncementList",
     "CmsAnnouncementDetail",
+    "CmsAnnouncementImageDownload",
     "CmsResourceList",
     "CmsResourceDetail",
     "CmsResourceFileDownload",

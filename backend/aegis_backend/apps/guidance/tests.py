@@ -834,6 +834,48 @@ class RiskAlertCreateTest(GuidanceTestBase):
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
+    def _alert_recipients(self):
+        return set(
+            Notification.objects.filter(
+                notification_type="RISK_ALERT_GENERATED"
+            ).values_list("recipient__email", flat=True)
+        )
+
+    def test_manual_high_alert_notifies_guidance_adviser_and_parents(self):
+        response = self.client.post(
+            "/api/v1/guidance/risk-alerts/",
+            {
+                "student": str(self.student_profile.id),
+                "risk_level": "high",
+                "risk_factors": ["Frequent absences"],
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        recipients = self._alert_recipients()
+        # Guidance staff always; the section adviser and the linked parents
+        # are added on HIGH.
+        self.assertIn(self.guidance_user.email, recipients)
+        self.assertIn(self.guidance2_user.email, recipients)
+        self.assertIn(self.faculty_user.email, recipients)
+        self.assertIn(self.parent_user.email, recipients)
+
+    def test_manual_low_alert_notifies_guidance_only(self):
+        response = self.client.post(
+            "/api/v1/guidance/risk-alerts/",
+            {
+                "student": str(self.student_profile.id),
+                "risk_level": "low",
+                "risk_factors": ["Late once"],
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        recipients = self._alert_recipients()
+        self.assertIn(self.guidance_user.email, recipients)
+        self.assertNotIn(self.faculty_user.email, recipients)
+        self.assertNotIn(self.parent_user.email, recipients)
+
 
 class RiskAlertStatusTransitionTest(GuidanceTestBase):
     def setUp(self):

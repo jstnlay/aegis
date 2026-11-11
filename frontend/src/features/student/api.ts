@@ -48,6 +48,9 @@ interface EnrollmentRecord {
   student_name: string
   student_id: string
   section_name: string
+  grade_level_name: string
+  age: number | null
+  academic_year_name: string
   is_active: boolean
 }
 
@@ -101,20 +104,39 @@ function toScore(value: unknown): number | null {
 }
 
 /**
+ * Resolves the current student's active enrollment.
+ *
+ * `EnrollmentViewSet` already scopes the list to the caller's own record, so
+ * the active row is also the source of the basic profile facts the student
+ * dashboard shows (school ID, year level, section, age).
+ */
+export function useStudentEnrollment() {
+  return useQuery<EnrollmentRecord | null, Error>({
+    queryKey: ["student", "enrollment"],
+    queryFn: async () => {
+      const { results } = await fetchAllPages<EnrollmentRecord>(
+        "/academics/enrollments/"
+      )
+      return results.find((e) => e.is_active) ?? results[0] ?? null
+    },
+  })
+}
+
+/**
  * Resolves the current student's StudentProfile UUID from their own
  * enrollments. The authenticated user's `id` is the User UUID, which is
  * NOT the StudentProfile UUID used by analytics / attendance routes.
  */
 export function useStudentProfileId() {
-  return useQuery<string | null, Error>({
-    queryKey: ["student", "profile-id"],
+  return useQuery<EnrollmentRecord | null, Error, string | null>({
+    queryKey: ["student", "enrollment"],
     queryFn: async () => {
       const { results } = await fetchAllPages<EnrollmentRecord>(
         "/academics/enrollments/"
       )
-      const active = results.find((e) => e.is_active) ?? results[0]
-      return active?.student ?? null
+      return results.find((e) => e.is_active) ?? results[0] ?? null
     },
+    select: (data) => data?.student ?? null,
   })
 }
 

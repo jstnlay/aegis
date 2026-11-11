@@ -56,6 +56,7 @@ from .password_reset import (
     send_set_password_email,
 )
 from .serializers import (
+    ActivitySerializer,
     AegisTokenObtainPairSerializer,
     AdminParentInvitationSerializer,
     AdminRegistrationSerializer,
@@ -277,6 +278,28 @@ class CurrentUserView(generics.RetrieveUpdateAPIView):
 
     def get_object(self):
         return self.request.user
+
+
+class MyActivityView(generics.ListAPIView):
+    """
+    GET /api/v1/accounts/me/activity/ — the caller's own sign-in history.
+
+    A parent's account surface needs to show when their account was used. The
+    queryset is filtered to `request.user`, so this endpoint can only ever
+    return the caller's own rows: no account can read another's activity, and
+    the full audit log stays administrator-only (`/audit/logs/`).
+    """
+
+    serializer_class = ActivitySerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        from apps.audit.models import AuditLog
+
+        return AuditLog.objects.filter(
+            user=self.request.user,
+            action__in=[AuditLog.Action.LOGIN, AuditLog.Action.LOGOUT],
+        )
 
 
 class PasswordChangeView(APIView):

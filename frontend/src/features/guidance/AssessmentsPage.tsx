@@ -60,6 +60,7 @@ import {
   type GuidanceAssessmentResult,
   type GuidanceAssessmentType,
   type GuidanceStudent,
+  type QuestionDraft,
 } from "@/features/guidance/api"
 import { normalizeApiError } from "@/lib/error"
 
@@ -103,6 +104,8 @@ function ErrorNote({ message }: { message: string }) {
 /** `POST /assessments/assessments/` form. */
 function NewAssessmentDialog({ students }: { students: GuidanceStudent[] }) {
   const create = useCreateAssessment()
+  const createQuestion = useCreateAssessmentQuestion()
+  const generate = useGenerateQuestionDrafts()
 
   const [open, setOpen] = useState(false)
   const [title, setTitle] = useState("")
@@ -112,11 +115,44 @@ function NewAssessmentDialog({ students }: { students: GuidanceStudent[] }) {
   const [timeLimit, setTimeLimit] = useState("")
   const [deadline, setDeadline] = useState("")
   const [targetIds, setTargetIds] = useState<string[]>([])
+  const [targetSearch, setTargetSearch] = useState("")
+
+  // FR-027 draft step: proposals live here until the assessment exists, then
+  // the checked ones are created as its first questions.
+  const [draftTopic, setDraftTopic] = useState("")
+  const [draftType, setDraftType] =
+    useState<AssessmentQuestionType>("multiple_choice")
+  const [draftCount, setDraftCount] = useState("5")
+  const [drafts, setDrafts] = useState<QuestionDraft[]>([])
+  const [generatedType, setGeneratedType] =
+    useState<AssessmentQuestionType>("multiple_choice")
+  const [selectedDraftIndexes, setSelectedDraftIndexes] = useState<number[]>([])
+
+  // A failed question save must not hide the fact that the assessment itself
+  // was created, or a retry would make a second one.
+  const [createdId, setCreatedId] = useState<string | null>(null)
+  const [savedQuestionCount, setSavedQuestionCount] = useState(0)
+  const [questionError, setQuestionError] = useState<string | null>(null)
 
   const titleBlank = title.trim().length === 0
   const parsedLimit = timeLimit.trim() === "" ? null : Number(timeLimit)
   const limitInvalid =
-    parsedLimit !== null && (!Number.isInteger(parsedLimit) || parsedLimit <= 0)
+    parsedLimit !== null &&
+    (!Number.isInteger(parsedLimit) || parsedLimit < 1 || parsedLimit > 600)
+
+  const parsedCount = Number(draftCount)
+  const draftCountInvalid =
+    !Number.isInteger(parsedCount) || parsedCount < 1 || parsedCount > 20
+
+  const targetOptions = useMemo(() => {
+    const q = targetSearch.trim().toLowerCase()
+    if (!q) return students
+    return students.filter(
+      (student) =>
+        student.name.toLowerCase().includes(q) ||
+        (student.code ?? "").toLowerCase().includes(q)
+    )
+  }, [students, targetSearch])
 
   function toggleTarget(id: string) {
     setTargetIds((current) =>
@@ -126,11 +162,65 @@ function NewAssessmentDialog({ students }: { students: GuidanceStudent[] }) {
     )
   }
 
+  function toggleDraft(index: number) {
+    setSelectedDraftIndexes((current) =>
+      current.includes(index)
+        ? current.filter((item) => item !== index)
+        : [...current, index]
+    )
+  }
+
+  function resetForm() {
+    setTitle("")
+    setDescription("")
+    setTimeLimit("")
+    setDeadline("")
+    setTargetIds([])
+    setTargetSearch("")
+    setDraftTopic("")
+    setDraftType("multiple_choice")
+    setDraftCount("5")
+    setDrafts([])
+    setGeneratedType("multiple_choice")
+    setSelectedDraftIndexes([])
+    setCreatedId(null)
+    setSavedQuestionCount(0)
+    setQuestionError(null)
+    create.reset()
+    createQuestion.reset()
+    generate.reset()
+  }
+
+  function generateDrafts() {
+    if (!draftTopic.trim() || draftCountInvalid) return
+    generate.mutate(
+      {
+        topic: draftTopic.trim(),
+        question_type: draftType,
+        count: parsedCount,
+      },
+      {
+        onSuccess: (data) => {
+          setDrafts(data.drafts)
+          setGeneratedType(draftType)
+          setSelectedDraftIndexes(data.drafts.map((_, index) => index))
+        },
+      }
+    )
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (createdId) {
+      setOpen(false)
+      resetForm()
+      return
+    }
     if (titleBlank || limitInvalid) return
+
+    let assessment: { id: string }
     try {
-      await create.mutateAsync({
+      assessment = await create.mutateAsync({
         title: title.trim(),
         assessment_type: assessmentType,
         description: description.trim() || null,
@@ -138,23 +228,53 @@ function NewAssessmentDialog({ students }: { students: GuidanceStudent[] }) {
         deadline: deadline || null,
         target_students: targetIds,
       })
-      setTitle("")
-      setDescription("")
-      setTimeLimit("")
-      setDeadline("")
-      setTargetIds([])
-      setOpen(false)
     } catch {
       // Surfaced from `create.isError`; the dialog stays open with the draft.
+      return
     }
+
+    const selected = drafts.filter((_, index) =>
+      selectedDraftIndexes.includes(index)
+    )
+    let saved = 0
+    try {
+      for (const [position, draft] of selected.entries()) {
+        await createQuestion.mutateAsync({
+          assessment: assessment.id,
+          question_text: draft.question_text,
+          question_type: generatedType,
+          order: position + 1,
+          options: draft.options,
+          correct_answer: draft.correct_answer,
+        })
+        saved += 1
+      }
+    } catch (error) {
+      setCreatedId(assessment.id)
+      setSavedQuestionCount(saved)
+      setQuestionError(
+        normalizeApiError(error).message +
+          ` ${saved} of ${selected.length} generated questions were saved.`
+      )
+      return
+    }
+
+    setOpen(false)
+    resetForm()
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) resetForm()
+        setOpen(next)
+      }}
+    >
       <DialogTrigger asChild>
         <Button>New assessment</Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>New assessment</DialogTitle>
           <DialogDescription>
@@ -162,11 +282,12 @@ function NewAssessmentDialog({ students }: { students: GuidanceStudent[] }) {
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           <Field
             label="Title"
             id="assessment-title"
             required
+            maxLength={255}
             value={title}
             onChange={setTitle}
           />
@@ -200,10 +321,18 @@ function NewAssessmentDialog({ students }: { students: GuidanceStudent[] }) {
             <textarea
               id="assessment-description"
               rows={3}
+              maxLength={2000}
               value={description}
               onChange={(event) => setDescription(event.target.value)}
+              aria-describedby="assessment-description-hint"
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring"
             />
+            <p
+              id="assessment-description-hint"
+              className="text-xs text-muted-foreground"
+            >
+              Optional, up to 2,000 characters. {description.length}/2,000
+            </p>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
@@ -215,6 +344,7 @@ function NewAssessmentDialog({ students }: { students: GuidanceStudent[] }) {
                 id="assessment-time-limit"
                 type="number"
                 min={1}
+                max={600}
                 aria-invalid={limitInvalid || undefined}
                 aria-describedby={
                   limitInvalid
@@ -230,14 +360,14 @@ function NewAssessmentDialog({ students }: { students: GuidanceStudent[] }) {
                   role="alert"
                   className="text-xs text-destructive"
                 >
-                  Must be a whole number of minutes.
+                  Must be a whole number between 1 and 600 minutes.
                 </p>
               ) : (
                 <p
                   id="assessment-time-limit-hint"
                   className="text-xs text-muted-foreground"
                 >
-                  Optional.
+                  Optional, 1&ndash;600 minutes.
                 </p>
               )}
             </div>
@@ -253,7 +383,112 @@ function NewAssessmentDialog({ students }: { students: GuidanceStudent[] }) {
             </div>
           </div>
 
-          <fieldset className="space-y-1.5">
+          <fieldset className="space-y-2 rounded-md border border-border p-3">
+            <legend className="px-1 text-sm font-medium">
+              AI question drafts
+            </legend>
+            <p className="text-xs text-muted-foreground">
+              Optional. Generate proposals with the assistant, then choose which
+              ones become questions when the assessment is created.
+            </p>
+            <Field
+              label="Topic"
+              id="assessment-draft-topic"
+              value={draftTopic}
+              onChange={setDraftTopic}
+              placeholder="e.g. exam stress, study habits"
+            />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="assessment-draft-type">Question type</Label>
+                <Select
+                  value={draftType}
+                  onValueChange={(value) =>
+                    setDraftType(value as AssessmentQuestionType)
+                  }
+                >
+                  <SelectTrigger id="assessment-draft-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ASSESSMENT_QUESTION_TYPES.filter(
+                      (type) => type !== "true_false"
+                    ).map((type) => (
+                      <SelectItem key={type} value={type}>
+                        {ASSESSMENT_QUESTION_TYPE_LABELS[type]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="assessment-draft-count">How many</Label>
+                <Input
+                  id="assessment-draft-count"
+                  type="number"
+                  min={1}
+                  max={20}
+                  aria-invalid={draftCountInvalid || undefined}
+                  aria-describedby={
+                    draftCountInvalid
+                      ? "assessment-draft-count-error"
+                      : undefined
+                  }
+                  value={draftCount}
+                  onChange={(event) => setDraftCount(event.target.value)}
+                />
+                {draftCountInvalid ? (
+                  <p
+                    id="assessment-draft-count-error"
+                    role="alert"
+                    className="text-xs text-destructive"
+                  >
+                    Choose between 1 and 20 questions.
+                  </p>
+                ) : null}
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={
+                generate.isPending || !draftTopic.trim() || draftCountInvalid
+              }
+              onClick={generateDrafts}
+            >
+              {generate.isPending ? "Generating…" : "Generate drafts"}
+            </Button>
+
+            {generate.isError ? (
+              <ErrorNote message={normalizeApiError(generate.error).message} />
+            ) : null}
+
+            {drafts.length > 0 ? (
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  {selectedDraftIndexes.length} of {drafts.length} selected.
+                </p>
+                <ul className="max-h-56 space-y-2 overflow-y-auto pr-1">
+                  {drafts.map((draft, index) => (
+                    <li key={`${index}-${draft.question_text}`}>
+                      <label className="flex items-start gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          className="mt-1"
+                          checked={selectedDraftIndexes.includes(index)}
+                          onChange={() => toggleDraft(index)}
+                        />
+                        <span>{draft.question_text}</span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </fieldset>
+
+          <fieldset className="space-y-2">
             <legend className="text-sm font-medium">Target students</legend>
             {students.length === 0 ? (
               <p className="text-xs text-muted-foreground">
@@ -261,22 +496,57 @@ function NewAssessmentDialog({ students }: { students: GuidanceStudent[] }) {
               </p>
             ) : (
               <>
-                <div className="flex flex-wrap gap-1.5">
-                  {students.map((student) => {
-                    const selected = targetIds.includes(student.id)
-                    return (
-                      <Button
+                {targetIds.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {targetIds.map((id) => {
+                      const student = students.find((item) => item.id === id)
+                      return (
+                        <Button
+                          key={id}
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => toggleTarget(id)}
+                          aria-label={`Remove ${student?.name ?? "student"} from targets`}
+                        >
+                          {student?.name ?? "Student"} &times;
+                        </Button>
+                      )
+                    })}
+                  </div>
+                ) : null}
+                <Input
+                  type="search"
+                  aria-label="Search students to target"
+                  placeholder="Search students"
+                  value={targetSearch}
+                  onChange={(event) => setTargetSearch(event.target.value)}
+                />
+                <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-border p-2">
+                  {targetOptions.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      No students match the current search.
+                    </p>
+                  ) : (
+                    targetOptions.map((student) => (
+                      <label
                         key={student.id}
-                        type="button"
-                        size="sm"
-                        variant={selected ? "secondary" : "outline"}
-                        aria-pressed={selected}
-                        onClick={() => toggleTarget(student.id)}
+                        className="flex items-center gap-2 text-sm"
                       >
-                        {student.name}
-                      </Button>
-                    )
-                  })}
+                        <input
+                          type="checkbox"
+                          checked={targetIds.includes(student.id)}
+                          onChange={() => toggleTarget(student.id)}
+                        />
+                        <span>{student.name}</span>
+                        {student.code ? (
+                          <span className="font-mono text-xs text-muted-foreground">
+                            {student.code}
+                          </span>
+                        ) : null}
+                      </label>
+                    ))
+                  )}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   {targetIds.length} selected. Only students with guidance
@@ -286,24 +556,46 @@ function NewAssessmentDialog({ students }: { students: GuidanceStudent[] }) {
             )}
           </fieldset>
 
+          {questionError ? <ErrorNote message={questionError} /> : null}
+          {createdId && savedQuestionCount > 0 ? (
+            <p role="status" className="text-sm text-muted-foreground">
+              {savedQuestionCount} generated question
+              {savedQuestionCount === 1 ? "" : "s"} saved to the new assessment.
+            </p>
+          ) : null}
+
           {create.isError ? (
             <ErrorNote message={normalizeApiError(create.error).message} />
           ) : null}
 
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              disabled={create.isPending || titleBlank || limitInvalid}
-            >
-              {create.isPending ? "Creating…" : "Create assessment"}
-            </Button>
+            {createdId ? (
+              <Button
+                type="button"
+                onClick={() => {
+                  setOpen(false)
+                  resetForm()
+                }}
+              >
+                Close
+              </Button>
+            ) : (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={create.isPending || titleBlank || limitInvalid}
+                >
+                  {create.isPending ? "Creating…" : "Create assessment"}
+                </Button>
+              </>
+            )}
           </DialogFooter>
         </form>
       </DialogContent>

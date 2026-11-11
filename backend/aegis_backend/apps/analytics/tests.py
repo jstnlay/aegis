@@ -147,6 +147,78 @@ class AnalyticsServiceTest(AnalyticsTestBase):
         self.assertEqual(sum(point["count"] for point in result["alert_trend"]), 0)
 
 
+class ForecastTest(AnalyticsTestBase):
+    """
+    The predictive mode of the analytics dashboard.
+
+    A forecast projects a monthly series forward. When the series is too
+    thin the answer is "no estimate", never a projection drawn from noise.
+    """
+
+    URL = "/api/v1/analytics/forecast/"
+
+    def _attendance_month(self, month_start, present=1, absent=0):
+        from apps.attendance.models import AttendanceRecord
+
+        for index in range(present):
+            AttendanceRecord.objects.create(
+                student=self.student_profile, section=self.section,
+                date=month_start + timedelta(days=index), status="present",
+                recorded_by=self.faculty_profile,
+            )
+        for index in range(absent):
+            AttendanceRecord.objects.create(
+                student=self.student_profile, section=self.section,
+                date=month_start + timedelta(days=10 + index), status="absent",
+                recorded_by=self.faculty_profile,
+            )
+
+    def test_thin_series_answers_insufficient_data(self):
+        from apps.analytics import services
+
+        self.force_auth(self.admin_user)
+        response = self.client.get(self.URL, {"metric": "attendance_rate"})
+        data = response.data["data"]
+        self.assertTrue(data["insufficient_data"])
+        self.assertIsNone(data["estimate"])
+        self.assertEqual(data["coverage"]["points"], 0)
+
+    def test_three_months_produce_an_estimate(self):
+        from apps.analytics import services
+
+        self._attendance_month(date(2024, 6, 10), present=8, absent=2)
+        self._attendance_month(date(2024, 7, 10), present=7, absent=3)
+        self._attendance_month(date(2024, 8, 10), present=6, absent=4)
+
+        self.force_auth(self.admin_user)
+        response = self.client.get(
+            self.URL, {"metric": "attendance_rate", "months": "3"}
+        )
+        data = response.data["data"]
+        self.assertFalse(data["insufficient_data"])
+        self.assertEqual(data["coverage"]["points"], 3)
+        self.assertEqual(data["coverage"]["from"], "2024-06")
+        self.assertEqual(data["coverage"]["to"], "2024-08")
+        # 80%, 70%, 60% → a downward trend projected three months on.
+        self.assertLess(data["estimate"], 60)
+        self.assertEqual(data["trend"], "down")
+
+    def test_unknown_metric_is_rejected(self):
+        self.force_auth(self.admin_user)
+        response = self.client.get(self.URL, {"metric": "vibes"})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_unknown_horizon_is_rejected(self):
+        self.force_auth(self.admin_user)
+        response = self.client.get(self.URL, {"months": "7"})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_non_admin_cannot_forecast(self):
+        self.force_auth(self.faculty_user)
+        response = self.client.get(self.URL)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
 # ---------------------------------------------------------------------------
 # Analytics API RBAC tests
 # ---------------------------------------------------------------------------

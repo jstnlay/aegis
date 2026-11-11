@@ -551,10 +551,45 @@ class RiskAlertViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
     def perform_create(self, serializer):
-        serializer.save(
+        alert = serializer.save(
             source=RiskAlert.Source.MANUAL,
             generated_at=timezone.now(),
         )
+
+        # A manual alert is a counselor's decision about a real student, so
+        # the same people must be told as for an automatic one: guidance
+        # always, plus the section adviser and the linked parents on HIGH.
+        from apps.notifications.events import dispatch_event
+
+        recipients = set(_get_all_guidance_users())
+        if alert.risk_level == "high":
+            adviser = (
+                alert.student.section.adviser if alert.student.section_id else None
+            )
+            if adviser is not None:
+                recipients.add(adviser.user)
+            recipients.update(_get_linked_parent_users(alert.student))
+
+        if recipients:
+            dispatch_event(
+                "RISK_ALERT_GENERATED",
+                recipients=recipients,
+                sender=self.request.user,
+                title=(
+                    f"Risk Alert: {alert.student.user.get_full_name()} — "
+                    f"{alert.risk_level.upper()}"
+                ),
+                message=(
+                    f"A counselor flagged "
+                    f"{alert.student.user.get_full_name()} as "
+                    f"{alert.risk_level.upper()} risk."
+                ),
+                link="/guidance/risk-alerts",
+                deduplication_key=(
+                    f"risk_alert:{alert.student.id}:{alert.risk_level}:"
+                    f"{alert.generated_at.date()}"
+                ),
+            )
 
     @action(detail=True, methods=["post"], url_path="acknowledge")
     def acknowledge(self, request, pk=None):

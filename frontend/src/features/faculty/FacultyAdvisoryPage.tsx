@@ -1,4 +1,4 @@
-import { BookOpen, NotebookPen, Users } from "lucide-react"
+import { BookOpen, NotebookPen, Plus, Users } from "lucide-react"
 import { useMemo, useState, type FormEvent } from "react"
 
 import { Badge } from "@/components/ui/badge"
@@ -40,6 +40,7 @@ import {
 import {
   useAdvisoryEnrollments,
   useCreateBehavioralNote,
+  useCreateStudentProfile,
   useProfileReferenceData,
   useStudentProfile,
   useUpdateStudentProfile,
@@ -152,6 +153,8 @@ function RosterCard({
 }) {
   const rosterQuery = useAdvisoryEnrollments()
   const [search, setSearch] = useState("")
+  const [adding, setAdding] = useState(false)
+  const [created, setCreated] = useState<string | null>(null)
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -188,6 +191,16 @@ function RosterCard({
       cell: (entry) => entry.section_name,
     },
     {
+      key: "grade_level_name",
+      header: "Year level",
+      cell: (entry) => entry.grade_level_name || "—",
+    },
+    {
+      key: "age",
+      header: "Age",
+      cell: (entry) => (entry.age === null ? "—" : String(entry.age)),
+    },
+    {
       key: "actions",
       header: "Profile",
       headerClassName: "whitespace-nowrap",
@@ -207,18 +220,39 @@ function RosterCard({
   return (
     <Card data-panel="students">
       <CardHeader>
-        <CardTitle>
-          <span className="faculty-panel-icon" aria-hidden="true">
-            <Users />
-          </span>
-          <span>Students in your class</span>
-        </CardTitle>
-        <CardDescription>
-          Enrolled students in the sections you advise or teach. The server
-          keeps this list scoped to your own sections.
-        </CardDescription>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="space-y-1.5">
+            <CardTitle>
+              <span className="faculty-panel-icon" aria-hidden="true">
+                <Users />
+              </span>
+              <span>Students in your class</span>
+            </CardTitle>
+            <CardDescription>
+              Enrolled students in the sections you advise or teach. The server
+              keeps this list scoped to your own sections.
+            </CardDescription>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => {
+              setCreated(null)
+              setAdding(true)
+            }}
+          >
+            <Plus className="size-4" aria-hidden="true" />
+            Add student
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
+        {created ? (
+          <p role="status" className="mb-3 text-sm text-muted-foreground">
+            {created} was added to your class. They will receive an email link
+            to set their password.
+          </p>
+        ) : null}
         <div className="mb-3 space-y-1.5">
           <Label htmlFor="advisory-roster-search">Search students</Label>
           <Input
@@ -249,8 +283,223 @@ function RosterCard({
             }
           />
         </div>
+
+        <AddStudentDialog
+          open={adding}
+          onClose={() => setAdding(false)}
+          onCreated={(name) => {
+            setAdding(false)
+            setCreated(name)
+          }}
+        />
       </CardContent>
     </Card>
+  )
+}
+
+interface NewStudentForm {
+  first_name: string
+  last_name: string
+  email: string
+  student_id: string
+  grade_level: string
+  section: string
+  guardian_contact: string
+  date_of_birth: string
+}
+
+const EMPTY_NEW_STUDENT: NewStudentForm = {
+  first_name: "",
+  last_name: "",
+  email: "",
+  student_id: "",
+  grade_level: "",
+  section: "",
+  guardian_contact: "",
+  date_of_birth: "",
+}
+
+/**
+ * Add a student to the caller's class (FR-007 / TC-FAC-03).
+ *
+ * One submit creates the account, profile and enrollment server-side, so the
+ * form carries the identity fields as well as the profile fields. The student
+ * never gets a faculty-chosen password: the server mails a set-password link.
+ * The section list is already scoped to this faculty member and is narrowed
+ * further to the chosen grade level; the server repeats both checks.
+ */
+function AddStudentDialog({
+  open,
+  onClose,
+  onCreated,
+}: {
+  open: boolean
+  onClose: () => void
+  onCreated: (fullName: string) => void
+}) {
+  const reference = useProfileReferenceData()
+  const createStudent = useCreateStudentProfile()
+  const [form, setForm] = useState<NewStudentForm>(EMPTY_NEW_STUDENT)
+
+  const fieldErrors = createStudent.isError
+    ? getFieldErrors(createStudent.error)
+    : null
+
+  const set = (patch: Partial<NewStudentForm>) =>
+    setForm((current) => ({ ...current, ...patch }))
+
+  const sectionOptions = reference.sections
+    .filter(
+      (section) => !form.grade_level || section.grade_level === form.grade_level
+    )
+    .map((section) => ({ value: section.id, label: section.name }))
+
+  const onSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    createStudent.mutate(form, {
+      onSuccess: (profile) => {
+        setForm(EMPTY_NEW_STUDENT)
+        createStudent.reset()
+        onCreated(profile.student_name)
+      },
+    })
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) {
+          createStudent.reset()
+          onClose()
+        }
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Add student</DialogTitle>
+          <DialogDescription>
+            Creates the student account and enrolls them in one of your
+            sections. The student receives an email link to set their password.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form
+          className="space-y-3"
+          id="add-student-form"
+          onSubmit={onSubmit}
+          noValidate
+        >
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field
+              label="First name"
+              id="new-student-first-name"
+              required
+              value={form.first_name}
+              onChange={(value) => set({ first_name: value })}
+              error={fieldErrors?.first_name?.[0] ?? null}
+            />
+            <Field
+              label="Last name"
+              id="new-student-last-name"
+              required
+              value={form.last_name}
+              onChange={(value) => set({ last_name: value })}
+              error={fieldErrors?.last_name?.[0] ?? null}
+            />
+          </div>
+          <Field
+            label="Email"
+            id="new-student-email"
+            required
+            type="text"
+            value={form.email}
+            onChange={(value) => set({ email: value })}
+            error={fieldErrors?.email?.[0] ?? null}
+            hint="The set-password link is sent to this address."
+          />
+          <Field
+            label="Student ID"
+            id="new-student-id"
+            required
+            value={form.student_id}
+            onChange={(value) => set({ student_id: value })}
+            error={fieldErrors?.student_id?.[0] ?? null}
+          />
+          <ChoiceField
+            label="Grade level"
+            id="new-student-grade-level"
+            required
+            value={form.grade_level}
+            onChange={(value) => set({ grade_level: value, section: "" })}
+            options={reference.gradeLevels.map((level) => ({
+              value: level.id,
+              label: level.name,
+            }))}
+            error={fieldErrors?.grade_level?.[0] ?? null}
+          />
+          <ChoiceField
+            label="Section"
+            id="new-student-section"
+            required
+            value={form.section}
+            onChange={(value) => set({ section: value })}
+            options={sectionOptions}
+            error={fieldErrors?.section?.[0] ?? null}
+            hint={
+              form.grade_level && sectionOptions.length === 0
+                ? "You do not advise or teach a section in this grade level."
+                : undefined
+            }
+          />
+          <Field
+            label="Guardian contact"
+            id="new-student-guardian"
+            required
+            value={form.guardian_contact}
+            onChange={(value) => set({ guardian_contact: value })}
+            error={fieldErrors?.guardian_contact?.[0] ?? null}
+            placeholder="09XX-XXX-XXXX"
+          />
+          <Field
+            label="Date of birth"
+            id="new-student-date-of-birth"
+            required
+            type="date"
+            value={form.date_of_birth}
+            onChange={(value) => set({ date_of_birth: value })}
+            error={fieldErrors?.date_of_birth?.[0] ?? null}
+          />
+
+          {createStudent.isError &&
+          (!fieldErrors || Object.keys(fieldErrors).length === 0) ? (
+            <ErrorNote
+              message={normalizeApiError(createStudent.error).message}
+            />
+          ) : null}
+        </form>
+
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              createStudent.reset()
+              onClose()
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            form="add-student-form"
+            disabled={createStudent.isPending}
+          >
+            {createStudent.isPending ? "Adding…" : "Add student"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 

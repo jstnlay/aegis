@@ -8,10 +8,16 @@ in-app notifications. Domain modules are responsible for:
   - Passing pre-computed title, message, and link
 
 This module is responsible for:
-  - Creating Notification records
-  - Gating on recipient NotificationPreference.in_app_enabled
+  - Creating Notification records (in-app)
+  - Emailing the same event to recipients who opted into email
+  - Gating on recipient NotificationPreference.in_app_enabled and
+    .email_enabled, independently
   - Lazy-initializing NotificationPreference for new recipients
 """
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def dispatch_event(
@@ -25,7 +31,7 @@ def dispatch_event(
     deduplication_key=None,
 ):
     """
-    Create Notification objects for each recipient.
+    Create a Notification for each recipient and email those who opted in.
 
     Args:
         event_type: One of NotificationType values.
@@ -38,6 +44,9 @@ def dispatch_event(
             with this key already exists for ANY recipient, no notifications
             are created for ANY recipient (all-or-nothing dedup).
     """
+    from django.conf import settings
+    from django.core.mail import send_mail
+
     from .models import Notification, NotificationPreference, NotificationType
 
     recipients = list(recipients)
@@ -51,17 +60,39 @@ def dispatch_event(
 
     for recipient in recipients:
         pref, _ = NotificationPreference.objects.get_or_create(user=recipient)
-        if not pref.in_app_enabled:
-            continue
-        Notification.objects.create(
-            recipient=recipient,
-            sender=sender,
-            notification_type=event_type,
-            title=title,
-            message=message,
-            link=link,
-            deduplication_key=deduplication_key,
-        )
+
+        if pref.in_app_enabled:
+            Notification.objects.create(
+                recipient=recipient,
+                sender=sender,
+                notification_type=event_type,
+                title=title,
+                message=message,
+                link=link,
+                deduplication_key=deduplication_key,
+            )
+
+        if pref.email_enabled and recipient.email:
+            body = message
+            if link:
+                base = settings.AEGIS_FRONTEND_URL.rstrip("/")
+                body = f"{message}\n\n{base}{link}"
+            try:
+                send_mail(
+                    title,
+                    body,
+                    settings.DEFAULT_FROM_EMAIL,
+                    [recipient.email],
+                    fail_silently=False,
+                )
+            except Exception:
+                # A mail failure must not undo the in-app notification or the
+                # caller's transaction, so it is logged and swallowed here.
+                # Quiet hours are stored on the preference but not honoured yet.
+                logger.exception(
+                    "Notification email could not be sent to user %s",
+                    recipient.pk,
+                )
 
 
 def schedule_maintenance_window(*, starts_at, ends_at, message="", sender=None):

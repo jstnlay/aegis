@@ -163,3 +163,23 @@
 {"text": "i want to kill myself", "intent": "urgent_concern"}
 {"text": "someone is bullying me", "intent": "urgent_concern"}
 {"text": "i need urgent help right now", "intent": "urgent_concern"}
+{"text": "who is at risk", "intent": "ask_at_risk_students"}
+{"text": "sino ang at risk sa klase", "intent": "ask_at_risk_students"}
+{"text": "list the at risk students", "intent": "ask_at_risk_students"}
+{"text": "ilan ang at risk", "intent": "ask_at_risk_students"}
+{"text": "risk alerts list", "intent": "ask_at_risk_students"}
+{"text": "how is my class performing", "intent": "ask_class_performance"}
+{"text": "ano performance ng klase ko", "intent": "ask_class_performance"}
+{"text": "class average grade", "intent": "ask_class_performance"}
+{"text": "how are my students doing", "intent": "ask_class_performance"}
+{"text": "average ng class", "intent": "ask_class_performance"}
+{"text": "how many consultations this month", "intent": "ask_consultation_summary"}
+{"text": "consultation summary", "intent": "ask_consultation_summary"}
+{"text": "ilan consultations ngayong buwan", "intent": "ask_consultation_summary"}
+{"text": "counseling sessions count", "intent": "ask_consultation_summary"}
+{"text": "total consultations today", "intent": "ask_consultation_summary"}
+{"text": "give me a school summary", "intent": "ask_school_summary"}
+{"text": "school overview", "intent": "ask_school_summary"}
+{"text": "how many students are in the school", "intent": "ask_school_summary"}
+{"text": "ilang estudyante sa school", "intent": "ask_school_summary"}
+{"text": "school totals", "intent": "ask_school_summary"}

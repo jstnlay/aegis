@@ -50,6 +50,7 @@ export interface FieldProps {
   placeholder?: string
   min?: number
   max?: number
+  maxLength?: number
   step?: number
   required?: boolean
   error?: string | null
@@ -139,6 +140,7 @@ export function Field({
   placeholder,
   min,
   max,
+  maxLength,
   step,
   required = false,
   error,
@@ -174,6 +176,7 @@ export function Field({
         placeholder={placeholder}
         min={min}
         max={max}
+        maxLength={maxLength}
         step={step}
         required={required}
         aria-required={required || undefined}

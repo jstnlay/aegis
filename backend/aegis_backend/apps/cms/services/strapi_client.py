@@ -50,7 +50,7 @@ def _parse_datetime(value):
         return None
 
 
-def normalize_announcement(raw):
+def normalize_announcement(raw, base_url=""):
     """
     Validate/normalize a raw Strapi announcement object into the
     specification-defined shape. Raises ValueError on invalid data.
@@ -85,6 +85,31 @@ def normalize_announcement(raw):
     if not document_id:
         raise ValueError("announcement.documentId is required")
 
+    # SEC-007: an uploaded cover image is served through the same authorized
+    # Django proxy as resource files, never as a direct Strapi URL. A CDN-hosted
+    # image is treated as an authored external URL and passed through.
+    cover_image = None
+    cover_image_source = None
+    cover_image_path = None
+    image_obj = raw.get("cover_image")
+    if isinstance(image_obj, dict) and image_obj.get("url"):
+        media_path = _safe_strapi_media_path(image_obj["url"], base_url=base_url)
+        if media_path is not None:
+            cover_image_source = "proxy"
+            cover_image_path = media_path
+            try:
+                cover_image = reverse(
+                    "cms:cms-announcement-image",
+                    kwargs={"document_id": document_id},
+                )
+            except Exception as exc:  # pragma: no cover - config error
+                raise ValueError(
+                    "cms announcement image route is unavailable"
+                ) from exc
+        else:
+            cover_image = str(image_obj["url"]).strip()
+            cover_image_source = "external"
+
     return {
         "document_id": document_id,
         "title": title,
@@ -95,6 +120,10 @@ def normalize_announcement(raw):
         "target_sections": target_sections,
         "published_at": published_at,
         "expires_at": expires_at,
+        "cover_image": cover_image,
+        # Internal-only: never serialized to clients.
+        "cover_image_source": cover_image_source,
+        "cover_image_path": cover_image_path,
     }
 
 
@@ -315,7 +344,7 @@ class StrapiClient:
         if not raw:
             raise StrapiNotFoundError(f"Announcement {document_id} not found")
         try:
-            return normalize_announcement(raw)
+            return normalize_announcement(raw, base_url=self.base_url)
         except ValueError as exc:
             raise StrapiError(f"Invalid announcement data: {exc}") from exc
 
@@ -336,7 +365,7 @@ class StrapiClient:
         results = []
         for raw in self._unwrap_list(payload):
             try:
-                results.append(normalize_announcement(raw))
+                results.append(normalize_announcement(raw, base_url=self.base_url))
             except ValueError as exc:
                 logger.warning("Skipping invalid announcement from Strapi: %s", exc)
         return results

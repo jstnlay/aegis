@@ -20,8 +20,11 @@ Recognised today
         ``TERM n SUMMARY`` sheets, one row per learner and learning area.
     SF2 JUNIOR HS.xlsm                  -> attendance
         ``SF2-JHS`` grid plus the ``COVER`` header (section, level, month).
+    the school's Electronic Class Record -> grades or students
+        the same ``TERM n SUMMARY`` layout, plus an ``INPUT DATA`` roster
+        and a ``COMMENT`` sheet.  See ``ECR`` below.
 
-Both readers are structural: a revised form that moves the header band, drops a
+All readers are structural: a revised form that moves the header band, drops a
 sheet, or renames a learning area fails loudly here instead of silently
 attaching values to the wrong learner or subject.
 
@@ -31,11 +34,17 @@ Neither form carries the app's student code.  The learner's *name* cell (SF9
 column C, SF2 column B) is taken as ``student_id`` and resolved by the existing
 importer, so a filled form must carry the school code the Students export
 shows -- see ``docs/test-data/README.md``.
+
+The ECR is the exception: it carries the learner's LRN next to the name, and
+the LRN is the key.  The two forms are told apart by their sheets -- the ECR
+has no ``FINAL GRADES`` sheet -- so the two identity rules never mix.
 """
 
 from __future__ import annotations
 
 from datetime import date, datetime
+
+from .constants import ImportType
 
 # ---------------------------------------------------------------------------
 # SF9 (grades)
@@ -128,6 +137,54 @@ _MONTH_NAMES = (
 )
 _MONTH_BY_PREFIX = {name[:3]: index for index, name in enumerate(_MONTH_NAMES, 1)}
 
+# ---------------------------------------------------------------------------
+# ECR (the school's Electronic Class Record)
+# ---------------------------------------------------------------------------
+
+#: The ECR workbook is the same DepEd form family as the SF9 template -- the
+#: same ``TERM n SUMMARY`` layout -- minus the ``FINAL GRADES`` sheet and plus
+#: a ``COMMENT`` sheet that carries the teacher's remarks for each term.
+ECR_INPUT_DATA_SHEET = "INPUT DATA"
+ECR_SF9_SHEET = "SF9 - GRADE 4-10"
+ECR_COMMENT_SHEET = "COMMENT"
+
+#: The ECR identifies a learner by LRN: column F of a summary sheet, and
+#: columns M / R of the ``INPUT DATA`` roster.  The legacy SF9 form carries
+#: the school's own code in the *name* column instead.
+ECR_LRN_COLUMN = 6
+#: ``INPUT DATA`` roster blocks: (name column, LRN column, birthdate column)
+#: for the male block and the female block.  Both start at the same row.
+ECR_ROSTER_COLUMNS = ((12, 13, 14), (17, 18, 19))
+ECR_ROSTER_FIRST_ROW = 11
+#: The roster's last column (the female block's birthdate).
+ECR_ROSTER_MAX_COLUMN = 19
+#: ``INPUT DATA`` header cells: school year, grade level, section.
+ECR_SCHOOL_YEAR_CELL = (18, 6)
+ECR_GRADE_LEVEL_CELL = (27, 6)
+ECR_SECTION_CELL = (28, 6)
+#: ``COMMENT`` sheet: the learner's name, then one column per term.
+ECR_COMMENT_NAME_COLUMN = 2
+ECR_COMMENT_FIRST_ROW = 3
+ECR_COMMENT_TERM_COLUMNS = {"Term 1": 3, "Term 2": 4, "Term 3": 5}
+#: The COMMENT sheet's last column (Term 3).
+ECR_COMMENT_MAX_COLUMN = 5
+#: The ECR has no email column and a learner account needs one.  The LRN is
+#: unique across the roster, so the address is derived from it and never
+#: collides.  The domain is deliberately not routable.
+ECR_STUDENT_EMAIL_DOMAIN = "students.aegis.local"
+
+#: The roster columns the students importer accepts.
+STUDENT_HEADERS = (
+    "student_id",
+    "first_name",
+    "last_name",
+    "email",
+    "grade_level",
+    "section",
+    "academic_year",
+    "date_of_birth",
+)
+
 
 class DepedFormError(Exception):
     """A recognised DepEd form did not have the shape its reader requires."""
@@ -168,11 +225,99 @@ def _format_number(value):
 
 
 def _normalize_level(raw):
-    """``8``, ``"8"`` and ``"Grade 8"`` all mean level 8."""
+    """``8``, ``"8"``, ``8.0`` and ``"Grade 8"`` all mean level 8."""
     text = _text(raw)
+    if text.endswith(".0") and text[:-2].isdigit():
+        text = text[:-2]
     if text.lower().startswith("grade"):
         text = text[5:].strip()
     return text
+
+
+def _key(value):
+    """Casefolded, whitespace-collapsed comparison form."""
+    return " ".join(str(value).split()).casefold()
+
+
+def _lrn(value):
+    """The LRN cell as text; a whole number keeps every digit it carries."""
+    if value is None or isinstance(value, bool):
+        return ""
+    if isinstance(value, (int, float)):
+        return str(int(value)) if float(value).is_integer() else str(value)
+    return _text(value)
+
+
+def _iso_date(value):
+    """A date cell as ``YYYY-MM-DD``; anything else reads as empty."""
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    return ""
+
+
+def _split_name(name):
+    """
+    ``"Andaya, Gabriel"`` -> ``("Andaya", "Gabriel")``.
+
+    The ECR writes names as ``Surname, Given names``.  A name that arrives
+    without its comma is still a learner, so the separators are tried in the
+    order the school writes them -- the comma, then the full stop the one
+    name in the current roster carries, then plain whitespace -- rather than
+    dropping the learner from the school.
+    """
+    for separator in (",", ". "):
+        last, found, first = name.partition(separator)
+        if found:
+            return last.strip(), first.strip().rstrip(",").strip()
+    last, _, first = name.partition(" ")
+    return last.strip(), first.strip().rstrip(",").strip()
+
+
+def _last_row(worksheet):
+    """
+    The sheet's last row that carries content.
+
+    A read-only workbook reports ``max_row`` from the sheet's dimension
+    record, and a sheet written without one reports ``None``.  The last row
+    with content is then found by looking at the cells.
+    """
+    if worksheet.max_row:
+        return worksheet.max_row
+    last = 0
+    for cells in worksheet.iter_rows():
+        for cell in cells:
+            if cell.value is not None and getattr(cell, "row", 0) > last:
+                last = cell.row
+    return last
+
+
+def _sheet_snapshot(worksheet, max_column):
+    """
+    The sheet's cells, read once: ``{row number: {column number: value}}``.
+
+    ``worksheet.cell()`` on a read-only workbook re-reads the sheet's XML on
+    every call, so one lookup on a form with a thousand rows costs a thousand
+    parses.  One pass over the rows is a fraction of that.
+
+    A read-only row is padded with ``EmptyCell`` objects, which carry neither
+    a row nor a column, so the cells that hold something decide the row.
+    """
+    snapshot = {}
+    for cells in worksheet.iter_rows(max_col=max_column):
+        values = {}
+        row_number = None
+        for cell in cells:
+            if not hasattr(cell, "row"):
+                continue
+            if cell.value is not None:
+                values[cell.column] = cell.value
+                if row_number is None:
+                    row_number = cell.row
+        if values:
+            snapshot[row_number] = values
+    return snapshot
 
 
 def _valid_level(text):
@@ -185,9 +330,21 @@ def _valid_level(text):
 # ---------------------------------------------------------------------------
 
 
+def _is_ecr(names):
+    """The school's ECR: the SF9 form family without the ``FINAL GRADES`` sheet."""
+    return (
+        ECR_INPUT_DATA_SHEET in names
+        and ECR_SF9_SHEET in names
+        and "FINAL GRADES" not in names
+        and all(sheet in names for sheet, _ in SF9_TERM_SHEETS)
+    )
+
+
 def detect(sheet_names):
-    """Return ``"sf9"`` / ``"sf2"`` when the workbook is a known DepEd form."""
+    """Return ``"sf9"`` / ``"sf2"`` / ``"ecr"`` when the workbook is a known DepEd form."""
     names = set(sheet_names)
+    if _is_ecr(names):
+        return "ecr"
     if "FINAL GRADES" in names and all(
         sheet in names for sheet, _ in SF9_TERM_SHEETS
     ):
@@ -197,18 +354,24 @@ def detect(sheet_names):
     return None
 
 
-def read(workbook):
+def read(workbook, import_type=None):
     """
     Translate a recognised DepEd workbook into ``(headers, rows)``.
 
     ``rows`` are flat dicts keyed by the importers' own column names, ready for
     the same header/row validation a CSV upload goes through.
+
+    ``import_type`` decides which dataset an ECR workbook yields: one workbook
+    carries the roster, the grades and the teacher's remarks, and one upload is
+    still one dataset.
     """
     kind = detect(workbook.sheetnames)
     if kind == "sf9":
         return read_sf9(workbook)
     if kind == "sf2":
         return read_sf2(workbook)
+    if kind == "ecr":
+        return read_ecr(workbook, import_type)
     raise DepedFormError(
         "INVALID_WORKBOOK", "The workbook is not a recognised DepEd form."
     )
@@ -219,10 +382,11 @@ def read(workbook):
 # ---------------------------------------------------------------------------
 
 
-def _check_sf9_band(worksheet, sheet_name):
+def _check_sf9_band(snapshot, sheet_name):
     """Assert the learning-area band is where and what the reader expects."""
+    band = snapshot.get(SF9_AREA_BAND_ROW, {})
     labels = tuple(
-        _text(worksheet.cell(row=SF9_AREA_BAND_ROW, column=SF9_AREA_FIRST_COL + i).value)
+        _text(band.get(SF9_AREA_FIRST_COL + i))
         for i in range(len(SF9_LABEL_TO_BASE))
     )
     expected = tuple(label for label, _ in SF9_LABEL_TO_BASE)
@@ -235,16 +399,28 @@ def _check_sf9_band(worksheet, sheet_name):
 
 def read_sf9(workbook):
     """Per-term ``TERM n SUMMARY`` sheets -> one grade row per (learner, area)."""
+    return _read_summary_sheets(workbook, SF9_NAME_COL)
+
+
+def _read_summary_sheets(workbook, id_column, remarks=None):
+    """
+    The shared ``TERM n SUMMARY`` reader.
+
+    ``id_column`` is the column carrying the learner's key, and ``remarks``
+    maps a learner's name to ``{grading period: remark}``.  Everything else --
+    the learning-area band, the term a sheet stands for, the MAPEH sub-scores
+    -- is the same form in both workbooks.
+    """
     rows = []
     for sheet_name, period in SF9_TERM_SHEETS:
         worksheet = workbook[sheet_name]
-        _check_sf9_band(worksheet, sheet_name)
+        snapshot = _sheet_snapshot(worksheet, SF9_AREA_COLUMNS[-1][-1])
+        _check_sf9_band(snapshot, sheet_name)
 
-        level = _normalize_level(
-            worksheet.cell(row=SF9_GRADE_LEVEL_CELL[0], column=SF9_GRADE_LEVEL_CELL[1]).value
-        )
+        header = snapshot.get(SF9_GRADE_LEVEL_CELL[0], {})
+        level = _normalize_level(header.get(SF9_GRADE_LEVEL_CELL[1]))
         section_name = _text(
-            worksheet.cell(row=SF9_SECTION_CELL[0], column=SF9_SECTION_CELL[1]).value
+            snapshot.get(SF9_SECTION_CELL[0], {}).get(SF9_SECTION_CELL[1])
         )
         if not _valid_level(level) or not section_name:
             # A summary with no school level/section carries no importable rows.
@@ -253,34 +429,46 @@ def read_sf9(workbook):
         section = f"Grade {level} - {section_name}"
 
         learners = 0
-        for row in range(SF9_FIRST_LEARNER_ROW, worksheet.max_row + 1):
-            student_id = _text(
-                worksheet.cell(row=row, column=SF9_NAME_COL).value
-            )
-            if not student_id:
+        for row in range(SF9_FIRST_LEARNER_ROW, max(snapshot, default=0) + 1):
+            values = snapshot.get(row)
+            if not values:
+                break
+            name = _text(values.get(SF9_NAME_COL))
+            if not name:
                 break
 
             learners += 1
+            # The ECR identifies the learner by LRN; the legacy SF9 form
+            # carries the school's own code in the name cell.  A learner row
+            # whose LRN is missing keeps no key, and the importer rejects that
+            # row with its own reason -- failing the whole file would throw
+            # away the other learners' grades for one empty cell.
+            student_id = (
+                name
+                if id_column == SF9_NAME_COL
+                else _lrn(values.get(ECR_LRN_COLUMN))
+            )
+            remark = (remarks or {}).get(_key(name), {}).get(period, "")
             for (label, base), columns in zip(SF9_LABEL_TO_BASE, SF9_AREA_COLUMNS):
                 scores = [
-                    value
-                    for value in (
-                        _number(worksheet.cell(row=row, column=column).value)
-                        for column in columns
+                    score
+                    for score in (
+                        _number(values.get(column)) for column in columns
                     )
-                    if value is not None
+                    if score is not None
                 ]
                 if not scores:
                     continue
-                rows.append(
-                    {
-                        "student_id": student_id,
-                        "section": section,
-                        "subject_code": f"{base}-{level}",
-                        "grading_period": period,
-                        "score": _format_number(sum(scores) / len(scores)),
-                    }
-                )
+                grade_row = {
+                    "student_id": student_id,
+                    "section": section,
+                    "subject_code": f"{base}-{level}",
+                    "grading_period": period,
+                    "score": _format_number(sum(scores) / len(scores)),
+                }
+                if remark:
+                    grade_row["remarks"] = remark
+                rows.append(grade_row)
 
         if not learners:
             continue
@@ -385,7 +573,7 @@ def read_sf2(workbook):
             )
 
     rows = []
-    for row in range(SF2_FIRST_LEARNER_ROW, sheet.max_row + 1):
+    for row in range(SF2_FIRST_LEARNER_ROW, _last_row(sheet) + 1):
         student_id = _text(sheet.cell(row=row, column=SF2_NAME_COL).value)
         if not student_id:
             break
@@ -401,3 +589,120 @@ def read_sf2(workbook):
             )
 
     return ATTENDANCE_HEADERS, rows
+
+
+# ---------------------------------------------------------------------------
+# ECR -> grade rows, roster rows
+# ---------------------------------------------------------------------------
+
+
+def read_ecr(workbook, import_type):
+    """
+    The school's Electronic Class Record -> one dataset, chosen by import type.
+
+    The workbook carries the roster, the grades and the teacher's remarks, so
+    the import type decides which one is read.  A type the workbook does not
+    carry fails loudly: a silent 0-row job would read as a successful import
+    of nothing.
+    """
+    if import_type is None:
+        raise DepedFormError(
+            "INVALID_FILE_CONTENT",
+            "This workbook carries several datasets; the import type decides "
+            "which one is read.",
+        )
+    if import_type == ImportType.GRADES:
+        return _read_summary_sheets(
+            workbook, ECR_LRN_COLUMN, _ecr_remarks(workbook)
+        )
+    if import_type == ImportType.STUDENTS:
+        return _read_ecr_students(workbook)
+    if import_type == ImportType.ATTENDANCE:
+        raise DepedFormError(
+            "INVALID_FILE_CONTENT",
+            "This ECR workbook carries no daily attendance marks: its "
+            "ATTENDANCE RECORD SUMMARY sheet lists the roster and the school "
+            "days per month. Upload the DepEd SF2 form for attendance.",
+        )
+    if import_type == ImportType.GUIDANCE_RECORDS:
+        raise DepedFormError(
+            "INVALID_FILE_CONTENT",
+            "This ECR workbook carries no guidance records: its COMMENT sheet "
+            "holds the teacher's remarks, which are imported with the grades.",
+        )
+    raise DepedFormError(
+        "INVALID_FILE_CONTENT",
+        f"This ECR workbook carries no {import_type} dataset.",
+    )
+
+
+def _ecr_remarks(workbook):
+    """``{learner name: {grading period: remark}}`` from the COMMENT sheet."""
+    if ECR_COMMENT_SHEET not in workbook.sheetnames:
+        return {}
+    sheet = workbook[ECR_COMMENT_SHEET]
+    snapshot = _sheet_snapshot(sheet, ECR_COMMENT_MAX_COLUMN)
+    remarks = {}
+    for row in range(ECR_COMMENT_FIRST_ROW, max(snapshot, default=0) + 1):
+        values = snapshot.get(row, {})
+        name = _text(values.get(ECR_COMMENT_NAME_COLUMN))
+        if not name:
+            continue
+        for period, column in ECR_COMMENT_TERM_COLUMNS.items():
+            remark = _text(values.get(column))
+            if remark:
+                remarks.setdefault(_key(name), {})[period] = remark
+    return remarks
+
+
+def _read_ecr_students(workbook):
+    """The ``INPUT DATA`` roster -> one student row per learner."""
+    if ECR_INPUT_DATA_SHEET not in workbook.sheetnames:
+        raise DepedFormError(
+            "MISSING_REQUIRED_COLUMN",
+            "The ECR workbook has no INPUT DATA sheet carrying the roster.",
+        )
+    sheet = workbook[ECR_INPUT_DATA_SHEET]
+    snapshot = _sheet_snapshot(sheet, ECR_ROSTER_MAX_COLUMN)
+
+    level = _normalize_level(
+        snapshot.get(ECR_GRADE_LEVEL_CELL[0], {}).get(ECR_GRADE_LEVEL_CELL[1])
+    )
+    section_name = _text(
+        snapshot.get(ECR_SECTION_CELL[0], {}).get(ECR_SECTION_CELL[1])
+    )
+    school_year = _text(
+        snapshot.get(ECR_SCHOOL_YEAR_CELL[0], {}).get(ECR_SCHOOL_YEAR_CELL[1])
+    )
+    if not (level and section_name):
+        raise DepedFormError(
+            "MISSING_REQUIRED_COLUMN",
+            "The ECR INPUT DATA sheet is missing its grade level or section; "
+            "fill them in before importing the roster.",
+        )
+
+    rows = []
+    for row in range(ECR_ROSTER_FIRST_ROW, max(snapshot, default=0) + 1):
+        values = snapshot.get(row, {})
+        for name_column, lrn_column, dob_column in ECR_ROSTER_COLUMNS:
+            name = _text(values.get(name_column))
+            lrn = _lrn(values.get(lrn_column))
+            if not name:
+                continue
+            # A learner without an LRN keeps its row: the importer gives that
+            # row its own reason instead of the whole roster failing.
+            last_name, first_name = _split_name(name)
+            rows.append(
+                {
+                    "student_id": lrn,
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "email": f"{lrn}@{ECR_STUDENT_EMAIL_DOMAIN}" if lrn else "",
+                    "grade_level": level,
+                    "section": section_name,
+                    "academic_year": school_year,
+                    "date_of_birth": _iso_date(values.get(dob_column)),
+                }
+            )
+
+    return STUDENT_HEADERS, rows

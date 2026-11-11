@@ -15,6 +15,7 @@ remains authoritative. The LLM never decides permissions.
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from apps.chatbot.policies import parse_message
@@ -70,18 +71,33 @@ ALLOWED_INTENTS_BY_ROLE = {
         ChatIntent.HELP,
         ChatIntent.SYSTEM_NAVIGATION,
         ChatIntent.UNKNOWN,
+        ChatIntent.ASK_AT_RISK_STUDENTS,
+        ChatIntent.ASK_CLASS_PERFORMANCE,
+        # A teacher authors academic assessments; the chatbot drafts the
+        # items for them (FR-027).
+        ChatIntent.ASK_ASSESSMENT,
     },
     "guidance": {
         ChatIntent.GREETING,
         ChatIntent.HELP,
         ChatIntent.SYSTEM_NAVIGATION,
         ChatIntent.UNKNOWN,
+        ChatIntent.ASK_AT_RISK_STUDENTS,
+        ChatIntent.ASK_CLASS_PERFORMANCE,
+        ChatIntent.ASK_CONSULTATION_SUMMARY,
+        # A counselor authors wellness/behavioral assessments; the chatbot
+        # drafts the items for them (FR-027).
+        ChatIntent.ASK_ASSESSMENT,
     },
     "admin": {
         ChatIntent.GREETING,
         ChatIntent.HELP,
         ChatIntent.SYSTEM_NAVIGATION,
         ChatIntent.UNKNOWN,
+        ChatIntent.ASK_AT_RISK_STUDENTS,
+        ChatIntent.ASK_CLASS_PERFORMANCE,
+        ChatIntent.ASK_CONSULTATION_SUMMARY,
+        ChatIntent.ASK_SCHOOL_SUMMARY,
     },
 }
 
@@ -369,6 +385,152 @@ def get_learning_resources(user, subject=None, limit=5) -> list[dict[str, Any]]:
     ]
 
 
+def _faculty_sections(user):
+    """Sections this faculty member advises or teaches, as a queryset."""
+    from django.db.models import Q
+
+    from apps.academics.models import Section
+
+    profile = getattr(user, "faculty_profile", None)
+    if profile is None:
+        return Section.objects.none()
+    return Section.objects.filter(
+        Q(adviser=profile) | Q(subject_assignments__faculty=profile)
+    ).distinct()
+
+
+def get_at_risk_students(user, limit=5) -> dict[str, Any] | None:
+    """
+    Open moderate/high risk alerts the caller may see.
+
+    Guidance and admin see the school; faculty see only students enrolled in
+    the sections they advise or teach. A student or parent gets ``None`` — this
+    is a staff summary, not another student's record.
+    """
+    from apps.guidance.models import RiskAlert
+
+    if user.role not in ("faculty", "guidance", "admin"):
+        return None
+
+    open_statuses = (
+        RiskAlert.Status.ACTIVE,
+        RiskAlert.Status.UNDER_MONITORING,
+        RiskAlert.Status.ESCALATED,
+    )
+    alerts = RiskAlert.objects.filter(
+        status__in=open_statuses,
+        risk_level__in=(RiskAlert.RiskLevel.MODERATE, RiskAlert.RiskLevel.HIGH),
+    ).select_related("student__user")
+
+    if user.role == "faculty":
+        alerts = alerts.filter(
+            student__enrollments__section__in=_faculty_sections(user)
+        )
+
+    total = alerts.values("student_id").distinct().count()
+
+    # One row per student, highest severity first. A student can have more than
+    # one open alert; listing them repeatedly would overstate the caseload.
+    students = []
+    seen = set()
+    for level in (RiskAlert.RiskLevel.HIGH, RiskAlert.RiskLevel.MODERATE):
+        for alert in alerts.filter(risk_level=level).order_by("-generated_at"):
+            if alert.student_id in seen:
+                continue
+            seen.add(alert.student_id)
+            students.append(
+                {
+                    "name": alert.student.user.get_full_name(),
+                    "risk_level": level,
+                }
+            )
+            if len(students) >= limit:
+                return {"total": total, "students": students}
+
+    return {"total": total, "students": students}
+
+
+def get_class_performance(user) -> dict[str, Any] | None:
+    """
+    Finalized grade average for the caller's class or for all sections.
+
+    Faculty are scoped to their own sections. Guidance and admin read the
+    school aggregate. Students and parents get ``None``.
+    """
+    from django.db.models import Avg
+
+    from apps.academics.models import Grade
+
+    if user.role not in ("faculty", "guidance", "admin"):
+        return None
+
+    grades = Grade.objects.filter(score__isnull=False, status="finalized")
+    if user.role == "faculty":
+        grades = grades.filter(
+            student__enrollments__section__in=_faculty_sections(user)
+        )
+
+    average = grades.aggregate(avg=Avg("score"))["avg"]
+    return {
+        "average": round(float(average), 2) if average is not None else None,
+        "grade_count": grades.count(),
+        "student_count": grades.values("student_id").distinct().count(),
+    }
+
+
+def get_consultation_summary(user) -> dict[str, Any] | None:
+    """
+    Consultation counts the caller may see.
+
+    Guidance counts their own sessions; admin counts the school. Other roles
+    get ``None``.
+    """
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from apps.guidance.models import ConsultationRecord
+
+    if user.role == "admin":
+        records = ConsultationRecord.objects.all()
+    elif user.role == "guidance":
+        profile = getattr(user, "guidance_profile", None)
+        if profile is None:
+            return None
+        records = ConsultationRecord.objects.filter(counselor=profile)
+    else:
+        return None
+
+    since = timezone.localdate() - timedelta(days=30)
+    return {
+        "total": records.count(),
+        "last_30_days": records.filter(session_date__gte=since).count(),
+        "ongoing": records.filter(
+            status=ConsultationRecord.Status.ONGOING
+        ).count(),
+        "follow_up": records.filter(
+            status=ConsultationRecord.Status.FOLLOW_UP
+        ).count(),
+    }
+
+
+def get_school_summary(user) -> dict[str, Any] | None:
+    """Active account and section counts. Admin only."""
+    from apps.accounts.models import User
+    from apps.academics.models import Section
+
+    if user.role != "admin":
+        return None
+
+    active = User.objects.filter(is_active=True)
+    return {
+        "students": active.filter(role=User.Role.STUDENT).count(),
+        "faculty": active.filter(role=User.Role.FACULTY).count(),
+        "guidance": active.filter(role=User.Role.GUIDANCE).count(),
+        "sections": Section.objects.count(),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Chatbot service entry point
 # ---------------------------------------------------------------------------
@@ -407,6 +569,53 @@ class ChatbotResponse:
         }
 
 
+def _assessment_topic(message: str, entities) -> str | None:
+    """
+    The topic an assessment request is about.
+
+    A keyword topic entity wins when the message names one of the known
+    topics; otherwise the phrase after "about/on/for" is used, trimmed of the
+    words that name the artifact ("quiz", "test", "assessment").
+    """
+    for entity in entities:
+        if entity.entity_type == "topic":
+            return entity.value
+
+    match = re.search(
+        r"\b(?:about|on|regarding|for)\s+(?:a|an|the)?\s*([a-z][a-z\s\-]{2,40})",
+        message,
+        re.IGNORECASE,
+    )
+    if not match:
+        return None
+    topic = re.split(
+        r"\b(?:quiz|test|assessment|question|questions|item|items)\b",
+        match.group(1),
+        flags=re.IGNORECASE,
+    )[0].strip()
+    return topic if len(topic) >= 3 else None
+
+
+def _draft_assessment_items(user, topic: str) -> list[dict]:
+    """Draft assessment items for `topic` in the caller's item bank."""
+    from apps.chatbot.question_generator import (
+        QuestionGenerationError,
+        generate_question_drafts,
+    )
+
+    family = "academic" if user.role == "faculty" else "concern"
+    try:
+        result = generate_question_drafts(
+            topic=topic,
+            question_type="essay",
+            count=3,
+            family=family,
+        )
+    except QuestionGenerationError:
+        return []
+    return result["drafts"]
+
+
 def _deterministic_reply(user, intent: ChatIntent, entities, context, data=None) -> str:
     """Generate a deterministic reply for supported intents."""
     from apps.chatbot.taxonomy import ChatEntity
@@ -431,6 +640,21 @@ def _deterministic_reply(user, intent: ChatIntent, entities, context, data=None)
     if intent == ChatIntent.GREETING:
         return f"Hello, {user.first_name}! I can help with AEGIS. What do you need?"
     if intent == ChatIntent.HELP:
+        if user.role == "faculty":
+            return (
+                "I can help with your class roster, class performance, and the "
+                "at-risk students in your sections. What would you like to know?"
+            )
+        if user.role == "guidance":
+            return (
+                "I can help with at-risk students, class performance, and your "
+                "consultation summary. What would you like to know?"
+            )
+        if user.role == "admin":
+            return (
+                "I can help with the school summary, at-risk students, class "
+                "performance, and consultation totals. What would you like to know?"
+            )
         return (
             "I can help you with grades, academic performance, attendance, "
             "assessments, and learning resources. What would you like to know?"
@@ -463,6 +687,80 @@ def _deterministic_reply(user, intent: ChatIntent, entities, context, data=None)
         )
     if intent == ChatIntent.GUIDANCE_HELP:
         return "Guidance is available to support you. I can help you connect."
+    if intent == ChatIntent.ASK_AT_RISK_STUDENTS:
+        summary = data.get("at_risk_students")
+        if not summary or summary["total"] == 0:
+            return (
+                "There are no open moderate or high risk alerts in the students "
+                "you can see."
+            )
+        listed = ", ".join(
+            f"{row['name']} ({row['risk_level']})"
+            for row in summary["students"]
+        )
+        remainder = summary["total"] - len(summary["students"])
+        tail = (
+            f" {remainder} more not listed." if remainder > 0 else ""
+        )
+        return (
+            f"{summary['total']} student(s) have an open moderate or high risk "
+            f"alert: {listed}.{tail} Open Guidance > Risk alerts to review them."
+        )
+    if intent == ChatIntent.ASK_CLASS_PERFORMANCE:
+        performance = data.get("class_performance")
+        if not performance or performance["grade_count"] == 0:
+            return (
+                "No finalized grades are recorded yet, so there is no average "
+                "to report."
+            )
+        scope = "your class" if user.role == "faculty" else "all sections"
+        return (
+            f"Across {scope}, {performance['student_count']} student(s) have "
+            f"{performance['grade_count']} finalized grade(s) averaging "
+            f"{performance['average']}."
+        )
+    if intent == ChatIntent.ASK_CONSULTATION_SUMMARY:
+        summary = data.get("consultation_summary")
+        if not summary:
+            return "I cannot read consultation records for this account."
+        scope = "The school has" if user.role == "admin" else "You have"
+        return (
+            f"{scope} {summary['total']} consultation record(s): "
+            f"{summary['last_30_days']} in the last 30 days, "
+            f"{summary['ongoing']} ongoing, and {summary['follow_up']} "
+            "marked follow-up."
+        )
+    if intent == ChatIntent.ASK_SCHOOL_SUMMARY:
+        summary = data.get("school_summary")
+        if not summary:
+            return "I cannot read the school summary for this account."
+        return (
+            f"The school has {summary['students']} active student(s), "
+            f"{summary['faculty']} faculty, {summary['guidance']} guidance "
+            f"counselor(s), and {summary['sections']} section(s)."
+        )
+    if intent == ChatIntent.ASK_ASSESSMENT and user.role in ("faculty", "guidance"):
+        drafts = data.get("assessment_drafts") or []
+        if not drafts:
+            return (
+                "I can draft assessment items for you. Tell me the topic, for "
+                "example “draft a quiz about study habits”."
+            )
+        topic = data.get("assessment_topic", "")
+        listed = "\n".join(
+            f"{index}. {draft['question_text']}"
+            for index, draft in enumerate(drafts, start=1)
+        )
+        where = (
+            "Faculty > Assessments"
+            if user.role == "faculty"
+            else "Guidance > Assessments"
+        )
+        return (
+            f"Here are {len(drafts)} draft item(s) for “{topic}”:\n{listed}\n"
+            f"Open {where} and use “Generate draft” to fill them in — nothing "
+            "is saved until you add the question."
+        )
     return "I can help you with that. What would you like to know?"
 
 
@@ -547,6 +845,34 @@ def handle_message(
                 subject = e.value
         resources = get_learning_resources(user, subject=subject)
         data["resources"] = resources
+    elif intent == ChatIntent.ASK_AT_RISK_STUDENTS:
+        summary = get_at_risk_students(user)
+        if summary is not None:
+            data["at_risk_students"] = summary
+    elif intent == ChatIntent.ASK_CLASS_PERFORMANCE:
+        performance = get_class_performance(user)
+        if performance is not None:
+            data["class_performance"] = performance
+    elif intent == ChatIntent.ASK_CONSULTATION_SUMMARY:
+        summary = get_consultation_summary(user)
+        if summary is not None:
+            data["consultation_summary"] = summary
+    elif intent == ChatIntent.ASK_SCHOOL_SUMMARY:
+        summary = get_school_summary(user)
+        if summary is not None:
+            data["school_summary"] = summary
+    elif intent == ChatIntent.ASK_ASSESSMENT and user.role in (
+        "faculty",
+        "guidance",
+    ):
+        # A teacher or counselor asking for an assessment gets drafted items
+        # for the topic they named. Nothing is written: the drafts are
+        # proposals, and only the assessments module saves a question.
+        topic = _assessment_topic(message, entities)
+        drafts = _draft_assessment_items(user, topic) if topic else []
+        if drafts:
+            data["assessment_drafts"] = drafts
+            data["assessment_topic"] = topic
 
     # LLM path (optional, structured, validated) — deterministic fallback otherwise
     if use_llm and llm_result and llm_result.get("valid"):

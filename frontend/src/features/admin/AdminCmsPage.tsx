@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/card"
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table"
 import { ErrorNote } from "@/components/feedback/Feedback"
+import { AnnouncementCover } from "@/features/cms/AnnouncementCover"
 import { useState } from "react"
 import {
   ANNOUNCEMENT_PRIORITY_LABELS,
@@ -124,6 +125,22 @@ function AnnouncementsCard() {
           </p>
         </div>
       ),
+    },
+    {
+      key: "photo",
+      header: "Photo",
+      cell: (row) =>
+        row.cover_image ? (
+          <div className="w-24">
+            <AnnouncementCover
+              documentId={row.document_id}
+              coverImage={row.cover_image}
+              alt={`Cover image for ${row.title}`}
+            />
+          </div>
+        ) : (
+          <span className="text-sm text-muted-foreground">—</span>
+        ),
     },
     {
       key: "type",

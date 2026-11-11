@@ -99,6 +99,10 @@ const StudentSchedulePage = lazyPage(
   () => import("@/features/student/StudentSchedulePage"),
   "StudentSchedulePage"
 )
+const AnnouncementsPage = lazyPage(
+  () => import("@/features/cms/AnnouncementsPage"),
+  "AnnouncementsPage"
+)
 const ParentDashboard = lazyPage(
   () => import("@/features/parent/ParentDashboard"),
   "ParentDashboard"
@@ -317,6 +321,14 @@ export const appRoutes: RouteObject[] = [
             ),
           },
           {
+            path: "student/announcements",
+            element: (
+              <RequireRole allowedRoles={["student"]}>
+                <AnnouncementsPage />
+              </RequireRole>
+            ),
+          },
+          {
             /*
              * Faculty assessments, academic only.
              *
@@ -391,6 +403,14 @@ export const appRoutes: RouteObject[] = [
             element: (
               <RequireRole allowedRoles={["parent"]}>
                 <ParentSupportRoute />
+              </RequireRole>
+            ),
+          },
+          {
+            path: "parent/announcements",
+            element: (
+              <RequireRole allowedRoles={["parent"]}>
+                <AnnouncementsPage />
               </RequireRole>
             ),
           },

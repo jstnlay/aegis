@@ -312,7 +312,9 @@ class QuestionDraftView(APIView):
     only assessments a guidance counselor creates are wellness/behavioral ones
     (`Assessment.clean()` ties `creator_role` to `assessment_type`).
 
-    Two refusal paths are deliberate and are returned as named error codes
+    Teachers are allowed too, for the academic assessments they author: the
+    drafts then come from the academic item bank instead of the classifier's
+    guess. Two refusal paths are deliberate and are returned as named error codes
     rather than as a generic 400, because they are the answers a counselor most
     needs to understand: `true_false` is not generated (a generated true/false
     item would assert a fact the system cannot verify), and a topic or count
@@ -322,16 +324,29 @@ class QuestionDraftView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        if request.user.role != "guidance":
+        if request.user.role not in ("guidance", "faculty"):
             raise PermissionDenied(
-                {"detail": "AI question drafting is available to guidance counselors."}
+                {
+                    "detail": "AI question drafting is available to guidance "
+                    "counselors and teachers."
+                }
             )
 
         serializer = QuestionDraftSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        data = dict(serializer.validated_data)
+        assessment_type = data.pop("assessment_type", None)
+
+        family = None
+        if request.user.role == "faculty":
+            # A teacher authors academic assessments; the wellness and
+            # behavioral banks stay with guidance.
+            family = "academic"
+        elif assessment_type in ("wellness", "behavioral"):
+            family = "concern"
 
         try:
-            result = generate_question_drafts(**serializer.validated_data)
+            result = generate_question_drafts(family=family, **data)
         except QuestionGenerationError as exc:
             raise serializers.ValidationError({exc.code: exc.detail})
 

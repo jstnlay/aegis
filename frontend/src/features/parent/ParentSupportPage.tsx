@@ -30,6 +30,8 @@ import {
   useChildBehavioralNotes,
   useChildConsultations,
   useChildRiskAlerts,
+  useMyActivity,
+  type AccountActivity,
   type LinkedStudent,
   type ParentBehavioralNote,
   type ParentConsultation,
@@ -176,6 +178,8 @@ export function ParentSupportPage({ child }: SupportProps) {
           />
         </CardContent>
       </Card>
+
+      <AccountActivityCard />
     </div>
   )
 }
@@ -345,6 +349,26 @@ const consultationColumns: readonly DataTableColumn<ParentConsultation>[] = [
       ),
   },
   {
+    key: "notes",
+    header: "Session notes",
+    cell: (row) =>
+      row.session_notes ? (
+        <span className="text-sm">{row.session_notes}</span>
+      ) : (
+        <span className="text-muted-foreground">—</span>
+      ),
+  },
+  {
+    key: "recommendations",
+    header: "Recommendations",
+    cell: (row) =>
+      row.recommendations ? (
+        <span className="text-sm">{row.recommendations}</span>
+      ) : (
+        <span className="text-muted-foreground">—</span>
+      ),
+  },
+  {
     key: "next",
     header: "Next session",
     cell: (row) =>
@@ -449,4 +473,65 @@ function formatDate(value: string): string {
     month: "short",
     day: "numeric",
   })
+}
+
+/**
+ * The parent's own sign-in history.
+ *
+ * `GET /accounts/me/activity/` is scoped to the caller's account on the
+ * server, so this table can only ever show the parent's own rows.
+ */
+const activityColumns: readonly DataTableColumn<AccountActivity>[] = [
+  {
+    key: "action",
+    header: "Event",
+    cell: (row) => (
+      <span className="text-sm font-medium">
+        {row.action === "login" ? "Signed in" : "Signed out"}
+      </span>
+    ),
+  },
+  {
+    key: "timestamp",
+    header: "When",
+    cell: (row) => <span className="text-sm">{formatDate(row.timestamp)}</span>,
+  },
+  {
+    key: "ip_address",
+    header: "IP address",
+    cell: (row) => (
+      <span className="font-mono text-sm">{row.ip_address ?? "—"}</span>
+    ),
+  },
+]
+
+function AccountActivityCard() {
+  const query = useMyActivity()
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Your account activity</CardTitle>
+        <CardDescription>
+          When your account was used to sign in or out. Contact the school if a
+          sign-in is not one you recognise.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <DataTable
+          caption="Your sign-in history"
+          columns={activityColumns}
+          rows={query.data ?? []}
+          rowKey={(row) => row.id}
+          isLoading={query.isLoading}
+          error={
+            query.isError
+              ? "Unable to load your account activity. Please try again."
+              : null
+          }
+          loadingLabel="Loading account activity"
+          emptyMessage="No sign-in activity has been recorded yet."
+        />
+      </CardContent>
+    </Card>
+  )
 }

@@ -17,6 +17,7 @@ class CmsAnnouncementSerializer(serializers.Serializer):
     target_sections = serializers.ListField(child=serializers.CharField())
     published_at = serializers.DateTimeField()
     expires_at = serializers.DateTimeField(allow_null=True)
+    cover_image = serializers.CharField(allow_null=True, required=False)
 
 
 class CmsResourceSerializer(serializers.Serializer):

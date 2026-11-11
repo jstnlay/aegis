@@ -827,6 +827,42 @@ class DispatchEventSkipsOptedOutTest(TestCase):
         self.assertEqual(Notification.objects.count(), 0)
 
 
+class DispatchEventEmailsRecipientsTest(TestCase):
+    def test_email_sent_when_email_enabled(self):
+        from django.core import mail
+
+        user = User.objects.create_user(
+            email="dispatch-mail1@test.com", password="pass12345",
+            first_name="D", last_name="M1", role="student",
+        )
+        dispatch_event(
+            "GRADE_POSTED",
+            recipients=[user],
+            title="Grade posted",
+            message="Your grade is ready.",
+            link="/app/notifications",
+        )
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ["dispatch-mail1@test.com"])
+        self.assertIn("/app/notifications", mail.outbox[0].body)
+
+    def test_email_skipped_when_email_disabled_but_in_app_kept(self):
+        from django.core import mail
+
+        user = User.objects.create_user(
+            email="dispatch-mail2@test.com", password="pass12345",
+            first_name="D", last_name="M2", role="student",
+        )
+        NotificationPreference.objects.create(user=user, email_enabled=False)
+        dispatch_event(
+            "GRADE_POSTED",
+            recipients=[user],
+            title="T", message="M",
+        )
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertEqual(Notification.objects.count(), 1)
+
+
 class DispatchEventCreatesDefaultPreferenceTest(TestCase):
     def test_creates_preference(self):
         user = User.objects.create_user(

@@ -27,6 +27,12 @@ class QuestionDraftSerializer(serializers.Serializer):
         choices=AssessmentQuestion.QuestionType.choices
     )
     count = serializers.IntegerField(min_value=1, max_value=MAX_DRAFTS, default=1)
+    # Optional: the kind of assessment being authored. It selects the item
+    # bank, so a teacher authoring an academic assessment gets academic
+    # stems instead of whatever a chat-trained classifier guesses.
+    assessment_type = serializers.ChoiceField(
+        choices=Assessment.AssessmentType.choices, required=False
+    )
 
 
 class AssessmentQuestionSerializer(serializers.ModelSerializer):
@@ -229,6 +235,21 @@ class AssessmentSerializer(serializers.ModelSerializer):
         """
         request = self.context.get('request')
         assessment_type = data.get('assessment_type') or (self.instance.assessment_type if self.instance else None)
+
+        # Bounded authoring input (TC-GUI-10 / FR-027). The model caps the
+        # title at 255; description and time limit had no upper bound, so an
+        # accidental paste could store an essay-length brief or a 100-hour
+        # timer. The form mirrors these numbers.
+        description = data.get('description')
+        if description is not None and len(description) > 2000:
+            raise serializers.ValidationError({
+                "description": "Description must be 2000 characters or fewer."
+            })
+        time_limit = data.get('time_limit_minutes')
+        if time_limit is not None and not 1 <= time_limit <= 600:
+            raise serializers.ValidationError({
+                "time_limit_minutes": "Time limit must be between 1 and 600 minutes."
+            })
 
         creator_role = data.get('creator_role')
         if not creator_role and self.instance:

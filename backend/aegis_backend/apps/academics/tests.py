@@ -492,11 +492,83 @@ class FacultyScopedQuerysetTest(AcademicsTestBase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertGreaterEqual(response.data["count"], 1)
 
+    def test_advisory_roster_shows_year_level_and_age(self):
+        from datetime import date
+
+        self.student_profile.date_of_birth = date(2012, 5, 10)
+        self.student_profile.save(update_fields=["date_of_birth"])
+
+        response = self.client.get("/api/v1/academics/enrollments/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        row = next(
+            r
+            for r in response.data["results"]
+            if str(r["student"]) == str(self.student_profile.id)
+        )
+        self.assertEqual(row["grade_level_name"], "Grade 7")
+        today = date.today()
+        expected_age = today.year - 2012 - ((today.month, today.day) < (5, 10))
+        self.assertEqual(row["age"], expected_age)
+
+
+class AdviserGradeScopeTest(AcademicsTestBase):
+    """
+    An adviser reads every subject grade of their advisees, not only the
+    subjects they teach themselves.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.sa_science_b = SubjectAssignment.objects.create(
+            subject=self.science, faculty=self.faculty2_profile,
+            section=self.section_b, academic_year=self.ay,
+        )
+        # A colleague's grade for an advisee.
+        self.grade_advisee = Grade.objects.create(
+            student=self.student_profile, subject_assignment=self.sa_science,
+            grading_period=self.gp1, score=Decimal("90.00"),
+            encoded_by=self.faculty2_profile, status=Grade.StatusChoices.DRAFT,
+        )
+        # A grade for a student in a section this faculty member does not advise.
+        self.grade_other = Grade.objects.create(
+            student=self.student2_profile, subject_assignment=self.sa_science_b,
+            grading_period=self.gp1, score=Decimal("70.00"),
+            encoded_by=self.faculty2_profile, status=Grade.StatusChoices.DRAFT,
+        )
+        self.client = APIClient()
+
+    @staticmethod
+    def _get_token(user):
+        from rest_framework_simplejwt.tokens import RefreshToken
+        return str(RefreshToken.for_user(user).access_token)
+
+    def test_adviser_sees_colleague_grade_for_advisee(self):
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {self._get_token(self.faculty_user)}"
+        )
+        response = self.client.get("/api/v1/academics/grades/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        ids = [r["id"] for r in response.data["results"]]
+        self.assertIn(str(self.grade_advisee.id), ids)
+        self.assertIn(str(self.grade1.id), ids)
+        self.assertNotIn(str(self.grade_other.id), ids)
+
+    def test_non_adviser_does_not_see_advisee_grade(self):
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {self._get_token(self.faculty2_user)}"
+        )
+        response = self.client.get("/api/v1/academics/grades/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        ids = [r["id"] for r in response.data["results"]]
+        # faculty2 teaches science, so its own grade is visible; the maths
+        # grade of the same student is not.
+        self.assertIn(str(self.grade_advisee.id), ids)
+        self.assertNotIn(str(self.grade1.id), ids)
+
 
 # ===========================================================================
 # API tests — Student scoped queryset
 # ===========================================================================
-
 
 class StudentScopedQuerysetTest(AcademicsTestBase):
     def setUp(self):
@@ -1415,6 +1487,147 @@ class StudentProfileManageTest(AcademicsTestBase):
     def test_unauthenticated_access_is_rejected(self):
         self.client.force_authenticate(user=None)
         response = self.client.get(self.profile_url(self.student_profile))
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class StudentProfileCreateTest(AcademicsTestBase):
+    """POST /api/v1/academics/student-profiles/ (FR-007 / TC-FAC-03)."""
+
+    URL = "/api/v1/academics/student-profiles/"
+
+    def payload(self, **overrides):
+        payload = {
+            "first_name": "New",
+            "last_name": "Student",
+            "email": "new_student_aca@test.com",
+            "student_id": "STU-NEW-001",
+            "grade_level": str(self.g7.id),
+            "section": str(self.section_a.id),
+            "guardian_contact": "0917-555-0199",
+            "date_of_birth": "2011-02-03",
+        }
+        payload.update(overrides)
+        return payload
+
+    def test_faculty_creates_the_account_profile_and_enrollment(self):
+        self.client.force_authenticate(user=self.faculty_user)
+        response = self.client.post(self.URL, data=self.payload(), format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["student_name"], "New Student")
+        self.assertEqual(response.data["student_id"], "STU-NEW-001")
+
+        profile = StudentProfile.objects.get(student_id="STU-NEW-001")
+        self.assertEqual(profile.user.role, "student")
+        self.assertEqual(profile.user.email, "new_student_aca@test.com")
+        # The faculty member never chooses a password; the student sets one
+        # from the emailed link.
+        self.assertFalse(profile.user.has_usable_password())
+        self.assertTrue(profile.user.must_change_password)
+        self.assertEqual(profile.section, self.section_a)
+        self.assertEqual(profile.guardian_contact, "0917-555-0199")
+
+        enrollment = Enrollment.objects.get(student=profile)
+        self.assertEqual(enrollment.section, self.section_a)
+        self.assertEqual(enrollment.academic_year, self.ay)
+        self.assertTrue(enrollment.is_active)
+
+    def test_duplicate_email_is_rejected(self):
+        self.client.force_authenticate(user=self.faculty_user)
+        response = self.client.post(
+            self.URL,
+            data=self.payload(email=self.student_user.email),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("email", response.data["error"]["details"])
+        self.assertFalse(
+            StudentProfile.objects.filter(student_id="STU-NEW-001").exists()
+        )
+
+    def test_duplicate_student_id_is_rejected(self):
+        self.client.force_authenticate(user=self.faculty_user)
+        response = self.client.post(
+            self.URL,
+            data=self.payload(student_id=self.student_profile.student_id),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("student_id", response.data["error"]["details"])
+        self.assertFalse(
+            User.objects.filter(email="new_student_aca@test.com").exists()
+        )
+
+    def test_section_outside_the_callers_scope_is_rejected(self):
+        self.client.force_authenticate(user=self.faculty_user)
+        response = self.client.post(
+            self.URL,
+            data=self.payload(
+                grade_level=str(self.g8.id), section=str(self.section_b.id)
+            ),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("section", response.data["error"]["details"])
+        self.assertFalse(
+            StudentProfile.objects.filter(student_id="STU-NEW-001").exists()
+        )
+
+    def test_section_must_belong_to_the_grade_level(self):
+        self.client.force_authenticate(user=self.faculty_user)
+        response = self.client.post(
+            self.URL,
+            data=self.payload(grade_level=str(self.g8.id)),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("section", response.data["error"]["details"])
+
+    def test_guardian_contact_must_be_a_phone_number(self):
+        self.client.force_authenticate(user=self.faculty_user)
+        response = self.client.post(
+            self.URL,
+            data=self.payload(guardian_contact="Call the office"),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("guardian_contact", response.data["error"]["details"])
+
+    def test_future_date_of_birth_is_rejected(self):
+        self.client.force_authenticate(user=self.faculty_user)
+        response = self.client.post(
+            self.URL,
+            data=self.payload(date_of_birth="2999-01-01"),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("date_of_birth", response.data["error"]["details"])
+
+    def test_non_faculty_roles_are_outside_the_surface(self):
+        for user in (
+            self.admin_user,
+            self.guidance_user,
+            self.student_user,
+            self.parent_user,
+        ):
+            self.client.force_authenticate(user=user)
+            response = self.client.post(
+                self.URL, data=self.payload(), format="json"
+            )
+            self.assertEqual(
+                response.status_code, status.HTTP_403_FORBIDDEN, user.email
+            )
+
+    def test_unauthenticated_access_is_rejected(self):
+        self.client.force_authenticate(user=None)
+        response = self.client.post(self.URL, data=self.payload(), format="json")
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 

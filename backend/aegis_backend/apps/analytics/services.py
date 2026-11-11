@@ -480,3 +480,153 @@ def low_performance_students(threshold=75, limit=20) -> list[dict[str, Any]]:
 
     result.sort(key=lambda x: x["average"])
     return result[:limit]
+
+
+# ---------------------------------------------------------------------------
+# Forecasting (predictive mode)
+# ---------------------------------------------------------------------------
+#
+# A forecast is a straight-line projection of a monthly series. It is
+# deliberately simple and deliberately honest: when the series has fewer than
+# three points the endpoint answers "no estimate" instead of projecting from
+# noise. The sample dashboard this mirrors says "no estimate yet, as no
+# monthly reporting coverage has been confirmed", and that is the same claim.
+
+#: Metrics that can be forecast, with the unit of the returned estimate.
+FORECAST_METRICS: dict[str, str] = {
+    "grade_average": "percent",
+    "attendance_rate": "percent",
+    "risk_alerts": "count",
+}
+
+#: Forecast horizons in months.
+FORECAST_HORIZONS = (1, 3, 6, 12)
+
+#: Minimum number of monthly points before a projection is offered.
+MIN_FORECAST_POINTS = 3
+
+
+def _series_grade_average() -> list[tuple[str, float]]:
+    """Mean finalized grade score per month, by the period's end month."""
+    from apps.academics.models import Grade
+
+    buckets: dict[str, list[float]] = {}
+    for score, end_date in Grade.objects.filter(
+        status="finalized", score__isnull=False
+    ).values_list("score", "grading_period__end_date"):
+        if end_date is None:
+            continue
+        buckets.setdefault(end_date.strftime("%Y-%m"), []).append(float(score))
+    return [
+        (month, sum(values) / len(values))
+        for month, values in sorted(buckets.items())
+    ]
+
+
+def _series_attendance_rate() -> list[tuple[str, float]]:
+    """Attendance rate (present + late) as a percentage, per month."""
+    from apps.attendance.models import AttendanceRecord
+
+    buckets: dict[str, dict[str, int]] = {}
+    for record_date, status in AttendanceRecord.objects.values_list("date", "status"):
+        bucket = buckets.setdefault(
+            record_date.strftime("%Y-%m"), {"present": 0, "late": 0, "absent": 0}
+        )
+        if status in bucket:
+            bucket[status] += 1
+
+    series: list[tuple[str, float]] = []
+    for month, counts in sorted(buckets.items()):
+        total = counts["present"] + counts["late"] + counts["absent"]
+        if not total:
+            continue
+        rate = (counts["present"] + counts["late"]) / total * 100
+        series.append((month, rate))
+    return series
+
+
+def _series_risk_alerts() -> list[tuple[str, float]]:
+    """Number of risk alerts opened per month."""
+    from apps.guidance.models import RiskAlert
+
+    buckets: dict[str, int] = {}
+    for created_at in RiskAlert.objects.values_list("created_at", flat=True):
+        month = created_at.strftime("%Y-%m")
+        buckets[month] = buckets.get(month, 0) + 1
+    return sorted((month, float(count)) for month, count in buckets.items())
+
+
+_SERIES_BUILDERS = {
+    "grade_average": _series_grade_average,
+    "attendance_rate": _series_attendance_rate,
+    "risk_alerts": _series_risk_alerts,
+}
+
+
+def forecast(metric: str, months: int) -> dict[str, Any]:
+    """
+    Project `metric` `months` months ahead from its monthly series.
+
+    The projection is a least-squares straight line through the observed
+    points. It is a projection, not a prediction: the response names the
+    coverage it was drawn from, and a series with fewer than three points
+    answers `insufficient_data` with no estimate at all.
+    """
+    builder = _SERIES_BUILDERS.get(metric)
+    if builder is None:
+        raise ValueError(f"unknown forecast metric: {metric}")
+
+    series = builder()
+    points = [value for _, value in series]
+    coverage = {
+        "points": len(points),
+        "from": series[0][0] if series else None,
+        "to": series[-1][0] if series else None,
+    }
+    payload = {
+        "metric": metric,
+        "months": months,
+        "unit": FORECAST_METRICS[metric],
+        "coverage": coverage,
+        "series": [{"month": month, "value": value} for month, value in series],
+    }
+
+    if len(points) < MIN_FORECAST_POINTS:
+        payload.update(
+            {
+                "estimate": None,
+                "insufficient_data": True,
+                "trend": "unknown",
+                "reason": (
+                    "Not enough months on record to project from. "
+                    f"{MIN_FORECAST_POINTS} monthly points are needed."
+                ),
+            }
+        )
+        return payload
+
+    count = len(points)
+    mean_x = (count - 1) / 2
+    mean_y = sum(points) / count
+    numerator = sum(
+        (index - mean_x) * (value - mean_y) for index, value in enumerate(points)
+    )
+    denominator = sum((index - mean_x) ** 2 for index in range(count))
+    slope = numerator / denominator if denominator else 0.0
+    intercept = mean_y - slope * mean_x
+    estimate = intercept + slope * (count - 1 + months)
+
+    if metric in ("grade_average", "attendance_rate"):
+        estimate = max(0.0, min(100.0, estimate))
+    elif metric == "risk_alerts":
+        estimate = max(0.0, estimate)
+
+    payload.update(
+        {
+            "estimate": round(estimate, 2),
+            "insufficient_data": False,
+            "trend": "up" if slope > 0 else ("down" if slope < 0 else "flat"),
+            "reason": None,
+        }
+    )
+    return payload

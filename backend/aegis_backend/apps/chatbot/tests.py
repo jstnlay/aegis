@@ -5,11 +5,12 @@ Covers: intent taxonomy, permissions, cross-student isolation,
 unknown intent, low-confidence, fallback, urgency, escalation.
 """
 
-from datetime import date
+from datetime import date, time
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -37,6 +38,7 @@ from apps.chatbot.policies import (
     parse_message,
 )
 from apps.chatbot.taxonomy import ChatIntent, UrgencyLevel
+from apps.guidance.models import ConsultationRecord, RiskAlert
 
 User = get_user_model()
 
@@ -267,6 +269,101 @@ class ChatbotAPITest(ChatbotAPIBase):
         self.assertTrue(resp.data["safe_fallback"])
 
 
+class ChatbotDomainSummaryTest(ChatbotAPIBase):
+    """
+    PH11 Cycle 4: staff roles can ask about the data they manage.
+
+    The four new intents read the same scoped querysets their pages use.
+    Faculty are limited to their own sections; guidance and admin see the
+    school; students are denied the staff summaries.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.guidance_user = User.objects.create_user(
+            email="chat_guidance_summary@test.com", password="pass12345",
+            first_name="Chat", last_name="Guidance", role="guidance",
+        )
+        self.guidance_profile = GuidanceProfile.objects.create(
+            user=self.guidance_user, employee_id="CHATG001"
+        )
+        self.admin_user = User.objects.create_user(
+            email="chat_admin_summary@test.com", password="pass12345",
+            first_name="Chat", last_name="Admin", role="admin",
+        )
+        self.alert = RiskAlert.objects.create(
+            student=self.student_profile,
+            risk_level=RiskAlert.RiskLevel.HIGH,
+            generated_at=timezone.now(),
+        )
+
+    def test_faculty_sees_at_risk_students_in_their_sections(self):
+        resp = self.post_message("Who is at risk?", self.faculty_user)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["intent"], "ask_at_risk_students")
+        summary = resp.data["data"]["at_risk_students"]
+        self.assertEqual(summary["total"], 1)
+        self.assertEqual(summary["students"][0]["risk_level"], "high")
+        self.assertIn("Chat Student", resp.data["reply"])
+
+    def test_faculty_class_performance_uses_finalized_grades(self):
+        resp = self.post_message("How is my class performing?", self.faculty_user)
+
+        self.assertEqual(resp.data["intent"], "ask_class_performance")
+        performance = resp.data["data"]["class_performance"]
+        self.assertEqual(performance["grade_count"], 1)
+        self.assertEqual(performance["student_count"], 1)
+        self.assertEqual(performance["average"], 88.0)
+        self.assertIn("88.0", resp.data["reply"])
+
+    def test_guidance_consultation_summary_counts_own_records(self):
+        ConsultationRecord.objects.create(
+            student=self.student_profile,
+            counselor=self.guidance_profile,
+            session_date=date(2024, 7, 1),
+            session_time=time(9, 0),
+            session_type=ConsultationRecord.SessionType.INDIVIDUAL_COUNSELING,
+            concern_categories=["academic"],
+            session_notes="First session.",
+            priority_level=ConsultationRecord.PriorityLevel.MEDIUM,
+        )
+
+        resp = self.post_message(
+            "How many consultations this month?", self.guidance_user
+        )
+
+        self.assertEqual(resp.data["intent"], "ask_consultation_summary")
+        summary = resp.data["data"]["consultation_summary"]
+        self.assertEqual(summary["total"], 1)
+        self.assertEqual(summary["ongoing"], 1)
+
+    def test_admin_reads_the_school_summary(self):
+        resp = self.post_message("Give me a school summary", self.admin_user)
+
+        self.assertEqual(resp.data["intent"], "ask_school_summary")
+        summary = resp.data["data"]["school_summary"]
+        self.assertEqual(summary["students"], 2)
+        self.assertEqual(summary["faculty"], 1)
+        self.assertEqual(summary["guidance"], 1)
+        self.assertEqual(summary["sections"], 1)
+
+    def test_student_cannot_ask_for_staff_summaries(self):
+        resp = self.post_message(
+            "How many at-risk students are there?", self.student_user
+        )
+
+        self.assertEqual(resp.data["intent"], "unknown")
+        self.assertTrue(resp.data["safe_fallback"])
+        self.assertNotIn("at_risk_students", resp.data["data"])
+
+    def test_guidance_cannot_read_the_school_summary(self):
+        resp = self.post_message("Give me a school summary", self.guidance_user)
+
+        self.assertEqual(resp.data["intent"], "unknown")
+        self.assertTrue(resp.data["safe_fallback"])
+
+
 class ChatbotParentDataTest(ChatbotAPIBase):
     """
     A parent is allowed ask_grade / ask_attendance, but had no data path.
@@ -492,6 +589,11 @@ class WiredIntentReachabilityTest(ChatbotBase):
             ("i am worried about classes", ChatIntent.EXPRESS_CONCERN),
             ("i want to talk to a counselor", ChatIntent.REQUEST_COUNSELOR),
             ("i am in a crisis", ChatIntent.URGENT_CONCERN),
+            ("who is at risk?", ChatIntent.ASK_AT_RISK_STUDENTS),
+            ("how is my class performing?", ChatIntent.ASK_CLASS_PERFORMANCE),
+            ("how many consultations this month?",
+             ChatIntent.ASK_CONSULTATION_SUMMARY),
+            ("give me a school summary", ChatIntent.ASK_SCHOOL_SUMMARY),
         ]
 
         produced = {classify_intent(text) for text, _ in probes}
@@ -639,3 +741,54 @@ class ChatbotPolicyTest(ChatbotAPIBase):
         self.assertFalse(check_intent_allowed("faculty", ChatIntent.ASK_GRADE))
         # Guidance can help seeker
         self.assertTrue(check_intent_allowed("student", ChatIntent.REQUEST_COUNSELOR))
+
+
+class ChatbotAssessmentDraftTest(ChatbotAPIBase):
+    """
+    The chatbot drafts assessment items for the staff who author them.
+
+    A teacher asks for an assessment about a topic and gets proposed items
+    back. Nothing is written: the drafts are proposals, and only the
+    assessments module saves a question.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.guidance_user = User.objects.create_user(
+            email="chat_guidance_draft@test.com", password="pass12345",
+            first_name="Chat", last_name="Counselor", role="guidance",
+        )
+        self.guidance_profile = GuidanceProfile.objects.create(
+            user=self.guidance_user, employee_id="CHATG002"
+        )
+
+    def test_faculty_gets_drafted_items_for_their_topic(self):
+        resp = self.post_message(
+            "Draft a quiz about study habits", self.faculty_user
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["intent"], "ask_assessment")
+        drafts = resp.data["data"]["assessment_drafts"]
+        self.assertEqual(len(drafts), 3)
+        self.assertIn("study habits", drafts[0]["question_text"])
+        self.assertIn("Faculty > Assessments", resp.data["reply"])
+
+    def test_guidance_gets_drafted_items(self):
+        resp = self.post_message(
+            "Create an assessment about study habits", self.guidance_user
+        )
+
+        self.assertEqual(resp.data["intent"], "ask_assessment")
+        drafts = resp.data["data"]["assessment_drafts"]
+        self.assertEqual(len(drafts), 3)
+        self.assertIn("study habits", drafts[0]["question_text"])
+        self.assertIn("Guidance > Assessments", resp.data["reply"])
+
+    def test_student_never_gets_drafts(self):
+        resp = self.post_message(
+            "Draft a quiz about study habits", self.student_user
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertNotIn("assessment_drafts", resp.data["data"])

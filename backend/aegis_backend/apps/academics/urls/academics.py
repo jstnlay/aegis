@@ -15,6 +15,7 @@ from ..views import (
     GradingPeriodViewSet,
     ScheduleViewSet,
     SectionViewSet,
+    StudentProfileCreateView,
     StudentProfileManageView,
     SubjectAssignmentViewSet,
     SubjectViewSet,
@@ -36,9 +37,15 @@ app_name = "academics"
 urlpatterns = [
     path("", include(router.urls)),
     # FR-007 / TC-FAC-03/04: faculty management of an advisory student's
-    # profile. Kept off the router because it is retrieve/update only — no
-    # create (student accounts are provisioned administratively), no delete
-    # (a profile lives as long as the account).
+    # profile. Kept off the router: create provisions the account, profile and
+    # enrollment together and is faculty-scoped, while retrieve/update have
+    # their own serializer. There is no delete — a profile lives as long as
+    # the account.
+    path(
+        "student-profiles/",
+        StudentProfileCreateView.as_view(),
+        name="student-profile-create",
+    ),
     path(
         "student-profiles/<uuid:pk>/",
         StudentProfileManageView.as_view(),

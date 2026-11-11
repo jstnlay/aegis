@@ -46,6 +46,17 @@ class ChatIntent(str, Enum):
     REQUEST_COUNSELOR = "request_counselor"
     URGENT_CONCERN = "urgent_concern"
 
+    # ROLE-SCOPED DOMAIN SUMMARIES (PH11 Cycle 4)
+    #
+    # Faculty, guidance and admin previously fell through to UNKNOWN for every
+    # question about the data they manage, so the chatbot only said hello. These
+    # read the same scoped querysets their pages use; the policy table decides
+    # who may ask.
+    ASK_AT_RISK_STUDENTS = "ask_at_risk_students"
+    ASK_CLASS_PERFORMANCE = "ask_class_performance"
+    ASK_CONSULTATION_SUMMARY = "ask_consultation_summary"
+    ASK_SCHOOL_SUMMARY = "ask_school_summary"
+
 
 # Intent categories
 GENERAL_INTENTS = {
@@ -80,6 +91,13 @@ GUIDANCE_INTENTS = {
     ChatIntent.EXPRESS_CONCERN,
     ChatIntent.REQUEST_COUNSELOR,
     ChatIntent.URGENT_CONCERN,
+}
+
+DOMAIN_SUMMARY_INTENTS = {
+    ChatIntent.ASK_AT_RISK_STUDENTS,
+    ChatIntent.ASK_CLASS_PERFORMANCE,
+    ChatIntent.ASK_CONSULTATION_SUMMARY,
+    ChatIntent.ASK_SCHOOL_SUMMARY,
 }
 
 

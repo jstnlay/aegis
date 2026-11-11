@@ -46,6 +46,7 @@ import {
   usePublicAnnouncements,
   usePublicResources,
 } from "@/features/cms/public-api"
+import { AnnouncementCover } from "@/features/cms/AnnouncementCover"
 import {
   CONTACT,
   MISSION_TEXT,
@@ -598,6 +599,14 @@ function AnnouncementsSection() {
           <ul className="landing-feed-list">
             {items.map((item) => (
               <li key={item.document_id} className="landing-feed-item">
+                {item.cover_image ? (
+                  <AnnouncementCover
+                    documentId={item.document_id}
+                    coverImage={item.cover_image}
+                    isPublic
+                    alt={`Cover image for ${item.title}`}
+                  />
+                ) : null}
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <h3>{item.title}</h3>
                   <Badge
