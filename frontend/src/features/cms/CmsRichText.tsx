@@ -18,8 +18,7 @@ const IMAGE_PATTERN = /!\[([^\]]*)\]\(([^)\s]+)\)/g
 const BOLD_PATTERN = /\*\*([^*]+)\*\*/g
 
 type Segment =
-  | { kind: "text"; text: string }
-  | { kind: "image"; alt: string; src: string }
+  { kind: "text"; text: string } | { kind: "image"; alt: string; src: string }
 
 /**
  * Where the bytes for an image live.

@@ -20,9 +20,7 @@ describe("CmsRichText", () => {
   })
 
   it("renders bold text as bold, not as markdown", () => {
-    render(
-      <CmsRichText content="**Read this first.**" documentId="doc-1" />
-    )
+    render(<CmsRichText content="**Read this first.**" documentId="doc-1" />)
 
     expect(screen.getByText("Read this first.").tagName).toBe("STRONG")
     expect(screen.queryByText(/\*\*/)).not.toBeInTheDocument()
@@ -37,7 +35,10 @@ describe("CmsRichText", () => {
     )
 
     const image = screen.getByRole("img", { name: "Poster" })
-    expect(image).toHaveAttribute("src", "https://images.example.org/poster.png")
+    expect(image).toHaveAttribute(
+      "src",
+      "https://images.example.org/poster.png"
+    )
   })
 
   it("serves a CMS-hosted image through the Django proxy, never directly", () => {

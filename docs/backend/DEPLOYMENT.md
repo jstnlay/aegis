@@ -35,6 +35,18 @@ Environment tab, then **Save and Redeploy**.
 | `EMAIL_HOST_USER` | `resend` |
 | `EMAIL_HOST_PASSWORD` | the Resend API key |
 | `EMAIL_USE_TLS` | `True` |
+| `SUPABASE_S3_ENDPOINT` | `https://<project-ref>.supabase.co/storage/v1/s3` |
+| `SUPABASE_S3_BUCKET` | the public bucket name, e.g. `cms-upload` |
+| `SUPABASE_S3_REGION` | the bucket's region, e.g. `ap-southeast-1` |
+| `SUPABASE_S3_ACCESS_KEY` | the Supabase S3 access key id |
+| `SUPABASE_S3_SECRET_KEY` | the Supabase S3 secret access key |
+
+The `SUPABASE_S3_*` set moves uploaded files (profile photos) out of the
+service's own disk. The free Render plan has no persistent disk, so a photo
+uploaded there is gone after the next redeploy; with these set, uploads go to
+the Supabase bucket and the URL points at it. Without them the app keeps
+using the local disk, so a deployment that has not configured storage is
+unaffected.
 
 `CORS_ALLOWED_ORIGINS` accepts regular expressions, so
 `https://.*\.vercel\.app` can be added to let preview deployments talk to the

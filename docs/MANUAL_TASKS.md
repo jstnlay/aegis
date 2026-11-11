@@ -48,7 +48,8 @@ migration command to run — a redeploy is the migration.
 `cms/public/uploads` is lost on every redeploy — uploaded photos disappear.
 `cms/config/plugins.ts` only switches the upload provider to S3 when **all
 four** `SUPABASE_S3_*` values are set; otherwise it silently keeps the local
-filesystem provider.
+filesystem provider. The Django service has the same problem for profile
+photos, and its settings switch to the bucket on the same variables.
 
 **Do this**
 
@@ -62,15 +63,32 @@ filesystem provider.
    |---|---|
    | `SUPABASE_S3_ENDPOINT` | `https://<project-ref>.supabase.co/storage/v1/s3` |
    | `SUPABASE_S3_BUCKET` | `cms-uploads` |
-   | `SUPABASE_S3_REGION` | `us-east-1` |
+   | `SUPABASE_S3_REGION` | the bucket's region, e.g. `ap-southeast-1` |
    | `SUPABASE_S3_ACCESS_KEY` | from step 1 |
    | `SUPABASE_S3_SECRET_KEY` | from step 1 |
 
    `render.yaml` already declares these five as `sync: false` — the values
    live only in the dashboard, never in the repository.
-3. Save and redeploy `aegis-cms`.
-4. Verify: upload a test photo in the Strapi admin, publish, then redeploy the
-   service again. The photo must still be there afterwards.
+3. Render dashboard → the **aegis** service → **Environment** → add the same
+   five. The Django service stores profile photos in the same bucket.
+4. Save and redeploy both services.
+5. Verify: upload a test photo in the Strapi admin, publish, then redeploy
+   the service again. The photo must still be there afterwards.
+
+**Why an upload with a complete configuration still failed before**
+
+`cms/config/plugins.ts` now sends the request the way Supabase's S3 API
+needs, and both details were the reason a 500 came back with all four values
+set:
+
+- the endpoint is addressed **path-style**, not virtual-host style, so the
+  provider is configured with `forcePathStyle`;
+- Supabase's bucket rejects the **ACL header** the provider sends by default,
+  so `ACL` is present and undefined, which makes the provider leave it off.
+
+The stored file URL is built from the public bucket URL, which the config
+derives from the endpoint (`.../storage/v1/object/public/<bucket>`); set
+`SUPABASE_S3_PUBLIC_URL` to override it.
 
 **Two caveats worth knowing**
 

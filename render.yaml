@@ -121,6 +121,23 @@ services:
       - key: STRAPI_WEBHOOK_SECRET
         sync: false
 
+      # Uploaded media (profile photos) in Supabase Storage (S3-compatible).
+      # The free plan has no persistent disk, so a file written to the
+      # service's own disk is lost on the next redeploy. With these set,
+      # uploads go to the bucket instead and survive. Declared without values:
+      # they live in the Render dashboard only, and without them the app
+      # keeps using the local disk.
+      - key: SUPABASE_S3_ENDPOINT
+        sync: false
+      - key: SUPABASE_S3_BUCKET
+        sync: false
+      - key: SUPABASE_S3_REGION
+        sync: false
+      - key: SUPABASE_S3_ACCESS_KEY
+        sync: false
+      - key: SUPABASE_S3_SECRET_KEY
+        sync: false
+
       # Shared throttle cache and outgoing mail (see docs/backend/DEPLOYMENT.md).
       # REDIS_URL points at the Render Redis service; without it the rate limits
       # are enforced per gunicorn worker. The EMAIL_* set is the SMTP
