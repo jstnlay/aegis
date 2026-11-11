@@ -18,6 +18,7 @@ import {
   type CmsAnnouncement,
 } from "@/features/admin/api"
 import { AnnouncementCover } from "@/features/cms/AnnouncementCover"
+import { CmsRichText } from "@/features/cms/CmsRichText"
 
 function formatDate(value: string | null): string {
   if (!value) return ""
@@ -67,8 +68,13 @@ function AnnouncementCard({
           ) : null}
         </div>
         <CardTitle>{announcement.title}</CardTitle>
-        <CardDescription className="whitespace-pre-line">
-          {announcement.content}
+        <CardDescription>
+          <CmsRichText
+            content={announcement.content}
+            documentId={announcement.document_id}
+            isPublic={isPublic}
+            className="text-sm text-muted-foreground"
+          />
         </CardDescription>
       </CardHeader>
     </Card>

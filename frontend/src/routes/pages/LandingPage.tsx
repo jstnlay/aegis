@@ -47,6 +47,7 @@ import {
   usePublicResources,
 } from "@/features/cms/public-api"
 import { AnnouncementCover } from "@/features/cms/AnnouncementCover"
+import { CmsRichText } from "@/features/cms/CmsRichText"
 import {
   CONTACT,
   MISSION_TEXT,
@@ -616,7 +617,12 @@ function AnnouncementsSection() {
                       item.announcement_type}
                   </Badge>
                 </div>
-                <p className="whitespace-pre-line">{item.content}</p>
+                <CmsRichText
+                  content={item.content}
+                  documentId={item.document_id}
+                  isPublic
+                  className="text-sm text-muted-foreground"
+                />
                 <p className="text-xs text-muted-foreground">
                   Published{" "}
                   <time dateTime={item.published_at}>
@@ -676,6 +682,16 @@ function ResourcesSection() {
                 </Badge>
               </div>
               {item.description ? <p>{item.description}</p> : null}
+              {item.file_or_url && /^https?:\/\//i.test(item.file_or_url) ? (
+                <a
+                  href={item.file_or_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm font-medium underline underline-offset-4"
+                >
+                  Open resource
+                </a>
+              ) : null}
             </li>
           ))}
         </ul>
