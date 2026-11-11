@@ -1,3 +1,4 @@
+import "./admin-dashboard.css"
 import {
   BellRing,
   BookOpen,
@@ -99,7 +100,7 @@ function AdminDashboard() {
 
         <MetricCard
           title="At-Risk Students"
-          className="admin-metric-card"
+          className="admin-metric-card admin-metric-card--risk"
           hint="Latest score moderate or high"
           icon={ShieldAlert}
           isLoading={riskQuery.isLoading}
@@ -110,7 +111,7 @@ function AdminDashboard() {
 
         <MetricCard
           title="High Risk Students"
-          className="admin-metric-card"
+          className="admin-metric-card admin-metric-card--high"
           hint="Latest score at the high level"
           icon={TriangleAlert}
           isLoading={riskQuery.isLoading}

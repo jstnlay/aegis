@@ -1,3 +1,4 @@
+import { useState } from "react"
 import {
   CalendarClock,
   ClipboardCheck,
@@ -157,9 +158,22 @@ function PanelHeader({
   /** Route for the "View All" link, omitted when there is no full page yet. */
   to?: string
 }) {
+  const Icon =
+    title === "Risk Alerts"
+      ? ShieldAlert
+      : title === "Upcoming Follow-ups"
+        ? CalendarClock
+        : title === "Recent Consultations"
+          ? ClipboardList
+          : Users
   return (
     <div className="flex items-center justify-between gap-2">
-      <CardTitle>{title}</CardTitle>
+      <CardTitle>
+        <span className="guidance-panel-emblem" aria-hidden="true">
+          <Icon />
+        </span>
+        {title}
+      </CardTitle>
       {to ? (
         <Link
           to={to}
@@ -184,6 +198,9 @@ export function GuidanceDashboard() {
   const riskAlertsQuery = useRiskAlerts()
   const consultationsQuery = useConsultations()
 
+  const [expandedLists, setExpandedLists] = useState<Record<string, boolean>>(
+    {}
+  )
   const stats = statsQuery.data
   const alerts = (riskAlertsQuery.data ?? []).slice().sort(byGeneratedAtDesc)
   const consultations = consultationsQuery.data ?? []
@@ -339,7 +356,7 @@ export function GuidanceDashboard() {
         the consultation feed and its summaries on the right.
       */}
       <div className="guidance-dashboard-columns grid items-start gap-4 lg:grid-cols-2">
-        <div className="space-y-4">
+        <div className="guidance-dashboard-left space-y-4">
           <Card data-panel="notes">
             <CardHeader>
               <PanelHeader title="Risk Alerts" to="/app/guidance/risk-alerts" />
@@ -359,49 +376,68 @@ export function GuidanceDashboard() {
                 <>
                   <RiskLevelBars alerts={alerts} />
                   <ul className="space-y-2">
-                    {recentAlerts.map((alert) => (
-                      <li
-                        key={alert.id}
-                        className="rounded-md border border-border p-3"
-                        data-risk={alert.risk_level}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-medium">
-                              {alert.student_name}
-                            </p>
-                            {/*
+                    {recentAlerts
+                      .slice(0, expandedLists.alerts ? recentAlerts.length : 3)
+                      .map((alert) => (
+                        <li
+                          key={alert.id}
+                          className="rounded-md border border-border p-3"
+                          data-risk={alert.risk_level}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium">
+                                {alert.student_name}
+                              </p>
+                              {/*
                               `RiskAlertSerializer` exposes no student ID code, so
                               no code is rendered here — the UUID is deliberately
                               not shown as a substitute. The student profile page
                               is the place a human-facing code is available.
                             */}
-                            <p className="truncate text-xs text-muted-foreground">
-                              {alertStatusLabel(alert.status)}
-                            </p>
+                              <p className="truncate text-xs text-muted-foreground">
+                                {alertStatusLabel(alert.status)}
+                              </p>
+                            </div>
+                            <Badge
+                              status={alert.risk_level}
+                              variant="secondary"
+                              className={`shrink-0 ${riskLevelBadgeClass(alert.risk_level)}`}
+                              data-risk-level={alert.risk_level}
+                            >
+                              {alert.risk_level.toUpperCase()}
+                            </Badge>
                           </div>
-                          <Badge
-                            status={alert.risk_level}
-                            variant="secondary"
-                            className={`shrink-0 ${riskLevelBadgeClass(alert.risk_level)}`}
-                            data-risk-level={alert.risk_level}
-                          >
-                            {alert.risk_level.toUpperCase()}
-                          </Badge>
-                        </div>
-                        {alert.risk_factors.length > 0 && (
-                          <p className="mt-1.5 text-xs text-muted-foreground">
-                            {alert.risk_factors
-                              .slice(0, 2)
-                              .map(riskFactorLabel)
-                              .filter(Boolean)
-                              .join(", ")}
-                            {alert.risk_factors.length > 2 && " …"}
-                          </p>
-                        )}
-                      </li>
-                    ))}
+                          {alert.risk_factors.length > 0 && (
+                            <p className="mt-1.5 text-xs text-muted-foreground">
+                              {alert.risk_factors
+                                .slice(0, 2)
+                                .map(riskFactorLabel)
+                                .filter(Boolean)
+                                .join(", ")}
+                              {alert.risk_factors.length > 2 && " …"}
+                            </p>
+                          )}
+                        </li>
+                      ))}
                   </ul>
+                  {recentAlerts.length > 3 ? (
+                    <button
+                      type="button"
+                      className="guidance-list-toggle"
+                      aria-expanded={Boolean(expandedLists.alerts)}
+                      onClick={() =>
+                        setExpandedLists((current) => ({
+                          ...current,
+                          alerts: !current.alerts,
+                        }))
+                      }
+                    >
+                      {expandedLists.alerts
+                        ? "Show less"
+                        : `View more (${recentAlerts.length - 3})`}
+                    </button>
+                  ) : null}
                 </>
               )}
             </CardContent>
@@ -426,48 +462,72 @@ export function GuidanceDashboard() {
               ) : upcomingFollowUps.length === 0 ? (
                 <EmptyState message="No follow-ups scheduled." />
               ) : (
-                <ul className="space-y-2">
-                  {upcomingFollowUps.map((consultation) => (
-                    <li
-                      key={consultation.id}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border p-3"
-                    >
-                      <div className="flex min-w-0 items-center gap-3">
-                        <span
-                          aria-hidden="true"
-                          className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary"
+                <>
+                  <ul className="space-y-2">
+                    {upcomingFollowUps
+                      .slice(
+                        0,
+                        expandedLists.followups ? upcomingFollowUps.length : 3
+                      )
+                      .map((consultation) => (
+                        <li
+                          key={consultation.id}
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border p-3"
                         >
-                          {initialsOf(consultation.student_name) || "—"}
-                        </span>
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium">
-                            {consultation.student_name}
-                          </p>
-                          <p className="truncate text-xs text-muted-foreground">
-                            {formatSessionDate(
-                              consultation.next_session_date ?? ""
+                          <div className="flex min-w-0 items-center gap-3">
+                            <span
+                              aria-hidden="true"
+                              className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary"
+                            >
+                              {initialsOf(consultation.student_name) || "—"}
+                            </span>
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium">
+                                {consultation.student_name}
+                              </p>
+                              <p className="truncate text-xs text-muted-foreground">
+                                {formatSessionDate(
+                                  consultation.next_session_date ?? ""
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                          <Badge
+                            status={consultation.status}
+                            variant="secondary"
+                            className={consultationStatusBadgeClass(
+                              consultation.status
                             )}
-                          </p>
-                        </div>
-                      </div>
-                      <Badge
-                        status={consultation.status}
-                        variant="secondary"
-                        className={consultationStatusBadgeClass(
-                          consultation.status
-                        )}
-                      >
-                        {consultationStatusLabel(consultation.status)}
-                      </Badge>
-                    </li>
-                  ))}
-                </ul>
+                          >
+                            {consultationStatusLabel(consultation.status)}
+                          </Badge>
+                        </li>
+                      ))}
+                  </ul>
+                  {upcomingFollowUps.length > 3 ? (
+                    <button
+                      type="button"
+                      className="guidance-list-toggle"
+                      aria-expanded={Boolean(expandedLists.followups)}
+                      onClick={() =>
+                        setExpandedLists((current) => ({
+                          ...current,
+                          followups: !current.followups,
+                        }))
+                      }
+                    >
+                      {expandedLists.followups
+                        ? "Show less"
+                        : `View more (${upcomingFollowUps.length - 3})`}
+                    </button>
+                  ) : null}
+                </>
               )}
             </CardContent>
           </Card>
         </div>
 
-        <div className="space-y-4">
+        <div className="guidance-dashboard-right space-y-4">
           <Card data-panel="history">
             <CardHeader>
               <PanelHeader
@@ -487,57 +547,83 @@ export function GuidanceDashboard() {
               ) : recentConsultations.length === 0 ? (
                 <EmptyState message="No consultations recorded yet." />
               ) : (
-                <ul className="space-y-2">
-                  {recentConsultations.map((consultation) => (
-                    <li
-                      key={consultation.id}
-                      className="flex flex-wrap items-start justify-between gap-2 rounded-md border border-border p-3"
+                <>
+                  <ul className="space-y-2">
+                    {recentConsultations
+                      .slice(
+                        0,
+                        expandedLists.consultations
+                          ? recentConsultations.length
+                          : 3
+                      )
+                      .map((consultation) => (
+                        <li
+                          key={consultation.id}
+                          className="flex flex-wrap items-start justify-between gap-2 rounded-md border border-border p-3"
+                        >
+                          <div className="flex min-w-0 items-center gap-3">
+                            <span
+                              aria-hidden="true"
+                              className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground"
+                            >
+                              {initialsOf(consultation.student_name) || "—"}
+                            </span>
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium">
+                                {consultation.student_name}
+                              </p>
+                              <p className="truncate text-xs text-muted-foreground">
+                                {
+                                  CONSULTATION_SESSION_TYPE_LABELS[
+                                    consultation.session_type
+                                  ]
+                                }{" "}
+                                · {formatSessionDate(consultation.session_date)}{" "}
+                                · {formatSessionTime(consultation.session_time)}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex shrink-0 flex-col items-end gap-1">
+                            <Badge
+                              status={consultation.status}
+                              variant="secondary"
+                              className={consultationStatusBadgeClass(
+                                consultation.status
+                              )}
+                              data-consultation-status={consultation.status}
+                            >
+                              {consultationStatusLabel(consultation.status)}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">
+                              {
+                                CONSULTATION_PRIORITY_LABELS[
+                                  consultation.priority_level
+                                ]
+                              }{" "}
+                              priority
+                            </span>
+                          </div>
+                        </li>
+                      ))}
+                  </ul>
+                  {recentConsultations.length > 3 ? (
+                    <button
+                      type="button"
+                      className="guidance-list-toggle"
+                      aria-expanded={Boolean(expandedLists.consultations)}
+                      onClick={() =>
+                        setExpandedLists((current) => ({
+                          ...current,
+                          consultations: !current.consultations,
+                        }))
+                      }
                     >
-                      <div className="flex min-w-0 items-center gap-3">
-                        <span
-                          aria-hidden="true"
-                          className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground"
-                        >
-                          {initialsOf(consultation.student_name) || "—"}
-                        </span>
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium">
-                            {consultation.student_name}
-                          </p>
-                          <p className="truncate text-xs text-muted-foreground">
-                            {
-                              CONSULTATION_SESSION_TYPE_LABELS[
-                                consultation.session_type
-                              ]
-                            }{" "}
-                            · {formatSessionDate(consultation.session_date)} ·{" "}
-                            {formatSessionTime(consultation.session_time)}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex shrink-0 flex-col items-end gap-1">
-                        <Badge
-                          status={consultation.status}
-                          variant="secondary"
-                          className={consultationStatusBadgeClass(
-                            consultation.status
-                          )}
-                          data-consultation-status={consultation.status}
-                        >
-                          {consultationStatusLabel(consultation.status)}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          {
-                            CONSULTATION_PRIORITY_LABELS[
-                              consultation.priority_level
-                            ]
-                          }{" "}
-                          priority
-                        </span>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+                      {expandedLists.consultations
+                        ? "Show less"
+                        : `View more (${recentConsultations.length - 3})`}
+                    </button>
+                  ) : null}
+                </>
               )}
             </CardContent>
           </Card>
@@ -562,7 +648,7 @@ export function GuidanceDashboard() {
               </CardContent>
             </Card>
 
-            <Card data-panel="history">
+            <Card data-panel="history" className="guidance-monthly-trend">
               <CardHeader>
                 <div className="flex items-center justify-between gap-2">
                   <CardTitle>Monthly Trend</CardTitle>
@@ -581,7 +667,7 @@ export function GuidanceDashboard() {
                     The trend is unavailable.
                   </p>
                 ) : hasRecentCaseHistory(alerts) ? (
-                  <NewCasesTrendChart alerts={alerts} />
+                  <NewCasesTrendChart alerts={alerts} height="100%" />
                 ) : (
                   <p className="text-sm text-muted-foreground">
                     No new cases recorded in the last six months.

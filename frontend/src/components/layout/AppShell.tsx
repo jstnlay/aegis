@@ -4,6 +4,7 @@ import { Outlet, useLocation } from "react-router-dom"
 
 import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { Header } from "@/components/layout/Header"
+import { NotificationPreviews } from "@/features/notifications/NotificationPreviews"
 import { PageLoading } from "@/components/layout/LoadingScreen"
 import { Sidebar } from "@/components/layout/Sidebar"
 import { SkipLink } from "@/components/layout/SkipLink"
@@ -23,6 +24,7 @@ import "./dashboard-header.css"
 import "./glass-surfaces.css"
 import "@/features/student/student-studio.css"
 import "./workspace-clarity.css"
+import "@/features/notifications/notification-finish.css"
 
 /**
  * Shared application shell for all five roles (admin, faculty, guidance,
@@ -122,6 +124,7 @@ export function AppShell() {
       data-dashboard={/^\/app\/dashboard(?:\/|$)/.test(location.pathname)}
     >
       <SkipLink />
+      <NotificationPreviews />
 
       <Sidebar
         open={menuOpen}
@@ -197,7 +200,7 @@ export function AppShell() {
           {chatOpen && (
             <div
               id="chatbot-panel"
-              className="app-assistant-panel w-[min(24rem,calc(100vw-2rem))] max-h-[70vh] overflow-y-auto"
+              className="app-assistant-panel w-[min(27rem,calc(100vw-2rem))]"
             >
               <ChatbotPanel
                 open={chatOpen}
@@ -218,8 +221,8 @@ export function AppShell() {
             className="app-assistant-launcher flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg hover:opacity-90"
           >
             {schoolTheme && !chatOpen ? (
-              <span className="app-assistant-hint" aria-hidden="true">
-                Need help?
+              <span className="app-assistant-label" aria-hidden="true">
+                Ask AEGIS <span>School assistant</span>
               </span>
             ) : null}
             <span className="app-assistant-avatar" aria-hidden="true">

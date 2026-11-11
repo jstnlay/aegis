@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useSyncExternalStore } from "react"
 import { BookOpen, CalendarCheck, FolderOpen } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
@@ -243,12 +243,13 @@ function AcademicRecord({
       <ParentStudentContext child={child} />
 
       <div className="parent-academic-metrics">
-        <Card className="parent-metric parent-metric--grade">
-          <CardHeader className="pb-2">
+        <Card data-metric="true" className="parent-metric parent-metric--grade">
+          <CardHeader className="flex flex-row items-center justify-between gap-3 pb-2">
             <CardTitle className="text-sm font-medium">Average grade</CardTitle>
+            <BookOpen className="size-5" aria-hidden="true" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-2xl font-bold tabular-nums">
               {gradesLoading ? (
                 <PendingMetric label="Average grade" />
               ) : gradesError ? (
@@ -267,12 +268,16 @@ function AcademicRecord({
           </CardContent>
         </Card>
 
-        <Card className="parent-metric parent-metric--attendance">
-          <CardHeader className="pb-2">
+        <Card
+          data-metric="true"
+          className="parent-metric parent-metric--attendance"
+        >
+          <CardHeader className="flex flex-row items-center justify-between gap-3 pb-2">
             <CardTitle className="text-sm font-medium">Attendance</CardTitle>
+            <CalendarCheck className="size-5" aria-hidden="true" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-2xl font-bold tabular-nums">
               {summaryLoading ? (
                 <PendingMetric label="Attendance" />
               ) : summaryError ? (
@@ -295,14 +300,15 @@ function AcademicRecord({
           </CardContent>
         </Card>
 
-        <Card className="parent-metric">
-          <CardHeader className="pb-2">
+        <Card data-metric="true" className="parent-metric">
+          <CardHeader className="flex flex-row items-center justify-between gap-3 pb-2">
             <CardTitle className="text-sm font-medium">
               Finalized grades
             </CardTitle>
+            <FolderOpen className="size-5" aria-hidden="true" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-2xl font-bold tabular-nums">
               {gradesLoading ? (
                 <PendingMetric label="Subjects graded" />
               ) : gradesError ? (
@@ -409,6 +415,19 @@ function AcademicRecord({
   )
 }
 
+function subscribeMobileRecords(callback: () => void) {
+  if (typeof window.matchMedia !== "function") return () => {}
+  const query = window.matchMedia("(max-width: 640px)")
+  query.addEventListener("change", callback)
+  return () => query.removeEventListener("change", callback)
+}
+function getMobileRecordsSnapshot() {
+  return (
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(max-width: 640px)").matches
+  )
+}
+
 function GradeTable({
   grades,
   isLoading,
@@ -422,7 +441,15 @@ function GradeTable({
   search: string
   onSearchChange: (value: string) => void
 }) {
+  const isMobile = useSyncExternalStore(
+    subscribeMobileRecords,
+    getMobileRecordsSnapshot,
+    () => false
+  )
+  const [expandedFor, setExpandedFor] = useState<string | null>(null)
   const term = search.trim().toLowerCase()
+  const expansionKey = `${term}:${grades.map((grade) => grade.id).join(",")}`
+  const expanded = expandedFor === expansionKey
   const filtered = term
     ? grades.filter((grade) =>
         [
@@ -499,8 +526,11 @@ function GradeTable({
       <DataTable
         caption="Finalized grades"
         columns={columns}
-        rows={pageRows}
+        rows={
+          isMobile ? (expanded ? filtered : filtered.slice(0, 3)) : pageRows
+        }
         rowKey={(grade) => grade.id}
+        rowProps={() => ({ "data-grade-record": "true" })}
         isLoading={isLoading}
         error={error}
         loadingLabel="Loading grades"
@@ -509,8 +539,18 @@ function GradeTable({
             ? "No grades match your search."
             : "No finalized grades have been recorded yet."
         }
-        pagination={pagination}
+        pagination={isMobile ? undefined : pagination}
       />
+      {isMobile && !isLoading && !error && filtered.length > 3 ? (
+        <button
+          type="button"
+          className="parent-action-link w-full justify-center"
+          aria-expanded={expanded}
+          onClick={() => setExpandedFor(expanded ? null : expansionKey)}
+        >
+          {expanded ? "Show less" : `View more grades (${filtered.length - 3})`}
+        </button>
+      ) : null}
     </div>
   )
 }

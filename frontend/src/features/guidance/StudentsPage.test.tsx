@@ -357,14 +357,23 @@ describe("StudentsPage — imported dataset", () => {
       })
   }
 
-  it("renders every learner in the dataset", async () => {
+  it("paginates the learners in the dataset", async () => {
     const rows = directoryRowsFromDataset()
     stub(rows)
     renderPage()
 
     // 50 learners in the file: two sections of 25.
     expect(rows).toHaveLength(50)
-    expect(await screen.findByText(/Showing 50 of 50/)).toBeInTheDocument()
+    expect(await screen.findByText(/Showing 10 of 50/)).toBeInTheDocument()
+    expect(screen.getByText("Page 1 of 5")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "Next" }))
+    expect(screen.getByText("Page 2 of 5")).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText("Search"), {
+      target: { value: "AEGIS-QA-S0046" },
+    })
+    expect(await screen.findByText("Learner S0046")).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText("Search"), { target: { value: "" } })
+    expect(await screen.findByText("Page 1 of 5")).toBeInTheDocument()
   })
 
   it("shows the at-risk learners the dataset actually contains", async () => {
@@ -391,7 +400,7 @@ describe("StudentsPage — imported dataset", () => {
   it("filters the dataset to the learners with open risk alerts", async () => {
     stub(directoryRowsFromDataset())
     renderPage()
-    await screen.findByText(/Showing 50 of 50/)
+    await screen.findByText(/Showing 10 of 50/)
 
     await openSelect(screen.getByLabelText("Activity type"))
     fireEvent.click(
@@ -405,7 +414,7 @@ describe("StudentsPage — imported dataset", () => {
   it("selects a dataset learner by student code", async () => {
     stub(directoryRowsFromDataset())
     renderPage()
-    await screen.findByText(/Showing 50 of 50/)
+    await screen.findByText(/Showing 10 of 50/)
 
     fireEvent.change(screen.getByLabelText("Search"), {
       target: { value: "AEGIS-QA-S0046" },

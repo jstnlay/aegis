@@ -1,0 +1,107 @@
+/* Complementary surfaces give each overview section a distinct identity. */
+.app-shell[data-role="admin"] .app-main .app-content .admin-dashboard {
+  .admin-metric-card--featured {
+    --metric-color: #426c8a;
+    --metric-surface: #e1edf5;
+    --metric-ink: #294a66;
+  }
+  .admin-metric-card--risk {
+    --metric-color: #aa751e;
+    --metric-surface: #f8edcf;
+    --metric-ink: #77501a;
+  }
+  .admin-metric-card--high {
+    --metric-color: #a24661;
+    --metric-surface: #f6e1e8;
+    --metric-ink: #85334d;
+  }
+  .admin-metric-card--soft {
+    --metric-color: #7960a4;
+    --metric-surface: #eae3f5;
+    --metric-ink: #5c447f;
+  }
+  [data-slot="card"][data-metric="true"]:has(
+      > [data-slot="card-content"] > .tabular-nums
+    ) {
+    --surface-accent: var(--metric-color);
+    background: linear-gradient(
+      125deg,
+      color-mix(in srgb, var(--metric-surface) 85%, #fffdfa),
+      color-mix(in srgb, var(--metric-surface) 40%, #fffdfa) 55%,
+      #fffdfa
+    );
+    border: 1px solid color-mix(in srgb, var(--metric-color) 55%, #e1d6ce);
+    border-radius: 20px;
+    box-shadow:
+      inset 0 1px #fff,
+      0 4px 8px #503c3508,
+      0 10px 24px #503c3510;
+  }
+  .admin-metric-card [data-slot="card-title"] {
+    color: #44352f;
+  }
+  .admin-metric-card [data-slot="card-content"] > .tabular-nums {
+    color: #302b28;
+  }
+  .admin-metric-card [data-slot="card-content"] > p {
+    color: #66574f;
+  }
+  .admin-metric-card [data-slot="card-header"] > svg {
+    background: color-mix(in srgb, var(--metric-surface) 50%, white);
+    color: var(--metric-color);
+    border-color: color-mix(in srgb, var(--metric-color) 45%, white);
+    box-shadow: 0 2px 5px #3d354505;
+  }
+  .admin-dashboard-charts
+    > [data-slot="card"]:not(
+      :has(> [data-slot="card-content"] > .tabular-nums)
+    ) {
+    --panel-tint: #e4edf1;
+    --panel-accent: #5c7e8e;
+    background: #fbfdfe;
+    border-color: #a6bcc5;
+    border-top: 2px solid #789ca9;
+    box-shadow: 0 7px 22px #30485809;
+  }
+  .admin-dashboard-charts
+    > [data-slot="card"]:nth-child(2):not(
+      :has(> [data-slot="card-content"] > .tabular-nums)
+    ) {
+    --panel-tint: #f0e4ed;
+    --panel-accent: #8f5d80;
+    background: #fffcfe;
+    border-color: #c6a5b8;
+    border-top: 2px solid #aa7c96;
+  }
+  .admin-dashboard-charts
+    > [data-slot="card"]:not(:has(> [data-slot="card-content"] > .tabular-nums))
+    > [data-slot="card-header"] {
+    background: linear-gradient(
+      110deg,
+      color-mix(in srgb, var(--panel-tint) 90%, #fffdfa),
+      color-mix(in srgb, var(--panel-tint) 35%, #fffdfa) 65%,
+      #fffdfa
+    );
+    border-bottom: 1px solid
+      color-mix(in srgb, var(--panel-accent) 30%, #e8dfda);
+  }
+  .admin-dashboard-charts
+    > [data-slot="card"]
+    > [data-slot="card-header"]::after {
+    display: none;
+  }
+  .admin-dashboard-charts [data-slot="card-title"] {
+    color: #44352f;
+  }
+  .admin-dashboard-charts [data-slot="card-description"] {
+    color: #66574f;
+  }
+  .admin-dashboard-table[data-slot="card"]:not(
+      :has(> [data-slot="card-content"] > .tabular-nums)
+    ) {
+    --panel-tint: #e7eee7;
+    --panel-accent: #657c69;
+    border-color: #d1dbd2;
+    background: #fdfefd;
+  }
+}

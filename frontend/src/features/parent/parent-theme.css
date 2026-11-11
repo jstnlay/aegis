@@ -1089,3 +1089,187 @@
     }
   }
 }
+
+/* A clear student identity and a full-width touch target on small screens. */
+.app-shell[data-role="parent"] {
+  .parent-child-selection {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 3px;
+    min-width: 0;
+    text-align: left;
+  }
+  .parent-child-selection-name {
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.4;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .parent-child-selection-section {
+    font-size: 12px;
+    line-height: 1.4;
+    color: #82716b;
+  }
+  .parent-child-picker-field [data-slot="select-trigger"] {
+    height: auto;
+    padding-block: 10px;
+  }
+  .parent-child-picker-field [data-slot="select-trigger"] > svg {
+    flex-shrink: 0;
+  }
+}
+@media (max-width: 640px) {
+  .app-shell[data-role="parent"] {
+    .parent-child-picker {
+      position: relative;
+      padding: 14px;
+      border-radius: 16px;
+      background: linear-gradient(135deg, #fffcfa, #faf0ed);
+      gap: 0;
+    }
+    .parent-child-picker-icon {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      width: 30px;
+      height: 30px;
+    }
+    .parent-child-picker-field {
+      max-width: none;
+      gap: 10px;
+    }
+    .parent-child-picker-field label {
+      min-height: 30px;
+      padding-left: 40px;
+      display: flex;
+      align-items: center;
+      font-size: 12px;
+      color: #7d4944;
+    }
+    .parent-child-picker-field [data-slot="select-trigger"] {
+      min-height: 62px;
+      border-radius: 11px;
+      background: #fffdfa;
+      padding: 10px 12px;
+      border-color: #d8bdb6;
+    }
+    .parent-child-picker-hint {
+      font-size: 11px;
+      line-height: 1.5;
+      padding-inline: 2px;
+    }
+  }
+}
+
+/* Risk alerts: paired status badges, followed by full-width record details. */
+@media (max-width: 640px) {
+  .app-shell[data-role="parent"] .parent-page [data-risk-alert="true"] {
+    border-radius: 14px;
+    border-color: #dcc7c2;
+    box-shadow: 0 3px 10px #633b3408;
+  }
+  .app-shell[data-role="parent"]
+    .parent-page
+    [data-risk-alert="true"]
+    > [data-slot="table-cell"] {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 108px minmax(0, 1fr);
+    align-items: start;
+    gap: 12px;
+    padding: 13px 14px;
+    border-bottom: 1px solid #eee3de;
+    background: transparent;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  .app-shell[data-role="parent"]
+    .parent-page
+    [data-risk-alert="true"]
+    > [data-slot="table-cell"]:nth-child(-n + 2) {
+    grid-column: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    background: #faf0ed;
+    padding-block: 14px;
+  }
+  .app-shell[data-role="parent"]
+    .parent-page
+    [data-risk-alert="true"]
+    > [data-slot="table-cell"]:last-child {
+    border-bottom: 0;
+  }
+  .app-shell[data-role="parent"]
+    .parent-page
+    [data-risk-alert="true"]
+    > [data-slot="table-cell"]::before {
+    font-size: 11px;
+    color: #86726a;
+    font-weight: 500;
+  }
+  .app-shell[data-role="parent"]
+    .parent-page
+    [data-risk-alert="true"]
+    > [data-slot="table-cell"]
+    > span:not([data-slot="badge"]) {
+    color: #493b35;
+    font-size: 13px;
+  }
+  .app-shell[data-role="parent"] .parent-page [data-risk-alert="true"] li {
+    font-size: 13px;
+    line-height: 1.6;
+  }
+}
+@media (max-width: 360px) {
+  .app-shell[data-role="parent"]
+    .parent-page
+    [data-risk-alert="true"]
+    > [data-slot="table-cell"] {
+    grid-template-columns: 90px minmax(0, 1fr);
+    gap: 8px;
+    padding-inline: 11px;
+  }
+}
+
+/* Mobile grade details stay readable; the list starts with three records. */
+@media (max-width: 640px) {
+  .app-shell[data-role="parent"] .parent-page [data-grade-record="true"] {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 12px;
+    gap: 8px;
+    border-radius: 12px;
+    background: #fffcfa;
+  }
+  .app-shell[data-role="parent"]
+    .parent-page
+    [data-grade-record="true"]
+    > [data-slot="table-cell"] {
+    display: grid;
+    grid-template-columns: 100px minmax(0, 1fr);
+    grid-column: 1 / -1;
+    align-items: start;
+    gap: 10px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    white-space: normal;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+  }
+  .app-shell[data-role="parent"]
+    .parent-page
+    [data-grade-record="true"]
+    > [data-slot="table-cell"]::before {
+    font-size: 11px;
+  }
+  .app-shell[data-role="parent"]
+    .parent-page
+    [data-grade-record="true"]
+    > [data-slot="table-cell"]
+    > span {
+    font-size: 13px;
+  }
+}

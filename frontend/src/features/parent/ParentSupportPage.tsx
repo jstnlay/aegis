@@ -283,6 +283,7 @@ function RiskAlertTable({
       columns={alertColumns}
       rows={pageRows}
       rowKey={(alert) => alert.id}
+      rowProps={() => ({ "data-risk-alert": "true" })}
       isLoading={isLoading}
       error={error}
       loadingLabel="Loading risk alerts"
@@ -294,89 +295,80 @@ function RiskAlertTable({
 
 const consultationColumns: readonly DataTableColumn<ParentConsultation>[] = [
   {
-    key: "date",
-    header: "Session date",
+    key: "session",
+    header: "Session details",
+    cellClassName: "whitespace-normal align-top",
     cell: (row) => (
-      <span className="text-sm font-medium">
-        {formatDate(row.session_date)}
-      </span>
-    ),
-  },
-  {
-    key: "type",
-    header: "Type",
-    cell: (row) => (
-      <span className="text-sm">
-        {CONSULTATION_SESSION_TYPE_LABELS[
-          row.session_type as ConsultationSessionType
-        ] ?? row.session_type}
-      </span>
-    ),
-  },
-  {
-    key: "status",
-    header: "Status",
-    cell: (row) => (
-      <Badge
-        status={row.status}
-        variant="outline"
-        className={consultationStatusBadgeClass(row.status)}
+      <article
+        className="space-y-5 py-2"
+        aria-label={`Session on ${formatDate(row.session_date)}`}
       >
-        {CONSULTATION_STATUS_LABELS[row.status as ConsultationStatus] ??
-          row.status}
-      </Badge>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground">Session date</p>
+            <h3 className="text-base font-semibold">
+              {formatDate(row.session_date)}
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              {CONSULTATION_SESSION_TYPE_LABELS[
+                row.session_type as ConsultationSessionType
+              ] ?? row.session_type}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge
+              status={row.status}
+              variant="outline"
+              className={consultationStatusBadgeClass(row.status)}
+            >
+              {CONSULTATION_STATUS_LABELS[row.status as ConsultationStatus] ??
+                row.status}
+            </Badge>
+            <Badge variant="outline">
+              {CONSULTATION_PRIORITY_LABELS[
+                row.priority_level as ConsultationPriority
+              ] ?? row.priority_level}
+            </Badge>
+          </div>
+        </div>
+        <div className="grid gap-5 border-t border-border/60 pt-4 md:grid-cols-2">
+          <section className="min-w-0 space-y-2">
+            <h4 className="text-xs font-semibold text-muted-foreground">
+              Session notes
+            </h4>
+            <p className="whitespace-pre-wrap break-words text-sm leading-7">
+              {row.session_notes || "No session notes recorded."}
+            </p>
+          </section>
+          <section className="min-w-0 space-y-2 rounded-xl border border-border/60 bg-muted/30 p-4">
+            <h4 className="text-xs font-semibold text-muted-foreground">
+              Recommendations
+            </h4>
+            <p className="whitespace-pre-wrap break-words text-sm leading-7">
+              {row.recommendations || "No recommendations recorded."}
+            </p>
+          </section>
+        </div>
+        <dl className="grid gap-4 rounded-lg bg-muted/25 p-3 text-sm sm:grid-cols-2">
+          <div>
+            <dt className="mb-1 text-xs text-muted-foreground">Concerns</dt>
+            <dd>
+              {row.concern_categories.length
+                ? row.concern_categories.join(", ")
+                : "No concerns listed"}
+            </dd>
+          </div>
+          <div>
+            <dt className="mb-1 text-xs text-muted-foreground">Next session</dt>
+            <dd className="font-medium">
+              {row.next_session_date
+                ? formatDate(row.next_session_date)
+                : "Not scheduled"}
+            </dd>
+          </div>
+        </dl>
+      </article>
     ),
-  },
-  {
-    key: "priority",
-    header: "Priority",
-    cell: (row) => (
-      <span className="text-sm">
-        {CONSULTATION_PRIORITY_LABELS[
-          row.priority_level as ConsultationPriority
-        ] ?? row.priority_level}
-      </span>
-    ),
-  },
-  {
-    key: "concerns",
-    header: "Concerns",
-    cell: (row) =>
-      row.concern_categories.length === 0 ? (
-        <span className="text-muted-foreground">—</span>
-      ) : (
-        <span className="text-sm">{row.concern_categories.join(", ")}</span>
-      ),
-  },
-  {
-    key: "notes",
-    header: "Session notes",
-    cell: (row) =>
-      row.session_notes ? (
-        <span className="text-sm">{row.session_notes}</span>
-      ) : (
-        <span className="text-muted-foreground">—</span>
-      ),
-  },
-  {
-    key: "recommendations",
-    header: "Recommendations",
-    cell: (row) =>
-      row.recommendations ? (
-        <span className="text-sm">{row.recommendations}</span>
-      ) : (
-        <span className="text-muted-foreground">—</span>
-      ),
-  },
-  {
-    key: "next",
-    header: "Next session",
-    cell: (row) =>
-      row.next_session_date ? (
-        <span className="text-sm">{formatDate(row.next_session_date)}</span>
-      ) : (
-        <span className="text-muted-foreground">—</span>
-      ),
   },
 ]
 

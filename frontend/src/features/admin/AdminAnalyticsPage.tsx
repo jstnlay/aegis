@@ -206,23 +206,23 @@ export function AdminAnalyticsPage() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="space-y-1.5">
+          <div className="flex min-w-0 flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+            <div className="min-w-0 flex-1 space-y-1.5">
               <CardTitle>{METRIC_LABEL[metric]}</CardTitle>
-              <CardDescription>
+              <CardDescription className="max-w-prose whitespace-normal break-words">
                 A straight-line projection of the monthly series, {months} month
                 {months === 1 ? "" : "s"} ahead. It is a projection of what has
                 been recorded, not a promise.
               </CardDescription>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="space-y-1.5">
+            <div className="flex shrink-0 flex-wrap items-end gap-3">
+              <div className="flex min-w-32 flex-col gap-2">
                 <Label htmlFor="admin-forecast-range">Forecast range</Label>
                 <select
                   id="admin-forecast-range"
                   value={months}
                   onChange={(event) => setMonths(Number(event.target.value))}
-                  className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
                 >
                   {FORECAST_RANGES.map((range) => (
                     <option key={range} value={range}>
@@ -235,6 +235,7 @@ export function AdminAnalyticsPage() {
                 type="button"
                 variant="outline"
                 size="sm"
+                className="h-10 shrink-0 px-4"
                 disabled={forecastQuery.isFetching}
                 onClick={() => {
                   void forecastQuery.refetch()

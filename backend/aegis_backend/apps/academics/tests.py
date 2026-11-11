@@ -254,6 +254,40 @@ class GradingPeriodModelTest(AcademicsTestBase):
             gp.clean()
 
 
+class EnrollmentSurnameOrderTest(AcademicsTestBase):
+    def test_surname_sort_uses_full_surname_in_both_directions(self):
+        self.student_user.first_name = "Zoe"
+        self.student_user.last_name = "de la Cruz"
+        self.student_user.save()
+        self.student2_user.first_name = "Ana"
+        self.student2_user.last_name = "Reyes"
+        self.student2_user.save()
+        self.client.force_authenticate(user=self.admin_user)
+
+        for direction, expected in (
+            ("asc", ["STU-001", "STU-002"]),
+            ("desc", ["STU-002", "STU-001"]),
+        ):
+            with self.subTest(direction=direction):
+                response = self.client.get(
+                    "/api/v1/academics/enrollments/", {"surname_order": direction}
+                )
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(
+                    [row["student_id"] for row in response.data["results"]], expected
+                )
+
+    def test_sort_preserves_student_visibility(self):
+        self.client.force_authenticate(user=self.student_user)
+        response = self.client.get(
+            "/api/v1/academics/enrollments/", {"surname_order": "asc"}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [row["student_id"] for row in response.data["results"]], ["STU-001"]
+        )
+
+
 class EnrollmentModelTest(AcademicsTestBase):
     def test_str(self):
         self.assertIn("STU-001", str(self.enrollment1))

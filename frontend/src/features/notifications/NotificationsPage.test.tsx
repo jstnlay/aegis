@@ -185,6 +185,48 @@ beforeEach(() => {
 })
 
 describe("NotificationsPage", () => {
+  it("loads the adviser's full note for guidance and links to that student", async () => {
+    mockedFetchAllPages.mockResolvedValue({
+      count: 1,
+      results: [
+        makeNotification({
+          notification_type: "BEHAVIORAL_WARNING",
+          link: "/guidance/behavioral-notes/note-1",
+          message: "A behavioral warning was recorded.",
+        }),
+      ],
+    })
+    vi.mocked(apiClient.get).mockResolvedValue({
+      data: {
+        id: "note-1",
+        student: "student-1",
+        student_name: "Ana Cruz",
+        student_id_code: "STU-001",
+        recorded_by_name: "Adviser Reyes",
+        note_type: "warning",
+        date_recorded: "2026-11-10",
+        note_text:
+          "Repeated interruptions during class.\nDiscussed respectful participation with the student.",
+      },
+    })
+    renderPage("guidance")
+    expect(apiClient.get).not.toHaveBeenCalled()
+    fireEvent.click(await screen.findByRole("button", { name: "View" }))
+    const dialog = await screen.findByRole("dialog")
+    expect(
+      await within(dialog).findByText(/Repeated interruptions during class/)
+    ).toBeInTheDocument()
+    expect(within(dialog).getByText("Adviser Reyes")).toBeInTheDocument()
+    expect(within(dialog).getByText("Ana Cruz — STU-001")).toBeInTheDocument()
+    expect(
+      within(dialog).getByRole("link", { name: "Open related page" })
+    ).toHaveAttribute("href", "/app/students/student-1")
+    expect(apiClient.get).toHaveBeenCalledWith(
+      "/guidance/behavioral-notes/note-1/",
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
+  })
+
   it("views details, retains a read notification, and deletes only after confirmation", async () => {
     let items = [makeNotification()]
     mockedFetchAllPages.mockImplementation(async (url) => ({

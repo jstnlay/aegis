@@ -658,7 +658,7 @@
   }
   .faculty-notes-list {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+    grid-template-columns: minmax(0, 1fr);
     gap: 12px;
     max-height: 360px;
     overflow-y: auto;
@@ -672,20 +672,54 @@
     outline-offset: 3px;
   }
   .faculty-notes li {
-    padding: 12px;
+    display: grid;
+    grid-template-columns: minmax(180px, 1fr) 90px minmax(0, 1.5fr) 90px;
+    align-items: center;
+    gap: 16px;
+    padding: 15px 16px;
     border: 1px solid #bc8b9326;
     border-left: 3px solid #c598a3;
     border-radius: 11px;
     background: #fff6f4a8;
   }
   .faculty-notes li > div {
-    flex-wrap: wrap;
-    gap: 6px;
+    display: contents;
   }
   .faculty-notes li > div > p {
     white-space: normal;
     overflow-wrap: anywhere;
+    font-size: 13px;
+    line-height: 1.5;
   }
+  .faculty-notes li [data-slot="badge"] {
+    justify-self: start;
+  }
+  .faculty-note-preview {
+    margin: 0;
+    overflow-wrap: anywhere;
+    line-height: 1.6;
+  }
+  .faculty-note-date {
+    margin: 0;
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  @media (max-width: 900px) {
+    .faculty-notes li {
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px 12px;
+    }
+    .faculty-note-preview {
+      grid-column: 1 / -1;
+    }
+    .faculty-note-date {
+      grid-column: 1 / -1;
+      text-align: left;
+      font-size: 11px;
+    }
+  }
+
   .faculty-side-column .faculty-pending [data-slot="card-header"] > p {
     font-size: 11px;
   }

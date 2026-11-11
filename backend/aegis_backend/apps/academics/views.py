@@ -367,6 +367,18 @@ class EnrollmentViewSet(viewsets.ModelViewSet):
             "student__user", "section", "section__grade_level", "academic_year"
         ).all()
 
+        surname_order = self.request.query_params.get("surname_order")
+        if surname_order in ("asc", "desc"):
+            from django.db.models.functions import Lower
+
+            surname = Lower("student__user__last_name")
+            qs = qs.order_by(
+                surname.desc() if surname_order == "desc" else surname.asc(),
+                Lower("student__user__first_name"),
+                "student__student_id",
+                "pk",
+            )
+
         if user.role == "admin":
             return qs
         if user.role == "guidance":

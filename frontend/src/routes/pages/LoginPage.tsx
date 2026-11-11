@@ -112,6 +112,39 @@ export function LoginPage() {
         />
       ) : null}
       <HomepageBackground />
+      <div className="school-login-atmosphere" aria-hidden="true">
+        <span className="school-login-orbit" />
+        <span className="school-login-ribbon" />
+      </div>
+      <div className="school-login-mobile-art" aria-hidden="true">
+        <svg viewBox="0 0 800 520" preserveAspectRatio="none" focusable="false">
+          <path fill="#ead8ce" d="M0 0H800V270C590 470 260 230 0 470Z" />
+          <path fill="#a64d57" d="M0 0H800V230C550 440 240 210 0 420Z" />
+          <path fill="#7d202b" d="M0 0H800V185C560 390 260 190 0 365Z" />
+          <path
+            d="M-80 320C220 100 500 370 880 100M-80 292C220 72 500 342 880 72"
+            fill="none"
+            stroke="#dbb68d"
+            strokeOpacity=".35"
+          />
+          <circle
+            cx="730"
+            cy="20"
+            r="150"
+            fill="none"
+            stroke="#ffffff"
+            strokeOpacity=".08"
+          />
+          <circle
+            cx="730"
+            cy="20"
+            r="185"
+            fill="none"
+            stroke="#ffffff"
+            strokeOpacity=".08"
+          />
+        </svg>
+      </div>
       <Link
         to="/"
         className="school-login-corner-home"
@@ -147,6 +180,9 @@ export function LoginPage() {
                 height={377}
               />
             </div>
+            <p className="school-login-mobile-brand">
+              HIS CARE CHRISTIAN INSTITUTE
+            </p>
             <h1 id="login-title">Sign in to AEGIS</h1>
             <p className="school-login-subtitle">
               Welcome to your learning space.

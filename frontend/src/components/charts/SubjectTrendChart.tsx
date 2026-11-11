@@ -136,7 +136,7 @@ export function SubjectTrendChart({
               <CartesianGrid
                 vertical={false}
                 stroke={GRID_COLOR}
-                strokeDasharray="3 3"
+                strokeDasharray="2 5"
               />
               <XAxis
                 dataKey="period"
@@ -193,7 +193,7 @@ export function SubjectTrendChart({
                   dataKey={subject}
                   name={subject}
                   stroke={CHART_COLORS[index]}
-                  strokeWidth={2}
+                  strokeWidth={3}
                   dot={{ r: 3 }}
                   // A gap stays a gap: connectNulls would draw a straight line
                   // across a period with no grades and imply data that is not

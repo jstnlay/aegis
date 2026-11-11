@@ -293,11 +293,11 @@ export function useGradingPeriods() {
 export function useEnrollmentsInSection(sectionId: string | null | undefined) {
   const enabled = Boolean(sectionId)
   return useQuery<Enrollment[], Error>({
-    queryKey: [...keys.enrollments, sectionId ?? ""],
+    queryKey: [...keys.enrollments, sectionId ?? "", "surname-asc"],
     enabled,
     queryFn: async () => {
       const { results } = await fetchAllPages<Enrollment>(
-        "/academics/enrollments/"
+        "/academics/enrollments/?surname_order=asc"
       )
       if (!sectionId) return []
       // `is_active` gates the backend's own grade/attendance integrity checks

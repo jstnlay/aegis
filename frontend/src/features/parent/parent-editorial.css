@@ -43,8 +43,22 @@
     .parent-dashboard-columns > .parent-recent-grades {
       grid-column: 2;
       grid-row: 1;
-      align-self: start;
+      align-self: stretch;
       min-height: 0;
+    }
+    .parent-recent-grades > [data-slot="card-content"] {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+    }
+    .parent-recent-list {
+      flex: 1;
+      grid-auto-rows: minmax(76px, 1fr);
+    }
+    .parent-recent-row {
+      align-items: center;
+      gap: 16px;
     }
     .parent-dashboard-columns > .parent-support-callout {
       grid-column: 1 / -1;

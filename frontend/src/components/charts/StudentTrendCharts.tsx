@@ -120,7 +120,7 @@ export function StudentAcademicTrendChart({
           <CartesianGrid
             vertical={false}
             stroke={GRID_COLOR}
-            strokeDasharray="3 3"
+            strokeDasharray="2 5"
           />
           <XAxis
             dataKey="period"
@@ -282,7 +282,7 @@ export function StudentAttendanceTrendChart({
           <CartesianGrid
             vertical={false}
             stroke={GRID_COLOR}
-            strokeDasharray="3 3"
+            strokeDasharray="2 5"
           />
           <XAxis
             dataKey="date"

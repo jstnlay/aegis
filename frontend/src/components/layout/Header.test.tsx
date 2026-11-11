@@ -327,6 +327,42 @@ describe("header bell (TC-STU-08)", () => {
     expect(within(menu).getByText(/from Ms\. Reyes/)).toBeInTheDocument()
   })
 
+  it("filters All, Unread, and Alerts and can mark all notifications read", async () => {
+    const items = [
+      makeNotification({ id: "read", title: "Earlier grade", is_read: true }),
+      makeNotification({
+        id: "warning",
+        title: "Behavior warning",
+        notification_type: "BEHAVIORAL_WARNING",
+      }),
+      makeNotification({ id: "new", title: "New grade" }),
+    ]
+    mockedFetchAllPages.mockImplementation(async (url) => ({
+      count: items.length,
+      results: String(url).includes("is_read=false")
+        ? items.filter((item) => !item.is_read)
+        : items,
+    }))
+    renderHeader()
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Notifications, 2 unread" })
+    )
+    const menu = await screen.findByRole("menu", { name: /^notifications$/i })
+    expect(within(menu).getByText("Earlier grade")).toBeInTheDocument()
+    fireEvent.click(within(menu).getByRole("button", { name: /^Unread/ }))
+    expect(within(menu).queryByText("Earlier grade")).not.toBeInTheDocument()
+    expect(within(menu).getByText("New grade")).toBeInTheDocument()
+    fireEvent.click(within(menu).getByRole("button", { name: /^Alerts/ }))
+    expect(within(menu).queryByText("New grade")).not.toBeInTheDocument()
+    expect(within(menu).getByText("Behavior warning")).toBeInTheDocument()
+    fireEvent.click(
+      within(menu).getByRole("menuitem", { name: "Mark all as read" })
+    )
+    await waitFor(() =>
+      expect(mockedPost).toHaveBeenCalledWith("/notifications/read-all/")
+    )
+  })
+
   it("marks the notification read when it is opened from the bell", async () => {
     mockedFetchAllPages.mockResolvedValue({
       count: 1,

@@ -312,7 +312,7 @@ describe("no page describes implemented functionality as future work", () => {
     authState.user = makeUser("admin")
     renderAt("/app/dashboard")
 
-    await screen.findByRole("heading", { name: /Administration Panel/i })
+    await screen.findByRole("heading", { name: /Administration overview/i })
 
     // PH11.5 hardcoded "AEGIS — PH11.5" here; a phase label in the chrome goes
     // stale the moment the next phase lands.
@@ -360,7 +360,10 @@ describe("PH11.8 guidance routes", () => {
       marker: /Students with guidance activity/i,
     },
     { path: "/app/assessments", marker: /assessments you created/i },
-    { path: "/app/account-settings", marker: /cannot be changed here/i },
+    {
+      path: "/app/account-settings",
+      marker: /School records and account access are managed by the school/i,
+    },
   ]
 
   it.each(GUIDANCE_CASES)(
@@ -771,7 +774,7 @@ describe("role dashboard routes", () => {
     ).toBeInTheDocument()
     await waitFor(() =>
       expect(
-        screen.queryByRole("heading", { name: /Administration Panel/i })
+        screen.queryByRole("heading", { name: /Administration overview/i })
       ).not.toBeInTheDocument()
     )
   })

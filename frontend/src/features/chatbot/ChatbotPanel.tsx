@@ -1,15 +1,9 @@
-import { MessageCircle, Send } from "lucide-react"
-import { useState, type FormEvent } from "react"
+import "./chatbot-panel.css"
+import { ArrowUp, Bot, Info, ShieldCheck, Sparkles, X } from "lucide-react"
+import { useEffect, useRef, useState, type FormEvent } from "react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
 import { ErrorNote } from "@/components/feedback/Feedback"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -66,6 +60,18 @@ export function ChatbotPanel({
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [draft, setDraft] = useState("")
 
+  const logRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    if (open) inputRef.current?.focus()
+  }, [open])
+
+  useEffect(() => {
+    const log = logRef.current
+    if (log) log.scrollTop = log.scrollHeight
+  }, [messages, send.isPending])
+
   if (!open || !user) return null
 
   const prompts = suggestedPrompts(user.role)
@@ -74,7 +80,12 @@ export function ChatbotPanel({
 
   async function submit(text: string) {
     const message = text.trim()
-    if (message.length === 0 || tooLong) return
+    if (
+      message.length === 0 ||
+      message.length > MAX_MESSAGE_LENGTH ||
+      send.isPending
+    )
+      return
 
     const userMessage: ChatMessage = {
       id: nextMessageId("u"),
@@ -107,111 +118,156 @@ export function ChatbotPanel({
   }
 
   return (
-    <Card className="flex h-full flex-col" data-chatbot-panel="open">
-      <CardHeader>
-        <div className="flex items-start justify-between gap-2">
-          <div className="space-y-1">
-            <CardTitle className="flex items-center gap-2">
-              <MessageCircle className="size-4" aria-hidden="true" />
-              AEGIS Assistant
-            </CardTitle>
-            <CardDescription>
-              Answers about grades, attendance and learning resources.
-            </CardDescription>
+    <section
+      className="aegis-chat"
+      data-chatbot-panel="open"
+      aria-label="AEGIS Assistant"
+      onKeyDown={(event) => {
+        if (event.key === "Escape") onClose()
+      }}
+    >
+      <header className="aegis-chat-header">
+        <div className="aegis-chat-brand">
+          <span className="aegis-chat-mark">
+            <Bot aria-hidden="true" />
+          </span>
+          <div>
+            <h2>AEGIS Assistant</h2>
+            <p>
+              <span className="aegis-chat-status" /> Your school help desk
+            </p>
           </div>
-          <Button type="button" size="xs" variant="ghost" onClick={onClose}>
-            Close
-          </Button>
         </div>
-      </CardHeader>
-
-      <CardContent className="flex min-h-0 flex-1 flex-col gap-3">
-        {/*
-          Stated up front rather than discovered by typing something the bot
-          cannot answer. Each message is handled on its own, so "it forgot what I
-          said" is a real and permanent limitation, not a bug.
-        */}
-        <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
-          This assistant recognises a fixed set of questions and answers each
-          one on its own. It does not hold a conversation, and nothing you type
-          here is saved after you close this panel. For anything urgent, contact
-          Guidance directly.
-        </p>
-
-        <div
-          className="min-h-0 flex-1 space-y-3 overflow-y-auto"
-          role="log"
-          aria-live="polite"
-          aria-label="Assistant conversation"
+        <button
+          className="aegis-chat-close"
+          type="button"
+          aria-label="Close assistant"
+          onClick={onClose}
         >
-          {messages.length === 0 ? (
-            <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">Try one of these:</p>
-              <ul className="space-y-1">
-                {prompts.map((prompt) => (
-                  <li key={prompt}>
-                    <Button
-                      type="button"
-                      size="xs"
-                      variant="outline"
-                      onClick={() => void submit(prompt)}
-                    >
-                      {prompt}
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : (
-            messages.map((message) => (
-              <ChatBubble key={message.id} message={message} />
-            ))
-          )}
-        </div>
+          <X aria-hidden="true" />
+        </button>
+      </header>
 
+      <div
+        className="aegis-chat-body"
+        ref={logRef}
+        role="log"
+        aria-live="polite"
+        aria-label="Assistant conversation"
+      >
+        <div className="aegis-chat-transcript">
+          <p className="aegis-chat-session-label">
+            <span /> School assistant <span />
+          </p>
+          <ChatBubble
+            message={{
+              id: "welcome",
+              role: "assistant",
+              text: `Hi${user.first_name?.trim() ? `, ${user.first_name.trim()}` : ""}! ${user.role === "student" || user.role === "parent" ? "I can help with grades, attendance, and learning resources. What would you like to check?" : "Need a hand finding something in AEGIS? Ask me about the tools available to you."}`,
+            }}
+          />
+          {messages.length === 0 ? (
+            <div className="aegis-chat-quick-replies">
+              <p>Choose a question to get started</p>
+              {prompts.map((prompt) => (
+                <button
+                  key={prompt}
+                  type="button"
+                  disabled={send.isPending}
+                  onClick={() => void submit(prompt)}
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {messages.map((message) => (
+            <ChatBubble key={message.id} message={message} />
+          ))}
+          {send.isPending ? (
+            <div className="aegis-chat-thinking" role="status">
+              <Bot aria-hidden="true" />
+              <span>Finding your answer</span>
+              <span className="aegis-chat-dots" aria-hidden="true">
+                <i />
+                <i />
+                <i />
+              </span>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      <footer className="aegis-chat-footer">
         {send.isError ? (
           <ErrorNote message={normalizeApiError(send.error).message} />
         ) : null}
-
-        <form onSubmit={handleSubmit} className="space-y-1.5">
-          <Label htmlFor="chatbot-message">Message</Label>
+        <form onSubmit={handleSubmit} className="aegis-chat-composer">
+          <Label htmlFor="chatbot-message" className="sr-only">
+            Message
+          </Label>
           <Textarea
+            ref={inputRef}
             id="chatbot-message"
             rows={2}
             value={draft}
             maxLength={MAX_MESSAGE_LENGTH}
+            placeholder="Ask AEGIS anything about school..."
             aria-invalid={tooLong || undefined}
-            aria-describedby={tooLong ? "chatbot-message-error" : undefined}
+            aria-describedby={
+              tooLong ? "chatbot-message-error" : "chatbot-message-hint"
+            }
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={(event) => {
-              // Enter sends; Shift+Enter is a newline. A textarea alone would
-              // make every reply require finding the send button.
-              if (event.key === "Enter" && !event.shiftKey) {
+              if (
+                event.key === "Enter" &&
+                !event.shiftKey &&
+                !event.nativeEvent.isComposing
+              ) {
                 event.preventDefault()
                 void submit(draft)
               }
             }}
           />
-          {tooLong ? (
-            <p
-              id="chatbot-message-error"
-              role="alert"
-              className="text-xs text-destructive"
+          <div className="aegis-chat-composer-bottom">
+            <span className="aegis-chat-composer-mode">
+              <Sparkles aria-hidden="true" /> School assistant
+            </span>
+            <span id="chatbot-message-hint" className="sr-only">
+              Enter to send. Shift + Enter for a new line.
+            </span>
+            <Button
+              type="submit"
+              className="aegis-chat-send"
+              disabled={blank || tooLong || send.isPending}
+              aria-label={send.isPending ? "Sending message" : "Send message"}
             >
+              <ArrowUp aria-hidden="true" />
+            </Button>
+          </div>
+          {tooLong ? (
+            <p id="chatbot-message-error" role="alert">
               Message is too long.
             </p>
           ) : null}
-          <Button
-            type="submit"
-            size="sm"
-            disabled={blank || tooLong || send.isPending}
-          >
-            <Send className="size-4" aria-hidden="true" />
-            {send.isPending ? "Sending…" : "Send"}
-          </Button>
         </form>
-      </CardContent>
-    </Card>
+        <div className="aegis-chat-footer-meta">
+          <details className="aegis-chat-info">
+            <summary>
+              <Info aria-hidden="true" /> About this assistant
+            </summary>
+            <p>
+              This assistant answers supported questions individually and does
+              not remember earlier messages. This chat clears when you close the
+              panel. For urgent concerns, contact Guidance directly.
+            </p>
+          </details>
+          <span className="aegis-chat-footnote">
+            <ShieldCheck aria-hidden="true" /> Here for your school day
+          </span>
+        </div>
+      </footer>
+    </section>
   )
 }
 
@@ -220,18 +276,24 @@ function ChatBubble({ message }: { message: ChatMessage }) {
 
   return (
     <div
-      className={isUser ? "flex justify-end" : "flex justify-start"}
+      className={`aegis-chat-message ${isUser ? "aegis-chat-message--user" : ""}`}
       data-chat-role={message.role}
     >
-      <div
-        className={`max-w-[85%] space-y-1 rounded-md px-3 py-2 text-sm ${
-          isUser ? "bg-primary text-primary-foreground" : "bg-muted"
-        }`}
-      >
-        <p>{message.text}</p>
-        {message.response ? (
-          <ResponseDetail response={message.response} />
-        ) : null}
+      {!isUser ? (
+        <span className="aegis-chat-message-avatar">
+          <Bot aria-hidden="true" />
+        </span>
+      ) : null}
+      <div className="aegis-chat-message-content">
+        <span className="aegis-chat-message-label">
+          {isUser ? "You" : "AEGIS Assistant"}
+        </span>
+        <div className="aegis-chat-bubble">
+          <p>{message.text}</p>
+          {message.response ? (
+            <ResponseDetail response={message.response} />
+          ) : null}
+        </div>
       </div>
     </div>
   )
@@ -253,7 +315,7 @@ function ResponseDetail({ response }: { response: ChatResponse }) {
   }
 
   return (
-    <div className="space-y-1 border-t border-border/40 pt-1 text-xs">
+    <div className="aegis-chat-response space-y-2 border-t border-border/40 pt-3 text-xs">
       {grades ? (
         <p>
           {/* An absent average renders as a dash, never a 0. */}

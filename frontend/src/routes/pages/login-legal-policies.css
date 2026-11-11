@@ -1,24 +1,24 @@
 .login-policy-consent {
-  margin: 12px auto 0;
-  max-width: 350px;
-  color: var(--muted-foreground);
-  font-size: 12px;
-  line-height: 1.65;
+  margin: 0 auto;
+  max-width: 310px;
+  color: #7d7471;
+  font-size: 10px;
+  line-height: 1.6;
   text-align: center;
   text-wrap: balance;
 }
 .login-policy-clause {
-  display: block;
+  display: inline;
 }
 .login-policy-link {
   white-space: nowrap;
 }
 .login-policy-consent button {
-  color: var(--primary);
+  color: #982a43;
   font-weight: 500;
   text-decoration: underline;
-  text-underline-offset: 4px;
-  text-decoration-color: color-mix(in srgb, var(--primary) 40%, transparent);
+  text-underline-offset: 3px;
+  text-decoration-color: #cc7f94;
   white-space: nowrap;
   cursor: pointer;
 }

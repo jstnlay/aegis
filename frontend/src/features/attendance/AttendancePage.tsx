@@ -17,7 +17,10 @@ import {
   GRID_COLOR,
 } from "@/components/charts/chart-config"
 import { Button } from "@/components/ui/button"
-import { useDataTablePagination } from "@/components/ui/data-table-pagination"
+import {
+  useDataTablePagination,
+  type DataTablePagination,
+} from "@/components/ui/data-table-pagination"
 import { Badge } from "@/components/ui/badge"
 import {
   Card,
@@ -104,6 +107,50 @@ const STATUS_OPTIONS: ReadonlyArray<{
   { value: "absent", label: "Absent" },
 ]
 
+function AttendancePagination({
+  pagination,
+  totalPages,
+}: {
+  pagination: DataTablePagination
+  totalPages: number
+}) {
+  return (
+    <nav
+      aria-label="Attendance records pages"
+      className="mt-4 flex flex-wrap items-center justify-between gap-3"
+    >
+      <p className="text-xs text-muted-foreground" role="status">
+        Showing {(pagination.page - 1) * pagination.pageSize + 1}–
+        {Math.min(pagination.page * pagination.pageSize, pagination.totalCount)}{" "}
+        of {pagination.totalCount}
+      </p>
+      <div className="flex items-center gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={pagination.page === 1}
+          onClick={() => pagination.onPageChange(pagination.page - 1)}
+        >
+          Previous
+        </Button>
+        <span className="text-xs text-muted-foreground" aria-live="polite">
+          {pagination.page} / {totalPages}
+        </span>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={pagination.page === totalPages}
+          onClick={() => pagination.onPageChange(pagination.page + 1)}
+        >
+          Next
+        </Button>
+      </div>
+    </nav>
+  )
+}
+
 function StudentAttendance() {
   const profileQuery = useStudentProfileId()
   const studentId = profileQuery.data
@@ -111,7 +158,7 @@ function StudentAttendance() {
   const summaryQuery = useAttendanceSummary(studentId)
   const { pagination, pageRows, totalPages } = useDataTablePagination(
     recordsQuery.data ?? [],
-    10,
+    15,
     studentId ?? ""
   )
 
@@ -272,42 +319,10 @@ function StudentAttendance() {
             </Table>
           )}
           {!loading && !recordsQuery.isError && pagination.totalCount > 0 ? (
-            <nav
-              aria-label="Attendance records pages"
-              className="mt-4 flex flex-wrap items-center justify-between gap-3"
-            >
-              <p className="text-xs text-muted-foreground" role="status">
-                Showing {(pagination.page - 1) * 10 + 1}–
-                {Math.min(pagination.page * 10, pagination.totalCount)} of{" "}
-                {pagination.totalCount}
-              </p>
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={pagination.page === 1}
-                  onClick={() => pagination.onPageChange(pagination.page - 1)}
-                >
-                  Previous
-                </Button>
-                <span
-                  className="text-xs text-muted-foreground"
-                  aria-live="polite"
-                >
-                  {pagination.page} / {totalPages}
-                </span>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={pagination.page === totalPages}
-                  onClick={() => pagination.onPageChange(pagination.page + 1)}
-                >
-                  Next
-                </Button>
-              </div>
-            </nav>
+            <AttendancePagination
+              pagination={pagination}
+              totalPages={totalPages}
+            />
           ) : null}
         </CardContent>
       </Card>
@@ -377,7 +392,7 @@ function SectionAttendanceChart({
             <CartesianGrid
               vertical={false}
               stroke={GRID_COLOR}
-              strokeDasharray="3 3"
+              strokeDasharray="2 5"
             />
             <XAxis
               dataKey="name"
@@ -482,6 +497,10 @@ function FacultyAttendance() {
   const sectionsQuery = useSections()
   const create = useCreateAttendance()
   const records = useMemo(() => recordsQuery.data ?? [], [recordsQuery.data])
+  const { pagination, pageRows, totalPages } = useDataTablePagination(
+    records,
+    15
+  )
 
   const [sectionId, setSectionId] = useState("")
   const [studentId, setStudentId] = useState("")
@@ -744,12 +763,21 @@ function FacultyAttendance() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(recordsQuery.data ?? []).map((r) => (
+                {pageRows.map((r) => (
                   <AttendanceRecordRow key={r.id} record={r} />
                 ))}
               </TableBody>
             </Table>
           )}
+
+          {!recordsQuery.isLoading &&
+          !recordsQuery.isError &&
+          records.length > 0 ? (
+            <AttendancePagination
+              pagination={pagination}
+              totalPages={totalPages}
+            />
+          ) : null}
 
           <p className="mt-4 text-xs text-muted-foreground">
             Editing and deleting a record is not available in this view:{" "}

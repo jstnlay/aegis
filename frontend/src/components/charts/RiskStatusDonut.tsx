@@ -34,7 +34,7 @@ export function RiskStatusDonut({ alerts }: { alerts: readonly RiskAlert[] }) {
   const drawn = slices.filter((slice) => slice.count > 0)
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="case-status-visual flex flex-col gap-4">
       <div className="relative mx-auto w-40 shrink-0">
         <ChartFrame
           height={150}
@@ -70,6 +70,8 @@ export function RiskStatusDonut({ alerts }: { alerts: readonly RiskAlert[] }) {
                 nameKey="label"
                 innerRadius="62%"
                 outerRadius="86%"
+                cornerRadius={4}
+                paddingAngle={2}
                 stroke="var(--background)"
                 isAnimationActive={false}
               >
@@ -95,7 +97,7 @@ export function RiskStatusDonut({ alerts }: { alerts: readonly RiskAlert[] }) {
         </div>
       </div>
 
-      <ul className="flex-1 space-y-1.5">
+      <ul className="chart-legend flex-1 space-y-1.5">
         {drawn.map((slice) => (
           <li
             key={slice.key}

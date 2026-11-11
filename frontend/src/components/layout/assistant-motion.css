@@ -220,3 +220,143 @@
     }
   }
 }
+
+/* A crisp ruby launcher with restrained depth. */
+.app-shell[data-role] .app-assistant-launcher[aria-expanded] {
+  width: 54px;
+  height: 54px;
+  border: 1px solid #b64050;
+  background:
+    radial-gradient(ellipse at 25% 8%, #d76b7770, transparent 60%),
+    linear-gradient(155deg, #b72c43, #8b1c32 72%, #741b2d);
+  color: #fff9f6;
+  box-shadow:
+    inset 0 1px 1px #ffffff70,
+    inset 0 -2px 3px #59102140,
+    0 0 0 3px #fff5f0c9,
+    0 7px 18px #79192f38;
+  opacity: 1;
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease;
+}
+.app-shell[data-role]
+  .app-assistant-launcher[aria-expanded]
+  .app-assistant-avatar {
+  width: 26px;
+  height: 26px;
+}
+.app-shell[data-role]
+  .app-assistant-launcher[aria-expanded]
+  .app-assistant-avatar
+  svg {
+  stroke-width: 1.7;
+}
+.app-shell[data-role] .app-assistant-launcher[aria-expanded="false"]::before,
+.app-shell[data-role] .app-assistant-launcher[aria-expanded="false"]::after {
+  animation: none;
+  opacity: 0;
+}
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .app-shell[data-role] .app-assistant-launcher[aria-expanded]:hover {
+    transform: translateY(-2px);
+    box-shadow:
+      inset 0 1px 1px #ffffff80,
+      0 0 0 4px #f4ccd65c,
+      0 10px 24px #79192f40;
+  }
+}
+.app-shell[data-role] .app-assistant-launcher[aria-expanded]:focus-visible {
+  outline: 2px solid #9b2941;
+  outline-offset: 5px;
+}
+.app-shell[data-role] .app-assistant-launcher[aria-expanded]:active {
+  transform: scale(0.96);
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-shell[data-role] .app-assistant-launcher[aria-expanded] {
+    transition: none;
+  }
+  .app-shell[data-role] .app-assistant-launcher[aria-expanded]:active {
+    transform: none;
+  }
+}
+
+/* A small greeting glint, with a quiet pause between repeats. */
+@media (prefers-reduced-motion: no-preference) {
+  .app-shell[data-role] .app-assistant-launcher[aria-expanded="false"]::after {
+    animation: assistant-shine 9s ease-in-out infinite;
+  }
+  .app-shell[data-role]
+    .app-assistant-launcher[aria-expanded="false"]
+    .app-assistant-sparks
+    > svg {
+    animation: assistant-friendly-spark 9s ease-in-out infinite;
+  }
+  .app-shell[data-role]
+    .app-assistant-launcher[aria-expanded="false"]
+    .app-assistant-sparks
+    > svg:last-child {
+    animation-delay: 180ms;
+  }
+}
+@keyframes assistant-friendly-spark {
+  0%,
+  40%,
+  57%,
+  100% {
+    opacity: 0;
+    transform: scale(0.4) rotate(-15deg);
+  }
+  45%,
+  50% {
+    opacity: 0.9;
+    transform: translateY(-2px) scale(1) rotate(10deg);
+  }
+}
+
+/* A persistent caption makes the assistant discoverable beyond its icon. */
+.app-shell[data-role] .app-assistant-label {
+  position: absolute;
+  right: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 10px 14px;
+  border: 1px solid #dca9b5;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #fff4f6, #f4d3dd);
+  color: #88283f;
+  box-shadow:
+    inset 0 1px #fff,
+    0 5px 18px #78243918;
+  font-size: 12px;
+  line-height: 1.3;
+  font-weight: 650;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.app-assistant-label > span {
+  font-size: 9px;
+  color: #95636c;
+  font-weight: 450;
+}
+.app-shell[data-role] .app-assistant-launcher[aria-expanded="false"] {
+  box-shadow:
+    inset 0 1px 1px #ffffff70,
+    0 0 0 4px #f5bdcc85,
+    0 6px 24px #a3204145;
+}
+@media (max-width: 480px) {
+  .app-shell[data-role] .app-assistant-label {
+    padding: 8px 10px;
+    font-size: 11px;
+    border-radius: 11px;
+  }
+  .app-assistant-label > span {
+    display: none;
+  }
+}

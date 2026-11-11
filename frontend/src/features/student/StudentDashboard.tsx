@@ -10,7 +10,6 @@ import {
   HeartHandshake,
   Sparkles,
   TrendingUp,
-  UserRound,
 } from "lucide-react"
 
 import {
@@ -45,7 +44,6 @@ import { useAuth } from "@/features/auth/AuthContext"
 import {
   useNominateParent,
   useStudentDashboardData,
-  useStudentEnrollment,
   useStudentProfileId,
 } from "@/features/student/api"
 import { RecommendationsCard } from "@/features/student/RecommendationsCard"
@@ -69,7 +67,6 @@ import { formatCount, formatPercent } from "@/lib/metric-format"
 export function StudentDashboard() {
   const { user } = useAuth()
   const profileQuery = useStudentProfileId()
-  const enrollmentQuery = useStudentEnrollment()
   const profileError = profileQuery.isError
   const studentId = profileQuery.data || ""
 
@@ -121,74 +118,6 @@ export function StudentDashboard() {
           <Sparkles />
         </div>
       </header>
-
-      <Card data-panel="profile" className="student-identity">
-        <CardHeader>
-          <CardTitle className="student-card-title">
-            <UserRound aria-hidden="true" />
-            My information
-          </CardTitle>
-          <CardDescription>
-            Your basic school record. Ask the office to correct a detail that is
-            wrong.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {enrollmentQuery.isLoading ? (
-            <PendingRegion label="My information">
-              <Skeleton className="h-16 w-full" />
-            </PendingRegion>
-          ) : enrollmentQuery.isError ? (
-            <ErrorNote message="Unable to load your information. Please try again." />
-          ) : !enrollmentQuery.data ? (
-            <EmptyState message="No enrollment record yet." />
-          ) : (
-            <dl className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
-              <div>
-                <dt className="text-muted-foreground">Name</dt>
-                <dd className="font-medium">
-                  {[user.first_name, user.last_name]
-                    .filter(Boolean)
-                    .join(" ") || "—"}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">Student ID</dt>
-                <dd className="font-mono">{enrollmentQuery.data.student_id}</dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">Year level</dt>
-                <dd className="font-medium">
-                  {enrollmentQuery.data.grade_level_name || "—"}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">Section</dt>
-                <dd className="font-medium">
-                  {enrollmentQuery.data.section_name || "—"}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">Age</dt>
-                <dd className="font-medium">
-                  {enrollmentQuery.data.age === null
-                    ? "—"
-                    : enrollmentQuery.data.age}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">School year</dt>
-                <dd className="font-medium">
-                  {enrollmentQuery.data.academic_year_name || "—"}
-                </dd>
-              </div>
-            </dl>
-          )}
-          <Button asChild variant="outline" size="sm" className="mt-4">
-            <Link to="/app/account-settings">Edit profile</Link>
-          </Button>
-        </CardContent>
-      </Card>
 
       {/*
         PH11.11: the placeholder is announced and the failure is distinct from

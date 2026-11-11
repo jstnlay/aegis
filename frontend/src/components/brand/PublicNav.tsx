@@ -109,7 +109,7 @@ export function PublicNav() {
   return (
     <div
       ref={wrapper}
-      className="public-nav-wrapper relative order-last sm:order-none"
+      className="public-nav-wrapper relative order-last lg:order-none"
     >
       <nav
         aria-label="Primary"
