@@ -31,6 +31,8 @@ from apps.academics.models import (
     Subject,
     SubjectAssignment,
 )
+from apps.chatbot.agreements import notice_version
+from apps.chatbot.models import AgreementAcceptance
 from apps.chatbot.policies import (
     classify_intent,
     classify_urgency,
@@ -77,6 +79,11 @@ class ChatbotBase(TestCase):
             student=self.student_profile, section=self.section,
             academic_year=self.academic_year, date_enrolled=date(2024, 6, 10),
             is_active=True,
+        )
+        AgreementAcceptance.objects.create(
+            user=self.student_user,
+            notice_version=notice_version(),
+            accepted_at=timezone.now(),
         )
 
         self.other_student_user = User.objects.create_user(

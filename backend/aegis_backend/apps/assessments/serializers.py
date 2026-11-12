@@ -8,6 +8,8 @@ Role-based field access:
 
 from rest_framework import serializers
 
+from apps.accounts.models import StudentProfile
+from apps.academics.models import Section
 from apps.chatbot.question_generator import MAX_DRAFTS
 
 from .models import Assessment, AssessmentQuestion, AssessmentResult
@@ -198,11 +200,20 @@ class AssessmentSerializer(serializers.ModelSerializer):
             "is_published",
             "published_at",
             "deadline",
+            "ai_generated",
+            "review_status",
+            "reviewed_by",
+            "reviewed_at",
+            "review_note",
             "questions",
             "created_at",
             "updated_at",
         )
-        read_only_fields = ("id", "created_by", "published_at", "created_at", "updated_at")
+        read_only_fields = (
+            "id", "created_by", "published_at", "ai_generated",
+            "review_status", "reviewed_by", "reviewed_at", "review_note",
+            "created_at", "updated_at",
+        )
     
     def get_target_sections_details(self, obj):
         """Return basic info about target sections."""
@@ -321,11 +332,16 @@ class AssessmentListSerializer(serializers.ModelSerializer):
             "is_published",
             "published_at",
             "deadline",
+            "ai_generated",
+            "review_status",
             "question_count",
             "created_at",
             "updated_at",
         )
-        read_only_fields = ("id", "created_by", "published_at", "created_at", "updated_at")
+        read_only_fields = (
+            "id", "created_by", "published_at", "ai_generated",
+            "review_status", "created_at", "updated_at",
+        )
     
     def get_question_count(self, obj):
         """Return number of questions in the assessment."""
@@ -432,3 +448,35 @@ class AssessmentResultListSerializer(serializers.ModelSerializer):
             "completed_at",
         )
         read_only_fields = fields  # All fields read-only in list view
+
+
+class AssessmentGenerationSerializer(serializers.Serializer):
+    """`POST /assessments/assessments/generate-draft/` body."""
+
+    title = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    topic = serializers.CharField(max_length=200, min_length=3)
+    question_type = serializers.ChoiceField(
+        choices=AssessmentQuestion.QuestionType.choices,
+        default=AssessmentQuestion.QuestionType.MULTIPLE_CHOICE,
+    )
+    count = serializers.IntegerField(min_value=1, max_value=20, default=5)
+    target_sections = serializers.PrimaryKeyRelatedField(
+        many=True, required=False, queryset=Section.objects.all()
+    )
+    target_students = serializers.PrimaryKeyRelatedField(
+        many=True, required=False, queryset=StudentProfile.objects.all()
+    )
+
+
+class AssessmentReviewSerializer(serializers.Serializer):
+    """`POST /assessments/assessments/{id}/review/` body."""
+
+    decision = serializers.ChoiceField(
+        choices=(
+            Assessment.ReviewStatus.APPROVED,
+            Assessment.ReviewStatus.CHANGES_REQUESTED,
+        )
+    )
+    note = serializers.CharField(
+        required=False, allow_blank=True, default="", max_length=2000
+    )

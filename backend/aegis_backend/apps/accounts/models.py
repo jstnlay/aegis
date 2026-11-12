@@ -334,6 +334,13 @@ class RegistrationRequest(TimestampedModel):
     )
     reviewed_at = models.DateTimeField(null=True, blank=True)
     review_note = models.TextField(blank=True)
+    notice_version = models.CharField(
+        max_length=40,
+        blank=True,
+        default="",
+        help_text="Version of the student chatbot notice the applicant accepted.",
+    )
+    notice_accepted_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         verbose_name = "registration request"

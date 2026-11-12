@@ -770,6 +770,7 @@ def handle_message(
     *,
     use_llm: bool = False,
     llm_result: dict[str, Any] | None = None,
+    escalate: bool = True,
 ) -> ChatbotResponse:
     """
     Main chatbot service entry point.
@@ -782,6 +783,14 @@ def handle_message(
       5. If LLM available and confident, use it; else deterministic fallback.
 
     The application remains authoritative. No direct DB access by LLM.
+
+    `escalate` controls whether the FR-031 escalation *notification* is
+    dispatched. The pipeline passes False because the flag workflow is now the
+    escalation path: it reaches every Guidance counselor, the administrators
+    and the student's faculty, with the severity and a timer attached. Leaving
+    the old notice on as well meant one crisis produced two notifications for
+    the same counselor, which is how a channel gets ignored. The intent, the
+    urgency and the reply are unchanged either way.
     """
     parse_result = parse_message(message)
     intent = parse_result.intent
@@ -804,6 +813,7 @@ def handle_message(
             intent=intent,
             message=message,
             entities=entities,
+            dispatch=escalate,
         )
         reply = _deterministic_reply(user, intent, entities, {})
         return ChatbotResponse(

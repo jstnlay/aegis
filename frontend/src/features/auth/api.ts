@@ -127,6 +127,8 @@ export async function submitRegistrationRequest(payload: {
   student_code: string
   password: string
   confirm_password: string
+  notice_accepted: boolean
+  notice_version: string
 }): Promise<void> {
   try {
     await apiClient.post("/accounts/registrations/", payload)

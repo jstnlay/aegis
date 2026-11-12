@@ -25,6 +25,7 @@ import {
   submitRegistrationRequest,
   verifyRegistrationRequest,
 } from "@/features/auth/api"
+import { usePublicNotice } from "@/features/chatbot/api"
 import { normalizeApiError } from "@/lib/error"
 import { SCHOOL_NAME } from "@/lib/school-content"
 import { HomepageBackground } from "@/components/brand/HomepageBackground"
@@ -43,6 +44,9 @@ const registerSchema = z
       .min(1, "Password is required.")
       .min(8, "Password must be at least 8 characters."),
     confirm_password: z.string().min(1, "Please confirm your password."),
+    notice_accepted: z.boolean().refine((value) => value, {
+      message: "You must accept the student notice to request an account.",
+    }),
   })
   .refine((data) => data.password === data.confirm_password, {
     message: "Passwords do not match.",
@@ -76,9 +80,13 @@ export function RegisterPage() {
       student_code: "",
       password: "",
       confirm_password: "",
+      notice_accepted: false,
     },
     mode: "onBlur",
   })
+
+  const noticeQuery = usePublicNotice(!verificationToken)
+  const notice = noticeQuery.data
 
   const isSubmitting = form.formState.isSubmitting
 
@@ -106,6 +114,8 @@ export function RegisterPage() {
         student_code: values.student_code ?? "",
         password: values.password,
         confirm_password: values.confirm_password,
+        notice_accepted: values.notice_accepted,
+        notice_version: notice?.version ?? "",
       })
       setSent(true)
     } catch (error) {
@@ -353,7 +363,71 @@ export function RegisterPage() {
                 />
               </div>
 
-              <Button type="submit" className="w-full" disabled={isSubmitting}>
+              {/*
+                The student notice. It is fetched from the public endpoint, so
+                the text shown here is the text the server holds, not a copy in
+                the frontend that could drift from it. The version travels with
+                the request: if the school changes the notice, the server
+                refuses a request that accepted the old version rather than
+                recording a stale acceptance.
+              */}
+              <div className="space-y-2 rounded-sm border border-border bg-muted/40 px-3 py-2">
+                <p className="text-sm font-semibold text-foreground">
+                  Student notice
+                  {notice?.version ? ` (version ${notice.version})` : ""}
+                </p>
+                {noticeQuery.isLoading ? (
+                  <p className="text-sm text-muted-foreground">
+                    Loading the notice…
+                  </p>
+                ) : noticeQuery.isError ? (
+                  <p className="text-sm text-destructive">
+                    The notice could not be loaded. Reload the page before
+                    requesting an account.
+                  </p>
+                ) : (
+                  <p className="text-sm text-muted-foreground">{notice?.text}</p>
+                )}
+
+                <FormField
+                  control={form.control}
+                  name="notice_accepted"
+                  render={({ field }) => (
+                    <FormItem>
+                      <div className="flex items-start gap-2">
+                        <input
+                          id="notice_accepted"
+                          type="checkbox"
+                          checked={field.value}
+                          disabled={isSubmitting}
+                          aria-invalid={Boolean(
+                            form.formState.errors.notice_accepted
+                          )}
+                          onChange={(event) => field.onChange(event.target.checked)}
+                          onBlur={field.onBlur}
+                          className="mt-1 size-4 rounded border-input"
+                        />
+                        <FormLabel
+                          htmlFor="notice_accepted"
+                          className="text-sm font-normal leading-snug"
+                        >
+                          I have read and accept the student notice. I
+                          understand that chatbot messages are stored and
+                          screened so a guidance counselor can review a safety
+                          concern.
+                        </FormLabel>
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={isSubmitting || noticeQuery.isError || !notice}
+              >
                 {isSubmitting ? (
                   <>
                     <Loader2

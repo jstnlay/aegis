@@ -45,6 +45,7 @@ import {
   ASSESSMENT_QUESTION_TYPE_LABELS,
   OPTIONS_BEARING_QUESTION_TYPES,
   nextQuestionOrder,
+  useAssessmentCompletion,
   useCreateFacultyAssessment,
   useCreateFacultyAssessmentQuestion,
   useDeployFacultyAssessment,
@@ -52,6 +53,8 @@ import {
   useFacultyAssessmentQuestions,
   useFacultyAssessmentResults,
   useFacultyTargetStudents,
+  useGenerateAssessmentDraft,
+  useReviewAssessment,
   type AssessmentQuestionType,
   type FacultyAssessment,
   type FacultyAssessmentQuestion,
@@ -300,6 +303,293 @@ function NewAssessmentDialog({
         </form>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/**
+ * The AI draft dialog.
+ *
+ * The assistant writes the questions; a teacher reads them. The server enforces
+ * the second half: a generated assessment is created with
+ * `review_status="pending"` and `deploy` refuses to publish it until a human
+ * approves it. So this dialog promises exactly one thing — a draft nobody has
+ * approved yet — and the approval control lives on the assessment card.
+ */
+function GenerateDraftDialog({ students }: { students: FacultyTargetStudent[] }) {
+  const generate = useGenerateAssessmentDraft()
+
+  const [open, setOpen] = useState(false)
+  const [title, setTitle] = useState("")
+  const [topic, setTopic] = useState("")
+  const [questionType, setQuestionType] = useState<
+    "multiple_choice" | "likert" | "essay"
+  >("multiple_choice")
+  const [count, setCount] = useState("5")
+  const [targetIds, setTargetIds] = useState<string[]>([])
+
+  const topicBlank = topic.trim().length === 0
+  const parsedCount = Number(count)
+  const countInvalid = !Number.isInteger(parsedCount) || parsedCount < 1 || parsedCount > 20
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (topicBlank || countInvalid) return
+    try {
+      await generate.mutateAsync({
+        title: title.trim() || topic.trim(),
+        topic: topic.trim(),
+        question_type: questionType,
+        count: parsedCount,
+      })
+      setTitle("")
+      setTopic("")
+      setTargetIds([])
+      setOpen(false)
+    } catch {
+      // Surfaced from `generate.isError`.
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline">Generate AI draft</Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Generate an AI draft</DialogTitle>
+          <DialogDescription>
+            The assistant writes the questions. You read them before anything
+            reaches a student — the server will not publish an unapproved
+            draft.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <Field
+            label="Title"
+            id="faculty-draft-title"
+            value={title}
+            onChange={setTitle}
+          />
+
+          <Field
+            label="Topic"
+            id="faculty-draft-topic"
+            required
+            value={topic}
+            onChange={setTopic}
+          />
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="faculty-draft-type">Question type</Label>
+              <Select
+                value={questionType}
+                onValueChange={(value) =>
+                  setQuestionType(value as "multiple_choice" | "likert" | "essay")
+                }
+              >
+                <SelectTrigger id="faculty-draft-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="multiple_choice">Multiple choice</SelectItem>
+                  <SelectItem value="likert">Likert scale</SelectItem>
+                  <SelectItem value="essay">Essay</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="faculty-draft-count">Questions</Label>
+              <Input
+                id="faculty-draft-count"
+                type="number"
+                min={1}
+                max={20}
+                value={count}
+                aria-invalid={countInvalid || undefined}
+                onChange={(event) => setCount(event.target.value)}
+              />
+              {countInvalid ? (
+                <p role="alert" className="text-xs text-destructive">
+                  Between 1 and 20.
+                </p>
+              ) : null}
+            </div>
+          </div>
+
+          <fieldset className="space-y-1.5">
+            <legend className="text-sm font-medium">Target students</legend>
+            {students.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                No students in your sections to target yet.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {students.map((student) => {
+                  const selected = targetIds.includes(student.id)
+                  return (
+                    <Button
+                      key={student.id}
+                      type="button"
+                      size="sm"
+                      variant={selected ? "secondary" : "outline"}
+                      aria-pressed={selected}
+                      onClick={() =>
+                        setTargetIds((current) =>
+                          current.includes(student.id)
+                            ? current.filter((item) => item !== student.id)
+                            : [...current, student.id]
+                        )
+                      }
+                    >
+                      {student.name}
+                    </Button>
+                  )
+                })}
+              </div>
+            )}
+          </fieldset>
+
+          {generate.isError ? (
+            <ErrorNote message={normalizeApiError(generate.error).message} />
+          ) : null}
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={generate.isPending || topicBlank || countInvalid}
+            >
+              {generate.isPending ? "Generating…" : "Generate draft"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/**
+ * The human review of an AI draft.
+ *
+ * Approve unlocks deployment. Request changes sends it back. There is no
+ * "publish anyway": the server refuses an unapproved draft, and this control
+ * is the only way out of that state.
+ */
+function ReviewControls({ assessment }: { assessment: FacultyAssessment }) {
+  const review = useReviewAssessment()
+  const [note, setNote] = useState("")
+
+  return (
+    <div className="space-y-2 rounded-md border border-dashed border-border p-3">
+      <p className="text-sm font-medium">
+        Human review required before this draft can be published
+      </p>
+      <p className="text-xs text-muted-foreground">
+        Read every question. The assistant can write a plausible wrong answer,
+        and only you can catch that.
+      </p>
+      <div className="space-y-1.5">
+        <Label htmlFor={`review-note-${assessment.id}`}>Review note</Label>
+        <Input
+          id={`review-note-${assessment.id}`}
+          value={note}
+          placeholder="Optional — what you checked or what to change"
+          onChange={(event) => setNote(event.target.value)}
+        />
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          size="sm"
+          disabled={review.isPending}
+          onClick={() =>
+            void review.mutate({
+              id: assessment.id,
+              decision: "approved",
+              note,
+            })
+          }
+        >
+          Approve draft
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={review.isPending}
+          onClick={() =>
+            void review.mutate({
+              id: assessment.id,
+              decision: "changes_requested",
+              note,
+            })
+          }
+        >
+          Request changes
+        </Button>
+      </div>
+      {review.isError ? (
+        <ErrorNote message={normalizeApiError(review.error).message} />
+      ) : null}
+    </div>
+  )
+}
+
+/**
+ * Deployment and completion tracking for a published assessment.
+ */
+function CompletionBlock({ assessment }: { assessment: FacultyAssessment }) {
+  const completion = useAssessmentCompletion(assessment.id)
+
+  if (!assessment.is_published) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Not deployed yet, so there is nothing to track.
+      </p>
+    )
+  }
+  if (completion.isLoading) {
+    return <Skeleton className="h-12 w-full" aria-hidden="true" />
+  }
+  if (completion.isError) {
+    return (
+      <ErrorNote message={normalizeApiError(completion.error).message} />
+    )
+  }
+
+  const data = completion.data
+  if (!data) return null
+
+  return (
+    <div className="space-y-1 text-sm">
+      <h4 className="font-medium">Completion</h4>
+      <p className="text-muted-foreground">
+        {data.targeted} targeted · {data.completed} completed ·{" "}
+        {data.in_progress} in progress · {data.not_started} not started
+      </p>
+      {data.non_completers.length > 0 ? (
+        <details className="text-xs text-muted-foreground">
+          <summary className="cursor-pointer">
+            {data.non_completers.length} student(s) have not completed it
+          </summary>
+          <ul className="mt-1 list-inside list-disc">
+            {data.non_completers.map((student) => (
+              <li key={student.id}>{student.name}</li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+    </div>
   )
 }
 
@@ -711,7 +1001,10 @@ export function FacultyAssessmentsPage() {
                 Showing {visible.length} of {assessments.length}.
               </CardDescription>
             </div>
-            <NewAssessmentDialog students={students} />
+            <div className="flex flex-wrap gap-2">
+              <NewAssessmentDialog students={students} />
+              <GenerateDraftDialog students={students} />
+            </div>
           </div>
         </CardHeader>
 
@@ -767,7 +1060,14 @@ export function FacultyAssessmentsPage() {
             </p>
           ) : (
             <div className="space-y-4">
-              {visible.map((assessment) => (
+              {visible.map((assessment) => {
+                // The server refuses to deploy an AI draft that nobody has
+                // approved. The button mirrors that rule rather than offering
+                // a control that can only fail.
+                const blockedByReview =
+                  assessment.ai_generated &&
+                  assessment.review_status !== "approved"
+                return (
                 <div
                   key={assessment.id}
                   data-assessment-id={assessment.id}
@@ -786,6 +1086,19 @@ export function FacultyAssessmentsPage() {
                       >
                         {assessment.is_published ? "Published" : "Draft"}
                       </Badge>
+                      {assessment.ai_generated ? (
+                        <Badge
+                          variant={
+                            assessment.review_status === "approved"
+                              ? "default"
+                              : "destructive"
+                          }
+                        >
+                          {assessment.review_status === "approved"
+                            ? "AI draft · approved"
+                            : "AI draft · needs review"}
+                        </Badge>
+                      ) : null}
                     </div>
                     {assessment.description ? (
                       <p className="text-sm text-muted-foreground">
@@ -813,13 +1126,19 @@ export function FacultyAssessmentsPage() {
                        * The server 400s a draft without questions, so the
                        * control is withheld until one exists and the reason is
                        * stated in text instead of left to a failed request.
+                       *
+                       * The same is true of the review gate: `deploy` refuses
+                       * an AI draft that nobody has approved, so the button is
+                       * disabled and the reason is stated.
                        */
                       <>
                         <Button
                           type="button"
                           size="sm"
                           disabled={
-                            deploy.isPending || assessment.question_count === 0
+                            deploy.isPending ||
+                            assessment.question_count === 0 ||
+                            blockedByReview
                           }
                           aria-label={
                             deploy.isPending &&
@@ -839,6 +1158,12 @@ export function FacultyAssessmentsPage() {
                             Add at least one question before deploying.
                           </p>
                         ) : null}
+                        {blockedByReview ? (
+                          <p className="text-xs text-muted-foreground">
+                            This AI draft needs a human review and an approval
+                            before it can be deployed.
+                          </p>
+                        ) : null}
                       </>
                     ) : (
                       /* `role="status"`: a successful deploy was previously only
@@ -853,7 +1178,15 @@ export function FacultyAssessmentsPage() {
                     )}
                   </div>
 
+                  {assessment.ai_generated &&
+                  assessment.review_status !== "approved" &&
+                  !assessment.is_published ? (
+                    <ReviewControls assessment={assessment} />
+                  ) : null}
+
                   <QuestionsBlock assessment={assessment} />
+
+                  <CompletionBlock assessment={assessment} />
 
                   {resultsQuery.isLoading ? (
                     <Skeleton className="h-16 w-full" />
@@ -868,7 +1201,8 @@ export function FacultyAssessmentsPage() {
                     />
                   )}
                 </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </CardContent>
@@ -877,9 +1211,11 @@ export function FacultyAssessmentsPage() {
       <p className="text-xs text-muted-foreground">
         The server scopes this list to academic assessments you created. An
         assessment starts as a draft, cannot be deployed without at least one
-        question, and cannot be edited or deleted once published. Percentages
-        are 0&ndash;100, not a 0&ndash;1 ratio. Wellness and behavioral
-        assessments remain on the guidance assessments page.
+        question, and cannot be edited or deleted once published. An
+        AI-generated draft additionally needs a human approval before the server
+        will publish it. Percentages are 0&ndash;100, not a 0&ndash;1 ratio.
+        Wellness and behavioral assessments remain on the guidance assessments
+        page.
       </p>
     </div>
   )

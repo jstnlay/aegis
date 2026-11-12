@@ -42,6 +42,15 @@ export interface FacultyAssessment {
   published_at: string | null
   deadline: string | null
   question_count: number
+  /** True when the assessment was drafted by the assistant. */
+  ai_generated: boolean
+  /**
+   * The human-review gate for an AI draft.
+   *
+   * `not_required` is what a hand-written assessment carries; `pending` blocks
+   * deployment until a human approves it.
+   */
+  review_status: "not_required" | "pending" | "approved" | "changes_requested"
   created_at: string
   updated_at: string
 }
@@ -322,6 +331,93 @@ export function useDeployFacultyAssessment() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: keys.assessments })
+    },
+  })
+}
+
+/**
+ * `POST /assessments/assessments/generate-draft/`
+ *
+ * Creates an AI-generated assessment in `review_status="pending"`. The server
+ * refuses to deploy an unapproved draft, so this returns something a teacher
+ * must read before it can reach a student.
+ */
+export function useGenerateAssessmentDraft() {
+  const queryClient = useQueryClient()
+  return useMutation<
+    FacultyAssessment & { generation_source?: string },
+    Error,
+    {
+      title: string
+      topic: string
+      question_type: "multiple_choice" | "likert" | "essay"
+      count: number
+    }
+  >({
+    mutationFn: async (payload) => {
+      const { data } = await apiClient.post(
+        "/assessments/assessments/generate-draft/",
+        payload
+      )
+      return data
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: keys.assessments })
+    },
+  })
+}
+
+/**
+ * `POST /assessments/assessments/{id}/review/`
+ *
+ * The human decision on an AI draft. `approved` is what unlocks deployment;
+ * `changes_requested` sends it back.
+ */
+export function useReviewAssessment() {
+  const queryClient = useQueryClient()
+  return useMutation<
+    unknown,
+    Error,
+    { id: string; decision: "approved" | "changes_requested"; note?: string }
+  >({
+    mutationFn: async ({ id, decision, note }) => {
+      const { data } = await apiClient.post(
+        `/assessments/assessments/${id}/review/`,
+        { decision, note: note ?? "" }
+      )
+      return data
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: keys.assessments })
+    },
+  })
+}
+
+/**
+ * `GET /assessments/assessments/{id}/completion/`
+ *
+ * Deployment and completion tracking for the assessment's target students.
+ */
+export function useAssessmentCompletion(assessmentId: string | null) {
+  return useQuery<
+    {
+      assessment: string
+      is_published: boolean
+      targeted: number
+      completed: number
+      in_progress: number
+      not_started: number
+      non_completers: { id: string; student_id: string; name: string }[]
+    },
+    Error
+  >({
+    queryKey: [...keys.assessments, assessmentId ?? "", "completion"],
+    enabled: Boolean(assessmentId),
+    queryFn: async () => {
+      const { data } = await apiClient.get(
+        `/assessments/assessments/${assessmentId}/completion/`
+      )
+      return data
     },
   })
 }

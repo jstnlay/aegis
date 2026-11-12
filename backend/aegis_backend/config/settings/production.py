@@ -124,6 +124,23 @@ ALLOWED_HOSTS = PRODUCTION_ALLOWED_HOSTS
 SECRET_KEY = PRODUCTION_SECRET_KEY
 
 # ---------------------------------------------------------------------------
+# Field encryption is required in production
+#
+# The chatbot tables hold what a student actually typed. With no key, those
+# columns hold plain text and a database dump is a disclosure — which is the
+# gap this workstream set out to close. So in production the key is not
+# optional: the start-up check in apps.chatbot.checks refuses to run without
+# one.
+#
+# Generate a key with:
+#     python manage.py generate_encryption_key
+# and put it in the environment as FIELD_ENCRYPTION_KEYS (or the single-key
+# FIELD_ENCRYPTION_KEY).
+# ---------------------------------------------------------------------------
+
+FIELD_ENCRYPTION_REQUIRED = True
+
+# ---------------------------------------------------------------------------
 # Django admin site
 # ---------------------------------------------------------------------------
 #

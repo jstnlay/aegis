@@ -1,6 +1,8 @@
 import "./chatbot-panel.css"
-import { ArrowUp, Bot, Info, ShieldCheck, Sparkles, X } from "lucide-react"
-import { useEffect, useRef, useState, type FormEvent } from "react"
+import { ArrowUp, Bot, Info, ShieldAlert, ShieldCheck, Sparkles, X } from "lucide-react"
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react"
+
+import { useQueryClient } from "@tanstack/react-query"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -11,6 +13,9 @@ import { useAuth } from "@/features/auth/AuthContext"
 import {
   MAX_MESSAGE_LENGTH,
   suggestedPrompts,
+  useAcceptNotice,
+  useChatHistory,
+  useChatNotice,
   useSendChatMessage,
   type ChatMessage,
   type ChatResponse,
@@ -24,15 +29,21 @@ import { normalizeApiError } from "@/lib/error"
  * destination, so it opens over the current page instead of navigating away from
  * whatever the user was reading.
  *
- * What the panel does not pretend to be:
+ * What the panel does and does not pretend to be:
  *
  * - **It is not a conversation.** Each message is classified and answered on its
  *   own; there is no memory of earlier turns. The help text says so.
- * - **It is deterministic, not an LLM.** `policies.py` classifies with keyword
- *   tables and `service._deterministic_reply` answers from templates. A reply it
- *   cannot classify returns the "rephrase" fallback rather than a guess.
- * - **It does not persist anything.** The transcript is component state. Closing
- *   the panel discards it, and nothing is written to the database.
+ * - **It is deterministic first.** `policies.py` classifies with keyword tables
+ *   and `service._deterministic_reply` answers from templates. Gemini may
+ *   rewrite a reply for a message that is not sensitive, and may raise the
+ *   severity of one that is, but it never decides intent or routing.
+ * - **It stores what you send.** Every turn is written to `ChatMessage`, and a
+ *   message that trips the screening is written to a flag that Guidance sees.
+ *   That is stated in the panel, because a student who believes nothing is
+ *   stored cannot give informed consent to it.
+ * - **A student must accept the notice first.** Until the notice for the
+ *   current version is accepted, the panel shows the notice and refuses to
+ *   send.
  */
 /**
  * A message id that is stable and unique within the transcript.
@@ -56,6 +67,10 @@ export function ChatbotPanel({
 }) {
   const { user } = useAuth()
   const send = useSendChatMessage()
+  const noticeQuery = useChatNotice(open)
+  const acceptNotice = useAcceptNotice()
+  const historyQuery = useChatHistory(open)
+  const queryClient = useQueryClient()
 
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [draft, setDraft] = useState("")
@@ -72,18 +87,57 @@ export function ChatbotPanel({
     if (log) log.scrollTop = log.scrollHeight
   }, [messages, send.isPending])
 
+  /*
+   * The transcript is the server's history plus the turns sent in this sitting.
+   *
+   * Deriving it beats copying the history into state: the copy would have to
+   * be invalidated by an effect whenever the query resolves, and a stale copy
+   * would show a student a transcript that no longer matches the record.
+   *
+   * The local turn carries the server's `chat_message_id`, so when the history
+   * refetch brings the same turn back the two collapse into one entry instead
+   * of appearing twice.
+   */
+  const transcript = useMemo(() => {
+    const byId = new Map<string, ChatMessage>()
+    for (const entry of [...(historyQuery.data ?? [])].reverse()) {
+      byId.set(`h-${entry.id}-u`, {
+        id: `h-${entry.id}-u`,
+        role: "user",
+        text: entry.message,
+      })
+      if (entry.reply) {
+        byId.set(`h-${entry.id}-a`, {
+          id: `h-${entry.id}-a`,
+          role: "assistant",
+          text: entry.reply,
+        })
+      }
+    }
+    for (const message of messages) {
+      byId.set(message.id, message)
+    }
+    return [...byId.values()]
+  }, [historyQuery.data, messages])
+
   if (!open || !user) return null
 
   const prompts = suggestedPrompts(user.role)
   const blank = draft.trim().length === 0
   const tooLong = draft.trim().length > MAX_MESSAGE_LENGTH
 
+  const notice = noticeQuery.data
+  // Only a student is gated: the notice is about a student's own messages.
+  const mustAccept =
+    user.role === "student" && notice !== undefined && !notice.accepted
+
   async function submit(text: string) {
     const message = text.trim()
     if (
       message.length === 0 ||
       message.length > MAX_MESSAGE_LENGTH ||
-      send.isPending
+      send.isPending ||
+      mustAccept
     )
       return
 
@@ -97,18 +151,29 @@ export function ChatbotPanel({
 
     try {
       const response = await send.mutateAsync({ message })
+      // The server's id for the turn, so the local copy and the history copy
+      // collapse into one entry when the history refetch brings it back.
+      const turnId = response.data.chat_message_id ?? nextMessageId("u")
       setMessages((current) => [
-        ...current,
+        ...current.map((entry) =>
+          entry.id === userMessage.id ? { ...entry, id: `h-${turnId}-u` } : entry,
+        ),
         {
-          id: nextMessageId("a"),
+          id: `h-${turnId}-a`,
           role: "assistant",
           text: response.reply,
           response,
         },
       ])
-    } catch {
-      // Surfaced from `send.isError` below. The user's message stays in the
-      // transcript so they can see what was not answered.
+      void queryClient.invalidateQueries({ queryKey: ["chatbot", "history"] })
+    } catch (error) {
+      // 428 means the notice was not accepted, or the version changed since
+      // the panel loaded it. Refreshing the notice brings the gate back.
+      if (normalizeApiError(error).status === 428) {
+        void queryClient.invalidateQueries({ queryKey: ["chatbot", "notice"] })
+      }
+      // Anything else is surfaced from `send.isError` below. The user's message
+      // stays in the transcript so they can see what was not answered.
     }
   }
 
@@ -166,7 +231,25 @@ export function ChatbotPanel({
               text: `Hi${user.first_name?.trim() ? `, ${user.first_name.trim()}` : ""}! ${user.role === "student" || user.role === "parent" ? "I can help with grades, attendance, and learning resources. What would you like to check?" : "Need a hand finding something in AEGIS? Ask me about the tools available to you."}`,
             }}
           />
-          {messages.length === 0 ? (
+          {mustAccept ? (
+            <div className="aegis-chat-quick-replies" role="group" aria-label="Student notice">
+              <p>Student notice (version {notice?.version ?? ""})</p>
+              <p>{notice?.text}</p>
+              <button
+                type="button"
+                disabled={acceptNotice.isPending}
+                onClick={() => void acceptNotice.mutate({})}
+              >
+                {acceptNotice.isPending
+                  ? "Accepting…"
+                  : "I accept this notice, and I understand my messages are stored and screened."}
+              </button>
+              {acceptNotice.isError ? (
+                <p>{normalizeApiError(acceptNotice.error).message}</p>
+              ) : null}
+            </div>
+          ) : null}
+          {transcript.length === 0 && !mustAccept ? (
             <div className="aegis-chat-quick-replies">
               <p>Choose a question to get started</p>
               {prompts.map((prompt) => (
@@ -181,7 +264,7 @@ export function ChatbotPanel({
               ))}
             </div>
           ) : null}
-          {messages.map((message) => (
+          {transcript.map((message) => (
             <ChatBubble key={message.id} message={message} />
           ))}
           {send.isPending ? (
@@ -213,6 +296,7 @@ export function ChatbotPanel({
             value={draft}
             maxLength={MAX_MESSAGE_LENGTH}
             placeholder="Ask AEGIS anything about school..."
+            disabled={mustAccept}
             aria-invalid={tooLong || undefined}
             aria-describedby={
               tooLong ? "chatbot-message-error" : "chatbot-message-hint"
@@ -239,7 +323,7 @@ export function ChatbotPanel({
             <Button
               type="submit"
               className="aegis-chat-send"
-              disabled={blank || tooLong || send.isPending}
+              disabled={blank || tooLong || send.isPending || mustAccept}
               aria-label={send.isPending ? "Sending message" : "Send message"}
             >
               <ArrowUp aria-hidden="true" />
@@ -258,8 +342,10 @@ export function ChatbotPanel({
             </summary>
             <p>
               This assistant answers supported questions individually and does
-              not remember earlier messages. This chat clears when you close the
-              panel. For urgent concerns, contact Guidance directly.
+              not remember earlier messages. Everything you type here is stored
+              so a guidance counselor can review a safety concern, and it is
+              screened by an automated keyword check. For urgent concerns,
+              contact Guidance directly.
             </p>
           </details>
           <span className="aegis-chat-footnote">
@@ -309,8 +395,15 @@ function ResponseDetail({ response }: { response: ChatResponse }) {
   const grades = response.data.grade_summary
   const attendance = response.data.attendance_summary
   const resources = response.data.resources ?? []
+  const flag = response.data.flag
 
-  if (!grades && !attendance && resources.length === 0 && !response.escalated) {
+  if (
+    !grades &&
+    !attendance &&
+    resources.length === 0 &&
+    !response.escalated &&
+    !flag
+  ) {
     return null
   }
 
@@ -348,11 +441,16 @@ function ResponseDetail({ response }: { response: ChatResponse }) {
       ) : null}
 
       {/*
-        An escalation means a real Guidance notification was dispatched
-        (FR-031). Saying so is important: the reply text is a template, and only
-        this fact tells the user something was actually done.
+        A flag means a guidance counselor has been told. Saying so is
+        important: the reply text is a template, and only this fact tells the
+        user that something was actually done.
       */}
-      {response.escalated ? (
+      {flag ? (
+        <p className="flex items-center gap-1 font-medium">
+          <ShieldAlert aria-hidden="true" />
+          A guidance counselor has been notified.
+        </p>
+      ) : response.escalated ? (
         <Badge variant="destructive">Notified Guidance</Badge>
       ) : null}
     </div>

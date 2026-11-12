@@ -179,6 +179,18 @@ const AdminSettingsPage = lazyPage(
   () => import("@/features/admin/AdminSettingsPage"),
   "AdminSettingsPage"
 )
+const AdminChatbotPage = lazyPage(
+  () => import("@/features/admin/AdminChatbotPage"),
+  "AdminChatbotPage"
+)
+const ChatFlagsPage = lazyPage(
+  () => import("@/features/guidance/ChatFlagsPage"),
+  "ChatFlagsPage"
+)
+const FacultyChatFlagsPage = lazyPage(
+  () => import("@/features/faculty/FacultyChatFlagsPage"),
+  "FacultyChatFlagsPage"
+)
 
 export const appRoutes: RouteObject[] = [
   { path: "/", element: <LandingPage /> },
@@ -561,6 +573,43 @@ export const appRoutes: RouteObject[] = [
             element: (
               <RequireRole allowedRoles={["admin"]}>
                 <AdminAuditPage />
+              </RequireRole>
+            ),
+          },
+          {
+            /*
+             * The guidance flag inbox. Guidance is the only role that sees the
+             * message text behind a flag, so the route is guidance-only.
+             */
+            path: "guidance/flags",
+            element: (
+              <RequireRole allowedRoles={["guidance"]}>
+                <ChatFlagsPage />
+              </RequireRole>
+            ),
+          },
+          {
+            /*
+             * The faculty flag feed. `FacultyFlagSerializer` carries severity
+             * and status and nothing else — no student, no message, no
+             * categories — so the page has no content to leak.
+             */
+            path: "faculty/flags",
+            element: (
+              <RequireRole allowedRoles={["faculty"]}>
+                <FacultyChatFlagsPage />
+              </RequireRole>
+            ),
+          },
+          {
+            /*
+             * The administrator's chatbot safety console: screening counts, the
+             * model status, the Layer 1 terms and the acknowledgment timer.
+             */
+            path: "admin/chatbot",
+            element: (
+              <RequireRole allowedRoles={["admin"]}>
+                <AdminChatbotPage />
               </RequireRole>
             ),
           },

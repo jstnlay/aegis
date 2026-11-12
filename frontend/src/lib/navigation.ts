@@ -11,6 +11,7 @@ import {
   Megaphone,
   Settings,
   Shield,
+  ShieldAlert,
   Upload,
   UserCog,
   Users,
@@ -491,6 +492,50 @@ const STUDENTS: NavItem = {
 }
 
 /**
+ * The guidance flag inbox.
+ *
+ * `GET /chatbot/flags/` returns the full flag — student, message, reply,
+ * categories and action history — to guidance and admin, so this is the one
+ * surface where a sensitive chatbot conversation can be read.
+ */
+const GUIDANCE_CHAT_FLAGS: NavItem = {
+  route: "guidance/flags",
+  label: "Chat Flags",
+  icon: ShieldAlert,
+  allowedRoles: ["guidance"],
+  status: "available",
+}
+
+/**
+ * The faculty flag feed.
+ *
+ * `FacultyFlagSerializer` carries only `id`, `severity`, `status` and the
+ * three timestamps. A teacher is told that support is in motion for a student
+ * in their class and nothing else.
+ */
+const FACULTY_CHAT_FLAGS: NavItem = {
+  route: "faculty/flags",
+  label: "Support Flags",
+  icon: ShieldAlert,
+  allowedRoles: ["faculty"],
+  status: "available",
+}
+
+/**
+ * The administrator's chatbot safety console.
+ *
+ * Screening counts, the Layer 2 model status, the Layer 1 keyword terms and
+ * the acknowledgment timer.
+ */
+const ADMIN_CHATBOT: NavItem = {
+  route: "admin/chatbot",
+  label: "Chatbot Safety",
+  icon: ShieldAlert,
+  allowedRoles: ["admin"],
+  status: "available",
+}
+
+/**
  * PH11.9 built the settings page for every role.
  *
  * `AccountSettingsPage` reads `GET/PATCH /accounts/me/` (self-scoped),
@@ -596,6 +641,7 @@ const FACULTY_NAVIGATION: readonly NavGroup[] = [
       FACULTY_ADVISORY,
       FACULTY_ASSESSMENTS,
       FACULTY_IMPORT,
+      FACULTY_CHAT_FLAGS,
       REPORTS,
     ],
   },
@@ -610,6 +656,7 @@ const GUIDANCE_NAVIGATION: readonly NavGroup[] = [
       CONSULTATIONS,
       INTERVENTIONS,
       STUDENTS,
+      GUIDANCE_CHAT_FLAGS,
       GUIDANCE_ASSESSMENTS,
       REPORTS,
     ],
@@ -635,6 +682,7 @@ const ADMIN_NAVIGATION: readonly NavGroup[] = [
       ADMIN_SETTINGS,
       ADMIN_CMS,
       ADMIN_AUDIT,
+      ADMIN_CHATBOT,
       REPORTS,
     ],
   },
@@ -733,6 +781,9 @@ export function getPageTitle(pathname: string): string {
     ADMIN_DATA,
     ADMIN_CMS,
     ADMIN_AUDIT,
+    ADMIN_CHATBOT,
+    GUIDANCE_CHAT_FLAGS,
+    FACULTY_CHAT_FLAGS,
   ]
 
   const match = allItems

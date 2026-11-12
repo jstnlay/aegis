@@ -30,6 +30,24 @@ DATABASES = {
 }
 
 # ---------------------------------------------------------------------------
+# The test suite never calls Gemini.
+#
+# `base.py` reads `GEMINI_API_KEY` and `GEMINI_API_KEYS` from `backend/.env`,
+# and that file is read for the test settings too. Without these lines the
+# suite would make real API calls: slow, flaky, dependent on the school's
+# quota, and — worse — it would spend it. A test that depends on a third
+# party's availability is not a test.
+#
+# With the keys blank, `gemini_client.configured()` is False, Layer 2 does
+# not run, and every assertion is about the deterministic layer and the mocked
+# model paths. The tests that need a model patch it.
+# ---------------------------------------------------------------------------
+GEMINI_API_KEY = ""
+GEMINI_API_KEYS = ""
+GEMINI_MODEL = "gemini-test-model"
+
+
+# ---------------------------------------------------------------------------
 # Speed up password hashing in tests
 # ---------------------------------------------------------------------------
 #

@@ -1675,7 +1675,10 @@ class SystemSettingSeedTest(TestCase):
     def test_every_registered_setting_is_seeded_with_its_default(self):
         for key, definition in SETTING_DEFINITIONS.items():
             row = SystemSetting.objects.get(key=key)
-            self.assertEqual(int(row.value), definition["default"])
+            # `coerce` applies the type the registry declares, so an integer
+            # setting is compared as an integer and a text setting — the chatbot
+            # notice and its version — is compared as the text it is.
+            self.assertEqual(coerce(key, row.value), definition["default"])
             self.assertTrue(row.description)
 
     def _seed(self):

@@ -59,6 +59,7 @@ def submit_registration(
     full_name: str,
     password: str,
     student_code: str = "",
+    notice_version: str = "",
 ) -> tuple[RegistrationRequest | None, str]:
     """
     Record a registration request and mail the verification link.
@@ -93,6 +94,8 @@ def submit_registration(
         verification_token_hash=hash_token(raw_token),
         verification_expires_at=timezone.now()
         + timezone.timedelta(hours=VERIFICATION_LIFETIME_HOURS),
+        notice_version=notice_version,
+        notice_accepted_at=timezone.now() if notice_version else None,
     )
     send_verification_email(request, raw_token)
     return request, raw_token
@@ -176,6 +179,15 @@ def approve_registration(
             enrollment_date=timezone.localdate(),
             is_active=True,
         )
+
+        if request.notice_version:
+            from apps.chatbot.models import AgreementAcceptance
+
+            AgreementAcceptance.objects.get_or_create(
+                user=user,
+                notice_version=request.notice_version,
+                defaults={"accepted_at": request.notice_accepted_at or timezone.now()},
+            )
 
         request.status = RegistrationRequest.Status.APPROVED
         request.reviewed_by = reviewer

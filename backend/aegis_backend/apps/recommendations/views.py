@@ -42,7 +42,8 @@ class RecommendationsView(APIView):
 
         from apps.accounts.models import StudentProfile
         from apps.cms.models import LearningItem, StudentInteraction
-        from ai_engine.recommender import recommend
+        from ai_engine.recommender import explain_recommendations, recommend
+        from ai_engine.resolver import extract_academic_needs
 
         student = get_object_or_404(StudentProfile, pk=student_id)
 
@@ -74,6 +75,16 @@ class RecommendationsView(APIView):
             learning_items,
             feature_dict=features,
             prediction=prediction,
+        )
+
+        # Gemini writes the reason for each item when it is available; the
+        # deterministic reason stays in place when it is not.
+        try:
+            needs = extract_academic_needs(features, prediction)
+        except Exception:
+            needs = []
+        result["recommendations"] = explain_recommendations(
+            result["recommendations"], method=result["method"], needs=needs
         )
 
         return Response({"status": "ok", "data": result})

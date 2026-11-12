@@ -391,6 +391,62 @@ SIMPLE_JWT = {
 # (password reset, account invitation) is built from this base URL.
 AEGIS_FRONTEND_URL = config("AEGIS_FRONTEND_URL", default="http://127.0.0.1:5173")
 
+# ---------------------------------------------------------------------------
+# Field encryption for student free text
+#
+# Chat messages, assistant replies, flag summaries and private case notes are
+# stored encrypted (AES-SIV). Keys live in the environment, never in the
+# database. The first key encrypts; every key decrypts, which is what makes a
+# rotation possible. Format: "key_id:base64key,key_id2:base64key2".
+# ---------------------------------------------------------------------------
+FIELD_ENCRYPTION_KEYS = config("FIELD_ENCRYPTION_KEYS", default="")
+
+#: Single-key shortcut, treated as the key id "default".
+FIELD_ENCRYPTION_KEY = config("FIELD_ENCRYPTION_KEY", default="")
+
+#: When true, a deployment refuses to start without a field encryption key.
+#: Production turns this on; development and the test suite leave it off so
+#: they work with no key at all.
+FIELD_ENCRYPTION_REQUIRED = config(
+    "FIELD_ENCRYPTION_REQUIRED", default=False, cast=bool
+)
+
+# ---------------------------------------------------------------------------
+# Gemini (chatbot Layer 2, assessment drafting, recommendation explanations)
+#
+# Key is environment-only. Never commit a value.
+#
+# The default is gemini-3.8-flash because gemini-2.5-flash is no longer
+# available to new API users: the API answers 404 ("This model ... is no
+# longer available to new users") for it. The school still has to approve
+# which model its students' text may be sent to — that approval is a policy
+# decision, not a technical one, and is recorded in DECISIONS.md.
+# ---------------------------------------------------------------------------
+GEMINI_API_KEY = config("GEMINI_API_KEY", default="")
+#: Fallback keys, comma- or whitespace-separated. The client moves to the next
+#: one when a key is rate limited or has spent its quota. A key is never
+#: logged, never stored and never reaches the frontend.
+GEMINI_API_KEYS = config("GEMINI_API_KEYS", default="")
+GEMINI_MODEL = config("GEMINI_MODEL", default="gemini-3.8-flash")
+
+#: Fallback models, comma- or whitespace-separated. A model can be saturated
+#: ("503 — This model is currently experiencing high demand") while the account
+#: is healthy, so the client tries the next model rather than the next key.
+#: The school should approve this list too: it decides which models may see
+#: student text.
+GEMINI_MODEL_FALLBACKS = config(
+    "GEMINI_MODEL_FALLBACKS", default="gemini-3.5-flash-lite,gemini-3.1-flash-lite"
+)
+
+#: Per-request HTTP timeout for a Gemini call, in seconds. A student waiting
+#: on a chat must not wait on a stalled model call: Layer 1 already has the
+#: answer, so the request gives up and the deterministic layer answers.
+GEMINI_TIMEOUT_SECONDS = config("GEMINI_TIMEOUT_SECONDS", default=15)
+
+#: Total budget for one Gemini call, retries included. The client stops
+#: starting new attempts once this is spent.
+GEMINI_DEADLINE_SECONDS = config("GEMINI_DEADLINE_SECONDS", default=30)
+
 #: The address outgoing mail is sent from. Without it, Django uses the
 # webserver's own account, which is usually not a deliverable address.
 DEFAULT_FROM_EMAIL = config(

@@ -74,6 +74,11 @@ describe("role navigation configuration", () => {
       "schedule",
       // Reports compiles the controlled exports each role is authorized for
       "reports",
+      // Chatbot safety surfaces: the guidance flag inbox, the content-blind
+      // faculty feed and the administrator's console.
+      "guidance/flags",
+      "faculty/flags",
+      "admin/chatbot",
     ]
 
     for (const role of ROLES) {
@@ -261,6 +266,7 @@ describe("role navigation configuration", () => {
         "consultations",
         "interventions",
         "students",
+        "guidance/flags",
       ]) {
         expect(available, `${role} / ${route}`).not.toContain(route)
       }
@@ -416,6 +422,7 @@ describe("route visibility", () => {
         "admin/settings",
         "admin/cms",
         "admin/audit",
+        "admin/chatbot",
       ]) {
         expect(available, `${role} / ${route}`).not.toContain(route)
       }

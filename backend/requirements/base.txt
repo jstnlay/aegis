@@ -12,3 +12,9 @@ openpyxl>=3.1,<4.0
 # Phase 9: ML analytics dependencies.
 scikit-learn>=1.9,<2.0
 numpy>=2.5,<3.0
+
+# Gemini: Layer 2 classification, assessment drafting, explanations.
+google-genai>=1.0,<2.0
+
+# Field encryption of student free text (AES-SIV).
+cryptography>=42,<51

@@ -1,4 +1,10 @@
-import { useMutation } from "@tanstack/react-query"
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type UseQueryResult,
+} from "@tanstack/react-query"
+
 import { apiClient } from "@/lib/api"
 
 /**
@@ -10,14 +16,21 @@ import { apiClient } from "@/lib/api"
  * Faculty, guidance and admin are allowed only greeting/help/navigation/unknown,
  * so they get a working but narrow assistant.
  *
- * The bot is stateless and deterministic. `POST /chatbot/message/` classifies
- * with the keyword tables in `policies.py` and answers from templates; there is
- * no LLM on this path (`views.py` passes `use_llm=False`). It recognises a fixed
- * set of intents and does not hold a conversation, so the UI states that rather
- * than implying a free-form conversation.
+ * What changed with the safety work:
  *
- * Nothing is persisted: the transcript lives in component state for the life of
- * the page and is sent nowhere but this endpoint.
+ * - **Turns are persisted.** `POST /chatbot/message/` writes a `ChatMessage`
+ *   row, and `GET /chatbot/history/` returns the caller's own turns. The
+ *   panel restores that history when it opens.
+ * - **Turns are screened.** The server runs two detection layers and, when a
+ *   message is sensitive, creates a flag that Guidance sees. The panel tells
+ *   the student that, because a student who believes nothing was stored cannot
+ *   give informed consent.
+ * - **A student must accept the notice first.** Until they do, the endpoint
+ *   answers HTTP 428 with the notice, and the panel shows it.
+ *
+ * The deterministic layer in `policies.py` remains authoritative: Gemini may
+ * rewrite a non-sensitive reply, and may raise a severity, but it never
+ * decides intent, urgency, routing or what a sensitive reply says.
  */
 
 export type ChatIntent =
@@ -43,6 +56,8 @@ export type ChatIntent =
 
 export type ChatUrgency = "normal" | "elevated" | "urgent"
 
+export type ChatSeverity = "low" | "medium" | "high" | "critical"
+
 export interface EscalationInfo {
   status: string
   escalation_key: string
@@ -54,6 +69,25 @@ export interface ChatPayload {
   attendance_summary?: AttendanceSummary
   resources?: LearningResource[]
   escalation?: EscalationInfo
+  safety?: ChatSafety
+  flag?: ChatFlagRef
+  chat_message_id?: string
+  [key: string]: unknown
+}
+
+/** What the two detection layers decided about one message. */
+export interface ChatSafety {
+  severity: ChatSeverity
+  categories: string[]
+  manual_review: boolean
+}
+
+/** The flag created for a sensitive message, as the student is allowed to see it. */
+export interface ChatFlagRef {
+  id: string
+  severity: ChatSeverity
+  status: string
+  manual_review: boolean
 }
 
 export interface GradeSummary {
@@ -90,6 +124,28 @@ export interface ChatResponse {
   safe_fallback: boolean
 }
 
+/** The student-facing chatbot notice. */
+export interface ChatNotice {
+  version: string
+  text: string
+  accepted: boolean
+  accepted_at?: string | null
+}
+
+/** A persisted turn, as `GET /chatbot/history/` returns it. */
+export interface ChatHistoryEntry {
+  id: string
+  message: string
+  reply: string
+  intent: string
+  urgency: string
+  severity: ChatSeverity
+  sensitive: boolean
+  manual_review: boolean
+  created_at: string
+  flag_id?: string | null
+}
+
 /** One entry in the on-screen transcript. */
 export interface ChatMessage {
   id: string
@@ -106,6 +162,7 @@ interface ChatWireResponse {
   data: ChatPayload
   escalated?: boolean
   safe_fallback?: boolean
+  notice?: ChatNotice
 }
 
 /** Server limits: `ChatMessageRequestSerializer` rejects a blank or >2000 char message. */
@@ -143,5 +200,85 @@ export function useSendChatMessage() {
         safe_fallback: Boolean(data.safe_fallback),
       }
     },
+  })
+}
+
+/* ------------------------------------------------------------------ */
+/* Notice and history                                                   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The current notice and whether the caller has accepted it.
+ *
+ * Only a student is gated by the notice, but every role can read it: the
+ * panel shows the same text to everyone, because it describes the assistant
+ * rather than a student-only right.
+ */
+export function useChatNotice(enabled = true): UseQueryResult<ChatNotice> {
+  return useQuery({
+    queryKey: ["chatbot", "notice"],
+    queryFn: async () => {
+      const { data } = await apiClient.get<ChatNotice>("/chatbot/notice/")
+      return data
+    },
+    enabled,
+    retry: false,
+  })
+}
+
+/** Accept the current notice version. */
+export function useAcceptNotice() {
+  const queryClient = useQueryClient()
+  return useMutation<
+    { detail: string; version: string; accepted_at: string },
+    Error,
+    { version?: string }
+  >({
+    mutationFn: async ({ version }) => {
+      const { data } = await apiClient.post<{
+        detail: string
+        version: string
+        accepted_at: string
+      }>("/chatbot/notice/", version ? { version } : {})
+      return data
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["chatbot", "notice"] })
+    },
+  })
+}
+
+/**
+ * The public notice text, read before sign-up.
+ *
+ * `GET /chatbot/notice/public/` needs no token, so the registration form can
+ * show the student what they are agreeing to before an account exists.
+ */
+export function usePublicNotice(enabled = true) {
+  return useQuery({
+    queryKey: ["chatbot", "notice", "public"],
+    queryFn: async () => {
+      const { data } = await apiClient.get<{ version: string; text: string }>(
+        "/chatbot/notice/public/"
+      )
+      return data
+    },
+    enabled,
+    retry: false,
+  })
+}
+
+/** The caller's own persisted turns, newest first. */
+export function useChatHistory(enabled = true) {
+  return useQuery({
+    queryKey: ["chatbot", "history"],
+    queryFn: async () => {
+      const { data } = await apiClient.get<{ results: ChatHistoryEntry[] }>(
+        "/chatbot/history/"
+      )
+      return data.results ?? []
+    },
+    enabled,
+    retry: false,
   })
 }

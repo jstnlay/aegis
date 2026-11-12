@@ -48,6 +48,75 @@ SETTING_DEFINITIONS: dict[str, dict[str, Any]] = {
             "guidance dashboard."
         ),
     },
+    "chatbot.acknowledgment_timer_minutes": {
+        "default": 15,
+        "description": (
+            "Minutes Guidance has to acknowledge a sensitive-message flag "
+            "before it is escalated to administrators. A per-severity value "
+            "below overrides this one."
+        ),
+    },
+    "chatbot.acknowledgment_timer_minutes.critical": {
+        "default": "",
+        "description": (
+            "Acknowledgment window for critical flags, in minutes. Blank "
+            "means use chatbot.acknowledgment_timer_minutes."
+        ),
+    },
+    "chatbot.acknowledgment_timer_minutes.high": {
+        "default": "",
+        "description": (
+            "Acknowledgment window for high flags, in minutes. Blank means "
+            "use chatbot.acknowledgment_timer_minutes."
+        ),
+    },
+    "chatbot.acknowledgment_timer_minutes.medium": {
+        "default": "",
+        "description": (
+            "Acknowledgment window for medium flags, in minutes. Blank means "
+            "use chatbot.acknowledgment_timer_minutes."
+        ),
+    },
+    "chatbot.acknowledgment_timer_minutes.low": {
+        "default": "",
+        "description": (
+            "Acknowledgment window for low flags, in minutes. Blank means use "
+            "chatbot.acknowledgment_timer_minutes."
+        ),
+    },
+    "chatbot.retention_days": {
+        "default": 0,
+        "description": (
+            "Days to keep chatbot messages and closed flags. 0 keeps "
+            "everything. manage.py purge_chatbot_data applies it; open "
+            "flags are never deleted."
+        ),
+    },
+    "chatbot.notice_version": {
+        "default": "2026-11-01",
+        "description": (
+            "Version of the student chatbot notice. Changing this value "
+            "requires every student to accept the notice again."
+        ),
+    },
+    "chatbot.notice_text": {
+        "default": (
+            "AEGIS stores chatbot messages so a guidance counselor can review "
+            "a safety concern. Messages are screened by an automated keyword "
+            "layer and may be classified by Gemini, a third-party AI service. "
+            "Only the message text is sent for classification; your name, "
+            "student number and school records are not. You can ask a "
+            "counselor what was stored about you."
+        ),
+        "description": "Student-facing chatbot privacy and data notice.",
+    },
+    "chatbot.faculty_notifications_enabled": {
+        "default": "true",
+        "description": (
+            "Whether faculty receive a content-free notice when a student in "
+            "their class has a high or critical flag."
+        ),
+    },
 }
 
 

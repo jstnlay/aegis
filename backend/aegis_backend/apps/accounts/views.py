@@ -497,6 +497,7 @@ class RegistrationSubmitView(APIView):
             full_name=data["full_name"],
             password=data["password"],
             student_code=data.get("student_code", ""),
+            notice_version=data.get("notice_version", ""),
         )
         if request_row is not None:
             try:

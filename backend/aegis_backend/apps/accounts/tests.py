@@ -2702,12 +2702,16 @@ class StudentRegistrationTest(TestCase):
         cache.clear()
 
     def _submit(self, **overrides):
+        from apps.chatbot.agreements import notice_version
+
         payload = {
             "full_name": "Juan Dela Cruz",
             "email": "juan@example.com",
             "student_code": "AEGIS-QA-S0001",
             "password": "brandnewpass1",
             "confirm_password": "brandnewpass1",
+            "notice_accepted": True,
+            "notice_version": notice_version(),
         }
         payload.update(overrides)
         return self.client.post(self.submit_url, payload, format="json")

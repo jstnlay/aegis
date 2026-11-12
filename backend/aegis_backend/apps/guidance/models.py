@@ -11,6 +11,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
+from core.fields import EncryptedTextField
 from core.models import TimestampedModel
 
 
@@ -37,7 +38,10 @@ class BehavioralNote(TimestampedModel):
         related_name="behavioral_notes",
     )
     note_type = models.CharField(max_length=10, choices=NoteType.choices)
-    note_text = models.TextField()
+    # A teacher's observation about a student. Encrypted at rest: it is
+    # narrative about a child, and it is the kind of text a database dump
+    # should not carry in the clear.
+    note_text = EncryptedTextField()
     date_recorded = models.DateField()
 
     class Meta(TimestampedModel.Meta):
@@ -106,8 +110,11 @@ class ConsultationRecord(TimestampedModel):
             "Valid values: academic, behavioral, emotional, family, bullying, other."
         ),
     )
-    session_notes = models.TextField()
-    recommendations = models.TextField(blank=True, null=True)
+    # A counselor's session notes. This is the most sensitive text the
+    # application holds — it is a clinical narrative about a child — so it is
+    # encrypted at rest.
+    session_notes = EncryptedTextField()
+    recommendations = EncryptedTextField(blank=True, null=True)
     next_session_date = models.DateField(blank=True, null=True)
     priority_level = models.CharField(
         max_length=10, choices=PriorityLevel.choices
@@ -521,7 +528,9 @@ class InterventionStep(TimestampedModel):
         related_name="steps",
     )
     title = models.CharField(max_length=255)
-    description = models.TextField()
+    # What a counselor plans to do for a student. Narrative about a child, so
+    # it is encrypted at rest like the notes it sits between.
+    description = EncryptedTextField()
     status = models.CharField(
         max_length=15,
         choices=Status.choices,
@@ -556,7 +565,7 @@ class ProgressNote(TimestampedModel):
         on_delete=models.CASCADE,
         related_name="progress_notes",
     )
-    note_text = models.TextField()
+    note_text = EncryptedTextField()
     recorded_by = models.ForeignKey(
         "accounts.GuidanceProfile",
         on_delete=models.PROTECT,

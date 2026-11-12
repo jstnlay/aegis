@@ -436,11 +436,29 @@ class RegistrationRequestSerializer(serializers.Serializer):
     )
     password = serializers.CharField(write_only=True, min_length=8)
     confirm_password = serializers.CharField(write_only=True)
+    notice_accepted = serializers.BooleanField()
+    notice_version = serializers.CharField(max_length=40)
 
     def validate(self, attrs):
         if attrs["password"] != attrs["confirm_password"]:
             raise serializers.ValidationError(
                 {"confirm_password": "The two passwords do not match."}
+            )
+        from apps.chatbot.agreements import notice_version
+
+        current = notice_version()
+        if not attrs.get("notice_accepted"):
+            raise serializers.ValidationError(
+                {"notice_accepted": "You must accept the student notice."}
+            )
+        if attrs.get("notice_version") != current:
+            raise serializers.ValidationError(
+                {
+                    "notice_version": (
+                        "The notice changed. Reload the page and accept the "
+                        "current version."
+                    )
+                }
             )
         return attrs
 

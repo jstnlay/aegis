@@ -316,3 +316,110 @@ def recommend(
         "fallback_used": True,
         "fallback_reason": "cf not eligible",
     }
+
+
+# ---------------------------------------------------------------------------
+# Explanations
+# ---------------------------------------------------------------------------
+
+#: The deterministic reason used when Gemini is unavailable. Every item gets
+#: one, so a recommendation is never returned without a stated reason.
+DETERMINISTIC_REASONS = {
+    "cf": "Similar to items this student interacted with",
+    "content_based": "Matched to an identified academic need",
+}
+
+
+def explain_recommendations(
+    recommendations: list[dict[str, Any]],
+    *,
+    method: str,
+    needs: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """
+    Attach a human-readable reason to each recommendation.
+
+    Gemini writes the reason when it is available; the deterministic reason
+    stays in place when it is not, or when the model returns nothing usable.
+    A recommendation without a reason would be a recommendation the student
+    cannot act on, so the fallback is not optional.
+
+    Privacy: only the item's own title, type and topic, plus the method and
+    the academic needs, are sent. No student name, id, grade or record is
+    included, so the prompt cannot carry an identifier even by accident.
+    """
+    fallback = DETERMINISTIC_REASONS.get(method, "Recommended for this student")
+    for row in recommendations:
+        row.setdefault("reason", fallback)
+        row.setdefault("reason_source", "deterministic")
+
+    if not recommendations:
+        return recommendations
+
+    from apps.chatbot import gemini_client
+
+    if not gemini_client.configured():
+        return recommendations
+
+    schema = {
+        "type": "object",
+        "properties": {
+            "reasons": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "learning_item_id": {"type": "string"},
+                        "reason": {"type": "string"},
+                    },
+                    "required": ["learning_item_id", "reason"],
+                },
+            }
+        },
+        "required": ["reasons"],
+    }
+
+    item_lines = "\n".join(
+        f"- id={row.get('learning_item_id')} title={row.get('title')} "
+        f"type={row.get('item_type')} topic={row.get('topic') or 'general'}"
+        for row in recommendations
+    )
+    need_lines = "\n".join(
+        f"- {need.get('need_type')}: {need.get('topic') or need.get('subject_id') or 'general'}"
+        for need in (needs or [])
+    )
+    prompt = (
+        f"Recommendation method: {method}.\n"
+        f"Academic needs:\n{need_lines or '- none recorded'}\n"
+        f"Candidate items:\n{item_lines}\n"
+        "Explain in one short sentence each why the item helps a student. "
+        "Do not name the student, do not cite grades or attendance numbers, "
+        "and do not invent facts about the item."
+    )
+
+    try:
+        result = gemini_client.generate_json(
+            prompt=prompt,
+            schema=schema,
+            system_instruction=(
+                "You explain learning recommendations to a student. Return "
+                "only the JSON payload."
+            ),
+            temperature=0.3,
+        )
+    except Exception as exc:
+        logger.warning("Gemini recommendation explanation failed: %s", type(exc).__name__)
+        return recommendations
+
+    explanations = {
+        str(item.get("learning_item_id")): str(item.get("reason") or "").strip()
+        for item in (result.get("reasons") or [])
+        if isinstance(item, dict)
+    }
+    for row in recommendations:
+        reason = explanations.get(str(row.get("learning_item_id")), "")
+        if reason:
+            row["reason"] = reason[:300]
+            row["reason_source"] = "gemini"
+    return recommendations
+

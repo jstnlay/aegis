@@ -18,9 +18,16 @@ from apps.chatbot.question_generator import (
     QuestionGenerationError,
     generate_question_drafts,
 )
+from .generation import (
+    AssessmentGenerationError,
+    generate_academic_assessment,
+    review_assessment,
+)
 
 from .models import Assessment, AssessmentQuestion, AssessmentResult
 from .serializers import (
+    AssessmentGenerationSerializer,
+    AssessmentReviewSerializer,
     AssessmentSerializer,
     AssessmentListSerializer,
     AssessmentQuestionSerializer,
@@ -35,6 +42,7 @@ from .permissions import (
     CanSubmitAssessment,
 )
 from .utils import (
+    _get_targeted_students,
     auto_grade_assessment,
     notify_assessment_deployment,
     notify_assessment_completion,
@@ -98,7 +106,7 @@ class AssessmentViewSet(viewsets.ModelViewSet):
         """Dynamic permissions based on action."""
         if self.action == 'create':
             return [IsAuthenticated(), CanCreateAssessment()]
-        elif self.action in ['update', 'partial_update', 'destroy', 'deploy']:
+        elif self.action in ['update', 'partial_update', 'destroy', 'deploy', 'review']:
             return [IsAuthenticated(), IsAssessmentCreator()]
         return [IsAuthenticated()]
     
@@ -195,6 +203,22 @@ class AssessmentViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        # An AI-generated draft carries a human-review gate. Check it before
+        # the question gate so the answer names the blocking reason.
+        if (
+            assessment.ai_generated
+            and assessment.review_status != Assessment.ReviewStatus.APPROVED
+        ):
+            return Response(
+                {
+                    "detail": (
+                        "This AI-generated assessment must be reviewed and "
+                        "approved before it can be published."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         # Validation gate: required questions must exist before deployment
         if not assessment.questions.exists():
             return Response(
@@ -210,6 +234,136 @@ class AssessmentViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(assessment)
         return Response(serializer.data)
+
+    @action(detail=False, methods=['post'], url_path='generate-draft')
+    def generate_draft(self, request):
+        """Draft an AI assessment for human review; never publishes it."""
+        if request.user.role != "faculty":
+            raise PermissionDenied(
+                {"detail": "Assessment generation is available to faculty."}
+            )
+
+        serializer = AssessmentGenerationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        allowed_sections, allowed_students = self._faculty_scope(request.user)
+        sections = data.get("target_sections") or []
+        students = data.get("target_students") or []
+        if any(section not in allowed_sections for section in sections):
+            raise PermissionDenied(
+                {"detail": "You can only target sections you teach or advise."}
+            )
+        if any(student not in allowed_students for student in students):
+            raise PermissionDenied(
+                {"detail": "You can only target students in your own sections."}
+            )
+
+        try:
+            assessment, source = generate_academic_assessment(
+                user=request.user,
+                title=data.get("title") or "",
+                topic=data["topic"],
+                question_type=data["question_type"],
+                count=data["count"],
+                target_sections=sections,
+                target_students=students,
+            )
+        except AssessmentGenerationError as exc:
+            return Response(
+                {"detail": exc.detail, "code": exc.code},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        payload = AssessmentSerializer(
+            assessment, context={"request": request}
+        ).data
+        payload["generation_source"] = source
+        return Response(payload, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'])
+    def review(self, request, pk=None):
+        """Approve an AI draft or send it back for changes."""
+        assessment = self.get_object()
+        serializer = AssessmentReviewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            review_assessment(
+                assessment,
+                reviewer=request.user,
+                decision=serializer.validated_data["decision"],
+                note=serializer.validated_data.get("note", ""),
+            )
+        except ValueError as exc:
+            return Response(
+                {"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST
+            )
+        return Response(
+            AssessmentSerializer(assessment, context={"request": request}).data
+        )
+
+    @action(detail=True, methods=['get'])
+    def completion(self, request, pk=None):
+        """Deployment/completion tracking for the assessment's target students."""
+        assessment = self.get_object()
+        targeted = _get_targeted_students(assessment)
+        results = AssessmentResult.objects.filter(assessment=assessment)
+        completed_ids = set(
+            results.filter(status=AssessmentResult.Status.COMPLETED).values_list(
+                "student_id", flat=True
+            )
+        )
+        started_ids = set(
+            results.filter(status=AssessmentResult.Status.IN_PROGRESS).values_list(
+                "student_id", flat=True
+            )
+        )
+        non_completers = [
+            {
+                "id": str(student.id),
+                "student_id": student.student_id,
+                "name": student.user.get_full_name(),
+            }
+            for student in targeted
+            if student.id not in completed_ids
+        ]
+        return Response(
+            {
+                "assessment": str(assessment.id),
+                "is_published": assessment.is_published,
+                "targeted": len(targeted),
+                "completed": len(completed_ids & {student.id for student in targeted}),
+                "in_progress": len(started_ids & {student.id for student in targeted}),
+                "not_started": len(
+                    [
+                        student
+                        for student in targeted
+                        if student.id not in completed_ids
+                        and student.id not in started_ids
+                    ]
+                ),
+                "non_completers": non_completers,
+            }
+        )
+
+    @staticmethod
+    def _faculty_scope(user):
+        """Sections and students this faculty member may target."""
+        from django.db.models import Q
+
+        from apps.accounts.models import StudentProfile
+        from apps.academics.models import Section
+
+        profile = getattr(user, "faculty_profile", None)
+        if profile is None:
+            return Section.objects.none(), StudentProfile.objects.none()
+        sections = Section.objects.filter(
+            Q(adviser=profile) | Q(subject_assignments__faculty=profile)
+        ).distinct()
+        students = StudentProfile.objects.filter(
+            Q(section__in=sections) | Q(enrollments__section__in=sections)
+        ).distinct()
+        return sections, students
 
 
 # ---------------------------------------------------------------------------
