@@ -32,6 +32,53 @@ class CmsResourceSerializer(serializers.Serializer):
     is_active = serializers.BooleanField()
 
 
+class CmsAnnouncementWriteSerializer(serializers.Serializer):
+    """Admin payload for creating or updating a Strapi announcement."""
+
+    title = serializers.CharField(max_length=255)
+    content = serializers.CharField()
+    announcement_type = serializers.ChoiceField(
+        choices=["news", "event", "alert", "academic"], default="news"
+    )
+    priority = serializers.ChoiceField(
+        choices=["normal", "high", "urgent"], default="normal"
+    )
+    target_roles = serializers.ListField(
+        child=serializers.ChoiceField(
+            choices=["all", "student", "parent", "faculty", "guidance", "admin"]
+        ),
+        required=False,
+        default=lambda: ["all"],
+    )
+    target_sections = serializers.ListField(
+        child=serializers.CharField(), required=False, default=list
+    )
+    expires_at = serializers.DateTimeField(required=False, allow_null=True)
+
+
+class CmsResourceWriteSerializer(serializers.Serializer):
+    """Admin payload for creating or updating a Strapi resource."""
+
+    title = serializers.CharField(max_length=255)
+    description = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True
+    )
+    resource_type = serializers.ChoiceField(
+        choices=["document", "link", "video", "other"], default="document"
+    )
+    url = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True
+    )
+    target_audience = serializers.ListField(
+        child=serializers.ChoiceField(
+            choices=["all", "student", "parent", "faculty", "guidance", "admin"]
+        ),
+        required=False,
+        default=lambda: ["all"],
+    )
+    is_active = serializers.BooleanField(required=False, default=True)
+
+
 class SystemSettingSerializer(serializers.ModelSerializer):
     """
     A runtime-editable system-wide setting (FR-034, TC-ADM-11).

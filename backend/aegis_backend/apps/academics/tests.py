@@ -414,6 +414,20 @@ class AdminAcademicYearCRUDTest(AcademicsTestBase):
         response = self.client.delete(f"/api/v1/academics/academic-years/{ay2.id}/")
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
 
+    def test_delete_in_use_subject_is_conflict_not_500(self):
+        """
+        A PROTECT-blocked delete is a state conflict, not a server fault.
+
+        Before the mapping in ``core.exceptions`` this raised ``ProtectedError``
+        straight out of the ORM and surfaced as an HTTP 500 with Django's debug
+        page, which is what the admin "deleting is not working" report saw.
+        """
+        response = self.client.delete(
+            f"/api/v1/academics/subjects/{self.math.id}/"
+        )
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertTrue(Subject.objects.filter(id=self.math.id).exists())
+
 
 # ===========================================================================
 # API tests — Faculty read-only on admin-managed resources
@@ -687,7 +701,26 @@ class GradeEncodeActionTest(AcademicsTestBase):
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_encode_grade_duplicate(self):
+    def test_encode_grade_duplicate_updates_in_place(self):
+        """Re-encoding an existing draft grade updates it, matching the importer."""
+        response = self.client.post(
+            "/api/v1/academics/grades/encode/",
+            {
+                "student": str(self.student_profile.id),
+                "subject_assignment": str(self.sa_math.id),
+                "grading_period": str(self.gp1.id),
+                "score": "90.00",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(Grade.objects.count(), 1)
+        self.grade1.refresh_from_db()
+        self.assertEqual(self.grade1.score, Decimal("90.00"))
+
+    def test_encode_grade_finalized_is_locked(self):
+        self.grade1.status = Grade.StatusChoices.FINALIZED
+        self.grade1.save()
         response = self.client.post(
             "/api/v1/academics/grades/encode/",
             {
@@ -699,6 +732,8 @@ class GradeEncodeActionTest(AcademicsTestBase):
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.grade1.refresh_from_db()
+        self.assertEqual(self.grade1.score, Decimal("85.50"))
 
     def test_encode_grade_invalid_score(self):
         response = self.client.post(

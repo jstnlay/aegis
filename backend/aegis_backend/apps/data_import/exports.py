@@ -170,6 +170,10 @@ _ROUNDTRIP_COLUMN_MAP = {
     ExportType.GUIDANCE_RECORDS: GUIDANCE_ROUNDTRIP_COLUMNS,
 }
 
+# The counseling-record export has a single (re-importable) column set, so its
+# standard schema uses the same columns as the round-trip schema.
+_COLUMN_MAP[ExportType.GUIDANCE_RECORDS] = GUIDANCE_ROUNDTRIP_COLUMNS
+
 
 def columns_for(export_type, reimport=False):
     """Look up the render columns for a kind and (optional) round-trip schema."""
@@ -592,6 +596,10 @@ _ROW_BUILDERS = {
     ExportType.ATTENDANCE: attendance_rows,
     ExportType.STUDENTS: student_rows,
     ExportType.ADVISORY: advisory_rows,
+    # The counseling-record export has a single (re-importable) shape, so its
+    # standard schema resolves to the same builder. Without this key the
+    # default `schema` raised KeyError and surfaced as a 500.
+    ExportType.GUIDANCE_RECORDS: guidance_rows,
 }
 
 _ROUNDTRIP_ROW_BUILDERS = {

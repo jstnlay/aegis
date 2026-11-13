@@ -13,12 +13,12 @@ request is the caller's bad input - but it escaped as HTTP 500 instead of a 400.
 
 The conversion below is deliberately narrow:
 
-* it matches exactly one exception type, so no unrelated failure is
-  reclassified;
+* it matches exactly the ORM's protection errors and the model-level
+  ``ValidationError``, so no unrelated failure is reclassified;
 * it is limited to unsafe HTTP methods, so a ``ValidationError`` escaping on a
   read keeps reporting as a server fault rather than being disguised as a
   client error;
-* it converts into a DRF ``ValidationError`` rather than building a response
+* it converts into a DRF exception rather than building a response
   by hand, so the existing envelope, status-code mapping and field detail in
   ``error.details`` are unchanged.
 
@@ -30,12 +30,32 @@ depending on how the failure was raised - see ``_message_from_detail``.
 """
 
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db.models import ProtectedError, RestrictedError
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.exceptions import APIException
 from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.views import exception_handler
 
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS", "TRACE"})
+
+
+class ResourceInUse(APIException):
+    """A delete blocked by a protecting relationship (HTTP 409).
+
+    ``ProtectedError`` and ``RestrictedError`` are raised by the ORM when a row
+    is still referenced by another row's ``on_delete=PROTECT``/``RESTRICT``.
+    They are not DRF ``APIException``s, so without this mapping they escaped as
+    an HTTP 500 carrying Django's debug HTML page. "Still in use" is a state
+    conflict the caller can resolve, not a server fault.
+    """
+
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = (
+        "This record is still referenced by other records and cannot be "
+        "deleted. Remove or reassign those records first."
+    )
+    default_code = "resource_in_use"
 
 
 def drf_validation_error_from(exc):
@@ -67,6 +87,11 @@ def _is_mutating_request(context):
 def custom_exception_handler(exc, context):
     if isinstance(exc, DjangoValidationError) and _is_mutating_request(context):
         exc = drf_validation_error_from(exc)
+
+    if isinstance(exc, (ProtectedError, RestrictedError)) and _is_mutating_request(
+        context
+    ):
+        exc = ResourceInUse()
 
     response = exception_handler(exc, context)
 

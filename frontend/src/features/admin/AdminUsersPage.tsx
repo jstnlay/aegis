@@ -633,8 +633,11 @@ function EditUserDialog({ user }: { user: AdminUser }) {
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        if (next) setOpen(true)
-        else close()
+        if (next) {
+          setRole(user.role)
+          setActive(user.is_active)
+          setOpen(true)
+        } else close()
       }}
     >
       <DialogTrigger asChild>

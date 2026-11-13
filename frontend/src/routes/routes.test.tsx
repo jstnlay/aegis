@@ -453,7 +453,7 @@ describe("PH11.8 guidance routes", () => {
     },
     {
       path: "/app/admin/cms",
-      marker: /Content is authored in Strapi/i,
+      marker: /Create, edit and delete announcements and resources/i,
     },
     {
       path: "/app/admin/audit",
@@ -526,7 +526,6 @@ describe("PH11.8 guidance routes", () => {
    */
   it.each([
     ["/app/admin/attendance", /Read-only view/i],
-    ["/app/admin/cms", /Read-only view/i],
   ])("states the unsupported operations at %s", async (path, marker) => {
     authState.user = makeUser("admin")
     renderAt(path as string)

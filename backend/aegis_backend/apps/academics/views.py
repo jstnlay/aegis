@@ -722,7 +722,9 @@ class GradeViewSet(viewsets.ModelViewSet):
     def encode(self, request):
         """
         POST /grades/encode/
-        Faculty encodes a single grade. Creates a new Grade in draft status.
+        Faculty encodes a single grade. Creates a new draft Grade, or updates
+        the existing draft/submitted grade for the same student, subject
+        assignment and grading period. A finalized grade is locked.
         """
         serializer = GradeEncodeSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -787,30 +789,38 @@ class GradeViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Check uniqueness
-        if Grade.objects.filter(
+        # Re-encoding the same key updates in place, matching GradeImporter.
+        # A finalized grade is a signed record and stays locked.
+        grade = Grade.objects.filter(
             student=student,
             subject_assignment=sa,
             grading_period=gp,
-        ).exists():
+        ).first()
+        if grade is not None and grade.status == Grade.StatusChoices.FINALIZED:
             return Response(
-                {"detail": "A grade already exists for this student, subject assignment, and grading period."},
+                {"detail": "This grade is finalized and can no longer be changed."},
                 status=status.HTTP_409_CONFLICT,
             )
-
-        grade = Grade.objects.create(
-            student=student,
-            subject_assignment=sa,
-            grading_period=gp,
-            score=data.get("score"),
-            letter_grade=data.get("letter_grade"),
-            remarks=data.get("remarks"),
-            encoded_by=fp,
-            status=Grade.StatusChoices.DRAFT,
-        )
+        if grade is None:
+            created = True
+            grade = Grade(
+                student=student,
+                subject_assignment=sa,
+                grading_period=gp,
+            )
+        else:
+            created = False
+        grade.score = data.get("score")
+        grade.letter_grade = data.get("letter_grade")
+        grade.remarks = data.get("remarks")
+        grade.encoded_by = fp
+        grade.status = Grade.StatusChoices.DRAFT
+        grade.save()
 
         output = GradeSerializer(grade, context={"request": request})
-        return Response(output.data, status=status.HTTP_201_CREATED)
+        if created:
+            return Response(output.data, status=status.HTTP_201_CREATED)
+        return Response(output.data)
 
     @action(detail=True, methods=["post"], url_path="finalize")
     @transaction.atomic

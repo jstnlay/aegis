@@ -459,7 +459,7 @@ function AcademicYearsCard() {
             onPageSizeChange={setPageSize}
             rowKey={(row) => row.id}
             isLoading={list.isLoading}
-            error={list.isError ? normalizeApiError(list.error).message : null}
+            error={tableError(list, remove)}
             loadingLabel="Loading academic years"
             emptyMessage="No academic years have been created."
           />
@@ -575,7 +575,7 @@ function GradeLevelsCard() {
             onPageSizeChange={setPageSize}
             rowKey={(row) => row.id}
             isLoading={list.isLoading}
-            error={list.isError ? normalizeApiError(list.error).message : null}
+            error={tableError(list, remove)}
             loadingLabel="Loading grade levels"
             emptyMessage="No grade levels have been created."
           />
@@ -762,7 +762,7 @@ function SectionsCard() {
             onPageSizeChange={setPageSize}
             rowKey={(row) => row.id}
             isLoading={list.isLoading}
-            error={list.isError ? normalizeApiError(list.error).message : null}
+            error={tableError(list, remove)}
             loadingLabel="Loading sections"
             emptyMessage="No sections have been created."
           />
@@ -902,7 +902,7 @@ function SubjectsCard() {
             onPageSizeChange={setPageSize}
             rowKey={(row) => row.id}
             isLoading={list.isLoading}
-            error={list.isError ? normalizeApiError(list.error).message : null}
+            error={tableError(list, remove)}
             loadingLabel="Loading subjects"
             emptyMessage="No subjects have been created."
           />
@@ -1100,7 +1100,7 @@ function SubjectAssignmentsCard() {
             onPageSizeChange={setPageSize}
             rowKey={(row) => row.id}
             isLoading={list.isLoading}
-            error={list.isError ? normalizeApiError(list.error).message : null}
+            error={tableError(list, remove)}
             loadingLabel="Loading subject assignments"
             emptyMessage="No subject assignments have been created."
           />
@@ -1280,7 +1280,7 @@ function GradingPeriodsCard() {
             onPageSizeChange={setPageSize}
             rowKey={(row) => row.id}
             isLoading={list.isLoading}
-            error={list.isError ? normalizeApiError(list.error).message : null}
+            error={tableError(list, remove)}
             loadingLabel="Loading grading periods"
             emptyMessage="No grading periods have been created."
           />
@@ -1505,7 +1505,7 @@ function EnrollmentsCard() {
             rows={pageRows}
             rowKey={(row) => row.id}
             isLoading={list.isLoading}
-            error={list.isError ? normalizeApiError(list.error).message : null}
+            error={tableError(list, remove)}
             loadingLabel="Loading enrollments"
             emptyMessage="No enrollments have been recorded."
             pagination={pagination}
@@ -1537,6 +1537,21 @@ function useFieldErrors(error: unknown): Record<string, string> {
     if (first) out[name] = first
   }
   return out
+}
+
+/**
+ * The message a table should show next to its rows.
+ *
+ * A failed delete is a table-level failure with no input of its own, so it is
+ * surfaced here rather than vanishing. It takes precedence over the list error
+ * because a delete failure is what the admin just did.
+ */
+function tableError(
+  list: { isError: boolean; error: unknown },
+  remove: { isError: boolean; error: unknown }
+): string | null {
+  if (remove.isError) return normalizeApiError(remove.error).message
+  return list.isError ? normalizeApiError(list.error).message : null
 }
 
 /**

@@ -21,6 +21,20 @@ const CMS_READ_ACTIONS = [
   'api::resource.resource.find',
   'api::resource.resource.findOne',
 ];
+/**
+ * Write scope used only by the admin-only Django proxy at
+ * /api/v1/cms/announcements|resources/manage/. No AEGIS end user talks to
+ * Strapi directly, so Strapi's own public role still has no CMS access.
+ */
+const CMS_WRITE_ACTIONS = [
+  'api::announcement.announcement.create',
+  'api::announcement.announcement.update',
+  'api::announcement.announcement.delete',
+  'api::resource.resource.create',
+  'api::resource.resource.update',
+  'api::resource.resource.delete',
+];
+const CMS_TOKEN_ACTIONS = [...CMS_READ_ACTIONS, ...CMS_WRITE_ACTIONS];
 
 /**
  * Persist a key=value pair into the project .env file so the AEGIS
@@ -92,22 +106,26 @@ async function ensureApiToken(strapi: any) {
         '[aegis] Set the STRAPI_API_TOKEN service env var to this token: on Render, cms/.env does not survive a redeploy, so Django loses access on the next deploy.'
       );
     }
-    if (existing.type !== 'custom') {
+    const current = Array.isArray(existing.permissions) ? existing.permissions : [];
+    const missing = CMS_TOKEN_ACTIONS.filter((action) => !current.includes(action));
+    if (existing.type !== 'custom' || missing.length > 0) {
       await strapi.service('admin::api-token').update(existing.id, {
         type: 'custom',
-        permissions: CMS_READ_ACTIONS,
+        permissions: CMS_TOKEN_ACTIONS,
+        description:
+          'Server-to-server read/write access for the AEGIS Django backend (Phase 7)',
       });
       strapi.log.info(
-        '[aegis] API token "AEGIS Backend" restricted to custom read-only scope.'
+        '[aegis] API token "AEGIS Backend" updated to the AEGIS read/write scope.'
       );
     }
     return;
   }
   const token = await strapi.service('admin::api-token').create({
     name: AEGIS_API_TOKEN_NAME,
-    description: 'Server-to-server read-only access for the AEGIS Django backend (Phase 7)',
+    description: 'Server-to-server read/write access for the AEGIS Django backend (Phase 7)',
     type: 'custom',
-    permissions: CMS_READ_ACTIONS,
+    permissions: CMS_TOKEN_ACTIONS,
     lifespan: null,
   });
   if (token?.accessKey) {

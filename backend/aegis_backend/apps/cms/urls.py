@@ -1,9 +1,13 @@
 from django.urls import path
 
 from .views import (
+    CmsAnnouncementAdminDetail,
+    CmsAnnouncementAdminList,
     CmsAnnouncementDetail,
     CmsAnnouncementImageDownload,
     CmsAnnouncementList,
+    CmsResourceAdminDetail,
+    CmsResourceAdminList,
     CmsResourceDetail,
     CmsResourceFileDownload,
     CmsResourceList,
@@ -33,6 +37,28 @@ urlpatterns = [
         "resources/public/",
         PublicCmsResourceList.as_view(),
         name="cms-resource-public-list",
+    ),
+    # Admin authoring routes. Declared before the `<document_id>` patterns so
+    # "manage" is never captured as an announcement/resource id.
+    path(
+        "announcements/manage/",
+        CmsAnnouncementAdminList.as_view(),
+        name="cms-announcement-admin-list",
+    ),
+    path(
+        "announcements/manage/<str:document_id>/",
+        CmsAnnouncementAdminDetail.as_view(),
+        name="cms-announcement-admin-detail",
+    ),
+    path(
+        "resources/manage/",
+        CmsResourceAdminList.as_view(),
+        name="cms-resource-admin-list",
+    ),
+    path(
+        "resources/manage/<str:document_id>/",
+        CmsResourceAdminDetail.as_view(),
+        name="cms-resource-admin-detail",
     ),
     path("announcements/", CmsAnnouncementList.as_view(), name="cms-announcement-list"),
     path(

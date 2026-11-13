@@ -356,6 +356,22 @@ const STUDENT_ANNOUNCEMENTS: NavItem = {
   status: "available",
 }
 
+/**
+ * The student's own behavioral notes and class concerns (objective 2.1.3).
+ *
+ * The endpoint already returned a student only their own rows; the surface was
+ * missing, so the checklist item read FAILED. This is the student counterpart
+ * of `PARENT_SUPPORT`, read-only for the same reason: the record is written by
+ * faculty and read by everyone else.
+ */
+const STUDENT_SUPPORT: NavItem = {
+  route: "student/support",
+  label: "Behavioral notes",
+  icon: ShieldAlert,
+  allowedRoles: ["student"],
+  status: "available",
+}
+
 const PARENT_ANNOUNCEMENTS: NavItem = {
   route: "parent/announcements",
   label: "Announcements",
@@ -599,6 +615,7 @@ const STUDENT_NAVIGATION: readonly NavGroup[] = [
       ATTENDANCE,
       STUDENT_ASSESSMENTS,
       STUDENT_ANNOUNCEMENTS,
+      STUDENT_SUPPORT,
       REPORTS,
     ],
   },
@@ -761,6 +778,7 @@ export function getPageTitle(pathname: string): string {
     GUIDANCE_ASSESSMENTS,
     FACULTY_ASSESSMENTS,
     STUDENT_ASSESSMENTS,
+    STUDENT_SUPPORT,
     FACULTY_IMPORT,
     FACULTY_ADVISORY,
     REPORTS,

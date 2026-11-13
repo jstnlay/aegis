@@ -1050,6 +1050,36 @@ class RoundTripExportTest(ExportApiBase):
         self.assertEqual(restored.concern_categories, ["academic"])
         self.assertEqual(restored.priority_level, "high")
 
+    def test_guidance_records_export_standard_schema(self):
+        """The default (standard) schema must not 500 for guidance-records."""
+        from apps.accounts.models import GuidanceProfile
+        from apps.guidance.models import ConsultationRecord
+
+        counselor_user = User.objects.create_user(
+            email="guide_std@test.com", password="pass12345",
+            first_name="Guide", last_name="Std", role="guidance",
+        )
+        counselor = GuidanceProfile.objects.create(
+            user=counselor_user, employee_id="GDE-STD-001"
+        )
+        ConsultationRecord.objects.create(
+            student=self.dom["s1"],
+            counselor=counselor,
+            session_date="2025-07-01",
+            session_time="10:30",
+            session_type="individual_counseling",
+            concern_categories=["academic"],
+            session_notes="Standard-schema session note.",
+            priority_level="high",
+            status="ongoing",
+        )
+        resp = self._get(
+            "/api/v1/data-import/exports/guidance-records/",
+            self.admin_user,
+            file_format="csv",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.content)
+
     def test_students_reimport_does_not_leak_credentials(self):
         """The round-trip student file must never carry a password column."""
         from apps.data_import.exports import STUDENT_ROUNDTRIP_COLUMNS

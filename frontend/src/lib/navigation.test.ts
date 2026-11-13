@@ -70,6 +70,8 @@ describe("role navigation configuration", () => {
       // School announcements for students and parents (objective 2.2.1)
       "student/announcements",
       "parent/announcements",
+      // The student's own behavioral notes (objective 2.1.3)
+      "student/support",
       // Student class schedule (TC-STU-04), backed by the `schedule` route
       "schedule",
       // Reports compiles the controlled exports each role is authorized for
@@ -148,6 +150,7 @@ describe("role navigation configuration", () => {
       "schedule",
       "student/announcements",
       "student/assessments",
+      "student/support",
     ])
   })
 

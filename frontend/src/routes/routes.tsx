@@ -99,6 +99,10 @@ const StudentSchedulePage = lazyPage(
   () => import("@/features/student/StudentSchedulePage"),
   "StudentSchedulePage"
 )
+const StudentSupportPage = lazyPage(
+  () => import("@/features/student/StudentSupportPage"),
+  "StudentSupportPage"
+)
 const AnnouncementsPage = lazyPage(
   () => import("@/features/cms/AnnouncementsPage"),
   "AnnouncementsPage"
@@ -337,6 +341,21 @@ export const appRoutes: RouteObject[] = [
             element: (
               <RequireRole allowedRoles={["student"]}>
                 <AnnouncementsPage />
+              </RequireRole>
+            ),
+          },
+          {
+            /*
+             * Behavioral notes for the student's own record (objective 2.1.3).
+             *
+             * `BehavioralNoteViewSet.get_queryset` returns a student only their
+             * own rows and accepts GET/POST only (POST is faculty-only), so this
+             * is a read-only surface and the page renders no mutation control.
+             */
+            path: "student/support",
+            element: (
+              <RequireRole allowedRoles={["student"]}>
+                <StudentSupportPage />
               </RequireRole>
             ),
           },

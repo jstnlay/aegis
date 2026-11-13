@@ -558,7 +558,7 @@ class StrapiMediaPopulationTest(TestCase):
             ]
         }
         with mock.patch(
-            "apps.cms.services.strapi_client.requests.get"
+            "apps.cms.services.strapi_client.requests.request"
         ) as fake_get:
             fake_get.return_value = mock.Mock(
                 status_code=200, json=lambda: payload
@@ -566,7 +566,7 @@ class StrapiMediaPopulationTest(TestCase):
             results = self._client().list_announcements()
 
         params = fake_get.call_args.kwargs["params"]
-        self.assertEqual(params["populate[cover_image]"], "true")
+        self.assertEqual(params["populate"], "*")
         # A picture on a foreign host is an authored external link and is
         # passed through unchanged.
         self.assertEqual(results[0]["cover_image"], "https://cdn.example.com/cover.png")
@@ -586,7 +586,7 @@ class StrapiMediaPopulationTest(TestCase):
             ]
         }
         with mock.patch(
-            "apps.cms.services.strapi_client.requests.get"
+            "apps.cms.services.strapi_client.requests.request"
         ) as fake_get:
             fake_get.return_value = mock.Mock(
                 status_code=200, json=lambda: payload
@@ -594,7 +594,7 @@ class StrapiMediaPopulationTest(TestCase):
             results = self._client().list_resources()
 
         params = fake_get.call_args.kwargs["params"]
-        self.assertEqual(params["populate[file]"], "true")
+        self.assertEqual(params["populate"], "file")
         self.assertEqual(
             results[0]["file_or_url"], "https://cdn.example.com/handbook.pdf"
         )
@@ -956,6 +956,101 @@ class CmsProxyEndpointsTest(CmsTestBase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["resource_type"], "document")
         self.assertEqual(response.data["title"], "Handbook")
+
+
+class CmsAdminAuthoringTest(CmsTestBase):
+    """Admin-only authoring through the Django proxy (5.1.1)."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.admin_user)
+
+    def test_non_admin_cannot_create(self):
+        student = APIClient()
+        student.force_authenticate(user=self.student_user)
+        response = student.post(
+            "/api/v1/cms/announcements/manage/",
+            {"title": "No", "content": "No"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_admin_creates_announcement(self):
+        with mock.patch("apps.cms.views.StrapiClient") as mock_client:
+            mock_client.return_value.create_announcement.return_value = (
+                canonical_announcement(document_id="new-doc")
+            )
+            response = self.client.post(
+                "/api/v1/cms/announcements/manage/",
+                {
+                    "title": "Sports Fest",
+                    "content": "Friday",
+                    "announcement_type": "event",
+                    "priority": "high",
+                    "target_roles": ["student"],
+                },
+                format="json",
+            )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["document_id"], "new-doc")
+        sent = mock_client.return_value.create_announcement.call_args.args[0]
+        self.assertEqual(sent["target_roles"], ["student"])
+
+    def test_strapi_error_returns_502_not_500(self):
+        from apps.cms.services.strapi_client import StrapiError
+
+        with mock.patch("apps.cms.views.StrapiClient") as mock_client:
+            mock_client.return_value.create_announcement.side_effect = StrapiError(
+                "bad upstream response"
+            )
+            response = self.client.post(
+                "/api/v1/cms/announcements/manage/",
+                {"title": "Broken", "content": "Body"},
+                format="json",
+            )
+        self.assertEqual(response.status_code, status.HTTP_502_BAD_GATEWAY)
+
+    def test_admin_updates_and_deletes_announcement(self):
+        with mock.patch("apps.cms.views.StrapiClient") as mock_client:
+            mock_client.return_value.update_announcement.return_value = (
+                canonical_announcement()
+            )
+            patch_response = self.client.patch(
+                "/api/v1/cms/announcements/manage/doc-abc123/",
+                {"title": "Revised"},
+                format="json",
+            )
+            delete_response = self.client.delete(
+                "/api/v1/cms/announcements/manage/doc-abc123/"
+            )
+        self.assertEqual(patch_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(delete_response.status_code, status.HTTP_204_NO_CONTENT)
+        mock_client.return_value.delete_announcement.assert_called_once_with(
+            "doc-abc123"
+        )
+
+    def test_admin_creates_resource(self):
+        with mock.patch("apps.cms.views.StrapiClient") as mock_client:
+            mock_client.return_value.create_resource.return_value = {
+                "document_id": "res-new",
+                "title": "Handbook",
+                "description": None,
+                "resource_type": "link",
+                "file_or_url": "https://example.com",
+                "target_audience": ["all"],
+                "is_active": True,
+            }
+            response = self.client.post(
+                "/api/v1/cms/resources/manage/",
+                {
+                    "title": "Handbook",
+                    "resource_type": "link",
+                    "url": "https://example.com",
+                },
+                format="json",
+            )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["document_id"], "res-new")
 
 
 # ---------------------------------------------------------------------------

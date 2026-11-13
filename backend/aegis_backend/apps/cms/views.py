@@ -31,7 +31,14 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .serializers import CmsAnnouncementSerializer, CmsResourceSerializer
+from .models import SystemSetting
+from .serializers import (
+    CmsAnnouncementSerializer,
+    CmsAnnouncementWriteSerializer,
+    CmsResourceSerializer,
+    CmsResourceWriteSerializer,
+    SystemSettingSerializer,
+)
 from .services.strapi_client import (
     StrapiClient,
     StrapiError,
@@ -39,15 +46,8 @@ from .services.strapi_client import (
     StrapiUnavailableError,
 )
 from .services.webhook import process_announcement_webhook
-from core.throttling import WebhookRateThrottle
 from core.permissions import IsAdminUser
-
-from .models import SystemSetting
-from .serializers import (
-    CmsAnnouncementSerializer,
-    CmsResourceSerializer,
-    SystemSettingSerializer,
-)
+from core.throttling import WebhookRateThrottle
 
 logger = logging.getLogger("apps.cms")
 
@@ -183,7 +183,7 @@ class CmsAnnouncementList(generics.ListAPIView):
     def list(self, request, *args, **kwargs):
         try:
             return super().list(request, *args, **kwargs)
-        except StrapiUnavailableError:
+        except StrapiError:
             return _cms_unavailable_response()
 
 
@@ -204,7 +204,9 @@ class CmsAnnouncementDetail(generics.RetrieveAPIView):
     def retrieve(self, request, *args, **kwargs):
         try:
             return super().retrieve(request, *args, **kwargs)
-        except StrapiUnavailableError:
+        except StrapiNotFoundError:
+            raise NotFound("Announcement not found.")
+        except StrapiError:
             return _cms_unavailable_response()
 
 
@@ -220,7 +222,7 @@ class CmsResourceList(generics.ListAPIView):
     def list(self, request, *args, **kwargs):
         try:
             return super().list(request, *args, **kwargs)
-        except StrapiUnavailableError:
+        except StrapiError:
             return _cms_unavailable_response()
 
 
@@ -244,7 +246,7 @@ class PublicCmsAnnouncementList(generics.ListAPIView):
     def list(self, request, *args, **kwargs):
         try:
             return super().list(request, *args, **kwargs)
-        except StrapiUnavailableError:
+        except StrapiError:
             return _cms_unavailable_response()
 
 
@@ -269,7 +271,7 @@ class PublicCmsResourceList(generics.ListAPIView):
     def list(self, request, *args, **kwargs):
         try:
             return super().list(request, *args, **kwargs)
-        except StrapiUnavailableError:
+        except StrapiError:
             return _cms_unavailable_response()
 
 
@@ -290,7 +292,9 @@ class CmsResourceDetail(generics.RetrieveAPIView):
     def retrieve(self, request, *args, **kwargs):
         try:
             return super().retrieve(request, *args, **kwargs)
-        except StrapiUnavailableError:
+        except StrapiNotFoundError:
+            raise NotFound("Resource not found.")
+        except StrapiError:
             return _cms_unavailable_response()
 
 
@@ -332,8 +336,6 @@ class CmsResourceFileDownload(APIView):
             visible = _visible_resources([resource], request.user)
         except StrapiNotFoundError:
             raise NotFound("Resource not found.")
-        except StrapiUnavailableError:
-            return _cms_unavailable_response()
         except StrapiError:
             return _cms_unavailable_response()
 
@@ -352,8 +354,6 @@ class CmsResourceFileDownload(APIView):
             upstream = client.get_media_stream(resource["strapi_file_path"])
         except StrapiNotFoundError:
             raise NotFound("Resource file not available.")
-        except StrapiUnavailableError:
-            return _cms_unavailable_response()
         except StrapiError:
             return _cms_unavailable_response()
 
@@ -394,8 +394,6 @@ class CmsAnnouncementImageDownload(APIView):
             visible = self.get_visible([announcement])
         except StrapiNotFoundError:
             raise NotFound("Announcement not found.")
-        except StrapiUnavailableError:
-            return _cms_unavailable_response()
         except StrapiError:
             return _cms_unavailable_response()
 
@@ -413,8 +411,6 @@ class CmsAnnouncementImageDownload(APIView):
             upstream = client.get_media_stream(announcement["cover_image_path"])
         except StrapiNotFoundError:
             raise NotFound("Announcement image not available.")
-        except StrapiUnavailableError:
-            return _cms_unavailable_response()
         except StrapiError:
             return _cms_unavailable_response()
 
@@ -457,6 +453,107 @@ def _cms_unavailable_response():
         {"detail": "Content service is temporarily unavailable."},
         status=status.HTTP_502_BAD_GATEWAY,
     )
+
+
+def _cms_admin_error_response(exc):
+    if isinstance(exc, StrapiNotFoundError):
+        return Response(
+            {"detail": "Content not found."}, status=status.HTTP_404_NOT_FOUND
+        )
+    logger.warning("Strapi admin request failed: %s", exc)
+    return _cms_unavailable_response()
+
+
+class CmsAnnouncementAdminList(APIView):
+    """POST /api/v1/cms/announcements/manage/ — admin-only announcement create."""
+
+    permission_classes = [IsAdminUser]
+
+    def post(self, request):
+        serializer = CmsAnnouncementWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = dict(serializer.validated_data)
+        if not data.get("target_roles"):
+            data["target_roles"] = ["all"]
+        if data.get("expires_at") is not None:
+            data["expires_at"] = data["expires_at"].isoformat()
+        try:
+            item = StrapiClient().create_announcement(data)
+        except StrapiError as exc:
+            return _cms_admin_error_response(exc)
+        return Response(item, status=status.HTTP_201_CREATED)
+
+
+class CmsAnnouncementAdminDetail(APIView):
+    """PATCH/DELETE /api/v1/cms/announcements/manage/<document_id>/."""
+
+    permission_classes = [IsAdminUser]
+
+    def patch(self, request, document_id):
+        serializer = CmsAnnouncementWriteSerializer(
+            data=request.data, partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+        data = dict(serializer.validated_data)
+        if "target_roles" in data and not data["target_roles"]:
+            data["target_roles"] = ["all"]
+        if data.get("expires_at") is not None:
+            data["expires_at"] = data["expires_at"].isoformat()
+        try:
+            item = StrapiClient().update_announcement(document_id, data)
+        except StrapiError as exc:
+            return _cms_admin_error_response(exc)
+        return Response(item)
+
+    def delete(self, request, document_id):
+        try:
+            StrapiClient().delete_announcement(document_id)
+        except StrapiError as exc:
+            return _cms_admin_error_response(exc)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class CmsResourceAdminList(APIView):
+    """POST /api/v1/cms/resources/manage/ — admin-only resource create."""
+
+    permission_classes = [IsAdminUser]
+
+    def post(self, request):
+        serializer = CmsResourceWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = dict(serializer.validated_data)
+        if not data.get("target_audience"):
+            data["target_audience"] = ["all"]
+        try:
+            item = StrapiClient().create_resource(data)
+        except StrapiError as exc:
+            return _cms_admin_error_response(exc)
+        return Response(item, status=status.HTTP_201_CREATED)
+
+
+class CmsResourceAdminDetail(APIView):
+    """PATCH/DELETE /api/v1/cms/resources/manage/<document_id>/."""
+
+    permission_classes = [IsAdminUser]
+
+    def patch(self, request, document_id):
+        serializer = CmsResourceWriteSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        data = dict(serializer.validated_data)
+        if "target_audience" in data and not data["target_audience"]:
+            data["target_audience"] = ["all"]
+        try:
+            item = StrapiClient().update_resource(document_id, data)
+        except StrapiError as exc:
+            return _cms_admin_error_response(exc)
+        return Response(item)
+
+    def delete(self, request, document_id):
+        try:
+            StrapiClient().delete_resource(document_id)
+        except StrapiError as exc:
+            return _cms_admin_error_response(exc)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 __all__ = [

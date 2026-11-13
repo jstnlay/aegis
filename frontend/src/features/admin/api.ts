@@ -1296,6 +1296,99 @@ export function useCmsResources() {
   })
 }
 
+/** Admin write payload for an announcement (Django validates before Strapi). */
+export interface CmsAnnouncementInput {
+  title: string
+  content: string
+  announcement_type: CmsAnnouncement["announcement_type"]
+  priority: CmsAnnouncement["priority"]
+  target_roles: string[]
+  expires_at?: string | null
+}
+
+export interface CmsResourceInput {
+  title: string
+  description?: string | null
+  resource_type: CmsResource["resource_type"]
+  url?: string | null
+  target_audience: string[]
+  is_active: boolean
+}
+
+function invalidateCmsQueries(queryClient: ReturnType<typeof useQueryClient>) {
+  void queryClient.invalidateQueries({ queryKey: ["admin", "cms-announcements"] })
+  void queryClient.invalidateQueries({ queryKey: ["admin", "cms-resources"] })
+  void queryClient.invalidateQueries({ queryKey: ["cms"] })
+}
+
+/**
+ * Create (`POST .../manage/`) or update (`PATCH .../manage/{id}/`) an
+ * announcement. Admin-only on the server; the proxy publishes the entry.
+ */
+export function useSaveCmsAnnouncement() {
+  const queryClient = useQueryClient()
+  return useMutation<
+    CmsAnnouncement,
+    Error,
+    { documentId?: string; payload: CmsAnnouncementInput }
+  >({
+    mutationFn: async ({ documentId, payload }) => {
+      const path = documentId
+        ? `/cms/announcements/manage/${encodeURIComponent(documentId)}/`
+        : "/cms/announcements/manage/"
+      const { data } = documentId
+        ? await apiClient.patch<CmsAnnouncement>(path, payload)
+        : await apiClient.post<CmsAnnouncement>(path, payload)
+      return data
+    },
+    onSuccess: () => invalidateCmsQueries(queryClient),
+  })
+}
+
+export function useDeleteCmsAnnouncement() {
+  const queryClient = useQueryClient()
+  return useMutation<void, Error, string>({
+    mutationFn: async (documentId) => {
+      await apiClient.delete(
+        `/cms/announcements/manage/${encodeURIComponent(documentId)}/`
+      )
+    },
+    onSuccess: () => invalidateCmsQueries(queryClient),
+  })
+}
+
+export function useSaveCmsResource() {
+  const queryClient = useQueryClient()
+  return useMutation<
+    CmsResource,
+    Error,
+    { documentId?: string; payload: CmsResourceInput }
+  >({
+    mutationFn: async ({ documentId, payload }) => {
+      const path = documentId
+        ? `/cms/resources/manage/${encodeURIComponent(documentId)}/`
+        : "/cms/resources/manage/"
+      const { data } = documentId
+        ? await apiClient.patch<CmsResource>(path, payload)
+        : await apiClient.post<CmsResource>(path, payload)
+      return data
+    },
+    onSuccess: () => invalidateCmsQueries(queryClient),
+  })
+}
+
+export function useDeleteCmsResource() {
+  const queryClient = useQueryClient()
+  return useMutation<void, Error, string>({
+    mutationFn: async (documentId) => {
+      await apiClient.delete(
+        `/cms/resources/manage/${encodeURIComponent(documentId)}/`
+      )
+    },
+    onSuccess: () => invalidateCmsQueries(queryClient),
+  })
+}
+
 /**
  * The CMS proxy route for a Strapi-hosted resource file.
  *

@@ -333,3 +333,34 @@ export function useNominateParent() {
     },
   })
 }
+
+export interface StudentBehavioralNote {
+  id: string
+  student: string
+  student_name: string
+  student_id_code: string
+  recorded_by_name: string
+  note_type: string
+  note_text: string
+  date_recorded: string
+}
+
+/**
+ * The signed-in student's own behavioral notes (objective 2.1.3).
+ *
+ * `BehavioralNoteViewSet.get_queryset` returns a student only rows where
+ * `student == their own profile`, so the server is the scope and this hook
+ * filters nothing. Read-only: the endpoint accepts GET/POST only, and POST
+ * is faculty-only, so the page has no mutation control to render.
+ */
+export function useMyBehavioralNotes() {
+  return useQuery<StudentBehavioralNote[], Error>({
+    queryKey: ["student", "behavioral-notes"],
+    queryFn: async () => {
+      const { results } = await fetchAllPages<StudentBehavioralNote>(
+        "/guidance/behavioral-notes/"
+      )
+      return results
+    },
+  })
+}

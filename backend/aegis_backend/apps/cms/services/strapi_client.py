@@ -300,10 +300,18 @@ class StrapiClient:
         return headers
 
     def _get(self, path, params=None):
+        return self._request("GET", path, params=params)
+
+    def _request(self, method, path, params=None, data=None):
         url = f"{self.base_url}{path}"
         try:
-            response = requests.get(
-                url, headers=self._headers(), params=params, timeout=self.timeout
+            response = requests.request(
+                method,
+                url,
+                headers=self._headers(),
+                params=params,
+                json=data,
+                timeout=self.timeout,
             )
         except requests.RequestException as exc:
             logger.warning("Strapi request failed (%s): %s", url, exc)
@@ -315,11 +323,13 @@ class StrapiClient:
             raise StrapiUnavailableError(
                 f"Strapi server error {response.status_code} for {url}"
             )
-        if response.status_code != 200:
+        if response.status_code not in (200, 201, 204):
             raise StrapiError(
                 f"Unexpected Strapi response {response.status_code} for {url}"
             )
 
+        if response.status_code == 204:
+            return None
         try:
             return response.json()
         except ValueError as exc:
@@ -341,7 +351,7 @@ class StrapiClient:
         """Fetch one announcement by documentId and normalize it."""
         payload = self._get(
             f"/api/announcements/{document_id}",
-            params={"populate[cover_image]": "true"},
+            params={"populate": "*"},
         )
         raw = self._unwrap_single(payload)
         if not raw:
@@ -355,7 +365,7 @@ class StrapiClient:
         """Fetch one resource by documentId and normalize it."""
         payload = self._get(
             f"/api/resources/{document_id}",
-            params={"populate[file]": "true"},
+            params={"populate": "file"},
         )
         raw = self._unwrap_single(payload)
         if not raw:
@@ -369,7 +379,7 @@ class StrapiClient:
         """List all published announcements, normalized."""
         payload = self._get(
             "/api/announcements",
-            params={"pagination[pageSize]": 100, "populate[cover_image]": "true"},
+            params={"pagination[pageSize]": 100, "populate": "*"},
         )
         results = []
         for raw in self._unwrap_list(payload):
@@ -383,7 +393,7 @@ class StrapiClient:
         """List all resources, normalized."""
         payload = self._get(
             "/api/resources",
-            params={"pagination[pageSize]": 100, "populate[file]": "true"},
+            params={"pagination[pageSize]": 100, "populate": "file"},
         )
         results = []
         for raw in self._unwrap_list(payload):
@@ -392,6 +402,54 @@ class StrapiClient:
             except ValueError as exc:
                 logger.warning("Skipping invalid resource from Strapi: %s", exc)
         return results
+
+    # -- admin authoring -------------------------------------------------- #
+
+    def create_announcement(self, data):
+        """Create and publish an announcement, returning the normalized entry."""
+        payload = self._request(
+            "POST",
+            "/api/announcements",
+            params={"status": "published"},
+            data={"data": data},
+        )
+        raw = self._unwrap_single(payload) or {}
+        document_id = raw.get("documentId") or raw.get("id")
+        if not document_id:
+            raise StrapiError("Strapi did not return the created announcement id")
+        return self.get_announcement(document_id)
+
+    def update_announcement(self, document_id, data):
+        """Update an announcement (publishing it if it was a draft)."""
+        self._request(
+            "PUT",
+            f"/api/announcements/{document_id}",
+            params={"status": "published"},
+            data={"data": data},
+        )
+        return self.get_announcement(document_id)
+
+    def delete_announcement(self, document_id):
+        self._request("DELETE", f"/api/announcements/{document_id}")
+
+    def create_resource(self, data):
+        payload = self._request(
+            "POST", "/api/resources", data={"data": data}
+        )
+        raw = self._unwrap_single(payload) or {}
+        document_id = raw.get("documentId") or raw.get("id")
+        if not document_id:
+            raise StrapiError("Strapi did not return the created resource id")
+        return self.get_resource(document_id)
+
+    def update_resource(self, document_id, data):
+        self._request(
+            "PUT", f"/api/resources/{document_id}", data={"data": data}
+        )
+        return self.get_resource(document_id)
+
+    def delete_resource(self, document_id):
+        self._request("DELETE", f"/api/resources/{document_id}")
 
     def get_media_stream(self, media_path):
         """
