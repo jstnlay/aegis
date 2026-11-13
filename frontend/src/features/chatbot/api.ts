@@ -68,6 +68,8 @@ export interface ChatPayload {
   grade_summary?: GradeSummary
   attendance_summary?: AttendanceSummary
   resources?: LearningResource[]
+  /** The school documents that grounded the reply, when it was grounded. */
+  knowledge?: KnowledgeSource[]
   escalation?: EscalationInfo
   safety?: ChatSafety
   flag?: ChatFlagRef
@@ -101,10 +103,12 @@ export interface GradeSummary {
 export interface AttendanceSummary {
   student_id?: string
   student_name?: string
-  present_count?: number
-  late_count?: number
-  absent_count?: number
-  total_records?: number
+  /** The chatbot's own summary uses `_days`; the record pages use `_count`. */
+  present_days?: number
+  late_days?: number
+  absent_days?: number
+  total_days?: number
+  attendance_rate?: number | null
   [key: string]: unknown
 }
 
@@ -113,6 +117,25 @@ export interface LearningResource {
   title?: string
   item_type?: string
   [key: string]: unknown
+}
+
+/**
+ * One passage of a school document that a reply was grounded in.
+ *
+ * `excerpt` is the window of the passage the assistant quoted; `source_label`
+ * is what the student sees cited. The reply text already names the source, so
+ * this is the same fact in structured form — it exists so a surface can link
+ * to the document rather than repeat the sentence.
+ */
+export interface KnowledgeSource {
+  chunk_id?: string
+  document_id?: string
+  title?: string
+  category?: string
+  source_label?: string
+  source_url?: string
+  excerpt?: string
+  score?: number
 }
 
 export interface ChatResponse {

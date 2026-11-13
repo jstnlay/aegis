@@ -95,6 +95,11 @@ class ChatMessage(TimestampedModel):
     # rationale can paraphrase what the student said, so the column holds
     # ciphertext: the type stays JSON, the content does not stay readable.
     detection_detail = EncryptedJSONField(default=dict, blank=True)
+    # Which school documents grounded this reply, as ids and titles. A second
+    # copy of the text would drift from the chunk it came from, so this stores
+    # the pointer instead. Encrypted for the same reason as the detection
+    # detail: a source list next to a message still describes a student.
+    retrieved_sources = EncryptedJSONField(default=list, blank=True)
 
     class Meta(TimestampedModel.Meta):
         ordering = ["-created_at"]
@@ -260,3 +265,97 @@ class AgreementAcceptance(TimestampedModel):
 
     def __str__(self):
         return f"{self.user_id} accepted {self.notice_version}"
+
+
+class KnowledgeDocument(TimestampedModel):
+    """
+    A school document the assistant is allowed to answer from.
+
+    The corpus is the school's own published material — the handbook, the
+    policies, the announcements, the learning resources. It is deliberately
+    *not* student data: `KnowledgeChunk.content` is stored in the clear
+    because retrieval has to search it, so anything placed here is readable
+    by anyone who can read the database. Student records stay in their own
+    tables, where the sensitive columns are encrypted; an administrator who
+    pastes a student's name into a policy document has published it.
+
+    This is why the assistant's record answers do not go through retrieval:
+    "what is my average" is answered from a scoped query with the caller's
+    own permissions, never from a passage anyone could have written.
+    """
+
+    class Origin(models.TextChoices):
+        MANUAL = "manual", "Entered by an administrator"
+        STRAPI = "strapi", "Strapi announcement or resource"
+        CMS = "cms", "Approved learning item"
+
+    class Category(models.TextChoices):
+        HANDBOOK = "handbook", "Student handbook"
+        POLICY = "policy", "Policy"
+        ANNOUNCEMENT = "announcement", "Announcement"
+        RESOURCE = "resource", "Learning resource"
+        FAQ = "faq", "FAQ"
+        OTHER = "other", "Other"
+
+    title = models.CharField(max_length=240)
+    category = models.CharField(
+        max_length=20, choices=Category.choices, default=Category.OTHER
+    )
+    # What the student sees cited: "Student Handbook 2026, p. 12".
+    source_label = models.CharField(max_length=120, blank=True, default="")
+    source_url = models.URLField(blank=True, default="")
+    origin = models.CharField(
+        max_length=10, choices=Origin.choices, default=Origin.MANUAL
+    )
+    # Strapi `documentId`, so a re-sync updates the announcement instead of
+    # appending a second copy of it. Blank for a hand-entered document.
+    external_id = models.CharField(max_length=120, blank=True, default="")
+    is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_knowledge_documents",
+    )
+
+    class Meta(TimestampedModel.Meta):
+        ordering = ["title"]
+        indexes = [models.Index(fields=["is_active", "category"])]
+        constraints = [
+            # A synced document is identified by where it came from. Enforced
+            # in the database, not only in the sync command: a second sync run
+            # racing the first must not create the announcement twice.
+            models.UniqueConstraint(
+                fields=["origin", "external_id"],
+                condition=~models.Q(external_id=""),
+                name="knowledge_document_origin_external_unique",
+            )
+        ]
+
+    def __str__(self):
+        return self.title
+
+
+class KnowledgeChunk(TimestampedModel):
+    """
+    One retrievable passage of a document.
+
+    Chunked rather than searched whole: a passage is what gets quoted, and a
+    whole handbook would not fit in a prompt. Retrieval scores chunks, so the
+    unit of retrieval and the unit of citation are the same thing.
+    """
+
+    document = models.ForeignKey(
+        KnowledgeDocument, on_delete=models.CASCADE, related_name="chunks"
+    )
+    ordinal = models.PositiveIntegerField()
+    content = models.TextField()
+
+    class Meta(TimestampedModel.Meta):
+        unique_together = ("document", "ordinal")
+        ordering = ["document_id", "ordinal"]
+        indexes = [models.Index(fields=["document", "ordinal"])]
+
+    def __str__(self):
+        return f"{self.document_id} #{self.ordinal}"

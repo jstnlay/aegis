@@ -7,6 +7,9 @@ from apps.chatbot import views
 
 router = DefaultRouter()
 router.register("admin/keywords", views.KeywordTermViewSet, basename="keyword-term")
+router.register(
+    "admin/knowledge", views.KnowledgeDocumentViewSet, basename="knowledge-document"
+)
 
 urlpatterns = [
     path("message/", views.ChatView.as_view(), name="chatbot-message"),

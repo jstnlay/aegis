@@ -405,6 +405,15 @@ access and backups, and what to do when something is wrong.
   classification, and both are explainable.
 * No model-based FAQ answers. Gemini rewrites an answer the deterministic
   layer already produced; it does not invent one.
+* No vector store, embedding model or re-ranker. Retrieval is lexical and the
+  corpus is the school's own documents (§17).
+* No model status panel on the admin console. It named the model, the key and
+  SDK, the fallback list, the two layers and the encryption posture on every
+  visit — operator diagnostics, not a safety control.
+  `GET /chatbot/admin/model-status/` and `manage.py security_posture` report the
+  same thing, and a production deployment refuses to start without an
+  encryption key (§14), so the console does not have to carry that warning to
+  keep the failure safe.
 * No automatic retuning from false positives (§11). A keyword does not get to
   decide what screens a child.
 
@@ -423,7 +432,105 @@ violence raises nothing, and "I am being abused at home" raises a high flag.
 An administrator can still add a broad term — the table is theirs to edit.
 This is a default, not a rule.
 
-## 17. Test evidence
+## 17. Answering from the school's own documents
+
+The client reported that the chatbot is **not accurate**. There were two
+separate causes, and both are fixed without a new dependency or a new service.
+
+### 17.1 The deterministic layer had no sentence to say
+
+`_deterministic_reply` (`apps/chatbot/service.py`) had no branch for a grade,
+an attendance, a performance or a resource question. The facts were already
+fetched — `handle_message` put `grade_summary` and `attendance_summary` into
+`data` — and then no branch read them, so every one of those questions fell
+through to one generic tail. With the key's quota spent, that tail was the
+*only* answer a student could get.
+
+The branches now read the facts they already had, and the tail names what the
+assistant can do ("I can look up your grades, attendance and approved learning
+resources") instead of pretending to answer. A parent's question about an
+unresolved child still asks which child, and a late arrival still counts as a
+day attended.
+
+The attendance figures also reached the reply but not the panel: the detail
+line read `present_count`/`late_count`/`absent_count` while the chatbot's own
+summary sends `present_days`/`late_days`/`absent_days`, so it rendered three
+dashes beside a correct sentence. Fixed to the names the endpoint sends, with a
+test that would have caught it.
+
+### 17.2 There was nothing to quote about the school itself
+
+A question about a rule, a schedule or a procedure had no source at all: the
+title lookup returned every approved item regardless of the question, and a
+model asked the same question answers from what schools *in general* do, which
+is not this school's policy. `apps/chatbot/retrieval.py` now answers those from
+the school's own documents and names the document in the reply.
+
+### 17.3 Why the retrieval is hand-written and lexical
+
+* PostgreSQL full-text search is Postgres-only, and the suite runs on SQLite
+  (`config/settings/test.py`). The path that decides what a student is told
+  would be the one path the tests cannot exercise.
+* pgvector needs a database extension and an embedding model, and the school's
+  API key is out of quota. A feature that silently becomes "no retrieval" when
+  a third-party quota runs out is not a safety improvement.
+
+So the scorer is lexical: every query term is looked up with `icontains` (which
+both databases support), then ranked in Python by term frequency, an
+inverse-document-frequency weight over the candidate pool, and bonuses for a
+term in the document's title and for the query appearing as a phrase. It
+handles no synonyms and no paraphrase. That limit is written in the module as a
+`shortcut:` note, not hidden.
+
+**A weak match is refused, not shown.** A multi-word question must match two of
+its words — or one word of the document's title — before a passage may be
+quoted. One matched word out of several is the difference between an answer and
+a plausible non-answer. When nothing matches, the reply says it does not have
+an answer and names what it can do.
+
+### 17.4 A record question never reaches retrieval
+
+`KNOWLEDGE_INTENTS` (`apps/chatbot/service.py`) lists the intents retrieval may
+answer, and a grade or an attendance intent is not in it. A passage is school
+prose anyone with database access could have written; a grade is the student's
+own record behind an authorization check. Letting the first stand in for the
+second would trade a permission boundary for a search hit. The test
+`RecordQuestionsBypassRetrievalTest` pins this with a document that is *about*
+grades.
+
+### 17.5 A grounded reply is not rewritten
+
+The pipeline returns a grounded answer as it stands. It is a quotation of the
+school's document with the document named; a paraphrase would put back the
+drift retrieval exists to remove, and the citation — the part a student uses to
+check the answer — is the first thing a rewrite drops. A sensitive reply is
+deterministic for the same reason (already the case).
+
+### 17.6 What the corpus may contain
+
+`KnowledgeChunk.content` is stored in the clear, because retrieval has to
+search it. So the corpus is school documents and only school documents:
+
+* handbook and policy text an administrator enters in the admin console;
+* published Strapi announcements and resources, pulled by
+  `manage.py sync_knowledge` (idempotent by origin + source id; `--prune`
+  deactivates a synced document whose source is gone, and never deletes one);
+* approved, active `cms.LearningItem` records.
+
+No student data. An administrator who pastes a student's name into a policy
+document has published it, and the model docstring says so.
+
+A document that has never been indexed holds no chunks and answers nothing,
+which is why the admin console shows the chunk count on every row rather than
+just the title.
+
+### 17.7 What was not built
+
+No embeddings, no vector store, no re-ranker, no query rewriting. The corpus is
+tens of documents; a vector index earns its cost at a few thousand chunks. The
+`shortcut:` note in `retrieval.py` records when to revisit it.
+
+## 18. Test evidence
 
 Backend, SQLite, `python manage.py test --settings=config.settings.test`. The
 suite makes no network calls — `config/settings/test.py` blanks the key.
@@ -435,14 +542,20 @@ suite makes no network calls — `config/settings/test.py` blanks the key.
 | `apps.chatbot.tests_safety` | 44 | Layer 1 and Layer 2, the union rule, the failure fallback, routing by severity, the content-blind faculty notice, the acknowledgment timer and its escalation, the per-severity window, the notice gate, the flag lifecycle, the administrator console, the false-positive feedback, the retention job, the key and model rotation, one notification per crisis, the precision of the shipped terms, and the free text being ciphertext in the column |
 | `apps.assessments.tests_review` | 13 | the review gate at model, endpoint and review level; the deterministic fallback; the payload Gemini receives |
 | `ai_engine.tests_at_risk` | 17 | the rubric, the refusal to train on thin or one-sided data, the decision path, the stored model round-trip, the duplicate-alert guard |
-| `apps.chatbot` (whole app) | 141 | the above plus the pre-existing intent, urgency and policy tests |
-| Whole backend | 2195 | everything above plus the pre-existing suite |
+| `apps.chatbot` (whole app) | 194 | the above plus the pre-existing intent, urgency and policy tests, the deterministic answers for a grade, attendance, performance and resource question (`tests_accuracy`), and the retriever, grounded and refused answers, the record-bypass rule, the knowledge admin API and the sync command (`tests_retrieval`) |
+| Whole backend | 2248 | everything above plus the pre-existing suite |
 
 Frontend, `npm run typecheck && npm run lint && npm test`:
 
 | Suite | Tests |
 |---|---|
-| `npm test` | 1016 in 75 files |
+| `npm test` | 1018 in 75 files |
+
+Two of those 1018 fail at `/app/admin/cms`, and they are not this work: a
+concurrent, uncommitted rewrite of `AdminCmsPage.tsx` removed the text the two
+route assertions look for (`/Content is authored in Strapi/i`). Every chatbot
+and admin assertion in this work passes, and the count above includes the one
+added test for the grounded-answer sources block.
 
 The manual checklist for the parts no unit test can prove — a real Gemini
 call, encryption at rest, retention and load — is in

@@ -524,8 +524,8 @@ const FACULTY_CHAT_FLAGS: NavItem = {
 /**
  * The administrator's chatbot safety console.
  *
- * Screening counts, the Layer 2 model status, the Layer 1 keyword terms and
- * the acknowledgment timer.
+ * Screening counts, the Layer 1 keyword terms, the knowledge corpus the
+ * assistant answers from and the acknowledgment timer.
  */
 const ADMIN_CHATBOT: NavItem = {
   route: "admin/chatbot",

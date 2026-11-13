@@ -2,12 +2,14 @@
 
 from rest_framework import serializers
 
+from apps.chatbot import retrieval
 from apps.chatbot.models import (
     ChatMessage,
     Flag,
     FlagAction,
     FlagRecipient,
     KeywordTerm,
+    KnowledgeDocument,
 )
 
 
@@ -27,6 +29,8 @@ class ChatMessageSerializer(serializers.ModelSerializer):
             "manual_review",
             "created_at",
             "flag_id",
+            # The school documents this reply was grounded in, as pointers.
+            "retrieved_sources",
         )
 
     def get_flag_id(self, obj):
@@ -146,6 +150,78 @@ class KeywordTermSerializer(serializers.ModelSerializer):
             "updated_at",
         )
         read_only_fields = ("id", "created_at", "updated_at")
+
+
+class KnowledgeDocumentSerializer(serializers.ModelSerializer):
+    """
+    Administrator CRUD for the documents the assistant answers from.
+
+    `body` is write-only. It is the document's text, and it is stored as the
+    chunks retrieval actually searches rather than on this row — the row is
+    the thing an administrator edits, the chunks are the thing a student is
+    quoted from.
+    """
+
+    body = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    chunk_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = KnowledgeDocument
+        fields = (
+            "id",
+            "title",
+            "category",
+            "body",
+            "source_label",
+            "source_url",
+            "origin",
+            "external_id",
+            "is_active",
+            "chunk_count",
+            "created_at",
+            "updated_at",
+        )
+        # Origin and external id belong to the sync command, not the edit form:
+        # an administrator marking a Strapi announcement would otherwise be
+        # able to make the next sync create a second copy of it.
+        read_only_fields = (
+            "id",
+            "origin",
+            "external_id",
+            "chunk_count",
+            "created_at",
+            "updated_at",
+        )
+
+    def get_chunk_count(self, obj) -> int:
+        return obj.chunks.count()
+
+    def validate(self, attrs):
+        if self.instance is None and not (attrs.get("body") or "").strip():
+            raise serializers.ValidationError(
+                {"body": "A new document needs text, or there is nothing to retrieve."}
+            )
+        return attrs
+
+    def create(self, validated_data):
+        # `body` is not a column on the model. It is popped here and turned
+        # into the chunks retrieval actually searches, which is why the
+        # serializer owns this rather than the view.
+        body = validated_data.pop("body", "")
+        document = super().create(validated_data)
+        if body.strip():
+            retrieval.index_document(document, body)
+        return document
+
+    def update(self, instance, validated_data):
+        # No body in the request means the administrator edited metadata only,
+        # so the passages are left exactly as they are. Re-indexing from an
+        # absent body would quietly empty a document.
+        body = validated_data.pop("body", None)
+        document = super().update(instance, validated_data)
+        if body and body.strip():
+            retrieval.index_document(document, body)
+        return document
 
 
 class CaseNoteSerializer(serializers.Serializer):

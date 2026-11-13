@@ -15,7 +15,14 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.chatbot import agreements, gemini_client, insights, routing
-from apps.chatbot.models import ChatMessage, Flag, FlagAction, KeywordTerm
+from apps.chatbot.models import (
+    ChatMessage,
+    Flag,
+    FlagAction,
+    KeywordTerm,
+    KnowledgeChunk,
+    KnowledgeDocument,
+)
 from apps.chatbot.pipeline import process_message
 from apps.chatbot.serializers import (
     AssessmentDraftRequestSerializer,
@@ -24,6 +31,7 @@ from apps.chatbot.serializers import (
     FacultyFlagSerializer,
     FlagSerializer,
     KeywordTermSerializer,
+    KnowledgeDocumentSerializer,
     NoticeAcceptSerializer,
     ResolutionSerializer,
 )
@@ -314,6 +322,17 @@ class KeywordTermViewSet(viewsets.ModelViewSet):
         serializer.save(created_by=self.request.user)
 
 
+class KnowledgeDocumentViewSet(viewsets.ModelViewSet):
+    """Admin CRUD for the documents the assistant answers from."""
+
+    queryset = KnowledgeDocument.objects.all()
+    serializer_class = KnowledgeDocumentSerializer
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+
 class AdminDashboardView(APIView):
     """GET /chatbot/admin/dashboard/ - aggregate flag and screening counts."""
 
@@ -362,6 +381,17 @@ class AdminDashboardView(APIView):
                 "keywords": {
                     "active": KeywordTerm.objects.filter(is_active=True).count(),
                     "total": KeywordTerm.objects.count(),
+                },
+                # The retrieval corpus. `documents` with no chunks are
+                # unretrievable, so the chunk count is the number that matters:
+                # a document that has not been indexed answers nothing.
+                "knowledge": {
+                    "documents": KnowledgeDocument.objects.count(),
+                    "active": KnowledgeDocument.objects.filter(is_active=True).count(),
+                    "chunks": KnowledgeChunk.objects.count(),
+                    "unindexed": KnowledgeDocument.objects.filter(
+                        chunks__isnull=True
+                    ).count(),
                 },
                 "acknowledgment": {
                     "timer_minutes": routing.acknowledgment_minutes(),

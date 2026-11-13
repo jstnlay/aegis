@@ -49,6 +49,58 @@ describe("ChatbotPanel", () => {
     expect(screen.getByText(/91.50%/)).toBeInTheDocument()
   })
 
+  it("shows the attendance counts the server actually sends", async () => {
+    // The summary field names are specific: the chatbot sends `_days`, and
+    // reading `_count` here rendered three dashes for a real answer.
+    vi.mocked(apiClient.post).mockResolvedValue({
+      data: {
+        reply: "You have attended 18 of 20 recorded days.",
+        intent: "ask_attendance",
+        urgency: "normal",
+        data: {
+          attendance_summary: { present_days: 16, late_days: 2, absent_days: 2 },
+        },
+      },
+    })
+    renderPanel()
+    fireEvent.click(
+      screen.getByRole("button", { name: "What is my grade in Math?" })
+    )
+    expect(
+      await screen.findByText(/Present: 16 · Late: 2 · Absent: 2/)
+    ).toBeInTheDocument()
+  })
+
+  it("shows which school document grounded the answer", async () => {
+    // The reply text names the source; this block is the link that lets the
+    // student read the document themselves.
+    vi.mocked(apiClient.post).mockResolvedValue({
+      data: {
+        reply: "From the handbook: a white polo is required.",
+        intent: "unknown",
+        urgency: "normal",
+        data: {
+          knowledge: [
+            {
+              chunk_id: "c1",
+              title: "Student Handbook",
+              source_label: "Student Handbook 2026, p. 12",
+              source_url: "https://example.test/handbook",
+            },
+          ],
+        },
+      },
+    })
+    renderPanel()
+    fireEvent.click(
+      screen.getByRole("button", { name: "What is my grade in Math?" })
+    )
+    expect(await screen.findByText("Answered from:")).toBeInTheDocument()
+    expect(
+      screen.getByRole("link", { name: "Student Handbook 2026, p. 12" })
+    ).toHaveAttribute("href", "https://example.test/handbook")
+  })
+
   it("keeps Shift+Enter for new lines and sends with Enter", async () => {
     vi.mocked(apiClient.post).mockResolvedValue({
       data: { reply: "Hello Ana!", data: {} },

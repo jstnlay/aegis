@@ -603,8 +603,9 @@ export const appRoutes: RouteObject[] = [
           },
           {
             /*
-             * The administrator's chatbot safety console: screening counts, the
-             * model status, the Layer 1 terms and the acknowledgment timer.
+             * The administrator's chatbot safety console: screening counts,
+             * the Layer 1 terms, the knowledge corpus and the acknowledgment
+             * timer.
              */
             path: "admin/chatbot",
             element: (

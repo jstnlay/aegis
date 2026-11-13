@@ -104,6 +104,37 @@ export interface KeywordTerm {
   updated_at: string
 }
 
+/**
+ * One document the assistant is allowed to answer from.
+ *
+ * `body` is write-only on the server: it is chunked into the passages
+ * retrieval searches and never returned. `chunk_count` is what says whether a
+ * document is actually retrievable — a document with no chunks answers
+ * nothing, whatever it is titled.
+ */
+export interface KnowledgeDocument {
+  id: string
+  title: string
+  category: string
+  source_label: string
+  source_url: string
+  origin: "manual" | "strapi" | "cms"
+  external_id: string
+  is_active: boolean
+  chunk_count: number
+  created_at: string
+  updated_at: string
+}
+
+export interface KnowledgeDocumentInput {
+  title: string
+  category: string
+  source_label?: string
+  source_url?: string
+  is_active?: boolean
+  body?: string
+}
+
 export interface ChatbotDashboard {
   flags: {
     total: number
@@ -119,6 +150,13 @@ export interface ChatbotDashboard {
     sensitive_last_7_days: number
   }
   keywords: { active: number; total: number }
+  /** The retrieval corpus: documents, and how many are actually indexed. */
+  knowledge: {
+    documents: number
+    active: number
+    chunks: number
+    unindexed: number
+  }
   acknowledgment: {
     timer_minutes: number
     /** The window per severity, after any per-severity override. */
@@ -150,34 +188,6 @@ export interface ChatbotDashboard {
       created_at: string
     }[]
   }
-}
-
-export interface ModelStatus {
-  configured: boolean
-  sdk_installed: boolean
-  /** The model in use right now. */
-  model: string
-  /** Every configured model, primary first. */
-  models: string[]
-  available: boolean
-  timeout_seconds: number
-  deadline_seconds: number
-  /** How many API keys are configured, and how many have spent their quota. */
-  key_count: number
-  keys_exhausted: number
-  /** Whether student free text is encrypted at rest. */
-  encryption: {
-    enabled: boolean
-    algorithm: string
-    key_count: number
-    active_key_id: string | null
-    error: string | null
-  }
-  /** Why the last call failed, if one did. Empty when the last call worked. */
-  last_failure: { reason: string; at: string | null }
-  layer1: string
-  layer2: string
-  privacy: string
 }
 
 /**
@@ -321,18 +331,6 @@ export function useChatbotDashboard() {
   })
 }
 
-export function useModelStatus() {
-  return useQuery({
-    queryKey: ["chatbot", "admin", "model-status"],
-    queryFn: async () => {
-      const { data } = await apiClient.get<ModelStatus>(
-        "/chatbot/admin/model-status/"
-      )
-      return data
-    },
-  })
-}
-
 /** Run the acknowledgment timer now. Idempotent server-side. */
 export function useEscalateStaleFlags() {
   const queryClient = useQueryClient()
@@ -414,4 +412,78 @@ export function useDeleteKeywordTerm() {
 /** Switch one term on or off without touching its text. */
 export function useToggleKeywordTerm() {
   return useUpdateKeywordTerm()
+}
+
+/* ------------------------------------------------------------------ */
+/* Knowledge corpus                                                     */
+/* ------------------------------------------------------------------ */
+
+export function useKnowledgeDocuments() {
+  return useQuery({
+    queryKey: ["chatbot", "knowledge"],
+    queryFn: async () => {
+      const { data } = await apiClient.get<{ results: KnowledgeDocument[] }>(
+        "/chatbot/admin/knowledge/"
+      )
+      return data.results ?? []
+    },
+  })
+}
+
+/**
+ * Create a document and index its text.
+ *
+ * The dashboard count is invalidated too: adding a document changes the corpus
+ * size the metric shows, and a stale number next to a fresh row reads as a bug.
+ */
+export function useCreateKnowledgeDocument() {
+  const queryClient = useQueryClient()
+  return useMutation<KnowledgeDocument, Error, KnowledgeDocumentInput>({
+    mutationFn: async (payload) => {
+      const { data } = await apiClient.post<KnowledgeDocument>(
+        "/chatbot/admin/knowledge/",
+        payload
+      )
+      return data
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["chatbot", "knowledge"] })
+      void queryClient.invalidateQueries({ queryKey: ["chatbot", "admin"] })
+    },
+  })
+}
+
+/** Edit a document. Omitting `body` keeps the existing passages. */
+export function useUpdateKnowledgeDocument() {
+  const queryClient = useQueryClient()
+  return useMutation<
+    KnowledgeDocument,
+    Error,
+    { id: string; payload: Partial<KnowledgeDocumentInput> }
+  >({
+    mutationFn: async ({ id, payload }) => {
+      const { data } = await apiClient.patch<KnowledgeDocument>(
+        `/chatbot/admin/knowledge/${id}/`,
+        payload
+      )
+      return data
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["chatbot", "knowledge"] })
+      void queryClient.invalidateQueries({ queryKey: ["chatbot", "admin"] })
+    },
+  })
+}
+
+export function useDeleteKnowledgeDocument() {
+  const queryClient = useQueryClient()
+  return useMutation<void, Error, string>({
+    mutationFn: async (id) => {
+      await apiClient.delete(`/chatbot/admin/knowledge/${id}/`)
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["chatbot", "knowledge"] })
+      void queryClient.invalidateQueries({ queryKey: ["chatbot", "admin"] })
+    },
+  })
 }

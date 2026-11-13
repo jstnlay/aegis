@@ -19,6 +19,7 @@ import re
 from typing import Any
 
 from apps.chatbot.policies import parse_message
+from apps.chatbot.retrieval import retrieve
 from apps.chatbot.taxonomy import ChatIntent, UrgencyLevel
 
 logger = logging.getLogger(__name__)
@@ -105,6 +106,22 @@ ALLOWED_INTENTS_BY_ROLE = {
 ESCALATION_INTENTS = {
     ChatIntent.URGENT_CONCERN,
     ChatIntent.REQUEST_COUNSELOR,
+}
+
+# Intents a passage from a school document may answer: the questions about the
+# school itself — its rules, its schedule, its procedures — that no table in
+# this database holds. A grade or an attendance question is deliberately NOT
+# here. Those are answered from a scoped query, and a document someone typed
+# must never be able to stand in for a child's record.
+KNOWLEDGE_INTENTS = {
+    ChatIntent.UNKNOWN,
+    ChatIntent.SYSTEM_NAVIGATION,
+    ChatIntent.ASK_SUBJECT_HELP,
+    ChatIntent.ASK_STUDY_STRATEGY,
+    ChatIntent.ASK_RECOMMENDATION,
+    ChatIntent.ASSESSMENT_SCHEDULE,
+    ChatIntent.ASSESSMENT_INSTRUCTIONS,
+    ChatIntent.GUIDANCE_HELP,
 }
 
 
@@ -356,11 +373,19 @@ def get_student_attendance_summary(user, student_profile) -> dict[str, Any] | No
     }
 
 
-def get_learning_resources(user, subject=None, limit=5) -> list[dict[str, Any]]:
+def get_learning_resources(user, subject=None, limit=5, query=None) -> list[dict[str, Any]]:
     """
     Authorized learning resource lookup.
 
     Only APPROVED + ACTIVE items. Content is never invented.
+
+    `query` is the student's own question. When the question names no subject
+    the caller recognised, the item is kept only if one of its own words
+    appears in the question. Without that filter the lookup was "every
+    approved item", so asking for underwater basket weaving returned the
+    algebra module — a real answer to a question nobody asked, which is what
+    "not accurate" meant in practice. A question that matches nothing now
+    returns nothing, and the reply says so.
     """
     from apps.cms.models import LearningItem
 
@@ -370,6 +395,8 @@ def get_learning_resources(user, subject=None, limit=5) -> list[dict[str, Any]]:
     )
     if subject:
         queryset = queryset.filter(subject__name__icontains=subject)
+    elif query:
+        queryset = _filter_items_by_query(queryset, query)
 
     items = queryset[:limit]
     return [
@@ -383,6 +410,27 @@ def get_learning_resources(user, subject=None, limit=5) -> list[dict[str, Any]]:
         }
         for item in items
     ]
+
+
+def _filter_items_by_query(queryset, query: str):
+    """Keep only items whose own words appear in the question."""
+    from django.db.models import Q
+
+    terms = {
+        word
+        for word in re.findall(r"[a-z0-9]+", (query or "").lower())
+        if len(word) >= 4
+    }
+    if not terms:
+        return queryset.none()
+    condition = Q()
+    for term in terms:
+        condition |= (
+            Q(title__icontains=term)
+            | Q(topic__icontains=term)
+            | Q(subject__name__icontains=term)
+        )
+    return queryset.filter(condition)
 
 
 def _faculty_sections(user):
@@ -616,6 +664,18 @@ def _draft_assessment_items(user, topic: str) -> list[dict]:
     return result["drafts"]
 
 
+def _record_subject(user, summary: dict) -> str:
+    """
+    "You have" for the student, the student's name for everyone else.
+
+    A parent reads their child's record, so "You have" would be wrong; a
+    student reading their own name back is accurate but unfriendly.
+    """
+    if user.role == "student":
+        return "You have"
+    return f"{summary.get('student_name') or 'That student'} has"
+
+
 def _deterministic_reply(user, intent: ChatIntent, entities, context, data=None) -> str:
     """Generate a deterministic reply for supported intents."""
     from apps.chatbot.taxonomy import ChatEntity
@@ -636,6 +696,30 @@ def _deterministic_reply(user, intent: ChatIntent, entities, context, data=None)
                 "I can answer that, but you have more than one linked student. "
                 "Which student do you mean? Tell me their name or student number."
             )
+
+    # -- Grounded answer from a school document ------------------------------
+    #
+    # Checked before the canned branches, because a real passage about the
+    # school beats a stock sentence about the assistant. It is only reached
+    # when `handle_message` retrieved something, and retrieval is not run for
+    # a record question, so this can never answer "what is my grade".
+    #
+    # The source is named in full. That is what makes the answer checkable by
+    # the student reading it, and it is what separates an answer grounded in
+    # this school from a sentence that merely sounds like one.
+    passages = data.get("knowledge") or []
+    if passages:
+        answer = " ".join(passages[0]["excerpt"].split())
+        label = passages[0]["source_label"] or passages[0]["title"]
+        reply = f"From “{label}”: {answer}"
+        if len(passages) > 1:
+            second = passages[1]
+            second_label = second["source_label"] or second["title"]
+            reply += (
+                f"\n\nAlso from “{second_label}”: "
+                f"{' '.join(second['excerpt'].split())}"
+            )
+        return f"{reply}\n\nIf that does not cover it, ask the school office."
 
     if intent == ChatIntent.GREETING:
         return f"Hello, {user.first_name}! I can help with AEGIS. What do you need?"
@@ -761,7 +845,79 @@ def _deterministic_reply(user, intent: ChatIntent, entities, context, data=None)
             f"Open {where} and use “Generate draft” to fill them in — nothing "
             "is saved until you add the question."
         )
-    return "I can help you with that. What would you like to know?"
+    # -- Authorized record answers ------------------------------------------
+    #
+    # These read the facts `handle_message` had already fetched. Until this
+    # block existed, none of these intents had a branch, so a student asking
+    # about their own grade fell through to the generic tail and was told
+    # nothing — even though the number was in `data` the whole time. The data
+    # was never the missing part; the sentence was.
+    if intent in (ChatIntent.ASK_GRADE, ChatIntent.ASK_ACADEMIC_PERFORMANCE):
+        summary = data.get("grade_summary")
+        if not summary:
+            return (
+                "I don't have finalized grades for that student, so there is no "
+                "average I can report. I only read grades a teacher has finalized; "
+                "ask your teacher if a grade is missing."
+            )
+        if not summary["grade_count"] or summary["average"] is None:
+            return (
+                f"{_record_subject(user, summary)} no finalized grades yet, so "
+                "there is no average to report. One appears here once a teacher "
+                "finalizes the first grade."
+            )
+        return (
+            f"{_record_subject(user, summary)} {summary['grade_count']} finalized "
+            f"grade(s), averaging {summary['average']:.2f}. Open Grades to see each "
+            "subject."
+        )
+    if intent in (ChatIntent.ASK_ATTENDANCE, ChatIntent.ASK_ATTENDANCE_STATUS):
+        summary = data.get("attendance_summary")
+        if not summary:
+            return (
+                "I don't have attendance records for that student. If you expected "
+                "some, ask the school office whether attendance has been encoded."
+            )
+        if not summary["total_days"]:
+            return (
+                f"{_record_subject(user, summary)} no recorded attendance days yet."
+            )
+        # A late arrival is a day the student was in school; counting it as an
+        # absence would report a child who attended as a child who did not.
+        attended = summary["present_days"] + summary["late_days"]
+        rate = (
+            f" ({summary['attendance_rate'] * 100:.1f}%)"
+            if summary["attendance_rate"] is not None
+            else ""
+        )
+        return (
+            f"{_record_subject(user, summary)} attended {attended} of "
+            f"{summary['total_days']} recorded days{rate}: "
+            f"{summary['present_days']} present, {summary['late_days']} late, "
+            f"{summary['absent_days']} absent."
+        )
+    if intent == ChatIntent.ASK_LEARNING_RESOURCE:
+        resources = data.get("resources") or []
+        if not resources:
+            return (
+                "I don't have an approved learning resource for that yet. Try "
+                "naming a subject, or ask your teacher what to use."
+            )
+        listed = "; ".join(
+            row["title"] + (f" ({row['subject']})" if row.get("subject") else "")
+            for row in resources
+        )
+        return (
+            f"These are the approved learning resources I can see: {listed}. "
+            "Your teacher may have more in class."
+        )
+    # The honest tail. Naming what this assistant cannot answer is the whole
+    # point: a confident non-answer is what made the old tail read as wrong.
+    return (
+        "I can look up your grades, attendance and approved learning resources. "
+        "I don't have an answer for this one — for school rules, schedules or "
+        "anything else, ask the school office or Guidance."
+    )
 
 
 def handle_message(
@@ -853,7 +1009,7 @@ def handle_message(
         for e in entities:
             if e.entity_type == "subject":
                 subject = e.value
-        resources = get_learning_resources(user, subject=subject)
+        resources = get_learning_resources(user, subject=subject, query=message)
         data["resources"] = resources
     elif intent == ChatIntent.ASK_AT_RISK_STUDENTS:
         summary = get_at_risk_students(user)
@@ -883,6 +1039,22 @@ def handle_message(
         if drafts:
             data["assessment_drafts"] = drafts
             data["assessment_topic"] = topic
+
+    # Knowledge retrieval (RAG).
+    #
+    # This is where the assistant stops guessing about the school and starts
+    # quoting it. The passages come back with their document attached, so the
+    # reply can name where the answer came from and the student can go read it.
+    #
+    # Retrieval is not run for a record question. A passage is school prose
+    # that anyone with database access could have written; a grade is the
+    # student's own record behind an authorization check. Letting the first
+    # stand in for the second would trade a permission boundary for a search
+    # hit, which is exactly the kind of accuracy the client complained about.
+    if intent in KNOWLEDGE_INTENTS:
+        passages = retrieve(message, limit=3)
+        if passages:
+            data["knowledge"] = passages
 
     # LLM path (optional, structured, validated) — deterministic fallback otherwise
     if use_llm and llm_result and llm_result.get("valid"):

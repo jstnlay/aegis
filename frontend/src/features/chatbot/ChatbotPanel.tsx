@@ -395,12 +395,14 @@ function ResponseDetail({ response }: { response: ChatResponse }) {
   const grades = response.data.grade_summary
   const attendance = response.data.attendance_summary
   const resources = response.data.resources ?? []
+  const sources = response.data.knowledge ?? []
   const flag = response.data.flag
 
   if (
     !grades &&
     !attendance &&
     resources.length === 0 &&
+    sources.length === 0 &&
     !response.escalated &&
     !flag
   ) {
@@ -424,9 +426,9 @@ function ResponseDetail({ response }: { response: ChatResponse }) {
 
       {attendance ? (
         <p>
-          Present: {attendance.present_count ?? "—"} · Late:{" "}
-          {attendance.late_count ?? "—"} · Absent:{" "}
-          {attendance.absent_count ?? "—"}
+          Present: {attendance.present_days ?? "—"} · Late:{" "}
+          {attendance.late_days ?? "—"} · Absent:{" "}
+          {attendance.absent_days ?? "—"}
         </p>
       ) : null}
 
@@ -438,6 +440,36 @@ function ResponseDetail({ response }: { response: ChatResponse }) {
             </li>
           ))}
         </ul>
+      ) : null}
+
+      {/*
+        Where a grounded answer came from. The reply text already says the
+        source, so this is not a second answer: it is the link that lets a
+        student read the rule themselves instead of taking the assistant's
+        word for it.
+      */}
+      {sources.length > 0 ? (
+        <div className="aegis-chat-sources space-y-0.5">
+          <p className="text-muted-foreground">Answered from:</p>
+          <ul className="space-y-0.5">
+            {sources.map((source, index) => (
+              <li key={source.chunk_id ?? `${source.title}-${index}`}>
+                {source.source_url ? (
+                  <a
+                    href={source.source_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline"
+                  >
+                    {source.source_label || source.title || "School document"}
+                  </a>
+                ) : (
+                  source.source_label || source.title || "School document"
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : null}
 
       {/*

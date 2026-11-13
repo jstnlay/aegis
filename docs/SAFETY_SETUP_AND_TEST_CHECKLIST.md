@@ -158,6 +158,7 @@ New migrations:
 | `chatbot` | `0005_encrypt_existing_text` | encrypts the rows that were already stored in plain text |
 | `chatbot` | `0006_alter_chatmessage_detection_detail` | marks the model rationale JSON as encrypted |
 | `chatbot` | `0007_encrypt_existing_detection_detail` | encrypts the stored rationale |
+| `chatbot` | `0008_chatmessage_retrieved_sources_knowledgedocument_and_more` | `KnowledgeDocument`, `KnowledgeChunk`, and the encrypted `ChatMessage.retrieved_sources` pointers |
 | `guidance` | `0006_alter_behavioralnote_note_text_and_more` | marks the counseling narrative as encrypted |
 | `guidance` | `0007_encrypt_existing_narrative` | encrypts the stored counseling narrative |
 | `accounts` | `0009_registrationrequest_notice_accepted_at_and_more` | notice acceptance at sign-up |
@@ -188,6 +189,40 @@ The rest of the school's synthetic data is unchanged:
 cd backend\aegis_backend
 ..\.venv\Scripts\python.exe manage.py shell < ..\scripts\seed_ph9_synthetic.py
 ```
+
+## 4a. Load the knowledge corpus
+
+The assistant answers questions about the school itself — rules, policies,
+schedules, procedures — only from the documents in this corpus
+(`DECISIONS.md` §17). With an empty corpus it refuses those questions rather
+than guessing. Two ways to fill it:
+
+**From the content the school already has** (Strapi announcements and
+resources, plus approved `LearningItem` records):
+
+```powershell
+cd backend\aegis_backend
+..\.venv\Scripts\python.exe manage.py sync_knowledge
+```
+
+The command is idempotent — keyed by the source it came from, so a second run
+updates rather than duplicates. `--prune` deactivates a synced document whose
+source has disappeared; it never deletes one, because a past reply cites it by
+id. There is no scheduler in this project, so run it from cron like the other
+maintenance commands.
+
+**By hand** at `/app/admin/chatbot`, under *Knowledge corpus*: paste the text
+of the handbook or a policy, give it a title and the label a student should see
+cited ("Handbook 2026, p. 12").
+
+Two things the school has to get right:
+
+* The corpus text is stored in the clear, because retrieval has to search it.
+  It is school documents only — **no student data**. A student's name pasted
+  into a policy document has been published to every student who asks.
+* A document with no text (or that failed to index) holds no passages and
+  answers nothing. The admin console shows the passage count on every row for
+  exactly that reason: zero is the number to notice.
 
 ## 5. Run the escalation timer
 
@@ -283,6 +318,9 @@ must be true when it is done.
 | 5 | Send a harmless message | No flag, no banner |
 | 6 | Check another student's history | Impossible from the UI; `GET /chatbot/history/` is scoped to the caller |
 | 6a | Send "I am being bullied every day" | The reply thanks them and says a counselor has been told — never "I didn't understand" — and a `medium` flag exists |
+| 6b | Send "What is the uniform policy?" with the handbook loaded | The reply quotes the handbook and names it; an "Answered from:" line links to the document |
+| 6c | Send a school question the corpus does not cover | The reply says it does not have an answer and names what it can do — it does not invent a policy |
+| 6d | Send "How many days have I missed?" | The reply gives the counts and the panel shows "Present: n · Late: n · Absent: n" — never three dashes |
 
 ### Guidance
 
@@ -309,35 +347,39 @@ must be true when it is done.
 
 | # | Action | Expected |
 |---|---|---|
-| 18 | Open `/app/admin/chatbot` | Flag counts, the average acknowledgment time, the model status and the Layer 1 term table |
+| 18 | Open `/app/admin/chatbot` | Flag counts, the average acknowledgment time, the Layer 1 term table, the knowledge corpus and the "Run escalation timer" button |
 | 19 | Deactivate a keyword term | It stops matching on the next message; the term stays in the table |
 | 20 | Add a term with severity `critical` | A message containing it is flagged critical and reaches administrators |
 | 21 | Press "Run escalation timer" | The number of escalated flags is reported; running it again reports zero |
-| 22 | Read the model status with no API key | "Layer 2 unavailable", and the reason is stated |
-| 23 | Read the model status with an exhausted quota | The console names the reason: "quota exhausted: check the plan and billing" |
-| 24 | Read the model status with no encryption key | The console says "Field encryption is OFF. Student messages are stored in plain text." |
+| 22 | `GET /api/v1/chatbot/admin/model-status/` with no API key | `available: false`, and the reason is stated. The model card was removed from the console on purpose; this endpoint and `manage.py security_posture` are where the model status is read now |
+| 23 | The same endpoint with an exhausted quota | The reason names the quota: "quota exhausted: check the plan and billing" |
+| 24 | Start the app with no encryption key, then run `manage.py security_posture` | The command reports that field encryption is OFF. The console shows no status card; a production deployment refuses to start without a key (§14) |
 | 25 | With a key configured, look at the chatbot tables directly | The message column holds `enc1:k1:…`, not the text; the application still shows the text |
 | 24 | Mark a flag as a false positive in Guidance, then reopen the console | The flag appears in the "False positives" list with the note; the message is not repeated there |
 | 25 | Set `chatbot.acknowledgment_timer_minutes.critical` to 5 | A new critical flag is due in 5 minutes; a medium flag still uses the school-wide window |
 | 26 | Set `chatbot.retention_days` and run `manage.py purge_chatbot_data --dry-run` | The counts are reported; an open flag is listed as kept; nothing is deleted |
+| 27 | Open `/app/admin/chatbot` with an empty corpus and ask the assistant a school question | The reply says it does not have an answer and names what it can do — it does not guess |
+| 28 | Add the handbook text under *Knowledge corpus* | The row shows a passage count above zero; asking a question the handbook covers is answered from it and names the document |
+| 29 | Add a document with no text | It is refused, or listed as "not indexed" with passage count 0 — the assistant never quotes it |
+| 30 | Ask a question about a student's grade | The answer is the grade from the record, never a passage from a policy document |
 
 ### Faculty assessments
 
 | # | Action | Expected |
 |---|---|---|
-| 27 | Generate an AI draft | The assessment appears with "AI draft · needs review"; the Deploy button is disabled with the reason |
-| 28 | Deploy it anyway | 400 — "must be reviewed and approved before it can be published" |
-| 29 | Approve it | The badge changes to "approved"; Deploy becomes available |
-| 30 | Deploy and check completion | Target count, completed, in progress and not-started counts; the names of students who have not completed it |
+| 31 | Generate an AI draft | The assessment appears with "AI draft · needs review"; the Deploy button is disabled with the reason |
+| 32 | Deploy it anyway | 400 — "must be reviewed and approved before it can be published" |
+| 33 | Approve it | The badge changes to "approved"; Deploy becomes available |
+| 34 | Deploy and check completion | Target count, completed, in progress and not-started counts; the names of students who have not completed it |
 
 ### Registration
 
 | # | Action | Expected |
 |---|---|---|
-| 31 | Open `/register` | The notice text is shown, fetched from the server, with its version |
-| 32 | Submit without ticking the box | The form refuses: "You must accept the student notice" |
-| 33 | Tick the box and submit | The request is accepted; the registration row records the notice version and the acceptance time |
-| 34 | Change `chatbot.notice_version` and reload the notice | The version changes; every student must accept again |
+| 35 | Open `/register` | The notice text is shown, fetched from the server, with its version |
+| 36 | Submit without ticking the box | The form refuses: "You must accept the student notice" |
+| 37 | Tick the box and submit | The request is accepted; the registration row records the notice version and the acceptance time |
+| 38 | Change `chatbot.notice_version` and reload the notice | The version changes; every student must accept again |
 
 ## 9. What is *not* covered by the automated tests
 
@@ -356,3 +398,11 @@ must be true when it is done.
   unset, so nothing is deleted yet. The school has to decide the number.
 * Load. The flag inbox has no pagination; a school with thousands of flags
   will want it.
+* Retrieval quality against a real corpus. The retriever is tested on
+  one-paragraph documents with known answers; it has not been run against the
+  school's actual handbook. The scorer is lexical, so it will miss a question
+  phrased with a synonym the document does not use. Load the real corpus and
+  try the questions students actually ask before shipping.
+* A real Strapi sync. `sync_knowledge` is tested with Strapi unreachable; the
+  live pull of announcements and resources has to be run once against the real
+  instance.
