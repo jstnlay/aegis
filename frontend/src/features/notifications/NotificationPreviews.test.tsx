@@ -60,7 +60,7 @@ it("shows at most two previews and promotes the next queued update on dismiss", 
   expect(screen.getByText("Update 1")).toBeInTheDocument()
   expect(screen.getAllByRole("article")).toHaveLength(2)
   expect(state.markRead).not.toHaveBeenCalled()
-  expect(state.notifications).toHaveBeenCalledWith({}, 15_000)
+  expect(state.notifications).toHaveBeenCalledWith()
 })
 
 it("clears the entire preview queue without marking read and still shows future updates", () => {

@@ -7,6 +7,7 @@ import {
   ErrorNote,
   LoadingState,
 } from "@/components/feedback/Feedback"
+import { UpdatedAt } from "@/components/feedback/UpdatedAt"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { NotificationSummary } from "@/components/layout/Header"
@@ -181,6 +182,7 @@ export function NotificationsPage() {
                   ? "You have no unread notifications."
                   : `${unreadCount} unread notification${unreadCount === 1 ? "" : "s"}.`}
               </CardDescription>
+              <UpdatedAt at={list.dataUpdatedAt} className="mt-1 block" />
             </div>
             <Button
               variant="outline"

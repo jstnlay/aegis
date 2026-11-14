@@ -2,6 +2,7 @@ import { useState, useMemo } from "react"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { apiClient } from "@/lib/api"
 import { fetchAllPages } from "@/lib/pagination"
+import { liveQueryOptions } from "@/lib/queryClient"
 
 /**
  * Bucket label for a finalized grade that carries no grading period.
@@ -153,6 +154,7 @@ export function useStudentDashboardData(studentId: string) {
   const enabled = Boolean(studentId)
 
   const metricsQuery = useQuery<DashboardMetrics | undefined, Error>({
+    ...liveQueryOptions,
     queryKey: ["student", "metrics", studentId],
     enabled,
     queryFn: async () => {
@@ -165,6 +167,7 @@ export function useStudentDashboardData(studentId: string) {
   })
 
   const attendanceQuery = useQuery<AttendanceSummary | null, Error>({
+    ...liveQueryOptions,
     queryKey: ["student", "attendance", studentId],
     enabled,
     queryFn: async () => {
@@ -196,6 +199,7 @@ export function useStudentDashboardData(studentId: string) {
   })
 
   const gradesQuery = useQuery<StudentGrade[], Error>({
+    ...liveQueryOptions,
     queryKey: ["student", "grades", studentId],
     enabled,
     queryFn: async () => {
@@ -305,6 +309,12 @@ export function useStudentDashboardData(studentId: string) {
     setSelectedPeriod,
     averageGrade,
     totalSubjects,
+    /** Newest successful fetch among the three live dashboard queries. */
+    updatedAt: Math.max(
+      metricsQuery.dataUpdatedAt,
+      attendanceQuery.dataUpdatedAt,
+      gradesQuery.dataUpdatedAt
+    ),
     loading:
       !enabled ||
       attendanceQuery.isFetching ||

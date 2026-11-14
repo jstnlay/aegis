@@ -266,6 +266,25 @@ describe("sign-out confirmation", () => {
 })
 
 describe("header bell (TC-STU-08)", () => {
+  it("counts unread from the list query so the badge and menu share one request", async () => {
+    mockedFetchAllPages.mockResolvedValue({
+      count: 2,
+      results: [
+        makeNotification({ id: "n-1" }),
+        makeNotification({ id: "n-2", is_read: true }),
+      ],
+    })
+
+    renderHeader()
+    await screen.findByRole("button", { name: "Notifications, 1 unread" })
+
+    expect(mockedFetchAllPages).toHaveBeenCalledTimes(1)
+    expect(mockedFetchAllPages).toHaveBeenCalledWith(
+      "/notifications/",
+      expect.objectContaining({ signal: expect.anything() })
+    )
+  })
+
   it("keeps related-page links outside the read button and marks the notification read on navigation", async () => {
     mockedFetchAllPages.mockResolvedValue({
       count: 1,
@@ -309,7 +328,7 @@ describe("header bell (TC-STU-08)", () => {
     })
 
     renderHeader()
-    // The unread count is the badge's own copy of the number.
+    // The badge counts the unread rows in the same list the menu renders.
     const bell = await screen.findByRole("button", {
       name: "Notifications, 1 unread",
     })

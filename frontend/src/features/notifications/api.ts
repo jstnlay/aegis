@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { apiClient } from "@/lib/api"
 import { getNavItemsForRole } from "@/lib/navigation"
 import { fetchAllPages } from "@/lib/pagination"
+import { liveQueryOptions } from "@/lib/queryClient"
 import type { Role } from "@/types/auth"
 
 /**
@@ -188,13 +189,15 @@ function buildUrl(filters: NotificationFilters): string {
   return query ? `/notifications/?${query}` : "/notifications/"
 }
 
-export function useNotifications(
-  filters: NotificationFilters = {},
-  refetchInterval: number | false = false
-) {
+/**
+ * Every notification list polls while watched: the bell, the inbox and the
+ * preview stack all mount this hook. The polling options live in
+ * `lib/queryClient.ts` so the interval and visibility rules have one definition.
+ */
+export function useNotifications(filters: NotificationFilters = {}) {
   const url = buildUrl(filters)
   return useQuery({
-    refetchInterval,
+    ...liveQueryOptions,
     queryKey: [KEY, "list", filters.isRead ?? null, filters.type ?? null],
     queryFn: async ({ signal }) => {
       const { results } = await fetchAllPages<Notification>(url, { signal })
@@ -203,7 +206,7 @@ export function useNotifications(
   })
 }
 
-/** Unread notifications only — the badge count and the default view. */
+/** Unread notifications only — the inbox's unread filter. */
 export function useUnreadNotifications() {
   return useNotifications({ isRead: "false" })
 }
@@ -234,12 +237,6 @@ export function useDeleteNotification() {
     mutationFn: (id: string) => apiClient.delete(`/notifications/${id}/`),
     onSuccess: () => client.invalidateQueries({ queryKey: [KEY] }),
   })
-}
-
-/** Unread count for the navigation badge. */
-export function useUnreadCount(): number {
-  const { data } = useUnreadNotifications()
-  return data?.length ?? 0
 }
 
 /** Newest first, matching `Notification.Meta.ordering = ["-created_at"]`. */

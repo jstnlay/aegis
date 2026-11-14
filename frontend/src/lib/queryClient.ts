@@ -12,6 +12,24 @@ export const queryKeys = {
   },
 }
 
+/** How often a live screen asks the server for changes. */
+export const LIVE_POLL_INTERVAL_MS = 20_000
+
+/**
+ * Adaptive polling for screens that must show changes while watched.
+ *
+ * React Query suspends the interval while the tab is hidden, and `"always"`
+ * makes focus refetch even when the existing data is still inside `staleTime`.
+ * `staleTime: 0` is deliberate: the next poll is the source of freshness, not
+ * the 60 s default that would let a focus event skip the fetch.
+ */
+export const liveQueryOptions = {
+  staleTime: 0,
+  refetchInterval: LIVE_POLL_INTERVAL_MS,
+  refetchIntervalInBackground: false,
+  refetchOnWindowFocus: "always",
+} as const
+
 /**
  * Sensible defaults for an institutional SPA.
  * Retries stay low (the backend already throttles), staleTime prevents

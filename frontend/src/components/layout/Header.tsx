@@ -25,7 +25,6 @@ import {
   sortNotifications,
   useMarkNotificationRead,
   useMarkAllNotificationsRead,
-  useUnreadNotifications,
   useNotifications,
   type Notification,
 } from "@/features/notifications/api"
@@ -109,11 +108,13 @@ export function NotificationSummary({
 
 function UserChip() {
   const { user } = useAuth()
-  const unread = useUnreadNotifications()
   const inbox = useNotifications()
   const [selectedNotification, setSelectedNotification] =
     useState<Notification | null>(null)
-  const unreadCount = unread.data?.length ?? 0
+  // The badge reads the same query the menu lists, so one response updates
+  // both and no second unread request is made.
+  const unreadCount =
+    inbox.data?.filter((notification) => !notification.is_read).length ?? 0
   const markRead = useMarkNotificationRead()
   const markAllRead = useMarkAllNotificationsRead()
   const [notificationFilter, setNotificationFilter] = useState<

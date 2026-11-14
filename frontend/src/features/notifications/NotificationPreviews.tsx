@@ -43,7 +43,7 @@ function UserNotificationPreviews({ userId }: { userId: string }) {
       return new Set()
     }
   })
-  const inbox = useNotifications({}, 15_000)
+  const inbox = useNotifications()
   const markRead = useMarkNotificationRead()
   const [selected, setSelected] = useState<Notification | null>(null)
   const [readError, setReadError] = useState<string>()

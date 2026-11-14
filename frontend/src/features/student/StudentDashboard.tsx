@@ -32,6 +32,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { MetricCard } from "@/components/ui/metric-card"
+import { UpdatedAt } from "@/components/feedback/UpdatedAt"
 import {
   Select,
   SelectContent,
@@ -78,6 +79,7 @@ export function StudentDashboard() {
     setSelectedPeriod,
     averageGrade,
     totalSubjects,
+    updatedAt,
     loading,
     error,
   } = useStudentDashboardData(studentId)
@@ -112,6 +114,7 @@ export function StudentDashboard() {
           <p className="student-welcome-message">
             Keep up with your grades, attendance, and next steps.
           </p>
+          <UpdatedAt at={updatedAt} className="student-updated" />
         </div>
         <div className="student-welcome-art" aria-hidden="true">
           <GraduationCap strokeWidth={1.5} />
