@@ -1,9 +1,9 @@
 # AEGIS: from website to web application
 
-**Status: Phase 1 (production posture) and Phase 2 (installable app shell) are
-built and deployed. Phases 3–7 are not built.** Manual install checks on
-Chrome and iOS are still outstanding; the automated build, manifest, worker and
-offline-gate checks pass.
+**Status: Phase 1 (production posture), Phase 2 (installable app shell) and
+Phase 3 (live data) are built and deployed. Phases 4–7 are not built.** The
+install prompt, offline page and recovery were verified in Chrome. The
+two-browser notification check is still outstanding.
 
 **Scope.** How the deployed AEGIS stops being "a website that happens to have
 pages behind a login" and becomes an application a parent or a student opens
@@ -253,6 +253,15 @@ looking at it.
 - A notification created in one browser appears in an already-open AEGIS tab
   within 30 s without a manual reload.
 - No polling happens on a hidden tab (verifiable in the network panel).
+
+**Built (2026-11-15).** `liveQueryOptions` in `lib/queryClient.ts` owns the
+rule: 20 s interval, `staleTime: 0`, refetch on focus even when data is fresh,
+and React Query's default pause while the tab is hidden. Every notification
+list uses it, so the bell, the previews and the inbox behave the same. The
+student dashboard polls its metrics, attendance and grades queries; the other
+role dashboards are unchanged. The bell badge now counts the unread rows of the
+list query it already renders instead of issuing a second unread request, and
+the dashboard and inbox show the time of the last successful update.
 
 **Verification:** `npm test`; manual two-browser check.
 
