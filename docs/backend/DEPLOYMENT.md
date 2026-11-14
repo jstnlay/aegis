@@ -3,43 +3,53 @@
 Backend: `https://aegis-0pav.onrender.com`
 Frontend: `https://aegis-frontend-neon.vercel.app`
 
-## What is deployed right now
+## Production cutover (Phase 1)
 
-The running Render build is older than the current code: it serves the API
-(the frozen error envelope, JSON only, no browsable API) but it does not have
-the health probes, the sign-in features, the server-side guidance directory,
-or the shared-cache support. **Redeploy the API service from the current
-branch** before setting the environment below, otherwise the new variables
-have nothing to configure.
+The service must run `config.settings.production`. `render.yaml` describes the
+target configuration, but the live service was created in the Render Dashboard,
+so the Dashboard is what actually changes it. Set every row below in
+**Environment**, then **Save and Redeploy**.
 
-After the redeploy:
-
-- `GET https://aegis-0pav.onrender.com/health/` → `{"status":"ok"}`
-- `GET https://aegis-0pav.onrender.com/ready/` → `{"status":"ok","database":true,"cache":"shared"}`
-- `GET https://aegis-0pav.onrender.com/admin/` → 404 (the admin site is off
-  in production; it was published before this change)
-
-## Render: the API service
-
-Environment tab, then **Save and Redeploy**.
+Production settings fail the build on a missing value instead of serving an
+insecure deployment: `DJANGO_ALLOWED_HOSTS` must be non-empty,
+`DJANGO_SECRET_KEY` must be at least 50 characters, and
+`FIELD_ENCRYPTION_KEYS` must be set.
 
 | Variable | Value |
 | --- | --- |
+| `DJANGO_SETTINGS_MODULE` | `config.settings.production` |
+| `DJANGO_DEBUG` | `False` |
+| `DJANGO_ALLOWED_HOSTS` | `aegis-0pav.onrender.com` |
+| `DJANGO_ENABLE_ADMIN_SITE` | `False` |
+| `DJANGO_SECRET_KEY` | 50+ random characters; keep the existing value if already set |
+| `FIELD_ENCRYPTION_KEYS` | `python manage.py generate_encryption_key` output |
 | `REDIS_URL` | the Redis service's **Internal Redis URL** (see below) |
 | `AEGIS_FRONTEND_URL` | `https://aegis-frontend-neon.vercel.app` |
 | `CORS_ALLOWED_ORIGINS` | `https://aegis-frontend-neon.vercel.app` |
-| `ALLOWED_HOSTS` | `aegis-0pav.onrender.com` |
-| `DEFAULT_FROM_EMAIL` | `no-reply@<your sending domain>` |
-| `EMAIL_HOST` | `smtp.resend.com` |
-| `EMAIL_PORT` | `587` |
-| `EMAIL_HOST_USER` | `resend` |
-| `EMAIL_HOST_PASSWORD` | the Resend API key |
-| `EMAIL_USE_TLS` | `True` |
+| `EMAIL_BACKEND` | `core.email.BrevoEmailBackend`, `core.email.Smtp2GoEmailBackend` or `core.email.ResendEmailBackend` on the free plan (see *Outgoing mail*) |
+| `DEFAULT_FROM_EMAIL` | the verified sender address |
 | `SUPABASE_S3_ENDPOINT` | `https://<project-ref>.supabase.co/storage/v1/s3` |
 | `SUPABASE_S3_BUCKET` | the public bucket name, e.g. `cms-upload` |
 | `SUPABASE_S3_REGION` | the bucket's region, e.g. `ap-southeast-1` |
 | `SUPABASE_S3_ACCESS_KEY` | the Supabase S3 access key id |
 | `SUPABASE_S3_SECRET_KEY` | the Supabase S3 secret access key |
+
+The build command is now `pip install` plus `migrate`. It no longer runs
+`provision_qa_accounts`, `seed_qa_dataset`, `train_risk_model` or
+`run_risk_computation`: those write a synthetic school into the database and
+must only run by hand on a DEV/QA environment. Running an import or risk
+recompute on a schedule is Phase 5 of `docs/WEB_APP_PLAN.md`.
+
+Because the Blueprint is not linked to the live service, the build command and
+health check are Dashboard settings too. In **Settings → Build & Deploy** set:
+
+| Setting | Value |
+| --- | --- |
+| Build Command | `pip install -r ../requirements/production.txt && python manage.py migrate` |
+| Health Check Path | `/api/v1/health/` |
+
+Without this step the old build command keeps seeding the database even after
+the environment variables above are set.
 
 The `SUPABASE_S3_*` set moves uploaded files (profile photos) out of the
 service's own disk. The free Render plan has no persistent disk, so a photo
@@ -54,7 +64,8 @@ API as well.
 
 `EMAIL_USE_TLS=True` with port 587 is STARTTLS, which is what Resend's SMTP
 relay expects. Resend's port 465 needs implicit SSL, which Django's SMTP
-backend does not do; use 587.
+backend does not do; use 587. Note that the free compute plan blocks those
+ports entirely — see *Outgoing mail*.
 
 ## Render: the Redis service
 
@@ -212,10 +223,11 @@ that cannot be chosen.
 
 ## Verifying it
 
-1. `GET https://aegis-0pav.onrender.com/health/` → 200
-2. `GET https://aegis-0pav.onrender.com/ready/` → 200 with `"database":true`
-   and `"cache":"shared"`. The cache field says which cache the rate limits
-   are counted in:
+1. `GET https://aegis-0pav.onrender.com/api/v1/health/` → 200 with JSON
+   `{"status":"ok"}`, not the DRF browsable-API HTML page.
+2. `GET https://aegis-0pav.onrender.com/api/v1/ready/` → 200 with
+   `"database":true` and `"cache":"shared"`. The cache field says which cache
+   the rate limits are counted in:
    - `"shared"` — Redis is configured and answers. One limit for the whole
      deployment.
    - `"local"` — the per-process cache is in use. Every limit is multiplied by
@@ -223,10 +235,13 @@ that cannot be chosen.
    - `"broken"` — Redis is configured but does not answer. The client treats
      it as empty, so no limit is enforced at all. Check `REDIS_URL` and that
      the Redis instance and the API service share a region.
-3. From one machine, make 16 failed sign-in requests to
+3. `GET https://aegis-0pav.onrender.com/admin/` → **404**. A 200 means
+   `DJANGO_ENABLE_ADMIN_SITE` is still on or the service is still running
+   development settings.
+4. From one machine, make 16 failed sign-in requests to
    `POST https://aegis-0pav.onrender.com/api/v1/auth/login/`. The 16th must
    answer **429** with a `Retry-After` header. If it answers 401, the limit is
    still per worker.
-4. Sign in on `https://aegis-frontend-neon.vercel.app/`, use **Forgot
+5. Sign in on `https://aegis-frontend-neon.vercel.app/`, use **Forgot
    password?**, and check that the link points at the Vercel URL and the
    mail arrives.

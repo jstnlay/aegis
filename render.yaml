@@ -1,15 +1,16 @@
-# Render service definition for the shared DEV/QA AEGIS backend.
+# Render service definition for the AEGIS production backend.
 #
-# This file DESCRIBES the already-running service. The live DEV/QA service was
+# This file DESCRIBES the already-running service. The live service was
 # created through the Render Dashboard, not from this Blueprint, so applying
 # or syncing the Blueprint is not part of the workflow -- Dashboard settings
 # are the source of truth at runtime. Keep this file in step with it.
 #
 # Architecture:
-#     Frontend (Cloudflare Pages / Vercel later)
+#     Frontend (Vercel)
 #         -> Render Django (this service)
 #             -> Supabase PostgreSQL (external, region ap-southeast-1)
-#             -> Render Strapi (aegis-cms)   -> Supabase PostgreSQL (aegis_cms_db)
+#             -> Render Redis (shared throttle cache)
+#             -> Render Strapi (aegis-cms) -> Supabase PostgreSQL (aegis_cms_db)
 #
 #     Strapi is the CMS: content is authored in its admin panel and AEGIS
 #     reads it server-side through /api/v1/cms/. No browser talks to Strapi
@@ -18,40 +19,22 @@
 # rootDir is backend/aegis_backend because manage.py lives there and because
 # the start command imports `config.wsgi` as a top-level module.
 #
-# Build order is deliberate and load-bearing:
-#     pip install -> migrate -> provision_qa_accounts -> seed_qa_dataset
-#     -> train_risk_model -> run_risk_computation -> gunicorn starts
-#     provision_qa_accounts writes accounts and seed_qa_dataset hangs records off
-#     those accounts, so both must run after migrate and must finish before gunicorn
-#     serves traffic. seed_qa_dataset is idempotent and transactional: re-running it
-#     on every deploy reuses the existing rows instead of duplicating them, and a
-#     failure rolls the whole dataset back rather than leaving a half-seeded school.
+# Build order is deliberate:
+#     pip install -> migrate -> gunicorn starts
 #
-#     train_risk_model is last among the data steps because it trains on the data
-#     the two steps above create: it computes features from graded, enrolled
-#     students and would find none before seed_qa_dataset runs. The model is stored
-#     in the database (RiskModelArtifact) because this host has no persistent disk,
-#     so without this step every deploy would leave run_risk_computation with
-#     nothing to load.
+#     migrate reads DJANGO_SETTINGS_MODULE, so it runs under the same
+#     production settings as the web process.
 #
-#     run_risk_computation then scores the seeded students, so the deployed DEV/QA
-#     service has real decision-tree risk alerts to test against instead of an
-#     empty Guidance > Risk alerts page. It is idempotent: an unchanged risk state
-#     does not create a duplicate alert. Both commands exit 0 when there is not
-#     enough history (they report why), so a small dataset cannot block a deploy;
-#     only a genuine error fails the build.
+#     QA seeding (provision_qa_accounts, seed_qa_dataset) and risk training
+#     (train_risk_model, run_risk_computation) are NOT part of this build.
+#     They write a synthetic school and recompute scores, so running them on
+#     every deploy overwrites real data. Run them by hand on a DEV/QA
+#     environment only; see docs/backend/DEPLOYMENT.md.
 #
-#     It is expected to refuse on a dataset too small to train -- the command
-#     reports the shortfall and exits 0 rather than persisting a model fitted on
-#     too few rows, so a small DEV dataset does not block a deploy. Only a genuine
-#     error fails the build, which is correct: if risk training is broken, that
-#     should be visible.
-#
-#     Retraining supersedes the previous artifact. Only one is active per version,
-#     enforced by a partial unique constraint.
-#
-# The shared DEV/QA service intentionally runs config.settings.development
-# (DEBUG=True, ALLOWED_HOSTS=["*"]). Production hardening is separate work.
+# The service runs config.settings.production: DEBUG=False, an explicit host
+# allow-list, the admin site off, JSON-only rendering, and field encryption
+# required. The security-critical values are enforced at start-up, so a
+# missing value fails the build instead of serving an insecure deployment.
 
 services:
   - type: web
@@ -63,31 +46,28 @@ services:
     rootDir: backend/aegis_backend
     buildCommand: >-
       pip install -r ../requirements/production.txt
-      && python manage.py migrate --settings=config.settings.development
-      && python manage.py provision_qa_accounts --settings=config.settings.development
-      && python manage.py seed_qa_dataset --settings=config.settings.development
-      && python manage.py train_risk_model --settings=config.settings.development
-      && python manage.py run_risk_computation --settings=config.settings.development
+      && python manage.py migrate
     startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
-    # No healthCheckPath: this Django project exposes no health endpoint, and
-    # inventing one would misrepresent the service. Do not add /healthz or
-    # /api/v1/health/ without first adding the route to config/urls.py.
+    healthCheckPath: /api/v1/health/
     autoDeploy: true
     envVars:
       - key: DJANGO_SETTINGS_MODULE
-        value: config.settings.development
-      # Quoted because YAML treats a bare * as an alias indicator.
+        value: config.settings.production
       - key: DJANGO_DEBUG
-        value: "True"
+        value: "False"
       - key: DJANGO_ALLOWED_HOSTS
-        value: "*"
+        value: aegis-0pav.onrender.com
+      - key: DJANGO_ENABLE_ADMIN_SITE
+        value: "False"
 
       # Secrets: declared here so the required variable set is discoverable,
       # but never given a value in this repository. sync: false keeps them in
       # the Render dashboard only.
       - key: DJANGO_SECRET_KEY
         sync: false
-      - key: QA_SHARED_PASSWORD
+      # production.py refuses to start without a field encryption key, so
+      # chat messages and case notes are never stored in plain text.
+      - key: FIELD_ENCRYPTION_KEYS
         sync: false
       - key: DATABASE_PASSWORD
         sync: false
@@ -105,10 +85,12 @@ services:
       - key: DATABASE_PORT
         value: "5432"
 
-      # The production frontend does not exist yet, so CORS stays on the local
-      # Vite dev origins. Add the real frontend origin when it is deployed.
+      # The deployed frontend. The backend mails links back to it (password
+      # reset, invitations), and the browser needs it in the CORS allowlist.
       - key: CORS_ALLOWED_ORIGINS
-        value: http://localhost:5173,http://localhost:3000
+        value: https://aegis-frontend-neon.vercel.app
+      - key: AEGIS_FRONTEND_URL
+        value: https://aegis-frontend-neon.vercel.app
 
       # Strapi CMS (Phase 7). Declared so the required variable set is
       # discoverable, but never given a value in this repository. The
@@ -140,14 +122,14 @@ services:
 
       # Shared throttle cache and outgoing mail (see docs/backend/DEPLOYMENT.md).
       # REDIS_URL points at the Render Redis service; without it the rate limits
-      # are enforced per gunicorn worker. The EMAIL_* set is the SMTP
-      # configuration; without EMAIL_BACKEND the service only prints mail to
+      # are enforced per gunicorn worker. EMAIL_BACKEND selects the delivery
+      # path: the free compute plan blocks outbound SMTP, so a free-plan
+      # deployment sets one of the HTTP backends below. The SMTP EMAIL_* set is
+      # for a paid plan. Without EMAIL_BACKEND the service only prints mail to
       # its logs and no invitation, reset or verification link is delivered.
       # Declared without values so the required set is discoverable; the values
       # live in the Render dashboard only.
       - key: REDIS_URL
-        sync: false
-      - key: AEGIS_FRONTEND_URL
         sync: false
       - key: EMAIL_BACKEND
         sync: false

@@ -159,6 +159,11 @@ REST_FRAMEWORK["DEFAULT_RENDERER_CLASSES"] = [  # noqa: F405
     "rest_framework.renderers.JSONRenderer",
 ]
 
-# Email backend - the SMTP backend is the deployment default; the provider
-# account (host/port/user/password/TLS) comes from the environment in base.py.
-EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+# Email backend - SMTP is the default when the environment names no backend.
+# The provider account (host/port/user/password/TLS) comes from the environment
+# in base.py. A free-plan deployment must set EMAIL_BACKEND to one of
+# core.email.* instead: Render's free compute plan blocks outbound SMTP ports,
+# and forcing the SMTP backend here would make every attempt hang and fail.
+EMAIL_BACKEND = _env_config(
+    "EMAIL_BACKEND", default="django.core.mail.backends.smtp.EmailBackend"
+)
