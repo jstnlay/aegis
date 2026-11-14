@@ -10,12 +10,15 @@ in-app notifications. Domain modules are responsible for:
 This module is responsible for:
   - Creating Notification records (in-app)
   - Emailing the same event to recipients who opted into email
-  - Gating on recipient NotificationPreference.in_app_enabled and
-    .email_enabled, independently
+  - Sending Web Push to subscribed browsers, outside quiet hours
+  - Gating on recipient NotificationPreference.in_app_enabled,
+    .email_enabled and .push_enabled, independently
   - Lazy-initializing NotificationPreference for new recipients
 """
 
 import logging
+
+from .push import in_quiet_hours, send_push_to_user
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +34,8 @@ def dispatch_event(
     deduplication_key=None,
 ):
     """
-    Create a Notification for each recipient and email those who opted in.
+    Create a Notification for each recipient, push to their browsers, and
+    email those who opted in.
 
     Args:
         event_type: One of NotificationType values.
@@ -70,6 +74,19 @@ def dispatch_event(
                 message=message,
                 link=link,
                 deduplication_key=deduplication_key,
+            )
+
+        # Push goes out even when the in-app row is off: the two preferences are
+        # independent. Quiet hours suppress the OS notification only.
+        # shortcut: delivery is synchronous, like the email below; Phase 5's
+        # worker moves both off the request path.
+        if pref.push_enabled and not in_quiet_hours(pref):
+            send_push_to_user(
+                user=recipient,
+                title=title,
+                message=message,
+                link=link,
+                tag=deduplication_key or str(event_type),
             )
 
         if pref.email_enabled and recipient.email:

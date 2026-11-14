@@ -9,11 +9,17 @@ from rest_framework.response import Response
 from core.permissions import IsAdminUser
 
 from .events import schedule_maintenance_window
-from .models import Notification, NotificationPreference, MaintenanceWindow
+from .models import (
+    MaintenanceWindow,
+    Notification,
+    NotificationPreference,
+    PushSubscription,
+)
 from .serializers import (
     NotificationSerializer,
     NotificationPreferenceSerializer,
     MaintenanceWindowSerializer,
+    PushSubscriptionSerializer,
 )
 
 
@@ -86,6 +92,52 @@ class NotificationPreferenceView(generics.RetrieveUpdateAPIView):
     def get_object(self):
         obj, _ = NotificationPreference.objects.get_or_create(user=self.request.user)
         return obj
+
+
+class PushSubscriptionListCreate(generics.CreateAPIView):
+    """
+    POST /notifications/push-subscriptions/ — register this browser.
+
+    Upserts on `endpoint`. A browser keeps the same endpoint across sign-ins, so
+    a shared device that switches accounts moves the row to the new user instead
+    of leaving the previous account subscribed to that browser.
+    """
+
+    serializer_class = PushSubscriptionSerializer
+    permission_classes = [IsAuthenticated]
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        subscription, created = PushSubscription.objects.update_or_create(
+            endpoint=serializer.validated_data["endpoint"],
+            defaults={
+                "user": request.user,
+                "p256dh": serializer.validated_data["p256dh"],
+                "auth": serializer.validated_data["auth"],
+            },
+        )
+        output = self.get_serializer(subscription)
+        return Response(
+            output.data,
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+
+
+class PushSubscriptionDetail(generics.DestroyAPIView):
+    """
+    DELETE /notifications/push-subscriptions/{id}/ — forget this browser.
+
+    The queryset is scoped to the caller, so another user's id is a 404 rather
+    than a deletion.
+    """
+
+    serializer_class = PushSubscriptionSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return PushSubscription.objects.filter(user=self.request.user)
 
 
 class MaintenanceWindowList(generics.ListCreateAPIView):

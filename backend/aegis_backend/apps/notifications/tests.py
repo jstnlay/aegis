@@ -8,10 +8,13 @@ and dispatch_event unit tests.
 """
 
 from datetime import date, time, timedelta
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
-from django.test import TestCase
+from django.db import IntegrityError
+from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -38,7 +41,9 @@ from apps.notifications.models import (
     Notification,
     NotificationPreference,
     NotificationType,
+    PushSubscription,
 )
+from apps.notifications.push import in_quiet_hours, send_push_to_user
 
 User = get_user_model()
 
@@ -449,6 +454,7 @@ class GetDefaultPreferencesTest(NotificationsTestBase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertTrue(resp.data["email_enabled"])
         self.assertTrue(resp.data["in_app_enabled"])
+        self.assertTrue(resp.data["push_enabled"])
         self.assertIsNone(resp.data["quiet_hours_start"])
         self.assertIsNone(resp.data["quiet_hours_end"])
 
@@ -1375,3 +1381,265 @@ class MaintenanceAdminTest(TestCase):
         self.assertTrue(
             MaintenanceWindow.objects.filter(pk=window.pk).exists()
         )
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 — Web Push
+# ---------------------------------------------------------------------------
+
+
+class PushSubscriptionApiTest(NotificationsTestBase):
+    URL = "/api/v1/notifications/push-subscriptions/"
+    PAYLOAD = {
+        "endpoint": "https://push.example.test/subscription/one",
+        "p256dh": "public-key-material",
+        "auth": "auth-secret",
+    }
+
+    def test_register_returns_row_and_owner(self):
+        self._auth(self.student_user)
+        response = self.client.post(self.URL, self.PAYLOAD, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn("id", response.data)
+        subscription = PushSubscription.objects.get()
+        self.assertEqual(subscription.user, self.student_user)
+        self.assertEqual(subscription.endpoint, self.PAYLOAD["endpoint"])
+
+    def test_same_endpoint_moves_to_the_signed_in_user(self):
+        PushSubscription.objects.create(
+            user=self.student_user, **self.PAYLOAD
+        )
+
+        self._auth(self.student2_user)
+        response = self.client.post(self.URL, self.PAYLOAD, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(PushSubscription.objects.count(), 1)
+        self.assertEqual(
+            PushSubscription.objects.get().user, self.student2_user
+        )
+
+    def test_delete_removes_own_subscription(self):
+        subscription = PushSubscription.objects.create(
+            user=self.student_user, **self.PAYLOAD
+        )
+
+        self._auth(self.student_user)
+        response = self.client.delete(f"{self.URL}{subscription.id}/")
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(
+            PushSubscription.objects.filter(pk=subscription.pk).exists()
+        )
+
+    def test_delete_never_removes_another_users_subscription(self):
+        subscription = PushSubscription.objects.create(
+            user=self.student_user, **self.PAYLOAD
+        )
+
+        self._auth(self.student2_user)
+        response = self.client.delete(f"{self.URL}{subscription.id}/")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertTrue(
+            PushSubscription.objects.filter(pk=subscription.pk).exists()
+        )
+
+    def test_anonymous_cannot_register(self):
+        response = self.client.post(self.URL, self.PAYLOAD, format="json")
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class PushSubscriptionModelTest(NotificationsTestBase):
+    def test_endpoint_is_unique(self):
+        PushSubscription.objects.create(
+            user=self.student_user,
+            endpoint="https://push.example.test/one",
+            p256dh="a",
+            auth="b",
+        )
+        with self.assertRaises(IntegrityError):
+            PushSubscription.objects.create(
+                user=self.student2_user,
+                endpoint="https://push.example.test/one",
+                p256dh="c",
+                auth="d",
+            )
+
+
+class QuietHoursTest(TestCase):
+    NOW_MANILA_22 = timezone.datetime(
+        2026, 11, 15, 14, 0, tzinfo=timezone.UTC
+    )
+    NOW_MANILA_14 = timezone.datetime(
+        2026, 11, 15, 6, 0, tzinfo=timezone.UTC
+    )
+
+    def pref(self, start, end):
+        return SimpleNamespace(quiet_hours_start=start, quiet_hours_end=end)
+
+    def test_overnight_window_wraps_midnight(self):
+        pref = self.pref(time(22, 0), time(6, 0))
+        self.assertTrue(in_quiet_hours(pref, self.NOW_MANILA_22))
+        self.assertFalse(in_quiet_hours(pref, self.NOW_MANILA_14))
+
+    def test_daytime_window_excludes_its_end(self):
+        pref = self.pref(time(8, 0), time(17, 0))
+        self.assertTrue(
+            in_quiet_hours(
+                pref,
+                timezone.datetime(2026, 11, 15, 1, 0, tzinfo=timezone.UTC),
+            )
+        )
+        self.assertFalse(
+            in_quiet_hours(
+                pref,
+                timezone.datetime(2026, 11, 15, 9, 0, tzinfo=timezone.UTC),
+            )
+        )
+
+    def test_unset_window_is_never_quiet(self):
+        self.assertFalse(in_quiet_hours(self.pref(None, None)))
+
+
+class PushDeliveryTest(NotificationsTestBase):
+    def setUp(self):
+        super().setUp()
+        self.subscription = PushSubscription.objects.create(
+            user=self.student_user,
+            endpoint="https://push.example.test/one",
+            p256dh="public-key",
+            auth="auth-key",
+        )
+
+    def test_payload_uses_app_path_and_counts_delivery(self):
+        import json
+        import sys
+
+        calls = []
+
+        def fake_webpush(**kwargs):
+            calls.append(kwargs)
+
+        module = SimpleNamespace(
+            webpush=fake_webpush, WebPushException=type("E", (Exception,), {})
+        )
+        with (
+            patch.dict(sys.modules, {"pywebpush": module}),
+            override_settings(
+                VAPID_PUBLIC_KEY="public",
+                VAPID_PRIVATE_KEY="private",
+                VAPID_ADMIN_EMAIL="no-reply@school.test",
+            ),
+        ):
+            delivered = send_push_to_user(
+                user=self.student_user,
+                title="Grade posted",
+                message="Your grade is ready.",
+                link="/academics/grades/1",
+                tag="grade:1",
+            )
+
+        self.assertEqual(delivered, 1)
+        self.assertEqual(len(calls), 1)
+        payload = json.loads(calls[0]["data"])
+        self.assertEqual(payload["title"], "Grade posted")
+        self.assertEqual(payload["url"], "/app/notifications")
+        self.assertEqual(payload["tag"], "grade:1")
+        self.assertEqual(
+            calls[0]["vapid_claims"]["sub"], "mailto:no-reply@school.test"
+        )
+
+    def test_gone_endpoint_is_deleted(self):
+        import sys
+
+        class Gone(Exception):
+            def __init__(self):
+                self.response = SimpleNamespace(status_code=410)
+
+        def fake_webpush(**kwargs):
+            raise Gone()
+
+        module = SimpleNamespace(webpush=fake_webpush, WebPushException=Gone)
+        with (
+            patch.dict(sys.modules, {"pywebpush": module}),
+            override_settings(
+                VAPID_PUBLIC_KEY="public",
+                VAPID_PRIVATE_KEY="private",
+            ),
+        ):
+            delivered = send_push_to_user(
+                user=self.student_user,
+                title="T",
+                message="M",
+            )
+
+        self.assertEqual(delivered, 0)
+        self.assertFalse(
+            PushSubscription.objects.filter(
+                pk=self.subscription.pk
+            ).exists()
+        )
+
+    @override_settings(VAPID_PUBLIC_KEY="", VAPID_PRIVATE_KEY="")
+    def test_missing_keys_sends_nothing(self):
+        self.assertEqual(
+            send_push_to_user(
+                user=self.student_user, title="T", message="M"
+            ),
+            0,
+        )
+
+
+class DispatchEventPushTest(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email="dispatch-push@test.com",
+            password="pass12345",
+            first_name="D",
+            last_name="P",
+            role="student",
+        )
+
+    @patch("apps.notifications.events.send_push_to_user")
+    def test_push_is_independent_of_in_app(self, send_push):
+        NotificationPreference.objects.create(
+            user=self.user, in_app_enabled=False, push_enabled=True
+        )
+
+        dispatch_event(
+            "GRADE_POSTED",
+            recipients=[self.user],
+            title="T",
+            message="M",
+            link="/app/notifications",
+            deduplication_key="grade:1",
+        )
+
+        self.assertEqual(Notification.objects.count(), 0)
+        send_push.assert_called_once()
+        self.assertEqual(
+            send_push.call_args.kwargs["tag"], "grade:1"
+        )
+
+    @patch("apps.notifications.events.send_push_to_user")
+    def test_push_preference_off_skips_delivery(self, send_push):
+        NotificationPreference.objects.create(
+            user=self.user, push_enabled=False
+        )
+
+        dispatch_event(
+            "GRADE_POSTED", recipients=[self.user], title="T", message="M"
+        )
+
+        send_push.assert_not_called()
+
+    @patch("apps.notifications.events.in_quiet_hours", return_value=True)
+    @patch("apps.notifications.events.send_push_to_user")
+    def test_quiet_hours_skip_delivery(self, send_push, _quiet):
+        dispatch_event(
+            "GRADE_POSTED", recipients=[self.user], title="T", message="M"
+        )
+
+        send_push.assert_not_called()

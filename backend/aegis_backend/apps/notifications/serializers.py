@@ -1,6 +1,11 @@
 from rest_framework import serializers
 
-from .models import MaintenanceWindow, Notification, NotificationPreference
+from .models import (
+    MaintenanceWindow,
+    Notification,
+    NotificationPreference,
+    PushSubscription,
+)
 
 
 class NotificationSerializer(serializers.ModelSerializer):
@@ -39,6 +44,7 @@ class NotificationPreferenceSerializer(serializers.ModelSerializer):
             "id",
             "email_enabled",
             "in_app_enabled",
+            "push_enabled",
             "quiet_hours_start",
             "quiet_hours_end",
         ]
@@ -52,6 +58,25 @@ class NotificationPreferenceSerializer(serializers.ModelSerializer):
                 {"quiet_hours_end": "quiet_hours_start and quiet_hours_end must differ."}
             )
         return attrs
+
+
+class PushSubscriptionSerializer(serializers.ModelSerializer):
+    """
+    A browser's push endpoint and its public encryption keys.
+
+    The response includes the row id so the client can delete the subscription
+    it just registered. `user` is never accepted: ownership comes from the
+    authenticated request.
+    """
+
+    class Meta:
+        model = PushSubscription
+        fields = ["id", "endpoint", "p256dh", "auth", "created_at"]
+        read_only_fields = ["id", "created_at"]
+        # `endpoint` is unique in the model, but the view upserts on it. The
+        # generated UniqueValidator would reject the second registration of the
+        # same browser before the view can update the existing row.
+        extra_kwargs = {"endpoint": {"validators": []}}
 
 
 class MaintenanceWindowSerializer(serializers.ModelSerializer):

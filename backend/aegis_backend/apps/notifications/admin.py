@@ -3,7 +3,12 @@ from django.contrib import admin
 from django.core.exceptions import ValidationError
 
 from .events import schedule_maintenance_window
-from .models import MaintenanceWindow, Notification, NotificationPreference
+from .models import (
+    MaintenanceWindow,
+    Notification,
+    NotificationPreference,
+    PushSubscription,
+)
 
 
 @admin.register(Notification)
@@ -22,8 +27,22 @@ class NotificationAdmin(admin.ModelAdmin):
 
 @admin.register(NotificationPreference)
 class NotificationPreferenceAdmin(admin.ModelAdmin):
-    list_display = ("user", "email_enabled", "in_app_enabled", "quiet_hours_start", "quiet_hours_end")
+    list_display = (
+        "user",
+        "email_enabled",
+        "in_app_enabled",
+        "push_enabled",
+        "quiet_hours_start",
+        "quiet_hours_end",
+    )
     search_fields = ("user__email",)
+
+
+@admin.register(PushSubscription)
+class PushSubscriptionAdmin(admin.ModelAdmin):
+    list_display = ("user", "endpoint", "created_at")
+    search_fields = ("user__email", "endpoint")
+    readonly_fields = ("endpoint", "p256dh", "auth", "created_at", "updated_at")
 
 
 class MaintenanceWindowForm(forms.ModelForm):

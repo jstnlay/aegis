@@ -81,6 +81,7 @@ class NotificationPreference(TimestampedModel):
     )
     email_enabled = models.BooleanField(default=True)
     in_app_enabled = models.BooleanField(default=True)
+    push_enabled = models.BooleanField(default=True)
     quiet_hours_start = models.TimeField(blank=True, null=True)
     quiet_hours_end = models.TimeField(blank=True, null=True)
 
@@ -89,6 +90,36 @@ class NotificationPreference(TimestampedModel):
 
     def __str__(self):
         return f"Preferences for {self.user}"
+
+
+class PushSubscription(TimestampedModel):
+    """
+    One browser's Web Push endpoint for one user.
+
+    `endpoint` is unique: the push service issues one URL per browser
+    subscription, and a shared device that signs in as another user must move
+    the row to that user rather than leave the previous account receiving the
+    new user's notifications. The API upserts on this field for that reason.
+
+    The two key fields are the browser's public key material. Without them the
+    payload cannot be encrypted for that endpoint, so they are required.
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="push_subscriptions",
+    )
+    endpoint = models.URLField(max_length=500, unique=True)
+    p256dh = models.CharField(max_length=200)
+    auth = models.CharField(max_length=100)
+
+    class Meta(TimestampedModel.Meta):
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["user"])]
+
+    def __str__(self):
+        return f"Push subscription for {self.user}"
 
 
 class MaintenanceWindow(TimestampedModel):

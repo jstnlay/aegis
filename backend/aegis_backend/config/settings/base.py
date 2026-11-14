@@ -490,6 +490,15 @@ BREVO_API_KEY = config("BREVO_API_KEY", default="")
 #: email address as a sender.
 SMTP2GO_API_KEY = config("SMTP2GO_API_KEY", default="")
 
+# Web Push (Phase 4). Generate the pair once with `npx web-push
+# generate-vapid-keys` or `py-vapid`; the private key stays server-side and the
+# public key is also compiled into the frontend as VITE_VAPID_PUBLIC_KEY.
+# With either value empty, dispatch_event() skips push and in-app/email continue.
+VAPID_PUBLIC_KEY = config("VAPID_PUBLIC_KEY", default="")
+VAPID_PRIVATE_KEY = config("VAPID_PRIVATE_KEY", default="")
+#: Contact address sent in the VAPID claim, as required by the push services.
+VAPID_ADMIN_EMAIL = config("VAPID_ADMIN_EMAIL", default=DEFAULT_FROM_EMAIL)
+
 # ---------------------------------------------------------------------------
 # CORS
 # ---------------------------------------------------------------------------

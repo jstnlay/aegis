@@ -18,3 +18,7 @@ google-genai>=1.0,<2.0
 
 # Field encryption of student free text (AES-SIV).
 cryptography>=42,<51
+
+# Web Push (Phase 4): encrypts the payload for one browser endpoint and
+# signs the request with the deployment's VAPID key.
+pywebpush>=2.0,<3.0
