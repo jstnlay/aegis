@@ -33,6 +33,9 @@ insecure deployment: `DJANGO_ALLOWED_HOSTS` must be non-empty,
 | `SUPABASE_S3_REGION` | the bucket's region, e.g. `ap-southeast-1` |
 | `SUPABASE_S3_ACCESS_KEY` | the Supabase S3 access key id |
 | `SUPABASE_S3_SECRET_KEY` | the Supabase S3 secret access key |
+| `VAPID_PUBLIC_KEY` | Web Push pair, public half (see *Web Push* below) |
+| `VAPID_PRIVATE_KEY` | Web Push pair, private half. Never leaves the server |
+| `VAPID_ADMIN_EMAIL` | contact address for the push claim; defaults to `DEFAULT_FROM_EMAIL` |
 
 The build command is now `pip install` plus `migrate`. It no longer runs
 `provision_qa_accounts`, `seed_qa_dataset`, `train_risk_model` or
@@ -96,10 +99,39 @@ Project → Settings → Environment Variables → **Production**:
 | Variable | Value |
 | --- | --- |
 | `VITE_API_BASE_URL` | `https://aegis-0pav.onrender.com/api/v1` |
+| `VITE_VAPID_PUBLIC_KEY` | the same public key as Render's `VAPID_PUBLIC_KEY` |
 
 Add it for **Preview** too if preview deployments should reach the API, then
 **Redeploy**. A Vite build bakes the value in, so saving the variable is not
 enough.
+
+## Web Push
+
+Phase 4 of `WEB_APP_PLAN.md`. Push works only after both halves are set.
+
+1. Generate the pair once. In the backend virtualenv:
+
+   ```
+   pip install pywebpush
+   python -c "from py_vapid import Vapid; v = Vapid(); v.generate_keys(); print(v.public_key, v.private_key)"
+   ```
+
+   `public_key` is base64url of the raw uncompressed point (65 bytes); the
+   same string is what a browser needs in `applicationServerKey`.
+   `private_key` is base64url; it never leaves the server.
+
+2. Render → **Environment**: set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and
+   `VAPID_ADMIN_EMAIL` (a `mailto:` contact, for example the verified sender).
+   Save and redeploy.
+3. Vercel → **Environment Variables**: set `VITE_VAPID_PUBLIC_KEY` to the
+   same public key. Vite bakes it into the build, so redeploy the frontend.
+4. The sender shown by every provider is `AEGIS — HIS CARE CHRISTIAN INSTITUTE`
+   (decision D3). For email that means `DEFAULT_FROM_EMAIL` is set to
+   `AEGIS — HIS CARE CHRISTIAN INSTITUTE <no-reply@<verified-address>>`. The
+   display name is provider-supplied, not a separate variable.
+
+With `VAPID_*` empty the backend sends in-app and email as before and skips
+push silently; nothing else changes.
 
 ## Outgoing mail
 

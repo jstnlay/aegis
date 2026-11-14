@@ -727,9 +727,24 @@ NotificationPreference
 ├── user             FK → User (unique)
 ├── email_enabled    bool
 ├── in_app_enabled   bool
+├── push_enabled     bool (added Phase 4; default true)
 ├── quiet_hours_start  time, nullable
 └── quiet_hours_end  time, nullable
+
+PushSubscription (added Phase 4)
+├── id               UUID PK
+├── user             FK → User
+├── endpoint         URL (unique)
+├── p256dh           char
+└── auth             char
 ```
+
+Web Push delivery (Phase 4): `dispatch_event` sends to every registered
+browser of a recipient whose `push_enabled` is true and who is outside quiet
+hours. `POST /api/v1/notifications/push-subscriptions/` upserts on `endpoint`;
+`DELETE .../{id}/` removes only the caller's row. An endpoint answered with
+404/410 is deleted; other failures are logged. No existing field, route or
+payload changed.
 
 ### E.9 audit
 
@@ -1195,7 +1210,9 @@ safe because importers update an existing record in place.]
 │   ├── /                           # GET
 │   ├── {id}/read/                  # POST
 │   ├── read-all/                   # POST
-│   └── preferences/                # GET, PUT
+│   ├── preferences/                # GET, PUT
+│   └── push-subscriptions/         # POST (added Phase 4)
+│       └── {id}/                   # DELETE (added Phase 4)
 │
 └── audit/
     └── logs/                       # GET (admin only)

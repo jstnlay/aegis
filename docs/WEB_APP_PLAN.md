@@ -117,14 +117,13 @@ Verification commands are the ones CI already runs.
 
 ### Phase 0 — Decisions
 
-Three of the six decisions are answered (see §5). The record lives in this
+Two of the six decisions are answered (D1–D4). The record lives in this
 document's decision table rather than in `DECISIONS.md`: that file's scope
 header names the safety/Gemini/recommendation workstream, so appending a
 second workstream to it would blur what it is authoritative for.
 
-The three still open — push scope (D2), sending identity (D3), domain (D5)
-— do not block Phases 1, 2, 3 or 6. They gate Phase 4 and the naming of the
-installed app.
+Only D5, the domain, is still open. It does not block any phase; it only names
+the installed app and the sender address.
 
 **Acceptance:** the decision table in §5 carries an answer and a named owner
 for every row.
@@ -281,6 +280,17 @@ sending identity (see §5).
 
 **Tasks**
 
+**Backend built (2026-11-15), not yet deployed.** `PushSubscription` plus
+`NotificationPreference.push_enabled` (default on) and migration `0003`;
+`POST/DELETE /api/v1/notifications/push-subscriptions/` upsert on `endpoint`
+and are scoped to the caller; `dispatch_event()` delivers Web Push to every
+subscription of every opted-in, non-quiet-hours recipient, deletes 404/410
+endpoints and logs the rest; `pywebpush` sends with `settings.VAPID_*`. The
+preference is independent of in-app and email. Push is synchronous in the
+request, the same place the email send already runs; Phase 5 moves both. The
+SPA path used for the click target is the one in `Notification.link` when it
+starts with `/app/`, otherwise `/app/notifications`.
+
 1. Add `PushSubscription` to the notifications app: `user`, `endpoint`,
    `p256dh`, `auth`, `created_at`, with one row per browser.
 2. Add two endpoints: `POST /api/v1/notifications/push-subscriptions/` and
@@ -419,8 +429,8 @@ deployed URL.
 | ID | Decision | Answer | Status |
 |---|---|---|---|
 | D1 | **Offline student data.** §A.9 of the approved spec says "No offline access" and "Internet connection required at all times". | **Not in scope, and it stays that way.** The limitation was signed off before this plan existed, so it is not reopened. The service worker caches the shell and static assets only; no API response is ever cached. | Closed |
-| D2 | **Push notification scope.** Panel correction #16 asks what is needed and is applicable; §L OQ-7 asks whether in-app plus email is enough for v1. | Unanswered. | Open — gates Phase 4 |
-| D3 | **Sending identity for push and mail.** Web push shows the app's own name; email needs a verified sender. | Unanswered. | Open — gates Phase 4 |
+| D2 | **Push notification scope.** Panel correction #16 asks what is needed and is applicable; §L OQ-7 asks whether in-app plus email is enough for v1. | **All notification types.** Grade posted, attendance threshold, behaviour, assessments, risk alerts, interventions, announcements, consultations, maintenance — same fan-out as in-app and email, one extra channel. | Closed |
+| D3 | **Sending identity for push and mail.** Web push shows the app's own name; email needs a verified sender. | **`AEGIS — HIS CARE CHRISTIAN INSTITUTE`.** Email still needs a provider-verified address (e.g. `no-reply@<school-domain>`) passed as `DEFAULT_FROM_EMAIL` with this display name; push labels itself with the installed app name. | Closed — the sender address is an ops value, not a code value |
 | D4 | **Hosting tier.** Phase 5 needs a worker service and a scheduler. | **Vercel and Render stay.** A worker is a separate Render service from the same image; another provider is acceptable if Render's sleep behaviour or price does not work. | Closed, with the escape hatch named |
 | D5 | **Domain and certificate.** The app is installed from `*.vercel.app` today. A school domain makes the install feel real. | Unanswered. | Open — does not block any phase |
 | D6 | **Redis durability.** The shared throttle cache is a Render Redis instance. If it sits on the free tier it can expire after a period of inactivity, which silently turns the rate limits back to per-process without failing anything. | **To be tested.** The procedure is in §5.1 below. | Open — gates Phase 5 only |
