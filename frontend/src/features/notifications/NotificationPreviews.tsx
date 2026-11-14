@@ -9,6 +9,7 @@ import {
 } from "lucide-react"
 import { useAuth } from "@/features/auth/AuthContext"
 import { NotificationDetails } from "./NotificationDetails"
+import { PushPermissionPrompt } from "./PushPermissionPrompt"
 import { normalizeApiError } from "@/lib/error"
 import {
   sortNotifications,
@@ -200,6 +201,7 @@ function UserNotificationPreviews({ userId }: { userId: string }) {
                   </button>
                 </article>
               ))}
+              <PushPermissionPrompt />
             </aside>,
             document.body
           )

@@ -79,13 +79,15 @@ export interface ChangePasswordPayload {
  * `get_or_create(user=request.user)`, so the row always exists by the time it
  * is read and the client never has to create one.
  *
- * Exactly four writable fields, and the viewset exposes no others — the UI must
+ * Exactly five writable fields, and the viewset exposes no others — the UI must
  * not offer a preference the serializer would reject.
  */
 export interface NotificationPreference {
   id: string
   email_enabled: boolean
   in_app_enabled: boolean
+  /** Server-wide push gate; a device still has to subscribe itself. */
+  push_enabled: boolean
   /** `HH:MM:SS` from a `TimeField`, or `null` for unset. */
   quiet_hours_start: string | null
   quiet_hours_end: string | null
@@ -95,6 +97,7 @@ export interface NotificationPreference {
 export interface UpdateNotificationPreferencePayload {
   email_enabled: boolean
   in_app_enabled: boolean
+  push_enabled: boolean
   /** `HH:MM` or `HH:MM:SS`, or `null` to clear. */
   quiet_hours_start: string | null
   quiet_hours_end: string | null

@@ -45,6 +45,7 @@ const preference = {
   id: "np-1",
   email_enabled: true,
   in_app_enabled: true,
+  push_enabled: true,
   quiet_hours_start: null,
   quiet_hours_end: null,
 }
@@ -424,15 +425,17 @@ describe("notification preferences", () => {
     expect(mockedGet).toHaveBeenCalledWith("/notifications/preferences/")
   })
 
-  it("renders the two channel toggles with their stored state", async () => {
+  it("renders the three channel toggles with their stored state", async () => {
     renderPage()
 
     const email = await screen.findByRole("switch", {
       name: /email notifications/i,
     })
     const inApp = screen.getByRole("switch", { name: /in-app notifications/i })
+    const push = screen.getByRole("switch", { name: /push notifications/i })
     expect(email).toHaveAttribute("aria-checked", "true")
     expect(inApp).toHaveAttribute("aria-checked", "true")
+    expect(push).toHaveAttribute("aria-checked", "true")
   })
 
   it("reflects a stored false value", async () => {
@@ -481,7 +484,7 @@ describe("notification preferences", () => {
     expect(screen.getByLabelText(/quiet hours end/i)).toHaveValue("06:30")
   })
 
-  it("PUTs exactly the four serializer fields", async () => {
+  it("PUTs exactly the five serializer fields", async () => {
     renderPage()
     await screen.findByRole("switch", { name: /email notifications/i })
 
@@ -500,17 +503,19 @@ describe("notification preferences", () => {
       expect(mockedPut).toHaveBeenCalledWith("/notifications/preferences/", {
         email_enabled: true,
         in_app_enabled: false,
+        push_enabled: true,
         quiet_hours_start: "22:00",
         quiet_hours_end: "06:30",
       })
     })
 
     const payload = mockedPut.mock.calls[0]?.[1] as Record<string, unknown>
-    // `id` is the only read-only field, and nothing outside the four
+    // `id` is the only read-only field, and nothing outside the five
     // writable preferences may be sent.
     expect(Object.keys(payload).sort()).toEqual([
       "email_enabled",
       "in_app_enabled",
+      "push_enabled",
       "quiet_hours_end",
       "quiet_hours_start",
     ])

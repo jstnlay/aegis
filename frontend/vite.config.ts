@@ -35,6 +35,9 @@ export default defineConfig({
         globPatterns: ["**/*.{js,css,html,svg,webmanifest,woff2}"],
         navigateFallback: "/index.html",
         navigateFallbackDenylist: [/^\/api\//],
+        // The push handlers live in a static file so the precache list stays
+        // derived from the build; the worker imports it at install time.
+        importScripts: ["/push-sw.js"],
         runtimeCaching: [
           {
             // Same origin in production, Render directly in local dev: match

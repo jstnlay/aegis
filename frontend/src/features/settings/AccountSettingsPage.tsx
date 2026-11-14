@@ -554,7 +554,7 @@ function PreferenceToggle({
 /**
  * `GET/PUT /notifications/preferences/`
  *
- * Only the four fields `NotificationPreferenceSerializer` exposes are rendered.
+ * Only the five fields `NotificationPreferenceSerializer` exposes are rendered.
  * `validate()` rejects `quiet_hours_start == quiet_hours_end`, so the form
  * blocks that pair itself rather than sending a request the server will refuse.
  *
@@ -596,6 +596,7 @@ function NotificationPreferencesForm({
 
   const [emailEnabled, setEmailEnabled] = useState(preference.email_enabled)
   const [inAppEnabled, setInAppEnabled] = useState(preference.in_app_enabled)
+  const [pushEnabled, setPushEnabled] = useState(preference.push_enabled)
   const [quietStart, setQuietStart] = useState(
     toTimeInputValue(preference.quiet_hours_start)
   )
@@ -616,6 +617,7 @@ function NotificationPreferencesForm({
       await update.mutateAsync({
         email_enabled: emailEnabled,
         in_app_enabled: inAppEnabled,
+        push_enabled: pushEnabled,
         quiet_hours_start: quietStart.trim() || null,
         quiet_hours_end: quietEnd.trim() || null,
       })
@@ -651,6 +653,14 @@ function NotificationPreferencesForm({
             description="Delivery inside AEGIS."
             checked={inAppEnabled}
             onToggle={() => setInAppEnabled((current) => !current)}
+          />
+
+          <PreferenceToggle
+            id="pref-push"
+            label="Push notifications"
+            description="OS alerts on devices where you enabled them. Quiet hours still apply."
+            checked={pushEnabled}
+            onToggle={() => setPushEnabled((current) => !current)}
           />
 
           <div className="grid gap-3 sm:grid-cols-2">

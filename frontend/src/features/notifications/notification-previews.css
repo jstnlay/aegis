@@ -301,3 +301,62 @@
     min-height: 40px;
   }
 }
+.push-prompt {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.push-prompt-copy {
+  min-width: 0;
+  flex: 1;
+}
+.push-prompt-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #392e3e;
+}
+.push-prompt-body {
+  margin: 4px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: #56384f;
+}
+.push-prompt-error {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: #a52840;
+}
+.push-prompt-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.push-prompt-enable {
+  border: 0;
+  border-radius: 999px;
+  padding: 7px 14px;
+  background: #a52840;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.push-prompt-enable:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.push-prompt-dismiss {
+  display: inline-flex;
+  align-items: center;
+  border: 0;
+  background: transparent;
+  color: #7b687a;
+  cursor: pointer;
+  padding: 4px;
+}
+.push-prompt-dismiss svg {
+  width: 14px;
+  height: 14px;
+}
