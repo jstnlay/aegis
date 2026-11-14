@@ -4,6 +4,10 @@ import { RouterProvider } from "react-router-dom"
 import { QueryClientProvider } from "@tanstack/react-query"
 
 import { ErrorBoundary } from "@/components/ErrorBoundary"
+import { OfflineGate } from "@/features/pwa/OfflineGate"
+// Registers the `beforeinstallprompt` listener at start-up, before the account
+// menu exists. The event fires once; a listener mounted with the menu is late.
+import "@/features/pwa/install-prompt"
 import { AuthProvider } from "@/features/auth/AuthContext"
 import { queryClient } from "@/lib/queryClient"
 import { router } from "@/routes/router"
@@ -25,11 +29,13 @@ createRoot(container).render(
       leaving a blank page.
     */}
     <ErrorBoundary label="AEGIS">
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <RouterProvider router={router} />
-        </AuthProvider>
-      </QueryClientProvider>
+      <OfflineGate>
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <RouterProvider router={router} />
+          </AuthProvider>
+        </QueryClientProvider>
+      </OfflineGate>
     </ErrorBoundary>
   </StrictMode>
 )

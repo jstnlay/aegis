@@ -1,8 +1,9 @@
 import { useRef, useState } from "react"
 import { DropdownMenu } from "radix-ui"
-import { ChevronUp, LogOut, Settings } from "lucide-react"
+import { ChevronUp, Download, LogOut, Settings } from "lucide-react"
 import { Link } from "react-router-dom"
 import { useAuth } from "@/features/auth/AuthContext"
+import { useInstallPrompt } from "@/features/pwa/install-prompt"
 import { profilePhotoSrc } from "@/lib/profile-photo"
 import { ROLE_LABELS, userDisplayName } from "@/lib/roles"
 import { SignOutDialog } from "./SignOutDialog"
@@ -18,6 +19,7 @@ export function SidebarAccount({
   onNavigate?: () => void
 }) {
   const { user } = useAuth()
+  const { canInstall, promptInstall } = useInstallPrompt()
   const trigger = useRef<HTMLButtonElement>(null)
   const [signOutOpen, setSignOutOpen] = useState(false)
   const name = userDisplayName(user) || "Signed in"
@@ -88,6 +90,18 @@ export function SidebarAccount({
                 </span>
               </Link>
             </DropdownMenu.Item>
+            {canInstall && (
+              <DropdownMenu.Item
+                aria-label="Install app"
+                onSelect={() => void promptInstall()}
+              >
+                <Download aria-hidden="true" />
+                <span>
+                  <strong>Install app</strong>
+                  <small>Add AEGIS to your device</small>
+                </span>
+              </DropdownMenu.Item>
+            )}
             <DropdownMenu.Separator className="sidebar-account-separator" />
             <DropdownMenu.Item
               aria-label="Sign out"
