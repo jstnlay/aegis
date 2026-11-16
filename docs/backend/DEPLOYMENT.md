@@ -37,12 +37,14 @@ insecure deployment: `DJANGO_ALLOWED_HOSTS` must be non-empty,
 | `VAPID_PRIVATE_KEY` | Web Push pair, private half. Never leaves the server |
 | `VAPID_ADMIN_EMAIL` | contact address for the push claim; defaults to `DEFAULT_FROM_EMAIL` |
 
-The build command is `pip install`, `migrate`, then `provision_qa_accounts`.
-The five shared DEV/QA logins are provisioned on every deploy: the free plan
-has no shell, so a manual run is not available, and the QA accounts must exist
-for a demo. The command is idempotent, writes only the five allowlisted
-addresses and never resets a password a tester has set; it needs
-`QA_SHARED_PASSWORD` in the environment or the build fails.
+The build command is `pip install`, `migrate`, then
+`provision_qa_accounts --reset-password`. The five shared DEV/QA logins are
+provisioned on every deploy: the free plan has no shell, so a manual run is not
+available, and the QA accounts must exist for a demo. `--reset-password` makes
+each account accept `QA_SHARED_PASSWORD`, so the documented password always
+works; without the flag the command never overwrites a tester-chosen password.
+Only the five allowlisted addresses are ever written. The variable must be set
+on the service or the build fails.
 
 `seed_qa_dataset`, `train_risk_model` and `run_risk_computation` stay out of
 the build: they write a synthetic school into the database and must only run
@@ -54,7 +56,7 @@ health check are Dashboard settings too. In **Settings → Build & Deploy** set:
 
 | Setting | Value |
 | --- | --- |
-| Build Command | `pip install -r ../requirements/production.txt && python manage.py migrate && python manage.py provision_qa_accounts` |
+| Build Command | `pip install -r ../requirements/production.txt && python manage.py migrate && python manage.py provision_qa_accounts --reset-password` |
 | Health Check Path | `/api/v1/health/` |
 
 Without this step the old build command keeps seeding the database even after

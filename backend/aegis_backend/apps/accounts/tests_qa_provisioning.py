@@ -55,8 +55,8 @@ EXPECTED_ROLES = {
 }
 
 
-def run_provision(stdout=None):
-    return call_command("provision_qa_accounts", stdout=stdout)
+def run_provision(stdout=None, **options):
+    return call_command("provision_qa_accounts", stdout=stdout, **options)
 
 
 class QaAccountsTestCase(TestCase):
@@ -383,6 +383,45 @@ class LegacyEmailRenameTest(QaAccountsTestCase):
         self.assertTrue(User.objects.filter(email=self.LEGACY).exists())
         self.assertTrue(User.objects.filter(email=self.NEW).exists())
         self.assertEqual(User.objects.count(), 2)
+
+
+class PasswordResetFlagTest(QaAccountsTestCase):
+    """--reset-password forces the shared password; without it, never."""
+
+    ADDRESS = "hiscarechristiantanauan1+admin@gmail.com"
+    TESTER_PASSWORD = "Tester-Chosen-3pQr!2026"
+
+    def _tester_account(self, **extra):
+        return User.objects.create_user(
+            email=self.ADDRESS,
+            password=self.TESTER_PASSWORD,
+            first_name="QA",
+            last_name="Admin",
+            role="admin",
+            **extra,
+        )
+
+    def test_flag_sets_the_shared_password_and_clears_the_gate(self):
+        self._tester_account(is_active=False, must_change_password=True)
+
+        out = io.StringIO()
+        run_provision(stdout=out, reset_password=True)
+
+        user = User.objects.get(email=self.ADDRESS)
+        self.assertTrue(user.check_password(VALID_SHARED_PASSWORD))
+        self.assertTrue(user.is_active)
+        self.assertFalse(user.must_change_password)
+        self.assertIn("RESET_PASSWORD", out.getvalue())
+        self.assertNotIn(VALID_SHARED_PASSWORD, out.getvalue())
+
+    def test_without_the_flag_a_tester_password_survives(self):
+        self._tester_account()
+
+        run_provision(stdout=io.StringIO())
+
+        user = User.objects.get(email=self.ADDRESS)
+        self.assertTrue(user.check_password(self.TESTER_PASSWORD))
+        self.assertFalse(user.check_password(VALID_SHARED_PASSWORD))
 
 
 class QaOutputTest(QaAccountsTestCase):

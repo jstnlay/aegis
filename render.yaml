@@ -25,11 +25,11 @@
 #     migrate reads DJANGO_SETTINGS_MODULE, so it runs under the same
 #     production settings as the web process.
 #
-#     The shared DEV/QA logins (provision_qa_accounts) ARE provisioned during
-#     the build, so the five accounts exist on every redeploy. The command is
-#     idempotent, it only ever writes the five allowlisted QA addresses, and it
-#     never resets a password a tester has set. QA_SHARED_PASSWORD must be set
-#     on the service, or the build fails loudly.
+#     The shared DEV/QA logins (provision_qa_accounts --reset-password) ARE
+#     provisioned during the build, so the five accounts exist and accept the
+#     documented QA password on every redeploy. The command only ever writes
+#     the five allowlisted QA addresses. QA_SHARED_PASSWORD must be set on the
+#     service or the build fails loudly.
 #
 #     QA data seeding (seed_qa_dataset) and risk training (train_risk_model,
 #     run_risk_computation) are NOT part of this build. They write a synthetic
@@ -53,7 +53,7 @@ services:
     buildCommand: >-
       pip install -r ../requirements/production.txt
       && python manage.py migrate
-      && python manage.py provision_qa_accounts
+      && python manage.py provision_qa_accounts --reset-password
     startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
     healthCheckPath: /api/v1/health/
     autoDeploy: true

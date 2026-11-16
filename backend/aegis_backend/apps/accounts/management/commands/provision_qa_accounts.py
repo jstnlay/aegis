@@ -23,6 +23,9 @@ Safety properties, all of which are covered by tests_qa_provisioning.py:
 * An existing QA account keeps whatever password a tester has already set:
   rerunning after a role fix or any other redeploy never resets it. Only a
   wrong ``role`` is corrected, and only for the allowlisted address.
+  ``--reset-password`` overrides that: it forces the shared password and
+  clears the must-change flag, which is what the Render build passes so the
+  documented QA password always works on the deployed DEV/QA service.
 * No profile, enrollment, grade, attendance, consultation, or risk records
   are created. This task provisions logins only.
 
@@ -79,9 +82,23 @@ class Command(BaseCommand):
         f"password in {PASSWORD_ENV_VAR}."
     )
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--reset-password",
+            action="store_true",
+            dest="reset_password",
+            help=(
+                "Set every allowlisted QA account to the password in "
+                f"{PASSWORD_ENV_VAR} and clear its must-change flag. The Render "
+                "build passes this so a demo login is predictable; without it "
+                "an existing password is never overwritten."
+            ),
+        )
+
     def handle(self, *args, **options):
         User = get_user_model()
 
+        reset_password = options["reset_password"]
         password = self._read_password()
         self._validate_password(password)
 
@@ -137,10 +154,16 @@ class Command(BaseCommand):
                     continue
 
                 # An existing QA account may carry a tester-chosen password and
-                # a locally changed is_active / must_change_password. Both are
-                # reported, never rewritten. Only the role is corrected, and
-                # only because the allowlist defines the role each QA address
-                # must have for role-gated QA to be meaningful.
+                # a locally changed is_active / must_change_password. Without
+                # --reset-password both are reported, never rewritten, and only
+                # the role is corrected -- the allowlist defines the role each
+                # QA address must have for role-gated QA to be meaningful.
+                if reset_password:
+                    self._reset_password(user, password)
+                    self.stdout.write(
+                        f"RESET_PASSWORD role={role:9} {email}"
+                    )
+
                 if user.role != role:
                     user.role = role
                     user.save(update_fields=["role"])
@@ -158,6 +181,22 @@ class Command(BaseCommand):
             f"TOTAL created={created} exists={unchanged} "
             f"updated_role={role_fixed} renamed={renamed}"
         )
+
+    def _reset_password(self, user, password):
+        """Force the shared password so a demo login is predictable.
+
+        Only used with ``--reset-password``. ``is_active`` and the must-change
+        flag are corrected too, so the account signs straight in.
+        """
+        user.set_password(password)
+        update_fields = ["password"]
+        if not user.is_active:
+            user.is_active = True
+            update_fields.append("is_active")
+        if user.must_change_password:
+            user.must_change_password = False
+            update_fields.append("must_change_password")
+        user.save(update_fields=update_fields)
 
     def _read_password(self):
         password = os.environ.get(PASSWORD_ENV_VAR)
