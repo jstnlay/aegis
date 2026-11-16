@@ -21,7 +21,6 @@ from core.throttling import (
     PasswordChangeRateThrottle,
     PasswordForgotRateThrottle,
     PasswordResetRateThrottle,
-    RegistrationRateThrottle,
     TokenRefreshRateThrottle,
 )
 
@@ -29,7 +28,6 @@ from .models import (
     ConsentRecord,
     FacultyProfile,
     ParentInvitation,
-    RegistrationRequest,
     User,
 )
 from .parent_invitation import (
@@ -37,13 +35,6 @@ from .parent_invitation import (
     approve_invitation,
     nominate_parent,
     reject_invitation,
-)
-from .registration import (
-    GENERIC_REGISTRATION_ANSWER,
-    approve_registration,
-    reject_registration,
-    submit_registration,
-    verify_registration,
 )
 from .password_reset import (
     GENERIC_RESET_ANSWER,
@@ -59,7 +50,6 @@ from .serializers import (
     ActivitySerializer,
     AegisTokenObtainPairSerializer,
     AdminParentInvitationSerializer,
-    AdminRegistrationSerializer,
     AdminUserUpdateSerializer,
     ConsentRecordSerializer,
     FacultyProfileListSerializer,
@@ -69,9 +59,6 @@ from .serializers import (
     ParentInvitationAcceptSerializer,
     ParentInvitationSerializer,
     PasswordResetSerializer,
-    RegistrationApprovalSerializer,
-    RegistrationRejectionSerializer,
-    RegistrationRequestSerializer,
     UserSerializer,
     UserCreateSerializer,
     UserProfileSerializer,
@@ -234,7 +221,12 @@ class UserDetailView(generics.RetrieveUpdateAPIView):
 
 class UserCreateView(generics.CreateAPIView):
     """
-    POST /api/v1/accounts/users/create/ - create an account.
+    POST /api/v1/accounts/users/create/ - create a staff or admin account.
+
+    The role profile is written with the account in one transaction, so no
+    account lands on a page whose profile is missing. Students use
+    ``/api/v1/academics/student-profiles/`` (account + profile + enrollment);
+    parents use the invitation flow (account + child link).
 
     Without a password, the account is created with an unusable password and
     a one-time set-password link is emailed to the person, so no
@@ -472,171 +464,6 @@ class PasswordResetView(APIView):
         revoke_sessions(user)
 
         return Response({"detail": "Password reset. You can sign in now."})
-
-
-class RegistrationSubmitView(APIView):
-    """
-    POST /api/v1/accounts/registrations/ - ask for a student account.
-
-    The answer is the same whether the address is new, already registered
-    or unknown, so the endpoint cannot be used to find out who has an
-    account. A request is not an account: it carries no role and no
-    permissions, and only an administrator turns it into one.
-    """
-
-    permission_classes = [permissions.AllowAny]
-    throttle_classes = [RegistrationRateThrottle]
-
-    def post(self, request):
-        serializer = RegistrationRequestSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        data = serializer.validated_data
-
-        request_row, _raw_token = submit_registration(
-            email=data["email"],
-            full_name=data["full_name"],
-            password=data["password"],
-            student_code=data.get("student_code", ""),
-            notice_version=data.get("notice_version", ""),
-        )
-        if request_row is not None:
-            try:
-                record_audit(action="create", instance=request_row)
-            except Exception:
-                logger.exception("REGISTRATION audit record failed")
-
-        return Response(
-            {"detail": GENERIC_REGISTRATION_ANSWER},
-            status=status.HTTP_202_ACCEPTED,
-        )
-
-
-class RegistrationVerifyView(APIView):
-    """
-    GET /api/v1/accounts/registrations/verify/?token=...
-
-    Confirms that the applicant owns the address. After this the request
-    waits for an administrator.
-    """
-
-    permission_classes = [permissions.AllowAny]
-    throttle_classes = [RegistrationRateThrottle]
-
-    def get(self, request):
-        raw_token = request.query_params.get("token", "")
-        registration = verify_registration(raw_token)
-        if registration is None:
-            return Response(
-                {"detail": "This verification link is invalid or has expired."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        return Response({"status": registration.status})
-
-
-class AdminRegistrationListView(generics.ListAPIView):
-    """
-    GET /api/v1/admin/registrations/ - the review queue.
-
-    Administrator only, like every other administrator surface: the queue
-    holds names and addresses, and NFR-010 keeps identifiable student data
-    out of the wrong hands.
-    """
-
-    serializer_class = AdminRegistrationSerializer
-    permission_classes = [IsAdminUser]
-
-    def get_queryset(self):
-        qs = RegistrationRequest.objects.select_related("reviewed_by").all()
-        status_filter = self.request.query_params.get("status")
-        if status_filter == "pending":
-            qs = qs.filter(
-                status__in=[
-                    RegistrationRequest.Status.PENDING,
-                    RegistrationRequest.Status.VERIFIED,
-                ]
-            )
-        return qs
-
-
-class AdminRegistrationApproveView(APIView):
-    """
-    POST /api/v1/admin/registrations/{id}/approve/
-
-    The only path from a request to an account. It creates the user and
-    the student profile in one transaction, because in this system a
-    student profile belongs to a user: they are one record.
-    """
-
-    permission_classes = [IsAdminUser]
-
-    def post(self, request, pk):
-        serializer = RegistrationApprovalSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        data = serializer.validated_data
-
-        registration = RegistrationRequest.objects.filter(pk=pk).first()
-        if registration is None:
-            return Response(
-                {"detail": "No registration request matches the given id."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        section = None
-        if data.get("section_id"):
-            from apps.academics.models import Section
-
-            section = Section.objects.filter(pk=data["section_id"]).first()
-            if section is None:
-                return Response(
-                    {"detail": "No section matches the given id."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-        try:
-            approve_registration(
-                registration, reviewer=request.user, section=section
-            )
-        except ValueError as exc:
-            return Response(
-                {"detail": str(exc)},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        return Response(
-            {
-                "detail": "Registration approved. The account can sign in now.",
-                "email": registration.email,
-            }
-        )
-
-
-class AdminRegistrationRejectView(APIView):
-    """POST /api/v1/admin/registrations/{id}/reject/ - close a request."""
-
-    permission_classes = [IsAdminUser]
-
-    def post(self, request, pk):
-        serializer = RegistrationRejectionSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        registration = RegistrationRequest.objects.filter(pk=pk).first()
-        if registration is None:
-            return Response(
-                {"detail": "No registration request matches the given id."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-        if registration.status == RegistrationRequest.Status.APPROVED:
-            return Response(
-                {"detail": "This request was already approved."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        reject_registration(
-            registration,
-            reviewer=request.user,
-            note=serializer.validated_data.get("note", ""),
-        )
-        return Response({"detail": "Registration rejected."})
 
 
 class ParentInvitationCreateView(APIView):

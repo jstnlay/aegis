@@ -890,14 +890,13 @@ AuditLog ── user → User (nullable)
 ### G.1 Authentication and Registration
 
 ```
-1. Student/Parent self-registers via /api/v1/auth/register/
-   - Must accept privacy policy (privacy_policy_accepted=True)
-   - Account created as inactive
-   - Email verification required before activation
-
-2. Faculty/Guidance/Admin accounts created by Admin
-   via /api/v1/accounts/users/
-
+1. Every account is created by an administrator; there is no public
+   registration.
+   - Students: POST /api/v1/academics/student-profiles/ creates the user,
+     StudentProfile and Enrollment together
+   - Faculty/Guidance/Admin: POST /api/v1/accounts/users/
+   - The account is created without a password; the person receives a
+     set-password link by email
 3. Login: POST /api/v1/auth/login/
    → Returns JWT access token + refresh token
    [ASSUMPTION — token lifetimes are implementation details, see §J]
@@ -1115,7 +1114,7 @@ safe because importers update an existing record in place.]
 ├── auth/
 │   ├── login/
 │   ├── logout/
-│   ├── register/                   # Students & parents
+│   ├── register/                   # REMOVED — no public registration
 │   ├── token/refresh/
 │   ├── password/change/
 │   └── password/reset/

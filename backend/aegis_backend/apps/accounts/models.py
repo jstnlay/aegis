@@ -304,6 +304,10 @@ class RegistrationRequest(TimestampedModel):
 
     The email must be verified before an administrator spends time on it, so
     the request proves the applicant owns the address.
+
+    Retained for history only: public registration was withdrawn, so no
+    endpoint writes this table any more. Accounts are created by an
+    administrator.
     """
 
     class Status(models.TextChoices):

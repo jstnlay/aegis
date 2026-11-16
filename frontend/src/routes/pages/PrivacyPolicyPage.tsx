@@ -134,7 +134,7 @@ export function PrivacyPolicyPage({
         <p className="text-sm leading-relaxed text-muted-foreground">
           Most students here are below the age of majority, so a parent or
           guardian gives consent on the student's behalf. The school records
-          that consent during enrolment and registration.
+          that consent when it creates the account and enrols the student.
         </p>
         <p className="text-sm leading-relaxed text-muted-foreground">
           Until a student reaches the age of majority, a parent or guardian

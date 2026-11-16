@@ -12,7 +12,6 @@ import {
 import {
   useAcceptNotice,
   useChatHistory,
-  usePublicNotice,
 } from "@/features/chatbot/api"
 
 vi.mock("@/lib/api", () => ({
@@ -110,19 +109,6 @@ describe("notice and history", () => {
     expect(mockedPost).toHaveBeenCalledWith("/chatbot/notice/", {
       version: "2026-11-01",
     })
-  })
-
-  it("reads the public notice without a token", async () => {
-    mockedGet.mockResolvedValueOnce({
-      data: { version: "2026-11-01", text: "Notice text." },
-    })
-
-    const { result } = renderHook(() => usePublicNotice(), {
-      wrapper: createWrapper(),
-    })
-
-    await waitFor(() => expect(result.current.data?.version).toBe("2026-11-01"))
-    expect(mockedGet).toHaveBeenCalledWith("/chatbot/notice/public/")
   })
 
   it("reads the caller's own turns from the history endpoint", async () => {

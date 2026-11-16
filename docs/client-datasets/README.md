@@ -80,10 +80,10 @@ the risk engine reads finalized grades only.
 
 The import creates the learner accounts but discards their generated
 passwords, and the adviser accounts get a password only when
-`QA_SHARED_PASSWORD` is set. *Admin -> Users -> New account* cannot fill the
-gap: the 97 learner emails already exist, the form sends a set-password link
-to an address the school does not own (`@students.aegis.local`), and a user
-made there has no `StudentProfile`, no `Enrollment` and no section.
+`QA_SHARED_PASSWORD` is set. *Admin -> Users -> Add student* cannot fill the
+gap: the 97 learner emails already exist, so the create is refused as a
+duplicate. The generated addresses (`@students.aegis.local`) also belong to
+no mailbox the school owns, so a set-password link sent to one goes nowhere.
 
 Prepare the existing accounts for a test instead:
 

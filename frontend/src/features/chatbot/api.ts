@@ -271,26 +271,6 @@ export function useAcceptNotice() {
   })
 }
 
-/**
- * The public notice text, read before sign-up.
- *
- * `GET /chatbot/notice/public/` needs no token, so the registration form can
- * show the student what they are agreeing to before an account exists.
- */
-export function usePublicNotice(enabled = true) {
-  return useQuery({
-    queryKey: ["chatbot", "notice", "public"],
-    queryFn: async () => {
-      const { data } = await apiClient.get<{ version: string; text: string }>(
-        "/chatbot/notice/public/"
-      )
-      return data
-    },
-    enabled,
-    retry: false,
-  })
-}
-
 /** The caller's own persisted turns, newest first. */
 export function useChatHistory(enabled = true) {
   return useQuery({

@@ -284,17 +284,6 @@
   padding-top: 0;
   border-top: 0;
 }
-.school-login-register {
-  color: #68554b;
-  font-size: 14px;
-  line-height: 1.6;
-  text-align: center;
-}
-.school-login-register a {
-  font-weight: 600;
-  text-decoration: underline;
-  white-space: nowrap;
-}
 .school-login-card a {
   color: var(--primary);
   text-underline-offset: 4px;

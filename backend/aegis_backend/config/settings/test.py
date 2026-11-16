@@ -85,7 +85,6 @@ REST_FRAMEWORK = {
         "password_change": "1000000/min",
         "password_forgot": "1000000/min",
         "password_reset": "1000000/min",
-        "registration": "1000000/min",
         "parent_invitation": "1000000/min",
         "health": "1000000/min",
     },

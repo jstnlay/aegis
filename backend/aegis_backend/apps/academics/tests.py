@@ -1645,9 +1645,27 @@ class StudentProfileCreateTest(AcademicsTestBase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("date_of_birth", response.data["error"]["details"])
 
+    def test_admin_creates_a_student_in_any_section(self):
+        self.client.force_authenticate(user=self.admin_user)
+        response = self.client.post(
+            self.URL,
+            data=self.payload(
+                grade_level=str(self.g8.id), section=str(self.section_b.id)
+            ),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        profile = StudentProfile.objects.get(student_id="STU-NEW-001")
+        self.assertEqual(profile.section, self.section_b)
+        self.assertTrue(
+            Enrollment.objects.filter(
+                student=profile, section=self.section_b
+            ).exists()
+        )
+
     def test_non_faculty_roles_are_outside_the_surface(self):
         for user in (
-            self.admin_user,
             self.guidance_user,
             self.student_user,
             self.parent_user,

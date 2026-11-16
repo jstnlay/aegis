@@ -15,11 +15,6 @@ urlpatterns = [
     path("message/", views.ChatView.as_view(), name="chatbot-message"),
     path("history/", views.ChatHistoryView.as_view(), name="chatbot-history"),
     path("notice/", views.NoticeView.as_view(), name="chatbot-notice"),
-    path(
-        "notice/public/",
-        views.PublicNoticeView.as_view(),
-        name="chatbot-notice-public",
-    ),
     path("intents/", views.IntentsView.as_view(), name="chatbot-intents"),
     path("flags/", views.FlagListView.as_view(), name="chatbot-flag-list"),
     path("flags/<uuid:pk>/", views.FlagDetailView.as_view(), name="chatbot-flag-detail"),

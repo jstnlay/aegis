@@ -468,24 +468,28 @@ class StudentProfileManageView(generics.RetrieveUpdateAPIView):
 
 class StudentProfileCreateView(generics.CreateAPIView):
     """
-    Create a student in one of the caller's advisory or subject sections
-    (FR-007 / TC-FAC-03).
+    Create a student in a section (FR-007 / TC-FAC-03).
 
     The account, the profile, and the enrollment are one record for a student:
     a profile with no user cannot sign in, and a profile with no enrollment is
     not in any class. They are written in one transaction so a partial create
     cannot leave a student who is neither.
 
-    Only a faculty member may call this. Administrators already create accounts
-    through `/accounts/users/create/`; keeping this surface faculty-only means
-    the scope check has one meaning — the caller must study the section.
+    A faculty member may add a student to a section they advise or teach. An
+    administrator may add one to any section, because the administrator
+    creates the school's accounts and is not attached to a class. That is the
+    only difference: the scope check is filled with the caller's sections for
+    faculty, and with every section (``None``) for an administrator.
     """
 
     serializer_class = StudentProfileCreateSerializer
-    permission_classes = [IsFacultyUser]
+    permission_classes = [IsFacultyOrAdminUser]
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
+        if self.request.user.role == "admin":
+            context["allowed_section_ids"] = None
+            return context
         fp = _get_faculty_profile(self.request.user)
         if fp is None:
             context["allowed_section_ids"] = set()

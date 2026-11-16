@@ -23,7 +23,9 @@ import sys
 import tempfile
 
 from apps.accounts.models import (
+    AdminProfile,
     FacultyProfile,
+    GuidanceProfile,
     ParentProfile,
     ParentStudentLink,
     StudentProfile,
@@ -668,6 +670,7 @@ class SEC001SelfServicePrivilegeEscalationTest(TestCase):
                 "first_name": "New",
                 "last_name": "Faculty",
                 "role": "faculty",
+                "employee_id": "SEC001-EMP-001",
                 "password": "securepass123",
             },
             format="json",
@@ -675,6 +678,7 @@ class SEC001SelfServicePrivilegeEscalationTest(TestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         created = User.objects.get(email="new_faculty@example.com")
         self.assertEqual(created.role, "faculty")
+        self.assertEqual(created.faculty_profile.employee_id, "SEC001-EMP-001")
 
     def test_admin_user_list_and_detail_still_work(self):
         admin = User.objects.create_superuser(
@@ -1575,6 +1579,7 @@ class AdminRoleAuthorityTest(TestCase):
                 "first_name": "Created",
                 "last_name": "Faculty",
                 "role": "faculty",
+                "employee_id": "ADMROLE-EMP-001",
                 "password": "CreatedRole_2026!",
             },
             format="json",
@@ -1583,6 +1588,7 @@ class AdminRoleAuthorityTest(TestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         created = User.objects.get(email="admrole_created@example.com")
         self.assertEqual(created.role, "faculty")
+        self.assertEqual(created.faculty_profile.employee_id, "ADMROLE-EMP-001")
 
     # -- the staff-state direction that must NOT grant access ------------
 
@@ -2665,181 +2671,6 @@ class PasswordResetFlowTest(TestCase):
 
 
 @mock.patch.dict(
-    "core.throttling.RegistrationRateThrottle.THROTTLE_RATES",
-    {"registration": "5/min"},
-)
-class StudentRegistrationTest(TestCase):
-    """
-    Student registration.
-
-    The point of the whole flow: a registration request is not an account.
-    It carries no role and no permissions, and the only way to an account
-    runs through an administrator's approval.
-    """
-
-    def setUp(self):
-        cache.clear()
-        self.client = APIClient()
-        self.submit_url = "/api/v1/accounts/registrations/"
-        self.verify_url = "/api/v1/accounts/registrations/verify/"
-        self.admin_list_url = "/api/v1/accounts/admin/registrations/"
-        self.admin = User.objects.create_user(
-            email="admin@example.com",
-            password="pass12345",
-            first_name="Admin",
-            last_name="Person",
-            role="admin",
-        )
-        self.student = User.objects.create_user(
-            email="student@example.com",
-            password="pass12345",
-            first_name="Student",
-            last_name="Person",
-            role="student",
-        )
-
-    def tearDown(self):
-        cache.clear()
-
-    def _submit(self, **overrides):
-        from apps.chatbot.agreements import notice_version
-
-        payload = {
-            "full_name": "Juan Dela Cruz",
-            "email": "juan@example.com",
-            "student_code": "AEGIS-QA-S0001",
-            "password": "brandnewpass1",
-            "confirm_password": "brandnewpass1",
-            "notice_accepted": True,
-            "notice_version": notice_version(),
-        }
-        payload.update(overrides)
-        return self.client.post(self.submit_url, payload, format="json")
-
-    def _admin_headers(self):
-        from rest_framework_simplejwt.tokens import RefreshToken
-
-        token = RefreshToken.for_user(self.admin)
-        return {"HTTP_AUTHORIZATION": f"Bearer {token.access_token}"}
-
-    def test_request_gets_the_same_answer_whatever_the_address(self):
-        fresh = self._submit()
-        unknown = self._submit(email="nobody@example.com")
-        existing = self._submit(email="student@example.com")
-
-        for response in (fresh, unknown, existing):
-            self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
-        self.assertEqual(fresh.data, unknown.data)
-        self.assertEqual(fresh.data, existing.data)
-
-    def test_a_request_creates_no_account(self):
-        from apps.accounts.models import RegistrationRequest
-
-        self._submit()
-
-        self.assertEqual(RegistrationRequest.objects.count(), 1)
-        self.assertFalse(
-            User.objects.filter(email="juan@example.com").exists(),
-            "a registration request must not create an account",
-        )
-
-    def test_the_request_stores_no_plaintext_password(self):
-        from apps.accounts.models import RegistrationRequest
-
-        self._submit()
-
-        request_row = RegistrationRequest.objects.get()
-        self.assertNotIn("brandnewpass1", request_row.password_hash)
-        self.assertTrue(request_row.password_hash.startswith("pbkdf2_sha256$"))
-
-    def test_verification_moves_the_request_to_verified(self):
-        from django.core import mail
-
-        from apps.accounts.models import RegistrationRequest
-
-        self._submit()
-        request_row = RegistrationRequest.objects.get()
-
-        body = mail.outbox[0].body
-        raw_token = body.split("/register?token=")[1].split()[0]
-
-        response = self.client.get(self.verify_url, {"token": raw_token})
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        request_row.refresh_from_db()
-        self.assertEqual(
-            request_row.status, RegistrationRequest.Status.VERIFIED
-        )
-
-    def test_an_unknown_verification_token_is_refused(self):
-        response = self.client.get(self.verify_url, {"token": "not-a-token"})
-
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-
-    def test_only_an_administrator_may_see_the_queue(self):
-        from rest_framework_simplejwt.tokens import RefreshToken
-
-        token = RefreshToken.for_user(self.student)
-        response = self.client.get(
-            self.admin_list_url,
-            HTTP_AUTHORIZATION=f"Bearer {token.access_token}",
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-
-    def test_approval_creates_the_account_and_the_student_profile(self):
-        from apps.accounts.models import StudentProfile
-
-        self._submit()
-        from apps.accounts.models import RegistrationRequest
-
-        request_row = RegistrationRequest.objects.get()
-        request_row.status = RegistrationRequest.Status.VERIFIED
-        request_row.save(update_fields=["status"])
-
-        response = self.client.post(
-            f"{self.admin_list_url}{request_row.pk}/approve/",
-            {},
-            format="json",
-            **self._admin_headers(),
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        user = User.objects.get(email="juan@example.com")
-        self.assertEqual(user.role, User.Role.STUDENT)
-        self.assertTrue(user.check_password("brandnewpass1"))
-        self.assertFalse(user.must_change_password)
-        self.assertTrue(StudentProfile.objects.filter(user=user).exists())
-
-        request_row.refresh_from_db()
-        self.assertEqual(
-            request_row.status, RegistrationRequest.Status.APPROVED
-        )
-        self.assertEqual(request_row.reviewed_by_id, self.admin.id)
-
-    def test_rejection_creates_no_account(self):
-        from apps.accounts.models import RegistrationRequest
-
-        self._submit()
-        request_row = RegistrationRequest.objects.get()
-
-        response = self.client.post(
-            f"{self.admin_list_url}{request_row.pk}/reject/",
-            {"note": "No enrolment on record."},
-            format="json",
-            **self._admin_headers(),
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertFalse(User.objects.filter(email="juan@example.com").exists())
-        request_row.refresh_from_db()
-        self.assertEqual(
-            request_row.status, RegistrationRequest.Status.REJECTED
-        )
-        self.assertEqual(request_row.review_note, "No enrolment on record.")
-
-
-@mock.patch.dict(
     "core.throttling.ParentInvitationRateThrottle.THROTTLE_RATES",
     {"parent_invitation": "5/min"},
 )
@@ -3131,6 +2962,7 @@ class StaffSetPasswordLinkTest(TestCase):
             "first_name": "New",
             "last_name": "Teacher",
             "role": "faculty",
+            "employee_id": "STAFF-EMP-001",
         }
         payload.update(overrides)
         return self.client.post(
@@ -3287,3 +3119,131 @@ class AdminCanCreateAnotherAdminTest(TestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         created = User.objects.get(email="second_admin@example.com")
         self.assertEqual(created.role, "admin")
+        self.assertEqual(created.admin_profile.admin_level, "admin")
+
+
+class RoleProfileCreationTest(TestCase):
+    """`POST /accounts/users/create/` writes the role's profile with the user."""
+
+    URL = "/api/v1/accounts/users/create/"
+
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = User.objects.create_user(
+            email="profile_admin@example.com",
+            password="AdminProfile_2026!",
+            first_name="Profile",
+            last_name="Admin",
+            role="admin",
+        )
+        self.client.force_authenticate(user=self.admin)
+
+    def _post(self, **overrides):
+        payload = {
+            "email": "new.staff@example.com",
+            "username": "",
+            "first_name": "New",
+            "last_name": "Staff",
+            "role": "faculty",
+            "employee_id": "EMP-NEW-001",
+            "password": "StaffChosen_2026!",
+        }
+        payload.update(overrides)
+        return self.client.post(self.URL, payload, format="json")
+
+    def test_faculty_gets_a_faculty_profile(self):
+        response = self._post(department="Science")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        user = User.objects.get(email="new.staff@example.com")
+        self.assertEqual(user.faculty_profile.employee_id, "EMP-NEW-001")
+        self.assertEqual(user.faculty_profile.department, "Science")
+
+    def test_guidance_gets_a_guidance_profile(self):
+        response = self._post(
+            role="guidance",
+            specialization="Adolescent counseling",
+            license_number="PRC-12345",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        user = User.objects.get(email="new.staff@example.com")
+        self.assertEqual(user.guidance_profile.employee_id, "EMP-NEW-001")
+        self.assertEqual(
+            user.guidance_profile.specialization, "Adolescent counseling"
+        )
+        self.assertEqual(user.guidance_profile.license_number, "PRC-12345")
+
+    def test_admin_gets_an_admin_profile(self):
+        response = self._post(role="admin", admin_level="superadmin")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        user = User.objects.get(email="new.staff@example.com")
+        self.assertEqual(user.admin_profile.admin_level, "superadmin")
+
+    def test_faculty_without_an_employee_id_is_rejected(self):
+        response = self._post(employee_id="")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("employee_id", response.data["error"]["details"])
+        self.assertFalse(
+            User.objects.filter(email="new.staff@example.com").exists()
+        )
+
+    def test_duplicate_employee_id_is_rejected(self):
+        FacultyProfile.objects.create(user=self.admin, employee_id="EMP-NEW-001")
+
+        response = self._post()
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("employee_id", response.data["error"]["details"])
+        self.assertFalse(
+            User.objects.filter(email="new.staff@example.com").exists()
+        )
+
+    def test_students_are_rejected_with_the_student_form(self):
+        response = self._post(role="student")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("role", response.data["error"]["details"])
+
+    def test_parents_are_rejected_with_the_invitation_flow(self):
+        response = self._post(role="parent")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("role", response.data["error"]["details"])
+
+
+class RegistrationEndpointsRemovedTest(TestCase):
+    """Public registration is gone; the table stays for history only."""
+
+    def setUp(self):
+        self.client = APIClient()
+
+    def test_public_registration_endpoints_return_404(self):
+        self.assertEqual(
+            self.client.post(
+                "/api/v1/accounts/registrations/", {}, format="json"
+            ).status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+        self.assertEqual(
+            self.client.get(
+                "/api/v1/accounts/registrations/verify/", {"token": "x"}
+            ).status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+
+    def test_admin_registration_queue_returns_404(self):
+        admin = User.objects.create_user(
+            email="no_reg_admin@example.com",
+            password="NoRegAdmin_2026!",
+            first_name="No",
+            last_name="Registration",
+            role="admin",
+        )
+        self.client.force_authenticate(user=admin)
+
+        response = self.client.get("/api/v1/accounts/admin/registrations/")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)

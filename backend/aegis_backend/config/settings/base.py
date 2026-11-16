@@ -138,7 +138,7 @@ DATABASES = {
 # ---------------------------------------------------------------------------
 #
 # The default cache is used by DRF throttling, so the rate limits that protect
-# login, refresh, import, export, password change and registration are
+# login, refresh, import, export and password change are
 # enforced through it.
 #
 # The built-in local-memory cache is per-process: with more than one worker
@@ -352,9 +352,6 @@ REST_FRAMEWORK = {
         "password_forgot": "5/min",
         # Reset redemptions are keyed on the token, not the client.
         "password_reset": "10/min",
-        # Student registration. Each submission may send a verification
-        # email, so an open form must not be usable to flood an inbox.
-        "registration": "5/min",
         # Parent nominations. Each one reaches an administrator's queue.
         "parent_invitation": "5/min",
     },

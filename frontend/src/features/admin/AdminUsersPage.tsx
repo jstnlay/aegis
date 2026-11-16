@@ -1,4 +1,5 @@
 import { ChoiceField, Field } from "@/components/ui/form-field"
+import { useQueryClient } from "@tanstack/react-query"
 import { useMemo, useState } from "react"
 
 import { Badge } from "@/components/ui/badge"
@@ -34,21 +35,17 @@ import {
   USER_ROLES,
   USER_ROLE_LABELS,
   useAdminParentInvitations,
-  useAdminRegistrations,
   useAdminUsers,
   useApproveParentInvitation,
-  useApproveRegistration,
   useCreateUser,
   useRejectParentInvitation,
-  useRejectRegistration,
-  useSections,
   useUpdateUser,
-  type AdminRegistration,
   type AdminUser,
   type UpdateUserPayload,
   type UserRole,
 } from "@/features/admin/api"
 import { useAuth } from "@/features/auth/AuthContext"
+import { AddStudentDialog } from "@/features/faculty/AddStudentDialog"
 import { normalizeApiError } from "@/lib/error"
 import { ErrorNote } from "@/components/feedback/Feedback"
 
@@ -164,8 +161,6 @@ export function AdminUsersPage() {
         </p>
       </div>
 
-      <PendingRegistrationsCard />
-
       <PendingParentInvitationsCard />
 
       <Card>
@@ -177,7 +172,10 @@ export function AdminUsersPage() {
                 Showing {filtered.length} of {users.length} accounts.
               </CardDescription>
             </div>
-            <NewUserDialog />
+            <div className="flex flex-wrap items-center gap-2">
+              <AddStudentButton />
+              <NewUserDialog />
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -238,135 +236,6 @@ export function AdminUsersPage() {
         </CardContent>
       </Card>
     </div>
-  )
-}
-
-/**
- * The student registration queue.
- *
- * A registration is a request, and this is where it becomes an account. The
- * section is chosen here rather than by the applicant: the student said who
- * they are, the school says where they sit.
- *
- * The queue is administrator-only, like every other administrator surface.
- */
-function PendingRegistrationsCard() {
-  const registrations = useAdminRegistrations("pending")
-  const sectionsQuery = useSections()
-  const approve = useApproveRegistration()
-  const reject = useRejectRegistration()
-
-  const requests = registrations.data ?? []
-  const sections = sectionsQuery.list.data ?? []
-  const error = registrations.isError
-    ? normalizeApiError(registrations.error).message
-    : null
-
-  return (
-    <Card>
-      <CardHeader>
-        <div className="space-y-1">
-          <CardTitle>Pending registrations</CardTitle>
-          <CardDescription>
-            Students who asked for an account. Approving one creates the account
-            and its student profile; rejecting one closes the request without
-            granting anything.
-          </CardDescription>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {error ? <ErrorNote message={error} /> : null}
-
-        {requests.length === 0 && !registrations.isLoading ? (
-          <p className="text-sm text-muted-foreground">
-            No registration requests are waiting.
-          </p>
-        ) : null}
-
-        <ul className="space-y-3">
-          {requests.map((request) => (
-            <RegistrationRow
-              key={request.id}
-              request={request}
-              sections={sections}
-              onApprove={(sectionId) =>
-                approve.mutate({
-                  id: request.id,
-                  body: { section_id: sectionId },
-                })
-              }
-              onReject={() => reject.mutate({ id: request.id })}
-              busy={approve.isPending || reject.isPending}
-            />
-          ))}
-        </ul>
-      </CardContent>
-    </Card>
-  )
-}
-
-/** One request in the queue, with its approve and reject actions. */
-function RegistrationRow({
-  request,
-  sections,
-  onApprove,
-  onReject,
-  busy,
-}: {
-  request: AdminRegistration
-  sections: { id: string; name: string; grade_level_name: string }[]
-  onApprove: (sectionId: string | null) => void
-  onReject: () => void
-  busy: boolean
-}) {
-  const [sectionId, setSectionId] = useState<string>("")
-
-  return (
-    <li className="flex flex-col gap-3 rounded-md border border-border p-3 sm:flex-row sm:items-center sm:justify-between">
-      <div className="min-w-0">
-        <p className="font-medium whitespace-nowrap">{request.full_name}</p>
-        <p className="truncate text-xs text-muted-foreground">
-          {request.email}
-          {request.student_code ? ` · ${request.student_code}` : ""}
-        </p>
-        <p className="text-xs text-muted-foreground">
-          {request.status === "verified"
-            ? "Email verified — waiting for approval."
-            : "Not yet verified."}
-        </p>
-      </div>
-
-      <div className="flex flex-wrap items-end gap-2">
-        <div className="space-y-1.5">
-          <Label htmlFor={`registration-section-${request.id}`}>Section</Label>
-          <Select value={sectionId} onValueChange={setSectionId}>
-            <SelectTrigger
-              id={`registration-section-${request.id}`}
-              className="w-56"
-            >
-              <SelectValue placeholder="Choose a section" />
-            </SelectTrigger>
-            <SelectContent>
-              {sections.map((section) => (
-                <SelectItem key={section.id} value={section.id}>
-                  {section.name} — {section.grade_level_name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <Button
-          size="sm"
-          disabled={busy || request.status !== "verified"}
-          onClick={() => onApprove(sectionId || null)}
-        >
-          Approve
-        </Button>
-        <Button size="sm" variant="outline" disabled={busy} onClick={onReject}>
-          Reject
-        </Button>
-      </div>
-    </li>
   )
 }
 
@@ -462,20 +331,41 @@ function PendingParentInvitationsCard() {
   )
 }
 
+const STAFF_ROLES = ["faculty", "guidance", "admin"] as const
+type StaffRole = (typeof STAFF_ROLES)[number]
+
+const EMPTY_STAFF_FORM = {
+  email: "",
+  first_name: "",
+  last_name: "",
+  role: "faculty" as StaffRole,
+  employee_id: "",
+  department: "",
+  specialization: "",
+  license_number: "",
+  admin_level: "admin" as "superadmin" | "admin",
+}
+
+/**
+ * Create a staff or administrator account.
+ *
+ * Students are not in this picker: a student is an account, a profile, and an
+ * enrollment, and the "Add student" dialog writes all three. Parents are not
+ * here either; the invitation flow is what links a parent to a child.
+ */
 function NewUserDialog() {
   const create = useCreateUser()
   const [open, setOpen] = useState(false)
-  const [form, setForm] = useState({
-    email: "",
-    first_name: "",
-    last_name: "",
-    role: "student" as UserRole,
-  })
+  const [form, setForm] = useState(EMPTY_STAFF_FORM)
+
+  const needsEmployeeId =
+    form.role === "faculty" || form.role === "guidance"
 
   const canSubmit =
     form.email.trim().length > 0 &&
     form.first_name.trim().length > 0 &&
-    form.last_name.trim().length > 0
+    form.last_name.trim().length > 0 &&
+    (!needsEmployeeId || form.employee_id.trim().length > 0)
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -486,11 +376,11 @@ function NewUserDialog() {
         <DialogHeader>
           <DialogTitle>Create an account</DialogTitle>
           <DialogDescription>
-            `POST /accounts/users/create/`. The role is chosen here because this
-            is where the account's shape is decided; revise it later with "Edit
-            access" on the account's row. A one-time link that lets the person
-            set their own password is emailed to them, so no password is chosen
-            here and none travels by email.
+            The role profile is written with the account, so the person lands
+            on a working page. A one-time link that lets them set their own
+            password is emailed to them, so no password is chosen here and none
+            travels by email. Add students with "Add student"; parents join
+            through the invitation flow.
           </DialogDescription>
         </DialogHeader>
 
@@ -509,16 +399,26 @@ function NewUserDialog() {
                 first_name: form.first_name.trim(),
                 last_name: form.last_name.trim(),
                 role: form.role,
+                ...(needsEmployeeId
+                  ? { employee_id: form.employee_id.trim() }
+                  : {}),
+                ...(form.role === "faculty"
+                  ? { department: form.department.trim() }
+                  : {}),
+                ...(form.role === "guidance"
+                  ? {
+                      specialization: form.specialization.trim(),
+                      license_number: form.license_number.trim(),
+                    }
+                  : {}),
+                ...(form.role === "admin"
+                  ? { admin_level: form.admin_level }
+                  : {}),
               },
               {
                 onSuccess: () => {
                   setOpen(false)
-                  setForm({
-                    email: "",
-                    first_name: "",
-                    last_name: "",
-                    role: "student",
-                  })
+                  setForm(EMPTY_STAFF_FORM)
                 },
               }
             )
@@ -567,12 +467,72 @@ function NewUserDialog() {
             label="Role"
             id="new-user-role"
             value={form.role}
-            onChange={(value) => setForm({ ...form, role: value as UserRole })}
-            options={USER_ROLES.map((role) => ({
+            onChange={(value) =>
+              setForm({ ...form, role: value as StaffRole })
+            }
+            options={STAFF_ROLES.map((role) => ({
               value: role,
               label: USER_ROLE_LABELS[role],
             }))}
           />
+
+          {needsEmployeeId ? (
+            <Field
+              label="Employee ID"
+              id="new-user-employee-id"
+              value={form.employee_id}
+              onChange={(value) => setForm({ ...form, employee_id: value })}
+              required
+            />
+          ) : null}
+
+          {form.role === "faculty" ? (
+            <Field
+              label="Department"
+              id="new-user-department"
+              value={form.department}
+              onChange={(value) => setForm({ ...form, department: value })}
+            />
+          ) : null}
+
+          {form.role === "guidance" ? (
+            <>
+              <Field
+                label="Specialization"
+                id="new-user-specialization"
+                value={form.specialization}
+                onChange={(value) =>
+                  setForm({ ...form, specialization: value })
+                }
+              />
+              <Field
+                label="License number"
+                id="new-user-license-number"
+                value={form.license_number}
+                onChange={(value) =>
+                  setForm({ ...form, license_number: value })
+                }
+              />
+            </>
+          ) : null}
+
+          {form.role === "admin" ? (
+            <ChoiceField
+              label="Administrator level"
+              id="new-user-admin-level"
+              value={form.admin_level}
+              onChange={(value) =>
+                setForm({
+                  ...form,
+                  admin_level: value as "superadmin" | "admin",
+                })
+              }
+              options={[
+                { value: "admin", label: "Admin" },
+                { value: "superadmin", label: "Super Admin" },
+              ]}
+            />
+          ) : null}
 
           {create.isError ? (
             <ErrorNote message={normalizeApiError(create.error).message} />
@@ -593,6 +553,49 @@ function NewUserDialog() {
         </form>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/**
+ * Add a student as an administrator.
+ *
+ * Reuses the faculty dialog, because the server-side create is the same one
+ * transaction: account, profile, and enrollment. An administrator gets every
+ * section from `/academics/sections/`, while a faculty member gets only their
+ * own; the endpoint enforces the same rule.
+ */
+function AddStudentButton() {
+  const queryClient = useQueryClient()
+  const [open, setOpen] = useState(false)
+  const [created, setCreated] = useState<string | null>(null)
+
+  return (
+    <div className="flex items-center gap-2">
+      {created ? (
+        <span role="status" className="text-xs text-muted-foreground">
+          Created {created}. Set-password link sent.
+        </span>
+      ) : null}
+      <Button
+        type="button"
+        variant="outline"
+        onClick={() => {
+          setCreated(null)
+          setOpen(true)
+        }}
+      >
+        Add student
+      </Button>
+      <AddStudentDialog
+        open={open}
+        onClose={() => setOpen(false)}
+        onCreated={(name) => {
+          setOpen(false)
+          setCreated(name)
+          void queryClient.invalidateQueries({ queryKey: ["admin", "users"] })
+        }}
+      />
+    </div>
   )
 }
 

@@ -4,9 +4,6 @@ from ..views import (
     AdminParentInvitationApproveView,
     AdminParentInvitationListView,
     AdminParentInvitationRejectView,
-    AdminRegistrationApproveView,
-    AdminRegistrationListView,
-    AdminRegistrationRejectView,
     ConsentListView,
     ConsentRevokeView,
     CurrentUserView,
@@ -17,8 +14,6 @@ from ..views import (
     PasswordChangeView,
     PasswordForgotView,
     PasswordResetView,
-    RegistrationSubmitView,
-    RegistrationVerifyView,
     UserCreateView,
     UserDetailView,
     UserListView,
@@ -46,18 +41,6 @@ urlpatterns = [
     # credential, so neither needs a session.
     path("password/forgot/", PasswordForgotView.as_view(), name="password-forgot"),
     path("password/reset/", PasswordResetView.as_view(), name="password-reset"),
-    # Student registration. A request is not an account: it carries no role
-    # and no permissions, and only an administrator turns it into one.
-    path(
-        "registrations/",
-        RegistrationSubmitView.as_view(),
-        name="registration-submit",
-    ),
-    path(
-        "registrations/verify/",
-        RegistrationVerifyView.as_view(),
-        name="registration-verify",
-    ),
     # Parent invitations. A nomination creates no account; an
     # administrator approves it and the parent accepts the link.
     path(
@@ -84,23 +67,6 @@ urlpatterns = [
         "admin/parent-invitations/<uuid:pk>/reject/",
         AdminParentInvitationRejectView.as_view(),
         name="admin-parent-invitation-reject",
-    ),
-    # The review queue. Administrator only, like every other administrator
-    # surface.
-    path(
-        "admin/registrations/",
-        AdminRegistrationListView.as_view(),
-        name="admin-registration-list",
-    ),
-    path(
-        "admin/registrations/<uuid:pk>/approve/",
-        AdminRegistrationApproveView.as_view(),
-        name="admin-registration-approve",
-    ),
-    path(
-        "admin/registrations/<uuid:pk>/reject/",
-        AdminRegistrationRejectView.as_view(),
-        name="admin-registration-reject",
     ),
     # NFR-010 / TC-ADM-17. `revoke` is a PATCH-only action, not a DELETE:
     # revocation closes the row so the history survives.

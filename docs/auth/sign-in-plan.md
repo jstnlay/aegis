@@ -12,10 +12,19 @@ backend, React frontend, five-role access model.
 | Idle session: 15 minutes | **Built.** Access token 15 min, refresh token 15 min without the checkbox. |
 | Health / readiness probes | **Built.** `/health`, `/ready` and `/api/v1/health/`, `/api/v1/ready/`. |
 | Password reset | **Built.** `POST /api/v1/accounts/password/forgot/` (enumeration-safe, 5/min per IP) mails a single-use hashed token that lives 30 minutes; `POST /api/v1/accounts/password/reset/` sets the password, clears the onboarding flag, revokes every outstanding refresh token and writes an audit row. Screens: `/forgot-password`, `/reset-password`. |
-| Student registration | **Built.** `RegistrationRequest` table (no role, no permissions). `POST /api/v1/accounts/registrations/` (enumeration-safe, 5/min per IP) hashes the password and mails a 24-hour verification link; `GET .../registrations/verify/?token=` confirms the address; the admin queue at `/accounts/admin/registrations/` approves (naming the section, creating the user and the student profile in one transaction) or rejects. Screen: `/register`. |
+| Student registration | **Removed.** It was built (public `POST /api/v1/accounts/registrations/`, `/register` screen, admin review queue) and then withdrawn: the school creates and distributes accounts instead. Students are added with *Admin -> Users -> Add student*; staff with *New account* plus a set-password link. The `RegistrationRequest` table stays for history only — no endpoint writes it. |
 | Parent invitation | **Built.** `ParentInvitation` table. A student nominates a parent from the student dashboard (a request, no account); the admin queue approves, which mints the 7-day invitation token and mails the link; the parent accepts at `/accept-invitation`, which creates the parent account and the `ParentStudentLink` in one transaction. |
 | Staff set-password link | **Built.** `POST /accounts/users/create/` takes the password optionally: without one the account is created with an unusable password, `must_change_password` set, and a 24-hour set-password link is emailed to the person. No administrator chooses a colleague's password and none travels by email. The link redeems through the same primitive as the password reset (`/set-password`). |
-| Sign up link, Register screen | Planned (Part E). |
+| Sign up link, Register screen | Dropped with public registration. The login page has no sign-up link. |
+
+> **Update — public registration withdrawn.** Part A (self-registration,
+> the `/register` screen, the admin review queue and the registration
+> notice) was built, then removed. The school creates and distributes
+> accounts instead: students through *Admin -> Users -> Add student*, staff
+> through *New account* with a set-password link. Everything else in this
+> document still stands, including the parent invitation (Part A2) and the
+> provisioned staff account (Part A3) flows. Parts A, D and E below are kept
+> as the design record for the withdrawn feature.
 
 
 ## What the documentation asks for

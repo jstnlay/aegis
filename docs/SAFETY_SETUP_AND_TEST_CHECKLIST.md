@@ -372,14 +372,17 @@ must be true when it is done.
 | 33 | Approve it | The badge changes to "approved"; Deploy becomes available |
 | 34 | Deploy and check completion | Target count, completed, in progress and not-started counts; the names of students who have not completed it |
 
-### Registration
+### Account creation
+
+Public registration was removed: the school creates and distributes every
+account. The chatbot notice gate that used to live on `/register` went with it.
 
 | # | Action | Expected |
 |---|---|---|
-| 35 | Open `/register` | The notice text is shown, fetched from the server, with its version |
-| 36 | Submit without ticking the box | The form refuses: "You must accept the student notice" |
-| 37 | Tick the box and submit | The request is accepted; the registration row records the notice version and the acceptance time |
-| 38 | Change `chatbot.notice_version` and reload the notice | The version changes; every student must accept again |
+| 35 | *Admin -> Users -> New account*, role Faculty | The account is created with no password set; the UI shows that a set-password link was emailed and never shows a password |
+| 36 | Open the set-password link from the mail | The person sets their own password, `must_change_password` clears, and the link cannot be reused |
+| 37 | *Admin -> Users -> Add student*, pick a section | The account, `StudentProfile`, `Enrollment` and section are created together; a duplicate email is refused |
+| 38 | Student nominates a parent, then approve it in *Admin -> Users* | An invitation email is sent; the parent accepts and sets their own password, creating the `ParentStudentLink` |
 
 ## 9. What is *not* covered by the automated tests
 

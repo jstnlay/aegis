@@ -192,24 +192,6 @@ class PasswordResetRateThrottle(ClientIdentMixin, SimpleRateThrottle):
         }
 
 
-class RegistrationRateThrottle(ClientIdentMixin, SimpleRateThrottle):
-    """
-    Per-client-IP cap on registration submissions (scope: "registration").
-
-    Each submission may send a verification email, and an open form is an
-    invitation to flood the school's inbox. The cap is keyed on the client
-    IP because the request is anonymous.
-    """
-
-    scope = "registration"
-
-    def get_cache_key(self, request, view):
-        return self.cache_format % {
-            "scope": self.scope,
-            "ident": self.get_ident(request),
-        }
-
-
 class ParentInvitationRateThrottle(ClientIdentMixin, SimpleRateThrottle):
     """
     Per-client-IP cap on parent nominations (scope: "parent_invitation").

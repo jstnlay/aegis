@@ -106,7 +106,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useCallback, useMemo } from "react"
 
 import { apiClient } from "@/lib/api"
-import { normalizeApiError } from "@/lib/error"
 import { filenameFromDisposition } from "@/lib/export"
 import { IMPORT_JOB_POLL_INTERVAL_MS, isImportJobLive } from "@/lib/importJobs"
 import { fetchAllPages } from "@/lib/pagination"
@@ -153,6 +152,16 @@ export interface CreateUserPayload {
   first_name: string
   last_name: string
   role: UserRole
+  /** Faculty and guidance only. Required for those roles. */
+  employee_id?: string
+  /** Faculty only. */
+  department?: string
+  /** Guidance only. */
+  specialization?: string
+  /** Guidance only. */
+  license_number?: string
+  /** Administrator only. Defaults to "admin" server-side. */
+  admin_level?: "superadmin" | "admin"
   /**
    * Optional. Without one, the account is created with a one-time
    * set-password link that is emailed to the person, so no administrator
@@ -1492,104 +1501,6 @@ export function useUpdateSystemSetting() {
     onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: ["admin", "system-settings"],
-      })
-    },
-  })
-}
-
-/**
- * A student registration request, as the administrator sees it.
- *
- * The password hash is never exposed: the administrator grants an account,
- * they do not read a credential.
- */
-export interface AdminRegistration {
-  id: string
-  full_name: string
-  email: string
-  student_code: string
-  status: "pending" | "verified" | "approved" | "rejected"
-  created_at: string
-  reviewed_at: string | null
-  reviewed_by_name: string | null
-  review_note: string
-}
-
-/**
- * The registration review queue.
- *
- * `GET /accounts/admin/registrations/?status=pending`. Administrator-only.
- */
-export function useAdminRegistrations(status: "pending" | "all" = "pending") {
-  return useQuery<AdminRegistration[], Error>({
-    queryKey: ["admin", "registrations", status],
-    queryFn: async () => {
-      const { results } = await fetchAllPages<AdminRegistration>(
-        `/accounts/admin/registrations/?status=${status}`
-      )
-      return results
-    },
-  })
-}
-
-/** Approve a registration request, naming the section the student is in. */
-export async function approveRegistrationRequest(
-  id: string,
-  body: {
-    section_id?: string | null
-    grade_level_id?: string | null
-    note?: string
-  }
-): Promise<void> {
-  try {
-    await apiClient.post(`/accounts/admin/registrations/${id}/approve/`, body)
-  } catch (error) {
-    throw normalizeApiError(error)
-  }
-}
-
-/** Close a registration request without granting anything. */
-export async function rejectRegistrationRequest(
-  id: string,
-  body: { note?: string } = {}
-): Promise<void> {
-  try {
-    await apiClient.post(`/accounts/admin/registrations/${id}/reject/`, body)
-  } catch (error) {
-    throw normalizeApiError(error)
-  }
-}
-
-/** Approve a registration request. Creates the account and the student profile. */
-export function useApproveRegistration() {
-  const queryClient = useQueryClient()
-  return useMutation<
-    void,
-    Error,
-    { id: string; body: { section_id?: string | null; note?: string } }
-  >({
-    mutationFn: async ({ id, body }) => {
-      await approveRegistrationRequest(id, body)
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: ["admin", "registrations"],
-      })
-      void queryClient.invalidateQueries({ queryKey: ["admin", "users"] })
-    },
-  })
-}
-
-/** Close a registration request without granting anything. */
-export function useRejectRegistration() {
-  const queryClient = useQueryClient()
-  return useMutation<void, Error, { id: string; note?: string }>({
-    mutationFn: async ({ id, note }) => {
-      await rejectRegistrationRequest(id, { note })
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: ["admin", "registrations"],
       })
     },
   })

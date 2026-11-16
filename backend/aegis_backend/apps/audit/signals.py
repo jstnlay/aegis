@@ -121,10 +121,6 @@ def _audit_pre_delete(sender, instance, **kwargs):
     )
 
 
-# ---------------------------------------------------------------------------
-# Registration
-# ---------------------------------------------------------------------------
-
 def connect_signals():
     """Connect the thin audit receivers to every instrumented model.
 

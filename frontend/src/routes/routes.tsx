@@ -7,7 +7,6 @@ import { RequireRole } from "@/features/auth/RequireRole"
 import { AcceptInvitationPage } from "@/routes/pages/AcceptInvitationPage"
 import { ChangePasswordPage } from "@/routes/pages/ChangePasswordPage"
 import { ForgotPasswordPage } from "@/routes/pages/ForgotPasswordPage"
-import { RegisterPage } from "@/routes/pages/RegisterPage"
 import {
   ResetPasswordPage,
   SetPasswordPage,
@@ -217,9 +216,6 @@ export const appRoutes: RouteObject[] = [
   // The link a newly provisioned account follows. Same redemption, different
   // wording: no administrator chooses a colleague's password.
   { path: "/set-password", element: <SetPasswordPage /> },
-  // Student registration. A request, not an account: an administrator
-  // approves it before any account exists.
-  { path: "/register", element: <RegisterPage /> },
   // Parent invitation. The school issued the link, so the account and the
   // child it opens are both decided by the invitation.
   { path: "/accept-invitation", element: <AcceptInvitationPage /> },

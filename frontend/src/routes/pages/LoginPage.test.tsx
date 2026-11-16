@@ -95,7 +95,7 @@ describe("LoginPage", () => {
     expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument()
   })
 
-  it("links to password recovery and to student registration", () => {
+  it("links to password recovery and not to account registration", () => {
     renderPage()
 
     // Password recovery stays available; account requests are no longer shown.

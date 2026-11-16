@@ -10,7 +10,7 @@ import logging
 from django.db.models import Count
 from django.utils import timezone
 from rest_framework import status, viewsets
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -95,21 +95,6 @@ class ChatHistoryView(APIView):
         limit = max(1, min(limit, 200))
         rows = ChatMessage.objects.filter(user=request.user)[:limit]
         return Response({"results": ChatMessageSerializer(rows, many=True).data})
-
-
-class PublicNoticeView(APIView):
-    """GET /chatbot/notice/public/ - the current student notice for sign-up."""
-
-    permission_classes = [AllowAny]
-    authentication_classes = []
-
-    def get(self, request):
-        return Response(
-            {
-                "version": agreements.notice_version(),
-                "text": agreements.notice_text(),
-            }
-        )
 
 
 class NoticeView(APIView):

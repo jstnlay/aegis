@@ -6,9 +6,8 @@ The import pipeline creates the client's learner accounts, and
 credential a tester can use: the students importer generates a random password
 and discards the plaintext, and the adviser accounts only get a password when
 ``QA_SHARED_PASSWORD`` is set.  The accounts also exist already, so creating
-them again through *Admin -> Users -> New account* would fail on the duplicate
-email -- and that form creates no ``StudentProfile``, no ``Enrollment`` and no
-section, so a "student" made there has nothing to sign in to.
+them again through *Admin -> Users -> Add student* would fail on the duplicate
+email.
 
 This command prepares the accounts that already exist for an on-site test:
 

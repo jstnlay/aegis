@@ -1,6 +1,6 @@
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.conf import settings
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
@@ -8,11 +8,12 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from apps.audit.hooks import audit_successful_login
 
 from .models import (
+    AdminProfile,
     ConsentRecord,
     FacultyProfile,
+    GuidanceProfile,
     ParentInvitation,
     ParentStudentLink,
-    RegistrationRequest,
     User,
 )
 
@@ -151,37 +152,133 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
 class UserCreateSerializer(serializers.ModelSerializer):
     """
-    Administrator account creation.
+    Administrator account creation for staff and administrators.
+
+    A role is a profile, not a label: faculty and guidance get their employee
+    profile, an administrator gets an admin profile, and all of it is written
+    in one transaction. A user without its profile would sign in to broken
+    pages, so the serializer never creates one.
+
+    Students are outside this route: a student is an account, a profile, and
+    an enrollment, which ``/academics/student-profiles/`` creates together.
+    Parents are outside it too; the invitation flow attaches the child.
 
     The password is optional. Without one, the account is created with an
     unusable password and a one-time set-password link is emailed to the
     person, so no administrator ever chooses a colleague's password and no
-    password travels by email. With one, the account is created as before —
-    an administrator may still set a password directly.
+    password travels by email.
     """
 
     password = serializers.CharField(
         write_only=True, min_length=8, required=False, allow_blank=True, default=""
+    )
+    employee_id = serializers.CharField(max_length=20, required=False)
+    department = serializers.CharField(
+        max_length=100, required=False, allow_blank=True, allow_null=True
+    )
+    specialization = serializers.CharField(
+        max_length=100, required=False, allow_blank=True, allow_null=True
+    )
+    license_number = serializers.CharField(
+        max_length=50, required=False, allow_blank=True, allow_null=True
+    )
+    admin_level = serializers.ChoiceField(
+        choices=AdminProfile.AdminLevel.choices,
+        required=False,
+        default=AdminProfile.AdminLevel.ADMIN,
     )
 
     class Meta:
         model = User
         fields = (
             "email", "username", "first_name", "last_name",
-            "role", "password",
+            "role", "password", "employee_id", "department",
+            "specialization", "license_number", "admin_level",
         )
 
+    def validate(self, attrs):
+        role = attrs.get("role")
+
+        if role == User.Role.STUDENT:
+            raise serializers.ValidationError(
+                {
+                    "role": (
+                        "Create a student from the student form so the "
+                        "profile and enrollment are written with the account."
+                    )
+                }
+            )
+        if role == User.Role.PARENT:
+            raise serializers.ValidationError(
+                {
+                    "role": (
+                        "Parent accounts are created through the invitation "
+                        "flow, which links the parent to their child."
+                    )
+                }
+            )
+
+        if role in (User.Role.FACULTY, User.Role.GUIDANCE):
+            employee_id = (attrs.get("employee_id") or "").strip()
+            if not employee_id:
+                raise serializers.ValidationError(
+                    {"employee_id": "An employee ID is required for this role."}
+                )
+            profile_model = (
+                FacultyProfile
+                if role == User.Role.FACULTY
+                else GuidanceProfile
+            )
+            if profile_model.objects.filter(
+                employee_id__iexact=employee_id
+            ).exists():
+                raise serializers.ValidationError(
+                    {"employee_id": "That employee ID is already in use."}
+                )
+            attrs["employee_id"] = employee_id
+
+        return attrs
+
     def create(self, validated_data):
+        role = validated_data["role"]
+        employee_id = validated_data.pop("employee_id", None)
+        department = validated_data.pop("department", None)
+        specialization = validated_data.pop("specialization", None)
+        license_number = validated_data.pop("license_number", None)
+        admin_level = validated_data.pop(
+            "admin_level", AdminProfile.AdminLevel.ADMIN
+        )
         password = validated_data.pop("password", "") or ""
-        user = User(**validated_data)
-        if password:
-            user.set_password(password)
-        else:
-            # The account cannot sign in until the person sets a password
-            # from the link the administrator's request triggers.
-            user.set_unusable_password()
-            user.must_change_password = True
-        user.save()
+
+        with transaction.atomic():
+            user = User(**validated_data)
+            if password:
+                user.set_password(password)
+            else:
+                # The account cannot sign in until the person sets a password
+                # from the link the administrator's request triggers.
+                user.set_unusable_password()
+                user.must_change_password = True
+            user.save()
+
+            if role == User.Role.FACULTY:
+                FacultyProfile.objects.create(
+                    user=user,
+                    employee_id=employee_id,
+                    department=department or None,
+                )
+            elif role == User.Role.GUIDANCE:
+                GuidanceProfile.objects.create(
+                    user=user,
+                    employee_id=employee_id,
+                    specialization=specialization or None,
+                    license_number=license_number or None,
+                )
+            elif role == User.Role.ADMIN:
+                AdminProfile.objects.create(
+                    user=user, admin_level=admin_level
+                )
+
         return user
 
 
@@ -418,103 +515,6 @@ class PasswordResetSerializer(serializers.Serializer):
         except DjangoValidationError as exc:
             raise serializers.ValidationError(" ".join(exc.messages))
         return value
-
-
-class RegistrationRequestSerializer(serializers.Serializer):
-    """
-    A student's request for an account.
-
-    There is no role field, and no field that could become one. The role is
-    granted by an administrator at approval, from the account side, never
-    from here.
-    """
-
-    full_name = serializers.CharField(max_length=150)
-    email = serializers.EmailField()
-    student_code = serializers.CharField(
-        max_length=20, required=False, allow_blank=True, default=""
-    )
-    password = serializers.CharField(write_only=True, min_length=8)
-    confirm_password = serializers.CharField(write_only=True)
-    notice_accepted = serializers.BooleanField()
-    notice_version = serializers.CharField(max_length=40)
-
-    def validate(self, attrs):
-        if attrs["password"] != attrs["confirm_password"]:
-            raise serializers.ValidationError(
-                {"confirm_password": "The two passwords do not match."}
-            )
-        from apps.chatbot.agreements import notice_version
-
-        current = notice_version()
-        if not attrs.get("notice_accepted"):
-            raise serializers.ValidationError(
-                {"notice_accepted": "You must accept the student notice."}
-            )
-        if attrs.get("notice_version") != current:
-            raise serializers.ValidationError(
-                {
-                    "notice_version": (
-                        "The notice changed. Reload the page and accept the "
-                        "current version."
-                    )
-                }
-            )
-        return attrs
-
-    def validate_password(self, value):
-        try:
-            validate_password(value)
-        except DjangoValidationError as exc:
-            raise serializers.ValidationError(" ".join(exc.messages))
-        return value
-
-
-class AdminRegistrationSerializer(serializers.ModelSerializer):
-    """
-    A registration request, as the administrator sees it.
-
-    The password hash is never exposed: the administrator grants an account,
-    they do not read a credential.
-    """
-
-    reviewed_by_name = serializers.CharField(
-        source="reviewed_by.get_full_name", read_only=True, default=None
-    )
-
-    class Meta:
-        model = RegistrationRequest
-        fields = (
-            "id",
-            "full_name",
-            "email",
-            "student_code",
-            "status",
-            "created_at",
-            "reviewed_at",
-            "reviewed_by_name",
-            "review_note",
-        )
-        read_only_fields = fields
-
-
-class RegistrationApprovalSerializer(serializers.Serializer):
-    """
-    An administrator's decision to approve a request.
-
-    The section is the administrator's to name, not the applicant's: the
-    student said who they are, the school says where they sit.
-    """
-
-    section_id = serializers.UUIDField(required=False, allow_null=True)
-    grade_level_id = serializers.UUIDField(required=False, allow_null=True)
-    note = serializers.CharField(required=False, allow_blank=True, default="")
-
-
-class RegistrationRejectionSerializer(serializers.Serializer):
-    """An administrator's decision to close a request without granting it."""
-
-    note = serializers.CharField(required=False, allow_blank=True, default="")
 
 
 class ParentInvitationSerializer(serializers.Serializer):

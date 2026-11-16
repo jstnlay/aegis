@@ -115,45 +115,6 @@ export async function resetPasswordRequest(payload: {
 }
 
 /**
- * POST /api/v1/accounts/registrations/ - ask for a student account.
- *
- * The answer is the same whether or not the address is known, so this call
- * cannot be used to find out who has an account. A request is not an
- * account: an administrator approves it.
- */
-export async function submitRegistrationRequest(payload: {
-  full_name: string
-  email: string
-  student_code: string
-  password: string
-  confirm_password: string
-  notice_accepted: boolean
-  notice_version: string
-}): Promise<void> {
-  try {
-    await apiClient.post("/accounts/registrations/", payload)
-  } catch (error) {
-    throw normalizeApiError(error)
-  }
-}
-
-/**
- * GET /api/v1/accounts/registrations/verify/?token=...
- *
- * Confirms the applicant owns the address. After this the request waits for
- * an administrator.
- */
-export async function verifyRegistrationRequest(token: string): Promise<void> {
-  try {
-    await apiClient.get("/accounts/registrations/verify/", {
-      params: { token },
-    })
-  } catch (error) {
-    throw normalizeApiError(error)
-  }
-}
-
-/**
  * POST /api/v1/accounts/parent-invitations/ - nominate a parent.
  *
  * A nomination is a request. An administrator approves it and issues the

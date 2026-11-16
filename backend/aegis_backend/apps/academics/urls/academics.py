@@ -36,11 +36,11 @@ app_name = "academics"
 
 urlpatterns = [
     path("", include(router.urls)),
-    # FR-007 / TC-FAC-03/04: faculty management of an advisory student's
+    # FR-007 / TC-FAC-03/04: faculty and admin management of a student's
     # profile. Kept off the router: create provisions the account, profile and
-    # enrollment together and is faculty-scoped, while retrieve/update have
-    # their own serializer. There is no delete — a profile lives as long as
-    # the account.
+    # enrollment together and is faculty- or admin-scoped, while
+    # retrieve/update have their own serializer. There is no delete — a profile
+    # lives as long as the account.
     path(
         "student-profiles/",
         StudentProfileCreateView.as_view(),

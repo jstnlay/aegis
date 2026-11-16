@@ -1053,11 +1053,10 @@ class NoticeGateTest(SafetyBase):
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_public_notice_is_readable_without_a_token(self):
+    def test_public_notice_endpoint_is_gone(self):
+        """The notice is read with a session; the sign-up page is gone."""
         response = self.client.get("/api/v1/chatbot/notice/public/")
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["version"], notice_version())
-        self.assertTrue(response.data["text"])
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
 
 class ChatPersistenceTest(SafetyBase):
