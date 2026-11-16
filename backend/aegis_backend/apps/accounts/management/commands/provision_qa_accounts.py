@@ -3,8 +3,9 @@ Provision the five shared DEV/QA login accounts on the hosted backend.
 
 The Render service is the shared DEV/QA environment, so QA needs a stable set
 of one account per role that survives every redeploy. This command is
-idempotent and runs automatically during the Render build, after
-``manage.py migrate`` and before gunicorn starts.
+idempotent and is **not** part of the Render build: run it by hand on a
+DEV/QA environment after a deploy (see render.yaml and
+docs/backend/DEPLOYMENT.md).
 
 Safety properties, all of which are covered by tests_qa_provisioning.py:
 
@@ -41,21 +42,40 @@ from django.db import transaction
 #: stored in source, .env.example, fixtures, tests, or documentation.
 PASSWORD_ENV_VAR = "QA_SHARED_PASSWORD"
 
+#: The school's official Gmail address. Gmail plus-addressing gives each role
+#: its own login address while every message lands in the one inbox the school
+#: already reads. No mailbox has to be created for a demo.
+QA_GMAIL_BASE = "hiscarechristiantanauan1@gmail.com"
+
 #: The complete DEV/QA account allowlist: (email, role) in reporting order.
 #: This tuple is the only set of emails this command may touch.
 QA_EMAILS = (
-    ("guidance.qa@aegis.local", "guidance"),
-    ("admin.qa@aegis.local", "admin"),
-    ("faculty.qa@aegis.local", "faculty"),
-    ("student.qa@aegis.local", "student"),
-    ("parent.qa@aegis.local", "parent"),
+    ("hiscarechristiantanauan1+guidance@gmail.com", "guidance"),
+    ("hiscarechristiantanauan1+admin@gmail.com", "admin"),
+    ("hiscarechristiantanauan1+faculty@gmail.com", "faculty"),
+    ("hiscarechristiantanauan1+student@gmail.com", "student"),
+    ("hiscarechristiantanauan1+parent@gmail.com", "parent"),
 )
+
+#: The fake-domain addresses the command used before the move to the school
+#: Gmail. An existing account is renamed in place, so its password, role and
+#: every profile or dataset row that points at it survive the change.
+LEGACY_QA_EMAILS = {
+    "guidance.qa@aegis.local": "hiscarechristiantanauan1+guidance@gmail.com",
+    "admin.qa@aegis.local": "hiscarechristiantanauan1+admin@gmail.com",
+    "faculty.qa@aegis.local": "hiscarechristiantanauan1+faculty@gmail.com",
+    "student.qa@aegis.local": "hiscarechristiantanauan1+student@gmail.com",
+    "parent.qa@aegis.local": "hiscarechristiantanauan1+parent@gmail.com",
+}
+
+#: New address -> the old address it may replace.
+_QA_LEGACY_BY_EMAIL = {new: old for old, new in LEGACY_QA_EMAILS.items()}
 
 
 class Command(BaseCommand):
     help = (
         "Create or verify the five shared DEV/QA accounts "
-        "(guidance/admin/faculty/student/parent .qa@aegis.local) using the "
+        "(guidance/admin/faculty/student/parent at the school Gmail) using the "
         f"password in {PASSWORD_ENV_VAR}."
     )
 
@@ -67,13 +87,40 @@ class Command(BaseCommand):
 
         role_labels = {choice.value: choice.label for choice in User.Role}
 
+        # Refuse before writing anything if a rename would collide: the old
+        # and new addresses both exist, so there is no single account to keep.
+        collisions = [
+            (old, new)
+            for old, new in LEGACY_QA_EMAILS.items()
+            if User.objects.filter(email=old).exists()
+            and User.objects.filter(email=new).exists()
+        ]
+        if collisions:
+            raise CommandError(
+                "Both the legacy and the new QA address exist, so the rename "
+                "is ambiguous. Resolve these accounts first:\n  - "
+                + "\n  - ".join(f"{old} / {new}" for old, new in collisions)
+            )
+
         created = 0
         unchanged = 0
         role_fixed = 0
+        renamed = 0
 
         with transaction.atomic():
             for email, role in QA_EMAILS:
                 user = User.objects.filter(email=email).first()
+
+                if user is None:
+                    legacy = _QA_LEGACY_BY_EMAIL[email]
+                    user = User.objects.filter(email=legacy).first()
+                    if user is not None:
+                        user.email = email
+                        user.save(update_fields=["email"])
+                        renamed += 1
+                        self.stdout.write(
+                            f"RENAMED       role={role:9} {legacy} -> {email}"
+                        )
 
                 if user is None:
                     User.objects.create_user(
@@ -108,7 +155,8 @@ class Command(BaseCommand):
                     )
 
         self.stdout.write(
-            f"TOTAL created={created} exists={unchanged} updated_role={role_fixed}"
+            f"TOTAL created={created} exists={unchanged} "
+            f"updated_role={role_fixed} renamed={renamed}"
         )
 
     def _read_password(self):

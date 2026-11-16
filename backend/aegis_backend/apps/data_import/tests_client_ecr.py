@@ -216,7 +216,7 @@ class ClientEcrImportTest(TestCase):
 
     def setUp(self):
         self.client = APIClient()
-        self.admin = User.objects.get(email="admin.qa@aegis.local")
+        self.admin = User.objects.get(email="hiscarechristiantanauan1+admin@gmail.com")
         self.client.force_authenticate(user=self.admin)
 
     # ------------------------------------------------------------------ #

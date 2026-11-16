@@ -18,7 +18,7 @@ one.
 
 Usage:
     python manage.py import_client_datasets
-    python manage.py import_client_datasets --email admin.qa@aegis.local
+    python manage.py import_client_datasets --email hiscarechristiantanauan1+admin@gmail.com
 """
 
 from pathlib import Path

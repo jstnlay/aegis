@@ -81,7 +81,7 @@ class DatasetPipelineTest(TestCase):
 
     def setUp(self):
         self.client = APIClient()
-        self.admin = User.objects.get(email="admin.qa@aegis.local")
+        self.admin = User.objects.get(email="hiscarechristiantanauan1+admin@gmail.com")
         self.client.force_authenticate(user=self.admin)
 
     # ------------------------------------------------------------------ #
@@ -320,7 +320,7 @@ class DatasetPipelineTest(TestCase):
         )
 
         # The student grades surface the app renders is scoped to one student.
-        student_user = User.objects.get(email="student.qa@aegis.local")
+        student_user = User.objects.get(email="hiscarechristiantanauan1+student@gmail.com")
         self.client.force_authenticate(user=student_user)
         resp = self.client.get("/api/v1/academics/grades/")
         self.assertIn(resp.status_code, (200, 403))
@@ -390,7 +390,7 @@ class DatasetTrendTest(TransactionTestCase):
             call_command("provision_qa_accounts", stdout=mock.MagicMock())
         call_command("seed_qa_dataset", stdout=mock.MagicMock())
         self.client = APIClient()
-        self.admin = User.objects.get(email="admin.qa@aegis.local")
+        self.admin = User.objects.get(email="hiscarechristiantanauan1+admin@gmail.com")
         self.client.force_authenticate(user=self.admin)
 
     def _upload(self, name, import_type):

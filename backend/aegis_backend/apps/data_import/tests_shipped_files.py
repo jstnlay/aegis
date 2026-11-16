@@ -51,7 +51,7 @@ class ShippedImportFilesTest(TestCase):
 
     def setUp(self):
         self.client = APIClient()
-        self.client.force_authenticate(user=User.objects.get(email="admin.qa@aegis.local"))
+        self.client.force_authenticate(user=User.objects.get(email="hiscarechristiantanauan1+admin@gmail.com"))
 
     def _upload(self, name, import_type, sheet=None):
         payload = {"file": _file(name), "import_type": import_type}

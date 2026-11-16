@@ -571,7 +571,7 @@ class SeedDatasetTestCase(TestCase):
         """AdminProfile is referenced only by models.py and the Django admin --
         no serializer, permission or view reads it -- so the seed must not invent
         one."""
-        user = User.objects.get(email="admin.qa@aegis.local")
+        user = User.objects.get(email="hiscarechristiantanauan1+admin@gmail.com")
         self.assertEqual(user.role, User.Role.ADMIN)
         self.assertFalse(AdminProfile.objects.filter(user=user).exists())
 

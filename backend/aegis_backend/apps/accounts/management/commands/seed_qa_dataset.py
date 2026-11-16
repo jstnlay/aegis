@@ -75,6 +75,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils import timezone
 
+from apps.accounts.management.commands.provision_qa_accounts import QA_EMAILS
 from apps.accounts.models import (
     FacultyProfile,
     GuidanceProfile,
@@ -127,11 +128,13 @@ QA_CODE_PREFIX = "AEGIS-QA-"
 
 #: The five shared DEV/QA logins owned by ``provision_qa_accounts``. Only these
 #: four roles receive dataset records; admin.qa is left alone (see module
-#: docstring and ``_report``).
-QA_FACULTY_EMAIL = "faculty.qa@aegis.local"
-QA_GUIDANCE_EMAIL = "guidance.qa@aegis.local"
-QA_STUDENT_EMAIL = "student.qa@aegis.local"
-QA_PARENT_EMAIL = "parent.qa@aegis.local"
+#: docstring and ``_report``). The addresses live in one place so a credential
+#: change can never leave the seed pointing at a retired login.
+_QA_EMAIL_BY_ROLE = {role: email for email, role in QA_EMAILS}
+QA_FACULTY_EMAIL = _QA_EMAIL_BY_ROLE["faculty"]
+QA_GUIDANCE_EMAIL = _QA_EMAIL_BY_ROLE["guidance"]
+QA_STUDENT_EMAIL = _QA_EMAIL_BY_ROLE["student"]
+QA_PARENT_EMAIL = _QA_EMAIL_BY_ROLE["parent"]
 
 SCHOOL_NAME = "AEGIS Integrated School"
 

@@ -151,6 +151,12 @@ implemented are re-tests, not code work.
   verified *email address* only, so it is the provider that works for a
   deployment without a domain. `core.email` now holds one HTTP backend with
   a provider-specific endpoint, key header and payload.
+
+  > Superseded: the shared QA logins now use school Gmail plus-aliases
+  > (`hiscarechristiantanauan1+<role>@gmail.com`), so every message they receive
+  > lands in the one inbox the school already reads.
+  > `provision_qa_accounts` renames an existing
+  > `*.qa@aegis.local` account in place and keeps its password.
 - **The audit trail recorded the CDN's edge, not the client.** `REMOTE_ADDR`
   behind Cloudflare is Cloudflare's address, so the audit's IP column named
   the same edge for every request and identified nobody. The audit now

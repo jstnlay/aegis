@@ -30,6 +30,7 @@ from django.test import TestCase
 from apps.accounts.management.commands.provision_qa_accounts import (
     PASSWORD_ENV_VAR,
     QA_EMAILS,
+    QA_GMAIL_BASE,
 )
 from apps.accounts.models import (
     AdminProfile,
@@ -46,11 +47,11 @@ User = get_user_model()
 VALID_SHARED_PASSWORD = "QaShared-9xKq-2026"
 
 EXPECTED_ROLES = {
-    "guidance.qa@aegis.local": "guidance",
-    "admin.qa@aegis.local": "admin",
-    "faculty.qa@aegis.local": "faculty",
-    "student.qa@aegis.local": "student",
-    "parent.qa@aegis.local": "parent",
+    "hiscarechristiantanauan1+guidance@gmail.com": "guidance",
+    "hiscarechristiantanauan1+admin@gmail.com": "admin",
+    "hiscarechristiantanauan1+faculty@gmail.com": "faculty",
+    "hiscarechristiantanauan1+student@gmail.com": "student",
+    "hiscarechristiantanauan1+parent@gmail.com": "parent",
 }
 
 
@@ -116,10 +117,12 @@ class QaAccountCreationTest(QaAccountsTestCase):
             sorted(email for email, _role in QA_EMAILS), sorted(EXPECTED_ROLES)
         )
         self.assertEqual(dict(QA_EMAILS), EXPECTED_ROLES)
+        local_part = QA_GMAIL_BASE.split("@")[0]
         for email, _role in QA_EMAILS:
             with self.subTest(email=email):
                 self.assertEqual(email, email.lower())
-                self.assertTrue(email.endswith(".qa@aegis.local"))
+                self.assertTrue(email.startswith(local_part + "+"))
+                self.assertTrue(email.endswith("@gmail.com"))
 
     def test_roles_are_assigned(self):
         run_provision(stdout=io.StringIO())
@@ -175,7 +178,7 @@ class QaAccountIdempotencyTest(QaAccountsTestCase):
     def test_existing_password_is_not_overwritten_on_rerun(self):
         chosen = "Tester-Chosen-4hdP!2026"
         User.objects.create_user(
-            email="student.qa@aegis.local",
+            email="hiscarechristiantanauan1+student@gmail.com",
             password=chosen,
             first_name="QA",
             last_name="Student",
@@ -184,7 +187,7 @@ class QaAccountIdempotencyTest(QaAccountsTestCase):
 
         run_provision(stdout=io.StringIO())
 
-        user = User.objects.get(email="student.qa@aegis.local")
+        user = User.objects.get(email="hiscarechristiantanauan1+student@gmail.com")
         self.assertTrue(user.check_password(chosen))
         self.assertFalse(user.check_password(VALID_SHARED_PASSWORD))
 
@@ -204,7 +207,7 @@ class QaAccountIdempotencyTest(QaAccountsTestCase):
     def test_existing_wrong_role_is_corrected_without_touching_password(self):
         chosen = "Tester-Chosen-4hdP!2026"
         User.objects.create_user(
-            email="faculty.qa@aegis.local",
+            email="hiscarechristiantanauan1+faculty@gmail.com",
             password=chosen,
             first_name="QA",
             last_name="Someone",
@@ -215,7 +218,7 @@ class QaAccountIdempotencyTest(QaAccountsTestCase):
         out = io.StringIO()
         run_provision(stdout=out)
 
-        user = User.objects.get(email="faculty.qa@aegis.local")
+        user = User.objects.get(email="hiscarechristiantanauan1+faculty@gmail.com")
         self.assertEqual(user.role, "faculty")
         self.assertTrue(user.check_password(chosen))
         # Report-only fields are left exactly as the tester left them.
@@ -226,7 +229,7 @@ class QaAccountIdempotencyTest(QaAccountsTestCase):
 
     def test_existing_inactive_account_is_reported_not_reactivated(self):
         User.objects.create_user(
-            email="parent.qa@aegis.local",
+            email="hiscarechristiantanauan1+parent@gmail.com",
             password=VALID_SHARED_PASSWORD,
             first_name="QA",
             last_name="Parent",
@@ -237,7 +240,7 @@ class QaAccountIdempotencyTest(QaAccountsTestCase):
         out = io.StringIO()
         run_provision(stdout=out)
 
-        user = User.objects.get(email="parent.qa@aegis.local")
+        user = User.objects.get(email="hiscarechristiantanauan1+parent@gmail.com")
         self.assertIs(user.is_active, False)
         self.assertIn("is_active=False", out.getvalue())
 
@@ -250,7 +253,7 @@ class NonQaUserSafetyTest(QaAccountsTestCase):
 
     def test_non_qa_users_remain_unchanged(self):
         staff = User.objects.create_superuser(
-            email="admin@aegis.local",
+            email="principal@aegis.edu",
             password="Staff-Chosen-7kLm!2026",
             first_name="Real",
             last_name="Admin",
@@ -304,11 +307,11 @@ class NonQaUserSafetyTest(QaAccountsTestCase):
     def test_near_miss_emails_are_not_matched_or_modified(self):
         """Exact-equality lookup: no wildcard, prefix, or suffix matching."""
         near_misses = [
-            "student.qa@aegis.local.evil.test",
+            "hiscarechristiantanauan1+student@gmail.com.evil.test",
             "student.qa@aegis.dev",
             "studentqa@aegis.local",
             "student.qa@evil.local",
-            "xstudent.qa@aegis.local",
+            "xhiscarechristiantanauan1+student@gmail.com",
             "QA.student@aegis.local",
         ]
         for index, email in enumerate(near_misses):
@@ -333,6 +336,55 @@ class NonQaUserSafetyTest(QaAccountsTestCase):
                 self.assertTrue(user.check_password("Nearmiss-Chosen-3vBn!2026"))
 
 
+class LegacyEmailRenameTest(QaAccountsTestCase):
+    """A pre-Gmail shared login is renamed, not recreated."""
+
+    LEGACY = "student.qa@aegis.local"
+    NEW = "hiscarechristiantanauan1+student@gmail.com"
+
+    def _create_legacy(self):
+        return User.objects.create_user(
+            email=self.LEGACY,
+            password="Legacy-Chosen-4wYz!2026",
+            first_name="Existing",
+            last_name="Student",
+            role="student",
+        )
+
+    def test_legacy_address_is_renamed_and_keeps_its_password(self):
+        self._create_legacy()
+
+        out = io.StringIO()
+        run_provision(stdout=out)
+
+        user = User.objects.get(email=self.NEW)
+        self.assertTrue(user.check_password("Legacy-Chosen-4wYz!2026"))
+        self.assertEqual(user.first_name, "Existing")
+        self.assertEqual(user.role, "student")
+        self.assertFalse(User.objects.filter(email=self.LEGACY).exists())
+        self.assertIn("RENAMED", out.getvalue())
+        self.assertIn("renamed=1", out.getvalue())
+
+    def test_rename_collision_aborts_before_any_write(self):
+        self._create_legacy()
+        User.objects.create_user(
+            email=self.NEW,
+            password="Other-Chosen-8nHj!2026",
+            first_name="New",
+            last_name="Address",
+            role="student",
+        )
+
+        with self.assertRaises(CommandError) as ctx:
+            run_provision(stdout=io.StringIO())
+
+        self.assertIn(self.LEGACY, str(ctx.exception))
+        self.assertIn(self.NEW, str(ctx.exception))
+        self.assertTrue(User.objects.filter(email=self.LEGACY).exists())
+        self.assertTrue(User.objects.filter(email=self.NEW).exists())
+        self.assertEqual(User.objects.count(), 2)
+
+
 class QaOutputTest(QaAccountsTestCase):
     """Reporting is concise and never discloses the secret or its hash."""
 
@@ -342,7 +394,9 @@ class QaOutputTest(QaAccountsTestCase):
         text = out.getvalue()
 
         self.assertEqual(text.count("CREATED"), 5)
-        self.assertIn("TOTAL created=5 exists=0 updated_role=0", text)
+        self.assertIn(
+            "TOTAL created=5 exists=0 updated_role=0 renamed=0", text
+        )
         for email in EXPECTED_ROLES:
             self.assertIn(email, text)
 

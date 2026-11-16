@@ -78,7 +78,7 @@ baseline carries it too.
 
 ```powershell
 $k6 = "C:\Program Files\k6\k6.exe"
-$accounts = "admin.qa@aegis.local,guidance.qa@aegis.local,faculty.qa@aegis.local,student.qa@aegis.local,parent.qa@aegis.local"
+$accounts = "hiscarechristiantanauan1+admin@gmail.com,hiscarechristiantanauan1+guidance@gmail.com,hiscarechristiantanauan1+faculty@gmail.com,hiscarechristiantanauan1+student@gmail.com,hiscarechristiantanauan1+parent@gmail.com"
 
 & $k6 run -e BASE_URL=https://aegis-0pav.onrender.com -e AEGIS_EMAILS=$accounts -e AEGIS_PASSWORD=<qa password> `
   -e VUS=1  -e DURATION=60s --summary-export=docs/qa/TC-SYS-03-baseline-warm.json backend/scripts/loadtest.js
