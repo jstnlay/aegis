@@ -25,9 +25,15 @@
 #     migrate reads DJANGO_SETTINGS_MODULE, so it runs under the same
 #     production settings as the web process.
 #
-#     QA seeding (provision_qa_accounts, seed_qa_dataset) and risk training
-#     (train_risk_model, run_risk_computation) are NOT part of this build.
-#     They write a synthetic school and recompute scores, so running them on
+#     The shared DEV/QA logins (provision_qa_accounts) ARE provisioned during
+#     the build, so the five accounts exist on every redeploy. The command is
+#     idempotent, it only ever writes the five allowlisted QA addresses, and it
+#     never resets a password a tester has set. QA_SHARED_PASSWORD must be set
+#     on the service, or the build fails loudly.
+#
+#     QA data seeding (seed_qa_dataset) and risk training (train_risk_model,
+#     run_risk_computation) are NOT part of this build. They write a synthetic
+#     school and recompute scores, so running them on
 #     every deploy overwrites real data. Run them by hand on a DEV/QA
 #     environment only; see docs/backend/DEPLOYMENT.md.
 #
@@ -47,6 +53,7 @@ services:
     buildCommand: >-
       pip install -r ../requirements/production.txt
       && python manage.py migrate
+      && python manage.py provision_qa_accounts
     startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
     healthCheckPath: /api/v1/health/
     autoDeploy: true
@@ -64,6 +71,11 @@ services:
       # but never given a value in this repository. sync: false keeps them in
       # the Render dashboard only.
       - key: DJANGO_SECRET_KEY
+        sync: false
+      # The build provisions the five shared DEV/QA logins, so this must be
+      # present or the build fails before the service starts. Never stored in
+      # the repository; it lives in the Render dashboard only.
+      - key: QA_SHARED_PASSWORD
         sync: false
       # production.py refuses to start without a field encryption key, so
       # chat messages and case notes are never stored in plain text.

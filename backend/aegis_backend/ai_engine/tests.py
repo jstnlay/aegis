@@ -1454,10 +1454,9 @@ class TrainRiskModelCommandTest(AIEngineTestBase):
 
     def test_refusal_paths_do_not_raise(self):
         """
-        render.yaml chains `train_risk_model` into the build, so every expected
-        refusal has to exit 0. A dataset too small to train is a normal
-        condition on a fresh DEV database and must not block a deploy; only a
-        genuine error should fail the build.
+        Every expected refusal has to exit 0: a dataset too small to train is a
+        normal condition on a fresh DEV database, so it must not block a
+        deploy or an operator run. Only a genuine error should fail.
         """
         from io import StringIO
 

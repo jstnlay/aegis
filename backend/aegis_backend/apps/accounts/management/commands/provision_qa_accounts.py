@@ -3,9 +3,9 @@ Provision the five shared DEV/QA login accounts on the hosted backend.
 
 The Render service is the shared DEV/QA environment, so QA needs a stable set
 of one account per role that survives every redeploy. This command is
-idempotent and is **not** part of the Render build: run it by hand on a
-DEV/QA environment after a deploy (see render.yaml and
-docs/backend/DEPLOYMENT.md).
+idempotent and runs during the Render build, after ``migrate`` and before the
+web process starts, so the five accounts exist on every deploy. It writes only
+the allowlisted addresses and never resets a password a tester has set.
 
 Safety properties, all of which are covered by tests_qa_provisioning.py:
 
