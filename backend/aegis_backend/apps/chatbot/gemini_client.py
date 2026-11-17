@@ -483,10 +483,18 @@ def classify(text: str, *, categories: list[str]) -> dict[str, Any]:
         contents=text,
         system_instruction=(
             "You are a school safety classifier. Decide whether the message "
-            "contains a sensitive student-support signal. Do not diagnose. "
-            "Use critical only for immediate danger or self-harm intent, high "
-            "for credible threats or abuse, medium for distress, and low for "
-            "none. Return JSON only."
+            "contains a sensitive student-support signal. Do not diagnose.\n"
+            "Rules:\n"
+            "- Judge what the student says about themselves, not what they "
+            "might be feeling. A request for advice, a recommendation, tips or "
+            "cheering up is not by itself a sensitive signal.\n"
+            "- A mood word in a request ('cheer me up', 'lift my mood', 'I am "
+            "bored', 'I am tired') is not distress.\n"
+            "- Use critical only for immediate danger or self-harm intent; "
+            "high for credible threats or abuse; medium for distress the "
+            "student says they feel right now (hopeless, worthless, "
+            "overwhelmed, cannot cope); low for none.\n"
+            "Return JSON only."
         ),
         schema=schema,
         temperature=0.0,

@@ -338,6 +338,33 @@ class LayerTwoTest(SafetyBase):
         self.assertEqual(result.source, "combined")
 
 
+class ClassifierPromptTest(TestCase):
+    """
+    The prompt is the only place the advice-versus-distress rule lives.
+
+    It was added after "can you recommend something to please my mood?"
+    classified as distress: a benign request was flagged and answered with the
+    crisis template. Deleting the rule would bring that back silently.
+    """
+
+    def test_the_prompt_separates_a_request_from_distress(self):
+        with patch.object(
+            gemini_client,
+            "_generate",
+            return_value={
+                "sensitive": False,
+                "severity": "low",
+                "categories": [],
+                "confidence": 0.5,
+            },
+        ) as generate:
+            gemini_client.classify("cheer me up", categories=["distress"])
+
+        instruction = generate.call_args.kwargs["system_instruction"]
+        self.assertIn("not by itself a sensitive signal", instruction)
+        self.assertIn("is not distress", instruction)
+
+
 class RoutingTest(SafetyBase):
     """Severity decides who hears about a flag."""
 
