@@ -126,6 +126,40 @@ class FreeConversationTest(ChatbotBase):
 
 
 @override_settings(GEMINI_API_KEY="test-key")
+class DefinitionQuestionTest(ChatbotBase):
+    """A definition is general knowledge, even when it names a school word."""
+
+    def test_a_definition_does_not_become_a_resource_request(self):
+        with (
+            patch("apps.chatbot.pipeline.detect", return_value=detection()),
+            patch(
+                "apps.chatbot.pipeline.gemini_client.chat",
+                return_value="Study is the act of learning something.",
+            ) as chat,
+        ):
+            response = process_message(
+                self.student_user, "What is the meaning of study?"
+            )
+
+        self.assertTrue(chat.called)
+        self.assertEqual(response.intent.value, "unknown")
+        self.assertEqual(response.reply, "Study is the act of learning something.")
+        self.assertNotIn("approved learning resources", response.reply)
+
+    def test_a_resource_request_still_names_the_documents(self):
+        with (
+            patch("apps.chatbot.pipeline.detect", return_value=detection()),
+            patch("apps.chatbot.pipeline.gemini_client.chat") as chat,
+        ):
+            response = process_message(
+                self.student_user, "Do you have study materials for Science?"
+            )
+
+        chat.assert_not_called()
+        self.assertEqual(response.intent.value, "ask_learning_resource")
+
+
+@override_settings(GEMINI_API_KEY="test-key")
 class RecordBoundaryTest(ChatbotBase):
     def test_a_grade_question_never_reaches_the_model(self):
         with (

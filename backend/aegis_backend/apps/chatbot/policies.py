@@ -77,10 +77,23 @@ SUBJECT_HELP_PATTERNS = [
     r"\btulong\s*(sa|ko)\b",
 ]
 
-# Learning resource
+# Learning resource. The trigger is the document, not the activity: a bare
+# "study" or "learn" is how a general question is phrased ("what is the meaning
+# of study?"), and matching it returned a list of modules instead of an answer.
 RESOURCE_PATTERNS = [
-    r"\b(resource|material|module|lesson|reviewer|handout)\b",
-    r"\b(magaaral|study|learn)\b",
+    r"\b(resources?|materials?|modules?|lessons?|reviewers?|handouts?)\b",
+]
+
+# A definition question is general knowledge, not a record lookup. Without
+# this, "what is the meaning of attendance" returned the student's own
+# attendance count, because the domain word matched before anything considered
+# what was being asked. A possessive ("my", "ko") is left to the record
+# intents: "what does my grade mean" is about their grade.
+DEFINITION_PATTERNS = [
+    r"\b(meaning|definition)\s+of\b",
+    r"\bdefine\b",
+    r"\bwhat\s+does\s+.+\s+mean\b",
+    r"\bano\s+ang\s+ibig\s+sabihin\b",
 ]
 
 # Study strategy. `how do i study` is matched before the bare `study` token in
@@ -372,6 +385,14 @@ def classify_intent(text: str) -> ChatIntent:
         return ChatIntent.EXPRESS_CONCERN
     if any(re.search(p, lower) for p in GUIDANCE_HELP_PATTERNS):
         return ChatIntent.GUIDANCE_HELP
+
+    # A definition is general knowledge. Checked before the academic intents
+    # so a domain word in the question ("study", "attendance") cannot turn it
+    # into a record lookup.
+    if any(re.search(p, lower) for p in DEFINITION_PATTERNS) and not re.search(
+        r"\b(my|ko|akin|mine)\b", lower
+    ):
+        return ChatIntent.UNKNOWN
 
     # Assessment. Instructions are checked before schedule because
     # "How many questions is the quiz?" contains "how", which SCHEDULE treats as
