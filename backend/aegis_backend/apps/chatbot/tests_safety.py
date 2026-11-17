@@ -406,6 +406,20 @@ class RoutingTest(SafetyBase):
         ):
             self.assertNotIn(forbidden, row)
 
+    def test_a_delivery_failure_does_not_erase_the_flag(self):
+        """The safety record is committed before any notification is sent."""
+        with patch(
+            "apps.chatbot.routing.dispatch_event",
+            side_effect=RuntimeError("push unavailable"),
+        ):
+            response = self.post_message(SELF_HARM)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        flag = Flag.objects.filter(user=self.student_user).first()
+        self.assertIsNotNone(flag)
+        self.assertEqual(flag.severity, "critical")
+        self.assertEqual(flag.chat_message.message, SELF_HARM)
+
     def test_student_cannot_read_the_flag_inbox(self):
         self.client.force_authenticate(user=self.student_user)
         response = self.client.get("/api/v1/chatbot/flags/")

@@ -233,7 +233,15 @@ def create_flag(
     summary: str,
     manual_review: bool,
 ) -> Flag:
-    """Create the flag and its timer, then route it."""
+    """
+    Create the flag and its timer, then route it.
+
+    The flag is committed before delivery starts. Notifications are best effort:
+    a mail or push failure must never roll back the safety record itself. That
+    happened once — the missing push-subscription column raised inside this
+    transaction, the flag was rolled back, and the student's message stayed
+    saved with no flag and no counselor able to see it.
+    """
     student = getattr(user, "student_profile", None)
     with transaction.atomic():
         flag = Flag.objects.create(
@@ -260,7 +268,11 @@ def create_flag(
                 "manual_review": manual_review,
             },
         )
+
+    try:
         route_flag(flag)
+    except Exception:
+        logger.exception("Flag %s was recorded but routing failed.", flag.pk)
     return flag
 
 
