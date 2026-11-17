@@ -86,21 +86,53 @@ function threadDate(value: string): string {
  * expanded before it is sent, so the transcript shows the question that was
  * actually answered.
  */
-const COMMANDS: Record<string, (argument: string) => string> = {
-  grades: (argument) =>
-    argument ? `What is my grade in ${argument}?` : "What is my grade?",
-  attendance: () => "What is my attendance?",
-  resources: (argument) =>
-    argument
-      ? `Do you have study materials for ${argument}?`
-      : "Where can I find study materials?",
-  help: () => "What can you do?",
+const COMMANDS: Record<
+  string,
+  { hint: string; takesArgument: boolean; build: (argument: string) => string }
+> = {
+  grades: {
+    hint: "Your grade in a subject",
+    takesArgument: true,
+    build: (argument) =>
+      argument ? `What is my grade in ${argument}?` : "What is my grade?",
+  },
+  attendance: {
+    hint: "Your attendance count",
+    takesArgument: false,
+    build: () => "What is my attendance?",
+  },
+  resources: {
+    hint: "Approved materials for a subject",
+    takesArgument: true,
+    build: (argument) =>
+      argument
+        ? `Do you have study materials for ${argument}?`
+        : "Where can I find study materials?",
+  },
+  help: {
+    hint: "What the assistant can do",
+    takesArgument: false,
+    build: () => "What can you do?",
+  },
 }
 
 function expandCommand(text: string): string | null {
   const [name = "", ...rest] = text.slice(1).split(/\s+/)
-  const build = COMMANDS[name.toLowerCase()]
-  return build ? build(rest.join(" ").trim()) : null
+  const command = COMMANDS[name.toLowerCase()]
+  return command ? command.build(rest.join(" ").trim()) : null
+}
+
+/**
+ * Commands to show while the draft is still just `/letters`. Typing a space
+ * starts the argument, so the menu gets out of the way.
+ */
+function matchingCommands(text: string) {
+  const match = /^\/(\w*)$/.exec(text.trim())
+  if (!match) return []
+  const prefix = (match[1] ?? "").toLowerCase()
+  return Object.entries(COMMANDS)
+    .filter(([name]) => name.startsWith(prefix))
+    .map(([name, command]) => ({ name, ...command }))
 }
 
 export function ChatbotPanel({
@@ -121,11 +153,9 @@ export function ChatbotPanel({
 
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [draft, setDraft] = useState("")
-  // `undefined` means "not chosen yet": open the newest thread. `null` is an
-  // explicit New chat, which must not auto-select the newest one again.
-  const [activeThreadId, setActiveThreadId] = useState<
-    string | null | undefined
-  >(undefined)
+  // A fresh conversation. History is one click away; reopening the last chat
+  // on every login made a new question look like a continuation of it.
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [pendingDelete, setPendingDelete] = useState<string | null>(null)
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false)
@@ -146,14 +176,6 @@ export function ChatbotPanel({
     const log = logRef.current
     if (log) log.scrollTop = log.scrollHeight
   }, [messages, send.isPending, threadQuery.data])
-
-  // Open the most recent conversation once the list arrives. A rejected list
-  // leaves the panel on a new chat rather than blocking it.
-  useEffect(() => {
-    if (!open || activeThreadId !== undefined) return
-    if (threadsQuery.data === undefined) return
-    setActiveThreadId(threadsQuery.data[0]?.id ?? null)
-  }, [open, activeThreadId, threadsQuery.data])
 
   /*
    * The transcript is the active thread's saved turns plus the turns sent in
@@ -192,6 +214,7 @@ export function ChatbotPanel({
   const prompts = suggestedPrompts(user.role)
   const blank = draft.trim().length === 0
   const tooLong = draft.trim().length > MAX_MESSAGE_LENGTH
+  const commandOptions = matchingCommands(draft)
 
   const notice = noticeQuery.data
   // Only a student is gated: the notice is about a student's own messages.
@@ -586,6 +609,32 @@ export function ChatbotPanel({
             <Label htmlFor="chatbot-message" className="sr-only">
               Message
             </Label>
+            {commandOptions.length > 0 ? (
+              <div
+                className="aegis-chat-commands"
+                role="group"
+                aria-label="Chat commands"
+              >
+                {commandOptions.map((option) => (
+                  <button
+                    key={option.name}
+                    type="button"
+                    className="aegis-chat-command"
+                    onClick={() => {
+                      setDraft(
+                        option.takesArgument
+                          ? `/${option.name} `
+                          : `/${option.name}`
+                      )
+                      inputRef.current?.focus()
+                    }}
+                  >
+                    <code>/{option.name}</code>
+                    <span>{option.hint}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
             <Textarea
               ref={inputRef}
               id="chatbot-message"

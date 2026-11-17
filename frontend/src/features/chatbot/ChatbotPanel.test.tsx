@@ -201,6 +201,39 @@ describe("ChatbotPanel", () => {
     expect(apiClient.post).not.toHaveBeenCalled()
   })
 
+  it("offers commands when the draft starts with a slash", async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({
+      data: { reply: "You have 91.50%.", data: {} },
+    })
+    renderPanel()
+    const input = screen.getByRole("textbox", { name: "Message" })
+    fireEvent.change(input, { target: { value: "/" } })
+
+    const menu = await screen.findByRole("group", { name: "Chat commands" })
+    fireEvent.click(within(menu).getByRole("button", { name: /grades/ }))
+    expect(input).toHaveValue("/grades ")
+
+    fireEvent.change(input, { target: { value: "/grades Math" } })
+    fireEvent.keyDown(input, { key: "Enter" })
+    await waitFor(() =>
+      expect(apiClient.post).toHaveBeenCalledWith("/chatbot/message/", {
+        message: "What is my grade in Math?",
+      })
+    )
+    expect(screen.queryByRole("group", { name: "Chat commands" })).toBeNull()
+  })
+
+  it("starts on a new chat instead of reopening the newest one", async () => {
+    mockGet({
+      "/chatbot/threads/": { results: [THREAD] },
+      "/chatbot/threads/t1/": THREAD_DETAIL,
+    })
+    renderPanel()
+
+    expect(await screen.findByText(/Hi, Ana!/)).toBeInTheDocument()
+    expect(apiClient.get).not.toHaveBeenCalledWith("/chatbot/threads/t1/")
+  })
+
   it("lists saved chats and opens one", async () => {
     mockGet({
       "/chatbot/threads/": {

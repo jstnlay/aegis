@@ -184,6 +184,37 @@
   padding-top: 7px;
   line-height: 1.6;
 }
+.aegis-chat-commands {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 0 9px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid #ece2d9;
+}
+.aegis-chat-command {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  text-align: left;
+  cursor: pointer;
+}
+.aegis-chat-command:hover,
+.aegis-chat-command:focus-visible {
+  background: #faf3ee;
+}
+.aegis-chat-command code {
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: #844457;
+}
+.aegis-chat-command span {
+  font-size: 11px;
+  color: #8a7d93;
+}
 .aegis-chat-composer {
   display: flex;
   flex-direction: column;
