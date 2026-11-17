@@ -2,7 +2,6 @@ import "./chatbot-panel.css"
 import {
   ArrowLeft,
   ArrowUp,
-  Bot,
   History,
   Info,
   Plus,
@@ -22,6 +21,7 @@ import { ErrorNote } from "@/components/feedback/Feedback"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useAuth } from "@/features/auth/AuthContext"
+import { AegiMark, AegiMascot } from "@/features/chatbot/AegiMark"
 import {
   MAX_MESSAGE_LENGTH,
   suggestedPrompts,
@@ -349,7 +349,7 @@ export function ChatbotPanel({
     <section
       className="aegis-chat"
       data-chatbot-panel="open"
-      aria-label="AEGIS Assistant"
+      aria-label="Aegi, the AEGIS assistant"
       onKeyDown={(event) => {
         if (event.key === "Escape") onClose()
       }}
@@ -357,12 +357,12 @@ export function ChatbotPanel({
       <header className="aegis-chat-header">
         <div className="aegis-chat-brand">
           <span className="aegis-chat-mark">
-            <Bot aria-hidden="true" />
+            <AegiMark />
           </span>
           <div>
-            <h2>AEGIS Assistant</h2>
+            <h2>Aegi</h2>
             <p>
-              <span className="aegis-chat-status" /> Your school help desk
+              <span className="aegis-chat-status" /> Your AEGIS school assistant
             </p>
           </div>
         </div>
@@ -530,8 +530,13 @@ export function ChatbotPanel({
           </div>
         ) : (
           <div className="aegis-chat-transcript">
+            {transcript.length === 0 ? (
+              <div className="aegis-chat-welcome">
+                <AegiMascot />
+              </div>
+            ) : null}
             <p className="aegis-chat-session-label">
-              <span /> School assistant <span />
+              <span /> Aegi <span />
             </p>
             <ChatBubble
               message={{
@@ -587,7 +592,7 @@ export function ChatbotPanel({
             ))}
             {send.isPending ? (
               <div className="aegis-chat-thinking" role="status">
-                <Bot aria-hidden="true" />
+                <AegiMark />
                 <span>Finding your answer</span>
                 <span className="aegis-chat-dots" aria-hidden="true">
                   <i />
@@ -661,7 +666,7 @@ export function ChatbotPanel({
             />
             <div className="aegis-chat-composer-bottom">
               <span className="aegis-chat-composer-mode">
-                <Sparkles aria-hidden="true" /> School assistant
+                <Sparkles aria-hidden="true" /> Aegi
               </span>
               <span id="chatbot-message-hint" className="sr-only">
                 Enter to send. Shift + Enter for a new line.
@@ -715,12 +720,12 @@ function ChatBubble({ message }: { message: ChatMessage }) {
     >
       {!isUser ? (
         <span className="aegis-chat-message-avatar">
-          <Bot aria-hidden="true" />
+          <AegiMark />
         </span>
       ) : null}
       <div className="aegis-chat-message-content">
         <span className="aegis-chat-message-label">
-          {isUser ? "You" : "AEGIS Assistant"}
+          {isUser ? "You" : "Aegi"}
         </span>
         <div className="aegis-chat-bubble">
           <p>{message.text}</p>

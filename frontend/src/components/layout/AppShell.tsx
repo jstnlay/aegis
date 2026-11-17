@@ -222,7 +222,7 @@ export function AppShell() {
           >
             {schoolTheme && !chatOpen ? (
               <span className="app-assistant-label" aria-hidden="true">
-                Ask AEGIS <span>School assistant</span>
+                Ask Aegi <span>AEGIS assistant</span>
               </span>
             ) : null}
             <span className="app-assistant-avatar" aria-hidden="true">

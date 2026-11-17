@@ -234,6 +234,16 @@ describe("ChatbotPanel", () => {
     expect(apiClient.get).not.toHaveBeenCalledWith("/chatbot/threads/t1/")
   })
 
+  it("names the assistant Aegi", () => {
+    renderPanel()
+    expect(
+      screen.getByRole("heading", { name: "Aegi" })
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/Your AEGIS school assistant/)
+    ).toBeInTheDocument()
+  })
+
   it("lists saved chats and opens one", async () => {
     mockGet({
       "/chatbot/threads/": {

@@ -450,6 +450,15 @@
   text-decoration: underline;
   cursor: pointer;
 }
+.aegis-chat-welcome {
+  display: grid;
+  place-items: center;
+  padding: 6px 0 4px;
+}
+.aegis-chat-welcome svg {
+  width: 96px;
+  height: 96px;
+}
 .aegis-chat-transcript {
   padding: 18px 17px 24px;
   display: flex;
