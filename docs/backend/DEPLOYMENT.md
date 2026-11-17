@@ -36,6 +36,8 @@ insecure deployment: `DJANGO_ALLOWED_HOSTS` must be non-empty,
 | `VAPID_PUBLIC_KEY` | Web Push pair, public half (see *Web Push* below) |
 | `VAPID_PRIVATE_KEY` | Web Push pair, private half. Never leaves the server |
 | `VAPID_ADMIN_EMAIL` | contact address for the push claim; defaults to `DEFAULT_FROM_EMAIL` |
+| `GEMINI_API_KEY` | the assistant's model key (see *The assistant's answers* below) |
+| `GEMINI_API_KEYS` | optional comma-separated fallback keys |
 
 The build command is `pip install`, `migrate`, then
 `provision_qa_accounts --reset-password`. The five shared DEV/QA logins are
@@ -77,6 +79,26 @@ API as well.
 relay expects. Resend's port 465 needs implicit SSL, which Django's SMTP
 backend does not do; use 587. Note that the free compute plan blocks those
 ports entirely — see *Outgoing mail*.
+
+## The assistant's answers
+
+`GEMINI_API_KEY` is what lets the assistant answer anything that is not on the
+student's record: small talk, definitions, general questions. Without it the
+deployment still starts and every grade, attendance and resource question is
+still answered from the database, but free conversation falls back to the
+school-only tail ("I can look up your grades, attendance and approved learning
+resources…") and Layer 2 sensitivity classification is off, leaving the keyword
+screen alone.
+
+That degradation is silent on purpose — the application, not the model, is
+authoritative — which is why an unset key is easy to miss: the chat looks
+healthy until a student asks something unrelated to their record. Set the key
+and redeploy; `GEMINI_API_KEYS` adds comma-separated fallback keys and
+`GEMINI_MODEL` / `GEMINI_MODEL_FALLBACKS` override the model names (the code
+defaults are the approved ones, so leave them unset unless a model is retired).
+
+Check it from the admin console: `/api/v1/chatbot/admin/model-status/` reports
+`configured`, `available` and the last failure reason, never a key.
 
 ## Render: the Redis service
 

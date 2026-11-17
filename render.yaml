@@ -81,6 +81,20 @@ services:
       # chat messages and case notes are never stored in plain text.
       - key: FIELD_ENCRYPTION_KEYS
         sync: false
+      # The assistant's model. Without a key the service still starts and
+      # answers every record question from the database, but free
+      # conversation falls back to the school-only tail ("I can look up your
+      # grades, attendance and approved learning resources...") and Layer 2
+      # classification is off, leaving Layer 1 keywords alone. That is a
+      # deliberate degradation, so it is not a build failure; it is declared
+      # here because an unset key is otherwise invisible until a student asks
+      # the assistant something that is not on their record.
+      # GEMINI_API_KEY is the primary; GEMINI_API_KEYS is an optional
+      # comma-separated list of fallbacks.
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_API_KEYS
+        sync: false
       - key: DATABASE_PASSWORD
         sync: false
       # Supabase's pooled user is project-specific (postgres.<project-ref>)
