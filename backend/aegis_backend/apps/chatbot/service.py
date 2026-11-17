@@ -744,9 +744,14 @@ def _deterministic_reply(user, intent: ChatIntent, entities, context, data=None)
             "assessments, and learning resources. What would you like to know?"
         )
     if intent == ChatIntent.UNKNOWN:
+        # Reached only when the reply model is unavailable. The old text asked
+        # the student to rephrase a question that was never the problem; this
+        # says what is actually missing and what still works.
         return (
-            "I'm sorry, I didn't fully understand. Could you rephrase? "
-            "I can help with grades, attendance, assessments, or learning resources."
+            "I can look up your grades, attendance and approved learning "
+            "resources. For general questions I use the assistant model, and "
+            "it is unavailable right now — try again in a moment, or ask the "
+            "school office."
         )
     if intent == ChatIntent.SYSTEM_NAVIGATION:
         return (

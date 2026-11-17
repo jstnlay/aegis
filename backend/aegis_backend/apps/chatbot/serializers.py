@@ -5,6 +5,7 @@ from rest_framework import serializers
 from apps.chatbot import retrieval
 from apps.chatbot.models import (
     ChatMessage,
+    ChatThread,
     Flag,
     FlagAction,
     FlagRecipient,
@@ -13,13 +14,42 @@ from apps.chatbot.models import (
 )
 
 
+class ChatThreadSerializer(serializers.ModelSerializer):
+    """A conversation in the student's history list."""
+
+    message_count = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = ChatThread
+        fields = ("id", "title", "created_at", "updated_at", "message_count")
+        read_only_fields = fields
+
+
+class ChatThreadDetailSerializer(ChatThreadSerializer):
+    """One conversation with its turns, oldest first."""
+
+    messages = serializers.SerializerMethodField()
+
+    class Meta(ChatThreadSerializer.Meta):
+        fields = ChatThreadSerializer.Meta.fields + ("messages",)
+        read_only_fields = fields
+
+    def get_messages(self, obj):
+        # The model ordering is newest first (the retention and inbox views
+        # want that); a transcript is read top to bottom.
+        rows = obj.messages.order_by("created_at")
+        return ChatMessageSerializer(rows, many=True).data
+
+
 class ChatMessageSerializer(serializers.ModelSerializer):
     flag_id = serializers.SerializerMethodField()
+    thread_id = serializers.UUIDField(read_only=True)
 
     class Meta:
         model = ChatMessage
         fields = (
             "id",
+            "thread_id",
             "message",
             "reply",
             "intent",

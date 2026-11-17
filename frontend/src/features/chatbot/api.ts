@@ -74,6 +74,8 @@ export interface ChatPayload {
   safety?: ChatSafety
   flag?: ChatFlagRef
   chat_message_id?: string
+  /** The conversation this turn belongs to. */
+  thread_id?: string
   [key: string]: unknown
 }
 
@@ -158,6 +160,7 @@ export interface ChatNotice {
 /** A persisted turn, as `GET /chatbot/history/` returns it. */
 export interface ChatHistoryEntry {
   id: string
+  thread_id?: string | null
   message: string
   reply: string
   intent: string
@@ -167,6 +170,20 @@ export interface ChatHistoryEntry {
   manual_review: boolean
   created_at: string
   flag_id?: string | null
+}
+
+/** One saved conversation in the history list. */
+export interface ChatThreadSummary {
+  id: string
+  title: string
+  created_at: string
+  updated_at: string
+  message_count: number
+}
+
+/** One saved conversation with its turns, oldest first. */
+export interface ChatThreadDetail extends ChatThreadSummary {
+  messages: ChatHistoryEntry[]
 }
 
 /** One entry in the on-screen transcript. */
@@ -187,7 +204,6 @@ interface ChatWireResponse {
   safe_fallback?: boolean
   notice?: ChatNotice
 }
-
 /** Server limits: `ChatMessageRequestSerializer` rejects a blank or >2000 char message. */
 export const MAX_MESSAGE_LENGTH = 2000
 
@@ -208,11 +224,15 @@ export function suggestedPrompts(role: string): string[] {
 }
 
 export function useSendChatMessage() {
-  return useMutation<ChatResponse, Error, { message: string }>({
-    mutationFn: async ({ message }) => {
+  return useMutation<
+    ChatResponse,
+    Error,
+    { message: string; threadId?: string | null }
+  >({
+    mutationFn: async ({ message, threadId }) => {
       const { data } = await apiClient.post<ChatWireResponse>(
         "/chatbot/message/",
-        { message }
+        threadId ? { message, thread_id: threadId } : { message }
       )
       return {
         reply: data.reply,
@@ -271,17 +291,66 @@ export function useAcceptNotice() {
   })
 }
 
-/** The caller's own persisted turns, newest first. */
-export function useChatHistory(enabled = true) {
+/** The caller's saved conversations, newest activity first. */
+export function useChatThreads(enabled = true) {
   return useQuery({
-    queryKey: ["chatbot", "history"],
+    queryKey: ["chatbot", "threads"],
     queryFn: async () => {
-      const { data } = await apiClient.get<{ results: ChatHistoryEntry[] }>(
-        "/chatbot/history/"
+      const { data } = await apiClient.get<{ results: ChatThreadSummary[] }>(
+        "/chatbot/threads/"
       )
       return data.results ?? []
     },
     enabled,
     retry: false,
+  })
+}
+
+/** One saved conversation with its turns. */
+export function useChatThread(threadId: string | null, enabled = true) {
+  return useQuery({
+    queryKey: ["chatbot", "thread", threadId],
+    queryFn: async () => {
+      const { data } = await apiClient.get<ChatThreadDetail>(
+        `/chatbot/threads/${threadId}/`
+      )
+      return data
+    },
+    enabled: enabled && Boolean(threadId),
+    retry: false,
+  })
+}
+
+/**
+ * Delete one conversation.
+ *
+ * The server marks it deleted rather than removing it: a hard delete would
+ * take the safety flag with it. The student stops seeing it; Guidance does
+ * not lose a record it may still have to act on.
+ */
+export function useDeleteChatThread() {
+  const queryClient = useQueryClient()
+  return useMutation<unknown, Error, string>({
+    mutationFn: async (threadId) => {
+      await apiClient.delete(`/chatbot/threads/${threadId}/`)
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["chatbot", "threads"] })
+      void queryClient.invalidateQueries({ queryKey: ["chatbot", "history"] })
+    },
+  })
+}
+
+/** Hide every saved conversation from this account. */
+export function useDeleteAllChatHistory() {
+  const queryClient = useQueryClient()
+  return useMutation<unknown, Error, void>({
+    mutationFn: async () => {
+      await apiClient.delete("/chatbot/history/")
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["chatbot", "threads"] })
+      void queryClient.invalidateQueries({ queryKey: ["chatbot", "history"] })
+    },
   })
 }

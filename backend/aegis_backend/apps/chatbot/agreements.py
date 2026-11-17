@@ -9,7 +9,7 @@ from apps.cms.settings_registry import get_setting
 
 
 def notice_version() -> str:
-    return str(get_setting("chatbot.notice_version", "2026-11-01"))
+    return str(get_setting("chatbot.notice_version", "2026-11-17"))
 
 
 def notice_text() -> str:
@@ -19,10 +19,11 @@ def notice_text() -> str:
             (
                 "AEGIS stores chatbot messages so a guidance counselor can "
                 "review a safety concern. Messages are screened by an "
-                "automated keyword layer and may be classified by Gemini, a "
-                "third-party AI service. Only the message text is sent for "
-                "classification; your name, student number and school records "
-                "are not. You can ask a counselor what was stored about you."
+                "automated keyword layer. To answer a question, the message "
+                "text and recent turns in the same chat may be sent to Gemini, "
+                "a third-party AI service. Your name, student number and "
+                "school records are not sent. You can ask a counselor what was "
+                "stored about you."
             ),
         )
     )

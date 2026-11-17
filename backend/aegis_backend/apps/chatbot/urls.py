@@ -14,6 +14,12 @@ router.register(
 urlpatterns = [
     path("message/", views.ChatView.as_view(), name="chatbot-message"),
     path("history/", views.ChatHistoryView.as_view(), name="chatbot-history"),
+    path("threads/", views.ChatThreadListView.as_view(), name="chatbot-thread-list"),
+    path(
+        "threads/<uuid:pk>/",
+        views.ChatThreadDetailView.as_view(),
+        name="chatbot-thread-detail",
+    ),
     path("notice/", views.NoticeView.as_view(), name="chatbot-notice"),
     path("intents/", views.IntentsView.as_view(), name="chatbot-intents"),
     path("flags/", views.FlagListView.as_view(), name="chatbot-flag-list"),

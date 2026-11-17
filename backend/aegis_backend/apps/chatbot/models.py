@@ -62,6 +62,41 @@ class KeywordTerm(TimestampedModel):
         return f"{self.term} ({self.severity})"
 
 
+class ChatThread(TimestampedModel):
+    """
+    One conversation.
+
+    `ChatMessage` rows used to be one undifferentiated stream, so a student
+    could not reopen or remove an earlier conversation. A thread is the unit a
+    student names, reopens and deletes.
+
+    Deletion is soft. A hard delete would cascade to `Flag` (the flag holds a
+    safety decision a counselor may still have to act on), so `deleted_at`
+    hides the thread from its owner and leaves the record for Guidance and the
+    retention job.
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="chat_threads",
+    )
+    # Derived from the first message, never written by a model: a generated
+    # title would describe the chat with words the student did not use.
+    # Encrypted because a preview is still the student's own words.
+    title = EncryptedTextField(blank=True, default="")
+    deleted_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta(TimestampedModel.Meta):
+        ordering = ["-updated_at"]
+        indexes = [
+            models.Index(fields=["user", "deleted_at"]),
+        ]
+
+    def __str__(self):
+        return f"Chat thread {self.id} for {self.user_id}"
+
+
 class ChatMessage(TimestampedModel):
     """
     One persisted chatbot turn.
@@ -76,6 +111,16 @@ class ChatMessage(TimestampedModel):
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="chat_messages",
+    )
+    # Nullable only for rows written before threads existed; the migration
+    # assigns them, and every new turn sets it. SET_NULL keeps a message if a
+    # thread row is ever hard-deleted by retention.
+    thread = models.ForeignKey(
+        ChatThread,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="messages",
     )
     # Encrypted at rest: this is the student's own words. The column holds
     # ciphertext, so a database dump does not carry a disclosure in plain text.

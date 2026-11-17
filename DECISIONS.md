@@ -38,15 +38,19 @@ data scope and the fallback reply. It stays that way.
 
 | Decision | Where |
 |---|---|
-| Gemini may rewrite a reply for a **non-sensitive** message | `pipeline.process_message` |
+| Gemini answers a conversational reply for a **non-sensitive** message | `pipeline.process_message` |
 | Gemini may **raise** a severity | `detection.detect` (union of severities) |
 | Gemini may **not** lower a severity | `detection.detect` — the maximum wins |
 | Gemini may **not** decide intent, urgency or routing | `pipeline.process_message` |
 | A sensitive message is answered deterministically | `pipeline.process_message` |
+| A grade, attendance count, staff summary or escalation is answered deterministically | `pipeline.DETERMINISTIC_ONLY_INTENTS` |
+| A grounded document answer is quoted, never paraphrased | `pipeline.process_message` |
 
 **Why:** a model that can lower a severity can talk the application out of
 routing a crisis message. The union rule is enforced in
 `detection.detect` and covered by `LayerTwoTest.test_model_cannot_lower_a_layer_one_severity`.
+The same reason applies to records: the model is not sent the number, so it has
+nothing to rewrite and no chance to round it.
 
 ## 3. Two detection layers
 
@@ -73,21 +77,28 @@ pages a counselor about every message is one they learn to ignore. Layer 1 is
 strong enough to carry the load on its own; Layer 2 only adds recall.
 
 **Model configuration is environment-only.** `GEMINI_API_KEY` is read from the
-environment and never stored. `GEMINI_MODEL` defaults to `gemini-2.5-flash`.
+environment and never stored. `GEMINI_MODEL` defaults to
+`gemini-3.5-flash-lite`, which answered reliably in a live probe;
+`gemini-3.8-flash` returned 503 under load, and `gemini-2.5-flash` is no longer
+available to new API users.
 
 ## 4. What is sent to Gemini, and what is not
 | Call | Sent | Never sent |
 |---|---|---|
 | Message classification | the message text | name, student number, email, role, any record |
+| Conversational reply | the message text and up to six earlier non-sensitive turns from the **same chat**, plus facts the service already authorized | name, student number, email, role, grades, attendance, staff summaries |
 | Assessment drafting | topic, question type, count | student names, rosters, grades |
 | Intervention suggestions | severity, category vocabulary | the message text, the student |
 | Recommendation reasons | item title/type/topic, need types | student name, id, grade average, attendance |
 
-The classification call is the only one that carries free text a student
-wrote, and it carries nothing else. `apps/chatbot/gemini_client.py` cannot
-enforce that by itself — it cannot know what a string means — so each caller
-documents its payload and a test asserts it. See
-`apps/assessments/tests_review.py::GeminiDraftFailureTest::test_gemini_receives_only_the_topic`.
+The classification and reply calls are the only ones that carry free text a
+student wrote. A reply call carries the same conversation's recent turns so
+"and the capital of Spain?" can resolve "it"; a turn the screen marked
+sensitive is excluded, so a disclosure is not re-sent on the next question.
+`apps/chatbot/gemini_client.py` cannot enforce that by itself — it cannot know
+what a string means — so each caller documents its payload and a test asserts
+it. See `apps/assessments/tests_review.py::GeminiDraftFailureTest::test_gemini_receives_only_the_topic`
+and `apps/chatbot/tests_conversation.py`.
 
 **Central client.** Every Gemini call goes through
 `apps/chatbot/gemini_client.py`: one model name, one retry policy, one JSON
@@ -207,6 +218,10 @@ Escalation is idempotent: `escalated_at` prevents a second notice.
 * The same acceptance is collected at sign-up: the registration request carries
   `notice_accepted` and `notice_version`, and the server refuses a request
   that accepted a stale version.
+* The version was bumped to `2026-11-17` when Gemini became the reply model
+  rather than only a classifier. The new text says the message and recent
+  turns in the same chat may be sent to write an answer. A student who accepted
+  the old text has not accepted this purpose, so the bump is deliberate.
 
 **Why 428 and not 403?** 428 Precondition Required says "this request is
 conditional on something that is not yet true", which is exactly the state.
@@ -403,8 +418,10 @@ access and backups, and what to do when something is wrong.
   notified; the record stays with Guidance.
 * No sentiment or emotion model. The layers are keyword screening and
   classification, and both are explainable.
-* No model-based FAQ answers. Gemini rewrites an answer the deterministic
-  layer already produced; it does not invent one.
+* No model-invented school facts. Gemini answers general conversation, but a
+  grade, an attendance count, a staff summary, an escalation and a grounded
+  document answer are written by the deterministic layer, and the model is not
+  sent the record to rewrite.
 * No vector store, embedding model or re-ranker. Retrieval is lexical and the
   corpus is the school's own documents (§17).
 * No model status panel on the admin console. It named the model, the key and

@@ -1,5 +1,17 @@
 import "./chatbot-panel.css"
-import { ArrowUp, Bot, Info, ShieldAlert, ShieldCheck, Sparkles, X } from "lucide-react"
+import {
+  ArrowLeft,
+  ArrowUp,
+  Bot,
+  History,
+  Info,
+  Plus,
+  ShieldAlert,
+  ShieldCheck,
+  Sparkles,
+  Trash2,
+  X,
+} from "lucide-react"
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react"
 
 import { useQueryClient } from "@tanstack/react-query"
@@ -14,8 +26,11 @@ import {
   MAX_MESSAGE_LENGTH,
   suggestedPrompts,
   useAcceptNotice,
-  useChatHistory,
   useChatNotice,
+  useChatThread,
+  useChatThreads,
+  useDeleteAllChatHistory,
+  useDeleteChatThread,
   useSendChatMessage,
   type ChatMessage,
   type ChatResponse,
@@ -31,16 +46,16 @@ import { normalizeApiError } from "@/lib/error"
  *
  * What the panel does and does not pretend to be:
  *
- * - **It is not a conversation.** Each message is classified and answered on its
- *   own; there is no memory of earlier turns. The help text says so.
  * - **It is deterministic first.** `policies.py` classifies with keyword tables
  *   and `service._deterministic_reply` answers from templates. Gemini may
  *   rewrite a reply for a message that is not sensitive, and may raise the
  *   severity of one that is, but it never decides intent or routing.
- * - **It stores what you send.** Every turn is written to `ChatMessage`, and a
- *   message that trips the screening is written to a flag that Guidance sees.
- *   That is stated in the panel, because a student who believes nothing is
- *   stored cannot give informed consent to it.
+ * - **Chats are saved.** Every turn is written to `ChatMessage` under a
+ *   `ChatThread`, so History can reopen a conversation and delete it. A safety
+ *   flag is not deleted with the chat; Guidance still sees it.
+ * - **It stores what you send.** A message that trips the screening is written
+ *   to a flag that Guidance sees. That is stated in the panel, because a
+ *   student who believes nothing is stored cannot give informed consent.
  * - **A student must accept the notice first.** Until the notice for the
  *   current version is accepted, the panel shows the notice and refuses to
  *   send.
@@ -58,6 +73,12 @@ function nextMessageId(prefix: "u" | "a"): string {
   return `${prefix}-${messageCounter}`
 }
 
+function threadDate(value: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ""
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" })
+}
+
 export function ChatbotPanel({
   open,
   onClose,
@@ -69,11 +90,26 @@ export function ChatbotPanel({
   const send = useSendChatMessage()
   const noticeQuery = useChatNotice(open)
   const acceptNotice = useAcceptNotice()
-  const historyQuery = useChatHistory(open)
+  const threadsQuery = useChatThreads(open)
+  const deleteThread = useDeleteChatThread()
+  const deleteAll = useDeleteAllChatHistory()
   const queryClient = useQueryClient()
 
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [draft, setDraft] = useState("")
+  // `undefined` means "not chosen yet": open the newest thread. `null` is an
+  // explicit New chat, which must not auto-select the newest one again.
+  const [activeThreadId, setActiveThreadId] = useState<
+    string | null | undefined
+  >(undefined)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null)
+  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false)
+
+  const threadQuery = useChatThread(
+    activeThreadId ?? null,
+    open && Boolean(activeThreadId)
+  )
 
   const logRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -85,22 +121,29 @@ export function ChatbotPanel({
   useEffect(() => {
     const log = logRef.current
     if (log) log.scrollTop = log.scrollHeight
-  }, [messages, send.isPending])
+  }, [messages, send.isPending, threadQuery.data])
+
+  // Open the most recent conversation once the list arrives. A rejected list
+  // leaves the panel on a new chat rather than blocking it.
+  useEffect(() => {
+    if (!open || activeThreadId !== undefined) return
+    if (threadsQuery.data === undefined) return
+    setActiveThreadId(threadsQuery.data[0]?.id ?? null)
+  }, [open, activeThreadId, threadsQuery.data])
 
   /*
-   * The transcript is the server's history plus the turns sent in this sitting.
-   *
-   * Deriving it beats copying the history into state: the copy would have to
-   * be invalidated by an effect whenever the query resolves, and a stale copy
+   * The transcript is the active thread's saved turns plus the turns sent in
+   * this sitting. Deriving it beats copying the thread into state: the copy
+   * would have to be invalidated whenever the query resolves, and a stale copy
    * would show a student a transcript that no longer matches the record.
    *
-   * The local turn carries the server's `chat_message_id`, so when the history
+   * The local turn carries the server's `chat_message_id`, so when the thread
    * refetch brings the same turn back the two collapse into one entry instead
    * of appearing twice.
    */
   const transcript = useMemo(() => {
     const byId = new Map<string, ChatMessage>()
-    for (const entry of [...(historyQuery.data ?? [])].reverse()) {
+    for (const entry of threadQuery.data?.messages ?? []) {
       byId.set(`h-${entry.id}-u`, {
         id: `h-${entry.id}-u`,
         role: "user",
@@ -118,7 +161,7 @@ export function ChatbotPanel({
       byId.set(message.id, message)
     }
     return [...byId.values()]
-  }, [historyQuery.data, messages])
+  }, [threadQuery.data, messages])
 
   if (!open || !user) return null
 
@@ -130,6 +173,46 @@ export function ChatbotPanel({
   // Only a student is gated: the notice is about a student's own messages.
   const mustAccept =
     user.role === "student" && notice !== undefined && !notice.accepted
+  const threads = threadsQuery.data ?? []
+
+  function startNewChat() {
+    setActiveThreadId(null)
+    setMessages([])
+    setDraft("")
+    setHistoryOpen(false)
+    setPendingDelete(null)
+    setConfirmDeleteAll(false)
+  }
+
+  function openThread(threadId: string) {
+    setActiveThreadId(threadId)
+    setMessages([])
+    setHistoryOpen(false)
+    setPendingDelete(null)
+  }
+
+  function removeThread(threadId: string) {
+    deleteThread.mutate(threadId, {
+      onSuccess: () => {
+        setPendingDelete(null)
+        if (activeThreadId === threadId) {
+          setActiveThreadId(null)
+          setMessages([])
+        }
+      },
+    })
+  }
+
+  function removeAllThreads() {
+    deleteAll.mutate(undefined, {
+      onSuccess: () => {
+        setConfirmDeleteAll(false)
+        setActiveThreadId(null)
+        setMessages([])
+        setHistoryOpen(false)
+      },
+    })
+  }
 
   async function submit(text: string) {
     const message = text.trim()
@@ -150,9 +233,12 @@ export function ChatbotPanel({
     setDraft("")
 
     try {
-      const response = await send.mutateAsync({ message })
-      // The server's id for the turn, so the local copy and the history copy
-      // collapse into one entry when the history refetch brings it back.
+      const response = await send.mutateAsync({
+        message,
+        threadId: activeThreadId ?? null,
+      })
+      // The server's id for the turn, so the local copy and the saved turn
+      // collapse into one entry when the thread refetch brings it back.
       const turnId = response.data.chat_message_id ?? nextMessageId("u")
       setMessages((current) => [
         ...current.map((entry) =>
@@ -165,7 +251,17 @@ export function ChatbotPanel({
           response,
         },
       ])
-      void queryClient.invalidateQueries({ queryKey: ["chatbot", "history"] })
+
+      const createdThreadId = response.data.thread_id
+      if (!activeThreadId && createdThreadId) {
+        setActiveThreadId(createdThreadId)
+      }
+      void queryClient.invalidateQueries({ queryKey: ["chatbot", "threads"] })
+      if (createdThreadId) {
+        void queryClient.invalidateQueries({
+          queryKey: ["chatbot", "thread", createdThreadId],
+        })
+      }
     } catch (error) {
       // 428 means the notice was not accepted, or the version changed since
       // the panel loaded it. Refreshing the notice brings the gate back.
@@ -203,148 +299,307 @@ export function ChatbotPanel({
             </p>
           </div>
         </div>
-        <button
-          className="aegis-chat-close"
-          type="button"
-          aria-label="Close assistant"
-          onClick={onClose}
-        >
-          <X aria-hidden="true" />
-        </button>
+        <div className="aegis-chat-header-actions">
+          <button
+            className="aegis-chat-header-button"
+            type="button"
+            aria-label="New chat"
+            title="New chat"
+            onClick={startNewChat}
+          >
+            <Plus aria-hidden="true" />
+          </button>
+          <button
+            className="aegis-chat-header-button"
+            type="button"
+            aria-label="Chat history"
+            title="Chat history"
+            aria-expanded={historyOpen}
+            onClick={() => {
+              setHistoryOpen((current) => !current)
+              setPendingDelete(null)
+              setConfirmDeleteAll(false)
+            }}
+          >
+            <History aria-hidden="true" />
+          </button>
+          <button
+            className="aegis-chat-close"
+            type="button"
+            aria-label="Close assistant"
+            onClick={onClose}
+          >
+            <X aria-hidden="true" />
+          </button>
+        </div>
       </header>
 
       <div
         className="aegis-chat-body"
         ref={logRef}
-        role="log"
-        aria-live="polite"
-        aria-label="Assistant conversation"
+        role={historyOpen ? undefined : "log"}
+        aria-live={historyOpen ? undefined : "polite"}
+        aria-label={historyOpen ? "Chat history" : "Assistant conversation"}
       >
-        <div className="aegis-chat-transcript">
-          <p className="aegis-chat-session-label">
-            <span /> School assistant <span />
-          </p>
-          <ChatBubble
-            message={{
-              id: "welcome",
-              role: "assistant",
-              text: `Hi${user.first_name?.trim() ? `, ${user.first_name.trim()}` : ""}! ${user.role === "student" || user.role === "parent" ? "I can help with grades, attendance, and learning resources. What would you like to check?" : "Need a hand finding something in AEGIS? Ask me about the tools available to you."}`,
-            }}
-          />
-          {mustAccept ? (
-            <div className="aegis-chat-quick-replies" role="group" aria-label="Student notice">
-              <p>Student notice (version {notice?.version ?? ""})</p>
-              <p>{notice?.text}</p>
+        {historyOpen ? (
+          <div className="aegis-chat-history">
+            <div className="aegis-chat-history-head">
               <button
                 type="button"
-                disabled={acceptNotice.isPending}
-                onClick={() => void acceptNotice.mutate({})}
+                className="aegis-chat-history-back"
+                onClick={() => setHistoryOpen(false)}
               >
-                {acceptNotice.isPending
-                  ? "Accepting…"
-                  : "I accept this notice, and I understand my messages are stored and screened."}
+                <ArrowLeft aria-hidden="true" /> Back
               </button>
-              {acceptNotice.isError ? (
-                <p>{normalizeApiError(acceptNotice.error).message}</p>
-              ) : null}
+              <span>Chat history</span>
             </div>
-          ) : null}
-          {transcript.length === 0 && !mustAccept ? (
-            <div className="aegis-chat-quick-replies">
-              <p>Choose a question to get started</p>
-              {prompts.map((prompt) => (
-                <button
-                  key={prompt}
-                  type="button"
-                  disabled={send.isPending}
-                  onClick={() => void submit(prompt)}
-                >
-                  {prompt}
-                </button>
+
+            {threadsQuery.isError ? (
+              <ErrorNote
+                message={normalizeApiError(threadsQuery.error).message}
+              />
+            ) : null}
+            {threadsQuery.isLoading ? (
+              <p className="aegis-chat-history-note">Loading chats…</p>
+            ) : null}
+            {!threadsQuery.isLoading && threads.length === 0 ? (
+              <p className="aegis-chat-history-note">
+                No saved chats yet. Start a conversation and it will appear
+                here.
+              </p>
+            ) : null}
+
+            <ul className="aegis-chat-history-list">
+              {threads.map((thread) => (
+                <li className="aegis-chat-history-item" key={thread.id}>
+                  <button
+                    type="button"
+                    className="aegis-chat-history-open"
+                    onClick={() => openThread(thread.id)}
+                  >
+                    <span className="aegis-chat-history-title">
+                      {thread.title || "Untitled chat"}
+                    </span>
+                    <span className="aegis-chat-history-meta">
+                      {threadDate(thread.updated_at)} ·{" "}
+                      {thread.message_count} message
+                      {thread.message_count === 1 ? "" : "s"}
+                    </span>
+                  </button>
+                  {pendingDelete === thread.id ? (
+                    <div
+                      className="aegis-chat-history-confirm"
+                      role="group"
+                      aria-label={`Delete ${thread.title || "Untitled chat"}`}
+                    >
+                      <p>
+                        Delete this chat? A chat that raised a safety concern
+                        stays with Guidance.
+                      </p>
+                      <div>
+                        <button
+                          type="button"
+                          disabled={deleteThread.isPending}
+                          onClick={() => removeThread(thread.id)}
+                        >
+                          {deleteThread.isPending ? "Deleting…" : "Delete"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPendingDelete(null)}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="aegis-chat-history-delete"
+                      aria-label={`Delete chat: ${thread.title || "Untitled chat"}`}
+                      onClick={() => setPendingDelete(thread.id)}
+                    >
+                      <Trash2 aria-hidden="true" />
+                    </button>
+                  )}
+                </li>
               ))}
-            </div>
-          ) : null}
-          {transcript.map((message) => (
-            <ChatBubble key={message.id} message={message} />
-          ))}
-          {send.isPending ? (
-            <div className="aegis-chat-thinking" role="status">
-              <Bot aria-hidden="true" />
-              <span>Finding your answer</span>
-              <span className="aegis-chat-dots" aria-hidden="true">
-                <i />
-                <i />
-                <i />
-              </span>
-            </div>
-          ) : null}
-        </div>
+            </ul>
+
+            {threads.length > 0 ? (
+              <div className="aegis-chat-history-clear">
+                {confirmDeleteAll ? (
+                  <>
+                    <p>
+                      Delete all saved chats? Safety-related messages stay with
+                      Guidance.
+                    </p>
+                    <div>
+                      <button
+                        type="button"
+                        disabled={deleteAll.isPending}
+                        onClick={removeAllThreads}
+                      >
+                        {deleteAll.isPending ? "Deleting…" : "Delete all"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDeleteAll(false)}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDeleteAll(true)}
+                  >
+                    Delete all chats
+                  </button>
+                )}
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <div className="aegis-chat-transcript">
+            <p className="aegis-chat-session-label">
+              <span /> School assistant <span />
+            </p>
+            <ChatBubble
+              message={{
+                id: "welcome",
+                role: "assistant",
+                text: `Hi${user.first_name?.trim() ? `, ${user.first_name.trim()}` : ""}! ${user.role === "student" || user.role === "parent" ? "I can help with grades, attendance, and learning resources. What would you like to check?" : "Need a hand finding something in AEGIS? Ask me about the tools available to you."}`,
+              }}
+            />
+            {mustAccept ? (
+              <div
+                className="aegis-chat-quick-replies"
+                role="group"
+                aria-label="Student notice"
+              >
+                <p>Student notice (version {notice?.version ?? ""})</p>
+                <p>{notice?.text}</p>
+                <button
+                  type="button"
+                  disabled={acceptNotice.isPending}
+                  onClick={() => void acceptNotice.mutate({})}
+                >
+                  {acceptNotice.isPending
+                    ? "Accepting…"
+                    : "I accept this notice, and I understand my messages are stored and screened."}
+                </button>
+                {acceptNotice.isError ? (
+                  <p>{normalizeApiError(acceptNotice.error).message}</p>
+                ) : null}
+              </div>
+            ) : null}
+            {transcript.length === 0 && !mustAccept ? (
+              <div className="aegis-chat-quick-replies">
+                <p>Choose a question to get started</p>
+                {prompts.map((prompt) => (
+                  <button
+                    key={prompt}
+                    type="button"
+                    disabled={send.isPending}
+                    onClick={() => void submit(prompt)}
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            {threadQuery.isError ? (
+              <ErrorNote
+                message={normalizeApiError(threadQuery.error).message}
+              />
+            ) : null}
+            {transcript.map((message) => (
+              <ChatBubble key={message.id} message={message} />
+            ))}
+            {send.isPending ? (
+              <div className="aegis-chat-thinking" role="status">
+                <Bot aria-hidden="true" />
+                <span>Finding your answer</span>
+                <span className="aegis-chat-dots" aria-hidden="true">
+                  <i />
+                  <i />
+                  <i />
+                </span>
+              </div>
+            ) : null}
+          </div>
+        )}
       </div>
 
       <footer className="aegis-chat-footer">
         {send.isError ? (
           <ErrorNote message={normalizeApiError(send.error).message} />
         ) : null}
-        <form onSubmit={handleSubmit} className="aegis-chat-composer">
-          <Label htmlFor="chatbot-message" className="sr-only">
-            Message
-          </Label>
-          <Textarea
-            ref={inputRef}
-            id="chatbot-message"
-            rows={2}
-            value={draft}
-            maxLength={MAX_MESSAGE_LENGTH}
-            placeholder="Ask AEGIS anything about school..."
-            disabled={mustAccept}
-            aria-invalid={tooLong || undefined}
-            aria-describedby={
-              tooLong ? "chatbot-message-error" : "chatbot-message-hint"
-            }
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (
-                event.key === "Enter" &&
-                !event.shiftKey &&
-                !event.nativeEvent.isComposing
-              ) {
-                event.preventDefault()
-                void submit(draft)
+        {!historyOpen ? (
+          <form onSubmit={handleSubmit} className="aegis-chat-composer">
+            <Label htmlFor="chatbot-message" className="sr-only">
+              Message
+            </Label>
+            <Textarea
+              ref={inputRef}
+              id="chatbot-message"
+              rows={2}
+              value={draft}
+              maxLength={MAX_MESSAGE_LENGTH}
+              placeholder="Ask AEGIS anything about school..."
+              disabled={mustAccept}
+              aria-invalid={tooLong || undefined}
+              aria-describedby={
+                tooLong ? "chatbot-message-error" : "chatbot-message-hint"
               }
-            }}
-          />
-          <div className="aegis-chat-composer-bottom">
-            <span className="aegis-chat-composer-mode">
-              <Sparkles aria-hidden="true" /> School assistant
-            </span>
-            <span id="chatbot-message-hint" className="sr-only">
-              Enter to send. Shift + Enter for a new line.
-            </span>
-            <Button
-              type="submit"
-              className="aegis-chat-send"
-              disabled={blank || tooLong || send.isPending || mustAccept}
-              aria-label={send.isPending ? "Sending message" : "Send message"}
-            >
-              <ArrowUp aria-hidden="true" />
-            </Button>
-          </div>
-          {tooLong ? (
-            <p id="chatbot-message-error" role="alert">
-              Message is too long.
-            </p>
-          ) : null}
-        </form>
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (
+                  event.key === "Enter" &&
+                  !event.shiftKey &&
+                  !event.nativeEvent.isComposing
+                ) {
+                  event.preventDefault()
+                  void submit(draft)
+                }
+              }}
+            />
+            <div className="aegis-chat-composer-bottom">
+              <span className="aegis-chat-composer-mode">
+                <Sparkles aria-hidden="true" /> School assistant
+              </span>
+              <span id="chatbot-message-hint" className="sr-only">
+                Enter to send. Shift + Enter for a new line.
+              </span>
+              <Button
+                type="submit"
+                className="aegis-chat-send"
+                disabled={blank || tooLong || send.isPending || mustAccept}
+                aria-label={send.isPending ? "Sending message" : "Send message"}
+              >
+                <ArrowUp aria-hidden="true" />
+              </Button>
+            </div>
+            {tooLong ? (
+              <p id="chatbot-message-error" role="alert">
+                Message is too long.
+              </p>
+            ) : null}
+          </form>
+        ) : null}
         <div className="aegis-chat-footer-meta">
           <details className="aegis-chat-info">
             <summary>
               <Info aria-hidden="true" /> About this assistant
             </summary>
             <p>
-              This assistant answers supported questions individually and does
-              not remember earlier messages. Everything you type here is stored
-              so a guidance counselor can review a safety concern, and it is
-              screened by an automated keyword check. For urgent concerns,
+              Chats are saved in History. Delete a chat at any time; a chat that
+              raised a safety concern stays with Guidance. Everything you type
+              here is screened by an automated keyword check. General questions
+              and recent messages in the chat may be sent to Gemini to write the
+              answer; your name and school records are not. For urgent concerns,
               contact Guidance directly.
             </p>
           </details>
@@ -427,8 +682,7 @@ function ResponseDetail({ response }: { response: ChatResponse }) {
       {attendance ? (
         <p>
           Present: {attendance.present_days ?? "—"} · Late:{" "}
-          {attendance.late_days ?? "—"} · Absent:{" "}
-          {attendance.absent_days ?? "—"}
+          {attendance.late_days ?? "—"} · Absent: {attendance.absent_days ?? "—"}
         </p>
       ) : null}
 

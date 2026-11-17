@@ -6,8 +6,9 @@ administrator controls.
 from __future__ import annotations
 
 import logging
+import uuid
 
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.permissions import IsAuthenticated
@@ -17,6 +18,7 @@ from rest_framework.views import APIView
 from apps.chatbot import agreements, gemini_client, insights, routing
 from apps.chatbot.models import (
     ChatMessage,
+    ChatThread,
     Flag,
     FlagAction,
     KeywordTerm,
@@ -28,6 +30,8 @@ from apps.chatbot.serializers import (
     AssessmentDraftRequestSerializer,
     CaseNoteSerializer,
     ChatMessageSerializer,
+    ChatThreadDetailSerializer,
+    ChatThreadSerializer,
     FacultyFlagSerializer,
     FlagSerializer,
     KeywordTermSerializer,
@@ -76,14 +80,91 @@ class ChatView(APIView):
                 status=status.HTTP_428_PRECONDITION_REQUIRED,
             )
 
-        response = process_message(request.user, message, use_gemini=True)
+        thread = None
+        thread_id = request.data.get("thread_id")
+        if thread_id:
+            try:
+                thread_uuid = uuid.UUID(str(thread_id))
+            except (TypeError, ValueError):
+                return Response(
+                    {"detail": "Invalid chat id."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            thread = ChatThread.objects.filter(
+                id=thread_uuid,
+                user=request.user,
+                deleted_at__isnull=True,
+            ).first()
+            if thread is None:
+                return Response(
+                    {"detail": "Chat not found."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+        response = process_message(
+            request.user, message, use_gemini=True, thread=thread
+        )
         payload = response.to_dict()
         payload["notice"] = agreements.notice_payload(request.user)
         return Response(payload, status=status.HTTP_200_OK)
 
 
+class ChatThreadListView(APIView):
+    """GET /chatbot/threads/ - the caller's own conversations."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        rows = (
+            ChatThread.objects.filter(
+                user=request.user, deleted_at__isnull=True
+            )
+            .annotate(message_count=Count("messages"))
+            .order_by("-updated_at")[:50]
+        )
+        return Response({"results": ChatThreadSerializer(rows, many=True).data})
+
+
+class ChatThreadDetailView(APIView):
+    """GET or DELETE /chatbot/threads/<id>/ - one conversation."""
+
+    permission_classes = [IsAuthenticated]
+
+    def _thread(self, request, pk):
+        return (
+            ChatThread.objects.filter(
+                pk=pk, user=request.user, deleted_at__isnull=True
+            )
+            .annotate(message_count=Count("messages"))
+            .first()
+        )
+
+    def get(self, request, pk):
+        thread = self._thread(request, pk)
+        if thread is None:
+            return Response(
+                {"detail": "Chat not found."}, status=status.HTTP_404_NOT_FOUND
+            )
+        return Response(ChatThreadDetailSerializer(thread).data)
+
+    def delete(self, request, pk):
+        thread = self._thread(request, pk)
+        if thread is None:
+            return Response(
+                {"detail": "Chat not found."}, status=status.HTTP_404_NOT_FOUND
+            )
+        # Soft delete: a hard one would cascade to `Flag`, deleting a safety
+        # record a counselor may still have to act on. The student stops
+        # seeing it; Guidance and the retention job still can.
+        now = timezone.now()
+        ChatThread.objects.filter(pk=thread.pk).update(
+            deleted_at=now, updated_at=now
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 class ChatHistoryView(APIView):
-    """GET /chatbot/history/ - the caller's own persisted turns."""
+    """GET or DELETE /chatbot/history/ - the caller's persisted turns."""
 
     permission_classes = [IsAuthenticated]
 
@@ -93,8 +174,16 @@ class ChatHistoryView(APIView):
         except (TypeError, ValueError):
             limit = 50
         limit = max(1, min(limit, 200))
-        rows = ChatMessage.objects.filter(user=request.user)[:limit]
+        visible = Q(thread__isnull=True) | Q(thread__deleted_at__isnull=True)
+        rows = ChatMessage.objects.filter(user=request.user).filter(visible)[:limit]
         return Response({"results": ChatMessageSerializer(rows, many=True).data})
+
+    def delete(self, request):
+        now = timezone.now()
+        deleted = ChatThread.objects.filter(
+            user=request.user, deleted_at__isnull=True
+        ).update(deleted_at=now, updated_at=now)
+        return Response({"deleted": deleted})
 
 
 class NoticeView(APIView):

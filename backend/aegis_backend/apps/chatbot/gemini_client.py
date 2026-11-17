@@ -12,7 +12,7 @@ documents and tests its payload.
 
 Configuration is environment-only:
     GEMINI_API_KEY   required for any call
-    GEMINI_MODEL     default "gemini-2.5-flash" (TODO: confirm approved model)
+    GEMINI_MODEL     default "gemini-3.5-flash-lite" (approved default)
 """
 
 from __future__ import annotations
@@ -148,7 +148,7 @@ def _key_slot(api_key: str) -> int:
 
 
 def model_name() -> str:
-    return getattr(settings, "GEMINI_MODEL", "gemini-3.8-flash")
+    return getattr(settings, "GEMINI_MODEL", "gemini-3.5-flash-lite")
 
 
 def _models() -> list[str]:
@@ -518,15 +518,29 @@ def chat(
     system_instruction: str,
     message: str,
     context: dict[str, Any] | None = None,
+    history: list[dict[str, str]] | None = None,
 ) -> str:
-    """Role-aware reply generation. Returns plain text."""
-    payload = message
+    """
+    Reply generation. Returns plain text.
+
+    `history` is this conversation's recent screened turns, oldest first. It
+    carries text only: the model needs what was said, not who said it. The
+    caller decides which turns are safe to send; a sensitive turn is not.
+    """
+    parts: list[str] = []
+    if history:
+        lines: list[str] = []
+        for turn in history:
+            lines.append(f"Student: {turn.get('message', '')}")
+            lines.append(f"Assistant: {turn.get('reply', '')}")
+        parts.append("Conversation so far:\n" + "\n".join(lines))
+    parts.append(f"Student's new message:\n{message}")
     if context:
-        payload = (
-            f"User message:\n{message}\n\n"
-            "Authorized facts (the only facts you may use):\n"
+        parts.append(
+            "Authorized facts (the only school facts you may use):\n"
             f"{json.dumps(context, default=str, ensure_ascii=False)}"
         )
+    payload = "\n\n".join(parts)
     schema = {
         "type": "object",
         "properties": {"reply": {"type": "string"}},

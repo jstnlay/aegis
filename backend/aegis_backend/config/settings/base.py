@@ -413,18 +413,19 @@ FIELD_ENCRYPTION_REQUIRED = config(
 #
 # Key is environment-only. Never commit a value.
 #
-# The default is gemini-3.8-flash because gemini-2.5-flash is no longer
-# available to new API users: the API answers 404 ("This model ... is no
-# longer available to new users") for it. The school still has to approve
-# which model its students' text may be sent to — that approval is a policy
-# decision, not a technical one, and is recorded in DECISIONS.md.
+# The default is gemini-3.5-flash-lite: it answered reliably in a live probe,
+# while gemini-3.8-flash returned 503 ("high demand") for the same request.
+# gemini-2.5-flash is no longer available to new API users (404). The school
+# still has to approve which model its students' text may be sent to — that
+# approval is a policy decision, not a technical one, and is recorded in
+# DECISIONS.md.
 # ---------------------------------------------------------------------------
 GEMINI_API_KEY = config("GEMINI_API_KEY", default="")
 #: Fallback keys, comma- or whitespace-separated. The client moves to the next
 #: one when a key is rate limited or has spent its quota. A key is never
 #: logged, never stored and never reaches the frontend.
 GEMINI_API_KEYS = config("GEMINI_API_KEYS", default="")
-GEMINI_MODEL = config("GEMINI_MODEL", default="gemini-3.8-flash")
+GEMINI_MODEL = config("GEMINI_MODEL", default="gemini-3.5-flash-lite")
 
 #: Fallback models, comma- or whitespace-separated. A model can be saturated
 #: ("503 — This model is currently experiencing high demand") while the account
@@ -432,7 +433,7 @@ GEMINI_MODEL = config("GEMINI_MODEL", default="gemini-3.8-flash")
 #: The school should approve this list too: it decides which models may see
 #: student text.
 GEMINI_MODEL_FALLBACKS = config(
-    "GEMINI_MODEL_FALLBACKS", default="gemini-3.5-flash-lite,gemini-3.1-flash-lite"
+    "GEMINI_MODEL_FALLBACKS", default="gemini-3.1-flash-lite,gemini-3.8-flash"
 )
 
 #: Per-request HTTP timeout for a Gemini call, in seconds. A student waiting

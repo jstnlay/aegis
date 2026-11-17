@@ -93,7 +93,7 @@ SETTING_DEFINITIONS: dict[str, dict[str, Any]] = {
         ),
     },
     "chatbot.notice_version": {
-        "default": "2026-11-01",
+        "default": "2026-11-17",
         "description": (
             "Version of the student chatbot notice. Changing this value "
             "requires every student to accept the notice again."
@@ -103,10 +103,10 @@ SETTING_DEFINITIONS: dict[str, dict[str, Any]] = {
         "default": (
             "AEGIS stores chatbot messages so a guidance counselor can review "
             "a safety concern. Messages are screened by an automated keyword "
-            "layer and may be classified by Gemini, a third-party AI service. "
-            "Only the message text is sent for classification; your name, "
-            "student number and school records are not. You can ask a "
-            "counselor what was stored about you."
+            "layer. To answer a question, the message text and recent turns in "
+            "the same chat may be sent to Gemini, a third-party AI service. "
+            "Your name, student number and school records are not sent. You "
+            "can ask a counselor what was stored about you."
         ),
         "description": "Student-facing chatbot privacy and data notice.",
     },

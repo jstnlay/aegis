@@ -72,10 +72,16 @@
   font-size: 11px;
   color: #f0dce4;
 }
-.aegis-chat-close {
+.aegis-chat-header-actions {
   position: absolute;
-  right: 17px;
-  top: 24px;
+  right: 14px;
+  top: 21px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.aegis-chat-header-button,
+.aegis-chat-close {
   display: grid;
   place-items: center;
   width: 31px;
@@ -86,9 +92,14 @@
   cursor: pointer;
   transition: background 160ms;
 }
+.aegis-chat-header-button:hover,
 .aegis-chat-close:hover {
   background: #ffffff2c;
 }
+.aegis-chat-header-button[aria-expanded="true"] {
+  background: #ffffff38;
+}
+.aegis-chat-header-button svg,
 .aegis-chat-close svg {
   width: 16px;
   height: 16px;
@@ -272,6 +283,141 @@
 .aegis-chat-footnote svg {
   width: 10px;
   height: 10px;
+}
+.aegis-chat-history {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 17px 24px;
+}
+.aegis-chat-history-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: #8a7d93;
+}
+.aegis-chat-history-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border: 1px solid #e4d8e5;
+  border-radius: 999px;
+  background: #fff;
+  color: #844457;
+  font-size: 11px;
+  cursor: pointer;
+}
+.aegis-chat-history-back svg {
+  width: 13px;
+  height: 13px;
+}
+.aegis-chat-history-note {
+  font-size: 12px;
+  line-height: 1.6;
+  color: #706374;
+}
+.aegis-chat-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.aegis-chat-history-item {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  padding: 10px 10px 10px 13px;
+  border: 1px solid #ece2d9;
+  border-radius: 14px;
+  background: #fff;
+}
+.aegis-chat-history-open {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  text-align: left;
+  cursor: pointer;
+}
+.aegis-chat-history-title {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 500;
+  color: #3f3444;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.aegis-chat-history-meta {
+  font-size: 10px;
+  color: #8a7d93;
+}
+.aegis-chat-history-delete {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 30px;
+  border-radius: 9px;
+  color: #a4546a;
+  cursor: pointer;
+}
+.aegis-chat-history-delete:hover {
+  background: #fbeef1;
+}
+.aegis-chat-history-delete svg {
+  width: 15px;
+  height: 15px;
+}
+.aegis-chat-history-confirm {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+}
+.aegis-chat-history-confirm p,
+.aegis-chat-history-clear p {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #655969;
+}
+.aegis-chat-history-confirm div,
+.aegis-chat-history-clear div {
+  display: flex;
+  gap: 8px;
+}
+.aegis-chat-history-confirm button,
+.aegis-chat-history-clear div button {
+  padding: 6px 12px;
+  border: 1px solid #ddc5cd;
+  border-radius: 999px;
+  background: #fff;
+  color: #844457;
+  font-size: 11px;
+  cursor: pointer;
+}
+.aegis-chat-history-confirm div button:first-child,
+.aegis-chat-history-clear div button:first-child {
+  border-color: #7d3547;
+  background: #7d3547;
+  color: #fff;
+}
+.aegis-chat-history-clear {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid #ece2d9;
+}
+.aegis-chat-history-clear > button {
+  align-self: flex-start;
+  padding: 2px 0;
+  background: none;
+  color: #a4546a;
+  font-size: 11px;
+  text-decoration: underline;
+  cursor: pointer;
 }
 .aegis-chat-transcript {
   padding: 18px 17px 24px;

@@ -1,7 +1,7 @@
 import { renderHook, waitFor } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import type { ReactNode } from "react"
-import { describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { apiClient } from "@/lib/api"
 import {
@@ -9,10 +9,7 @@ import {
   useFacultyFlags,
   useGuidanceFlags,
 } from "@/features/chatbot/flags-api"
-import {
-  useAcceptNotice,
-  useChatHistory,
-} from "@/features/chatbot/api"
+import { useAcceptNotice, useChatThreads } from "@/features/chatbot/api"
 
 vi.mock("@/lib/api", () => ({
   apiClient: {
@@ -25,6 +22,10 @@ vi.mock("@/lib/api", () => ({
 
 const mockedGet = vi.mocked(apiClient.get)
 const mockedPost = vi.mocked(apiClient.post)
+
+// Each test queues its own one-shot response; a leftover queue from a failed
+// test would otherwise answer the next test's request.
+beforeEach(() => vi.resetAllMocks())
 
 function createWrapper() {
   const client = new QueryClient({
@@ -111,32 +112,27 @@ describe("notice and history", () => {
     })
   })
 
-  it("reads the caller's own turns from the history endpoint", async () => {
+  it("reads the caller's saved conversations from the threads endpoint", async () => {
     mockedGet.mockResolvedValueOnce({
       data: {
         results: [
           {
-            id: "m1",
-            message: "Hello",
-            reply: "Hi",
-            intent: "greeting",
-            urgency: "normal",
-            severity: "low",
-            sensitive: false,
-            manual_review: false,
+            id: "t1",
+            title: "Math help",
             created_at: "2026-11-13T00:00:00Z",
-            flag_id: null,
+            updated_at: "2026-11-13T00:10:00Z",
+            message_count: 2,
           },
         ],
       },
     })
 
-    const { result } = renderHook(() => useChatHistory(), {
+    const { result } = renderHook(() => useChatThreads(), {
       wrapper: createWrapper(),
     })
 
     await waitFor(() => expect(result.current.data).toHaveLength(1))
-    expect(mockedGet).toHaveBeenCalledWith("/chatbot/history/")
+    expect(mockedGet).toHaveBeenCalledWith("/chatbot/threads/")
   })
 })
 
