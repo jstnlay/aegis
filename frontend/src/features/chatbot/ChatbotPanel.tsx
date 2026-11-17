@@ -79,6 +79,30 @@ function threadDate(value: string): string {
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric" })
 }
 
+/**
+ * Slash commands are shorthand for a record question the pipeline already
+ * understands. They give an explicit, typo-proof way to reach a grade or an
+ * attendance count; ordinary questions keep working unchanged. The command is
+ * expanded before it is sent, so the transcript shows the question that was
+ * actually answered.
+ */
+const COMMANDS: Record<string, (argument: string) => string> = {
+  grades: (argument) =>
+    argument ? `What is my grade in ${argument}?` : "What is my grade?",
+  attendance: () => "What is my attendance?",
+  resources: (argument) =>
+    argument
+      ? `Do you have study materials for ${argument}?`
+      : "Where can I find study materials?",
+  help: () => "What can you do?",
+}
+
+function expandCommand(text: string): string | null {
+  const [name = "", ...rest] = text.slice(1).split(/\s+/)
+  const build = COMMANDS[name.toLowerCase()]
+  return build ? build(rest.join(" ").trim()) : null
+}
+
 export function ChatbotPanel({
   open,
   onClose,
@@ -215,14 +239,34 @@ export function ChatbotPanel({
   }
 
   async function submit(text: string) {
-    const message = text.trim()
+    const raw = text.trim()
     if (
-      message.length === 0 ||
-      message.length > MAX_MESSAGE_LENGTH ||
+      raw.length === 0 ||
+      raw.length > MAX_MESSAGE_LENGTH ||
       send.isPending ||
       mustAccept
     )
       return
+
+    let message = raw
+    if (raw.startsWith("/")) {
+      const expanded = expandCommand(raw)
+      if (expanded === null) {
+        // A typo is answered here, not sent to the model as prose.
+        setMessages((current) => [
+          ...current,
+          { id: nextMessageId("u"), role: "user", text: raw },
+          {
+            id: nextMessageId("a"),
+            role: "assistant",
+            text: "Unknown command. Try /grades, /attendance, /resources, or /help.",
+          },
+        ])
+        setDraft("")
+        return
+      }
+      message = expanded
+    }
 
     const userMessage: ChatMessage = {
       id: nextMessageId("u"),
@@ -548,7 +592,7 @@ export function ChatbotPanel({
               rows={2}
               value={draft}
               maxLength={MAX_MESSAGE_LENGTH}
-              placeholder="Ask AEGIS anything about school..."
+              placeholder="Ask anything — or use /grades, /attendance, /resources"
               disabled={mustAccept}
               aria-invalid={tooLong || undefined}
               aria-describedby={

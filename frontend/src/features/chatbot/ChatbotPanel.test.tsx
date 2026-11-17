@@ -172,6 +172,35 @@ describe("ChatbotPanel", () => {
     expect(await screen.findByText("Hello Ana!")).toBeInTheDocument()
   })
 
+  it("expands /grades into the record question", async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({
+      data: { reply: "You have 91.50%.", data: {} },
+    })
+    renderPanel()
+    const input = screen.getByRole("textbox", { name: "Message" })
+    fireEvent.change(input, { target: { value: "/grades Math" } })
+    fireEvent.keyDown(input, { key: "Enter" })
+
+    await waitFor(() =>
+      expect(apiClient.post).toHaveBeenCalledWith("/chatbot/message/", {
+        message: "What is my grade in Math?",
+      })
+    )
+    expect(
+      await screen.findByText("What is my grade in Math?")
+    ).toBeInTheDocument()
+  })
+
+  it("answers an unknown command locally without sending it", async () => {
+    renderPanel()
+    const input = screen.getByRole("textbox", { name: "Message" })
+    fireEvent.change(input, { target: { value: "/nope" } })
+    fireEvent.keyDown(input, { key: "Enter" })
+
+    expect(await screen.findByText(/Unknown command/)).toBeInTheDocument()
+    expect(apiClient.post).not.toHaveBeenCalled()
+  })
+
   it("lists saved chats and opens one", async () => {
     mockGet({
       "/chatbot/threads/": {
