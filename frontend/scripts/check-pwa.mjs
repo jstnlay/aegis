@@ -26,7 +26,13 @@ if (!existsSync(manifestPath)) {
     fail(`dist/manifest.webmanifest is not valid JSON: ${error.message}`)
   }
   if (manifest) {
-    for (const field of ["name", "short_name", "start_url", "display", "icons"]) {
+    for (const field of [
+      "name",
+      "short_name",
+      "start_url",
+      "display",
+      "icons",
+    ]) {
       if (!manifest[field]) fail(`manifest is missing "${field}"`)
     }
     if (manifest.start_url && !manifest.start_url.startsWith("/")) {
@@ -34,7 +40,8 @@ if (!existsSync(manifestPath)) {
     }
     for (const icon of manifest.icons ?? []) {
       const iconPath = join(dist, icon.src.replace(/^\//, ""))
-      if (!existsSync(iconPath)) fail(`manifest icon ${icon.src} is not in dist`)
+      if (!existsSync(iconPath))
+        fail(`manifest icon ${icon.src} is not in dist`)
     }
     if (!(manifest.icons ?? []).some((icon) => icon.purpose === "maskable")) {
       fail("manifest has no maskable icon")
@@ -47,7 +54,7 @@ if (!existsSync(swPath)) {
   fail("dist/sw.js is missing")
 } else {
   const sw = readFileSync(swPath, "utf8")
-  if (!sw.includes("importScripts(\"/push-sw.js\")")) {
+  if (!sw.includes('importScripts("/push-sw.js")')) {
     fail("dist/sw.js does not import /push-sw.js, so push would be dead")
   }
 }
@@ -68,4 +75,6 @@ if (failures.length > 0) {
   process.exit(1)
 }
 
-console.log("PWA check passed: manifest, icons, worker and push handler present.")
+console.log(
+  "PWA check passed: manifest, icons, worker and push handler present."
+)
