@@ -1,0 +1,58 @@
+# Uptime: is the deployed API actually serving?
+#
+# Phase 7 of docs/WEB_APP_PLAN.md. `/api/v1/ready/` answers with the state of
+# the two dependencies the API cannot work without, so a scheduled GET is the
+# cheapest honest check that the deployment is up — and it keeps the free
+# Render instance from being asleep when a parent opens the app.
+#
+# This is a separate workflow on purpose: an uptime check reports on what is
+# *deployed*, which has nothing to do with whether the code in a push is
+# correct. Running it inside CI would blame a commit for a platform outage.
+
+name: Uptime
+
+on:
+  schedule:
+    # Every 15 minutes. GitHub throttles scheduled runs under load, so this is
+    # "about every 15 minutes", which is the right precision for an uptime
+    # check on a free instance with a ~50 s cold start.
+    - cron: "*/15 * * * *"
+  # So the check can be run by hand after a deploy.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uptime
+  cancel-in-progress: false
+
+jobs:
+  ready:
+    name: GET /api/v1/ready/
+    runs-on: ubuntu-latest
+
+    env:
+      READY_URL: https://aegis-0pav.onrender.com/api/v1/ready/
+
+    steps:
+      - name: Probe the deployment
+        run: |
+          set -euo pipefail
+
+          # A free instance that has been asleep needs most of a minute to
+          # answer, so the timeout is generous and a timeout is a failure.
+          body=$(curl --silent --show-error --fail-with-body \
+            --max-time 120 \
+            --retry 2 --retry-all-errors --retry-delay 10 \
+            "$READY_URL")
+
+          echo "$body"
+
+          # status + database are the API: without either, nothing works.
+          #
+          # cache is printed, not asserted. The Redis instance is on the free
+          # tier, and an expired one degrades the rate limits to per-process
+          # without failing a request (docs/WEB_APP_PLAN.md section 5.1). That
+          # is worth seeing in this log and not worth a red X every 15 minutes.
+          echo "$body" | jq -e '.status == "ok" and .database == true' > /dev/null
