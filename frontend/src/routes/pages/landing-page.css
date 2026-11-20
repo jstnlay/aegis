@@ -286,7 +286,7 @@
   align-items: stretch;
 }
 .landing-beliefs {
-  --belief-background-image: url("/MandV%20bg.jpg");
+  --belief-background-image: url("/MandV%20bg.webp");
   --belief-surface: color-mix(in srgb, var(--primary) 90%, var(--card));
   --belief-overlay: color-mix(in srgb, var(--belief-surface) 90%, transparent);
   --belief-ink: var(--primary-foreground);
@@ -1080,7 +1080,7 @@
 }
 .landing-contact-panel.landing-glass {
   --contact-divider: color-mix(in srgb, var(--glass-ink) 45%, transparent);
-  --contact-background-image: url("/footer%20bg.jpg");
+  --contact-background-image: url("/footer%20bg.webp");
   --contact-overlay: color-mix(in srgb, var(--glass-tint) 90%, transparent);
   width: 100cqw;
   margin-inline: calc(50% - 50cqw);

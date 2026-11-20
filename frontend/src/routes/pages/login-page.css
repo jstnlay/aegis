@@ -1,5 +1,5 @@
 .school-login-page {
-  --login-background-image: url("/completer%20login.jpg");
+  --login-background-image: url("/completer%20login.webp");
   --login-photo-tint: color-mix(in srgb, var(--primary) 68%, transparent);
   --landing-background-height: max(100svh, 1800px);
   display: grid;

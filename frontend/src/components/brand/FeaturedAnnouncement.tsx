@@ -6,14 +6,14 @@ export function FeaturedAnnouncement() {
     <article className="landing-event" aria-labelledby="landing-event-title">
       <div className="landing-event-media">
         <a
-          href="/announcement%20pic.png"
+          href="/announcement%20pic.webp"
           target="_blank"
           rel="noopener noreferrer"
           className="landing-event-poster"
           aria-label="View the full Mister & Miss HIS CARE 2027 poster"
         >
           <img
-            src="/announcement%20pic.png"
+            src="/announcement%20pic.webp"
             alt="Mister & Miss HIS CARE 2027 event poster with a gold crown and silhouettes on a green background"
             width={899}
             height={506}

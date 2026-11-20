@@ -167,7 +167,7 @@ export function AppShell() {
               <div
                 aria-hidden="true"
                 className="absolute inset-x-0 top-0 h-64 bg-cover bg-center"
-                style={{ backgroundImage: "url(/background.png)" }}
+                style={{ backgroundImage: "url(/background.webp)" }}
               />
               <div
                 aria-hidden="true"

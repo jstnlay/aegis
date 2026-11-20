@@ -138,7 +138,7 @@ export function LandingPage() {
         <section aria-labelledby="landing-hero" className="landing-hero">
           <div className="landing-hero__media">
             <img
-              src="/front%20bg.png"
+              src="/front%20bg.webp"
               alt="Entrance gate of His Care Christian Institute"
               className="landing-hero__photo"
               decoding="async"

@@ -46,7 +46,7 @@ describe("landing school identity", () => {
     const hero = container.querySelector(
       'section[aria-labelledby="landing-hero"]'
     )
-    expect(hero?.querySelector('img[src="/front%20bg.png"]')).not.toBeNull()
+    expect(hero?.querySelector('img[src="/front%20bg.webp"]')).not.toBeNull()
     expect(hero).toHaveTextContent(
       "serving students from Nursery to Grade 12 (Senior High School) in Batangas."
     )

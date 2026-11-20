@@ -170,7 +170,7 @@ describe("homepage interactions", () => {
       screen.getByRole("img", {
         name: /Mister & Miss HIS CARE 2027 event poster/,
       })
-    ).toHaveAttribute("src", "/announcement%20pic.png")
+    ).toHaveAttribute("src", "/announcement%20pic.webp")
     expect(
       screen.queryByText("No announcements have been published yet.")
     ).not.toBeInTheDocument()

@@ -1,23 +1,11 @@
-import { lazy, type ComponentType } from "react"
+import { lazy, Suspense, type ComponentType, type ReactElement } from "react"
 import { Navigate, type RouteObject } from "react-router-dom"
 
 import { AppShell } from "@/components/layout/AppShell"
+import { LoadingScreen } from "@/components/layout/LoadingScreen"
 import { ProtectedRoute } from "@/features/auth/ProtectedRoute"
 import { RequireRole } from "@/features/auth/RequireRole"
-import { AcceptInvitationPage } from "@/routes/pages/AcceptInvitationPage"
-import { ChangePasswordPage } from "@/routes/pages/ChangePasswordPage"
-import { ForgotPasswordPage } from "@/routes/pages/ForgotPasswordPage"
-import {
-  ResetPasswordPage,
-  SetPasswordPage,
-} from "@/routes/pages/ResetPasswordPage"
-import { CookiePolicyPage } from "@/routes/pages/CookiePolicyPage"
-import { LandingPage } from "@/routes/pages/LandingPage"
-import { LoginPage } from "@/routes/pages/LoginPage"
 import { NotFoundPage } from "@/routes/pages/NotFoundPage"
-import { PrivacyPolicyPage } from "@/routes/pages/PrivacyPolicyPage"
-import { SchoolPage } from "@/routes/pages/SchoolPage"
-import { TermsOfUsePage } from "@/routes/pages/TermsOfUsePage"
 import {
   RoleDashboardRedirect,
   RoleLandingPage,
@@ -26,8 +14,13 @@ import {
 /**
  * Lazily load a named page export.
  *
- * The public pages stay eager: they are the first paint for a signed-out
- * visitor. Everything behind `/app` is split per route, because the five role
+ * The public pages are split too, into their own chunks. Their stylesheets are
+ * a third of the entry CSS, and a signed-in user who follows a bookmarked
+ * `/app/...` URL never renders them — the stylesheet now arrives with the page
+ * that needs it. The first paint of `/` fetches its chunk instead of having
+ * every byte in the entry file.
+ *
+ * Everything behind `/app` is split per route, because the five role
  * surfaces and their chart libraries were a single 1.5 MB entry chunk that a
  * parent on a phone downloaded in full before seeing their own dashboard.
  * `Suspense` in `AppShell` shows the content skeleton while a chunk arrives.
@@ -41,6 +34,63 @@ function lazyPage<T extends Record<string, ComponentType>, K extends keyof T>(
 ) {
   return lazy(async () => ({ default: (await loader())[name] }))
 }
+
+/**
+ * Public page element with its own boundary.
+ *
+ * The fallback is the full-screen skeleton rather than the shell's content
+ * skeleton: no shell is mounted on a public route, so a content-area skeleton
+ * would float over an empty page.
+ */
+function publicRoute(Page: ComponentType): ReactElement {
+  return (
+    <Suspense fallback={<LoadingScreen />}>
+      <Page />
+    </Suspense>
+  )
+}
+
+const LandingPage = lazyPage(
+  () => import("@/routes/pages/LandingPage"),
+  "LandingPage"
+)
+const LoginPage = lazyPage(() => import("@/routes/pages/LoginPage"), "LoginPage")
+const SchoolPage = lazyPage(
+  () => import("@/routes/pages/SchoolPage"),
+  "SchoolPage"
+)
+const PrivacyPolicyPage = lazyPage(
+  () => import("@/routes/pages/PrivacyPolicyPage"),
+  "PrivacyPolicyPage"
+)
+const TermsOfUsePage = lazyPage(
+  () => import("@/routes/pages/TermsOfUsePage"),
+  "TermsOfUsePage"
+)
+const CookiePolicyPage = lazyPage(
+  () => import("@/routes/pages/CookiePolicyPage"),
+  "CookiePolicyPage"
+)
+const ChangePasswordPage = lazyPage(
+  () => import("@/routes/pages/ChangePasswordPage"),
+  "ChangePasswordPage"
+)
+const ForgotPasswordPage = lazyPage(
+  () => import("@/routes/pages/ForgotPasswordPage"),
+  "ForgotPasswordPage"
+)
+const ResetPasswordPage = lazyPage(
+  () => import("@/routes/pages/ResetPasswordPage"),
+  "ResetPasswordPage"
+)
+const SetPasswordPage = lazyPage(
+  () => import("@/routes/pages/ResetPasswordPage"),
+  "SetPasswordPage"
+)
+const AcceptInvitationPage = lazyPage(
+  () => import("@/routes/pages/AcceptInvitationPage"),
+  "AcceptInvitationPage"
+)
 
 const AcademicsPage = lazyPage(
   () => import("@/features/academics/AcademicsPage"),
@@ -196,29 +246,29 @@ const FacultyChatFlagsPage = lazyPage(
 )
 
 export const appRoutes: RouteObject[] = [
-  { path: "/", element: <LandingPage /> },
-  { path: "/login", element: <LoginPage /> },
+  { path: "/", element: publicRoute(LandingPage) },
+  { path: "/login", element: publicRoute(LoginPage) },
   // Public "Read more" destination from the landing page (school background).
-  { path: "/school", element: <SchoolPage /> },
+  { path: "/school", element: publicRoute(SchoolPage) },
   /*
    * Public legal pages. Reachable signed out, and linked from the public footer
    * and from the sign-in card. None of them reads an API, so none can fail and
    * none needs an error state.
    */
-  { path: "/privacy", element: <PrivacyPolicyPage /> },
-  { path: "/terms", element: <TermsOfUsePage /> },
-  { path: "/cookies", element: <CookiePolicyPage /> },
-  { path: "/change-password", element: <ChangePasswordPage /> },
+  { path: "/privacy", element: publicRoute(PrivacyPolicyPage) },
+  { path: "/terms", element: publicRoute(TermsOfUsePage) },
+  { path: "/cookies", element: publicRoute(CookiePolicyPage) },
+  { path: "/change-password", element: publicRoute(ChangePasswordPage) },
   // Password recovery. Both are public: the reset link in the email is the
   // credential, so neither needs a session.
-  { path: "/forgot-password", element: <ForgotPasswordPage /> },
-  { path: "/reset-password", element: <ResetPasswordPage /> },
+  { path: "/forgot-password", element: publicRoute(ForgotPasswordPage) },
+  { path: "/reset-password", element: publicRoute(ResetPasswordPage) },
   // The link a newly provisioned account follows. Same redemption, different
   // wording: no administrator chooses a colleague's password.
-  { path: "/set-password", element: <SetPasswordPage /> },
+  { path: "/set-password", element: publicRoute(SetPasswordPage) },
   // Parent invitation. The school issued the link, so the account and the
   // child it opens are both decided by the invitation.
-  { path: "/accept-invitation", element: <AcceptInvitationPage /> },
+  { path: "/accept-invitation", element: publicRoute(AcceptInvitationPage) },
   {
     // Pathless auth boundary: matches only through its children (`/app…`),
     // so `/` renders the public landing page and never bounces to /login.
