@@ -1,9 +1,11 @@
 # AEGIS: from website to web application
 
-**Status: Phase 1 (production posture), Phase 2 (installable app shell) and
-Phase 3 (live data) are built and deployed. Phases 4–7 are not built.** The
-install prompt, offline page and recovery were verified in Chrome. The
-two-browser notification check is still outstanding.
+**Status: Phase 1 (production posture), Phase 2 (installable app shell), Phase 3
+(live data), Phase 4 (push, backend and frontend) and Phase 6 (mobile payload)
+are built and deployed. Phase 5 (background work) is blocked by D6; Phase 7
+(proof and observability) is not built.** The install prompt, offline page and
+recovery were verified in Chrome. The two-browser notification check and the
+push delivery check on a real device are still outstanding.
 
 **Scope.** How the deployed AEGIS stops being "a website that happens to have
 pages behind a login" and becomes an application a parent or a student opens
@@ -365,6 +367,22 @@ large import.
 ---
 
 ### Phase 6 — Mobile payload
+
+**Built (2026-11-20).** The seven landing and sign-in rasters are WebP after
+Pillow conversion (`front bg.png` 1.84 MB → `front bg.webp` 100 KB, and the
+same treatment for `background`, `announcement pic`, `completer login`, `MandV
+bg`, `footer bg`; `cover-photo` was unreferenced and is gone). Every reference
+in `LandingPage.tsx`, `FeaturedAnnouncement.tsx`, `AppShell.tsx` and the three
+landing CSS files points at the WebP; the coarse originals are deleted so they
+are not deployed. Public pages became lazy routes with their own `Suspense`
+boundary, which moves 94 KB of landing and login CSS out of the entry
+stylesheet (474 KB → 380 KB; gzip 72 KB → 58 KB). `vercel.json` serves
+`/assets/*` with `max-age=31536000, immutable` and keeps `sw.js`/`push-sw.js`
+revalidated so a new worker is still picked up.
+
+Measured after build: landing first load is **327 KB gzip** (entry JS 150 KB,
+entry CSS 58 KB, landing chunk 8 KB JS + 11 KB CSS, hero 100 KB), before fonts.
+The same page previously shipped 3.9 MB of raster art.
 
 No decision gates this phase. It is the difference between an app that opens
 on a phone in two seconds and one that opens in twenty.
