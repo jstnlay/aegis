@@ -191,6 +191,155 @@ services:
       - key: JWT_REFRESH_LIFETIME_DAYS
         value: "7"
 
+      # Import queue (Phase 5). Switched on here so a large import is handed
+      # to the `aegis-worker` service below instead of running in the web
+      # process. It needs REDIS_URL, which this service already has; the queue
+      # definition itself is built from that URL in base.py, so the web
+      # process and the worker cannot point at different Redis instances.
+      # With this unset (or Redis unreachable) the import still runs in a
+      # thread here, which is the documented fallback.
+      - key: IMPORT_QUEUE_ENABLED
+        value: "true"
+
+  # Import worker (Phase 5). The same image as the web service, run as a
+  # worker: a redeploy, a crash or a sleeping instance no longer ends an import
+  # that was already accepted, and the job row stops being a side effect of a
+  # request that has already returned.
+  #
+  # It serves no HTTP traffic, so it needs no allowed-host list, mail provider,
+  # Strapi token or VAPID key — only what booting production settings and
+  # reaching the database and Redis require. `rqworker imports` names the queue
+  # in base.py's RQ_QUEUES.
+  #
+  # It must run on a paid-capable plan if the queue carries real files: a
+  # sleeping worker is a job that waits. While it is down, the reaper in
+  # runner.py fails a job that sat too long rather than leaving the client
+  # polling, so the school sees a failure it can retry instead of a hang.
+  - type: worker
+    name: aegis-worker
+    runtime: python
+    plan: free
+    region: singapore
+    branch: master
+    rootDir: backend/aegis_backend
+    buildCommand: pip install -r ../requirements/production.txt
+    startCommand: python manage.py rqworker imports
+    autoDeploy: true
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings.production
+      - key: DJANGO_DEBUG
+        value: "False"
+      # production.py refuses to start without a secret key and a host
+      # allow-list; a worker never answers a request, but it imports the same
+      # settings module.
+      - key: DJANGO_ALLOWED_HOSTS
+        value: aegis-0pav.onrender.com
+      - key: DJANGO_SECRET_KEY
+        sync: false
+      # Required by the field-encryption start-up check in production.
+      - key: FIELD_ENCRYPTION_KEYS
+        sync: false
+      # The database the worker writes to. Same Supabase instance as the web
+      # service, because the import writes the school's records.
+      - key: DATABASE_NAME
+        value: postgres
+      - key: DATABASE_HOST
+        value: aws-0-ap-southeast-1.pooler.supabase.com
+      - key: DATABASE_PORT
+        value: "5432"
+      - key: DATABASE_USER
+        sync: false
+      - key: DATABASE_PASSWORD
+        sync: false
+      # Where the jobs come from: the same Redis the web service caches on.
+      - key: REDIS_URL
+        sync: false
+
+  # Scheduled risk recomputation (Phase 5, D9). Scores used to be recomputed
+  # only while deploying, which meant a student's score was as old as the last
+  # release. This runs the command that already exists; it exits 0 with a
+  # message when there is no trained model or no completed grading period, so
+  # a quiet run is not a failed deploy.
+  #
+  # Render cron schedules are UTC: 18:00 UTC is 02:00 in Asia/Manila, before
+  # the school day and after the previous day's records are in.
+  #
+  # The build installs requirements and does NOT migrate: the web service owns
+  # migrations, and two services migrating the same database at 02:00 is a
+  # race, not a deployment.
+  #
+  # A risk alert is dispatched exactly as it is on the web service, so this
+  # service carries the same delivery variables. Without them the command still
+  # recomputes every score — the alerts simply do not leave, and the in-app
+  # notification row is all the recipient gets.
+  - type: cron
+    name: aegis-risk-recompute
+    runtime: python
+    plan: free
+    region: singapore
+    schedule: "0 18 * * *"
+    branch: master
+    rootDir: backend/aegis_backend
+    buildCommand: pip install -r ../requirements/production.txt
+    startCommand: python manage.py run_risk_computation
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings.production
+      - key: DJANGO_DEBUG
+        value: "False"
+      - key: DJANGO_ALLOWED_HOSTS
+        value: aegis-0pav.onrender.com
+      - key: DJANGO_SECRET_KEY
+        sync: false
+      - key: FIELD_ENCRYPTION_KEYS
+        sync: false
+      - key: DATABASE_NAME
+        value: postgres
+      - key: DATABASE_HOST
+        value: aws-0-ap-southeast-1.pooler.supabase.com
+      - key: DATABASE_PORT
+        value: "5432"
+      - key: DATABASE_USER
+        sync: false
+      - key: DATABASE_PASSWORD
+        sync: false
+      # Alert delivery. Same variables and same values as the web service (see
+      # the block there for what each one selects); declared here because a
+      # missing EMAIL_BACKEND leaves the SMTP default in place, and Render's
+      # free compute plan blocks outbound SMTP — every alert would hang until
+      # the socket times out instead of failing fast.
+      - key: EMAIL_BACKEND
+        sync: false
+      - key: EMAIL_HOST
+        sync: false
+      - key: EMAIL_PORT
+        sync: false
+      - key: EMAIL_HOST_USER
+        sync: false
+      - key: EMAIL_HOST_PASSWORD
+        sync: false
+      - key: EMAIL_USE_TLS
+        sync: false
+      - key: EMAIL_TIMEOUT
+        sync: false
+      - key: DEFAULT_FROM_EMAIL
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: BREVO_API_KEY
+        sync: false
+      - key: SMTP2GO_API_KEY
+        sync: false
+      # Web Push (Phase 4), for a counselor who turned push on.
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      # The alert email links back into the deployed frontend.
+      - key: AEGIS_FRONTEND_URL
+        value: https://aegis-frontend-neon.vercel.app
+
   # Strapi 5 CMS service (Phase 7). Content authoring happens in the Strapi
   # admin panel; AEGIS only ever reads it (see cms/config/middlewares.ts):
   # the flow is Browser -> Django -> Strapi, so no browser origin needs CORS

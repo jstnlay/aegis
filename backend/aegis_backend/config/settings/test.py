@@ -94,6 +94,19 @@ DEBUG = False
 
 
 # ---------------------------------------------------------------------------
+# The import queue is a deployment feature
+# ---------------------------------------------------------------------------
+#
+# The suite exercises the queue path with explicit patches and override_settings
+# so that no test depends on a Redis being up, and so that a developer whose
+# .env points REDIS_URL at a real instance never pushes a job into it while
+# running the suite.
+# ---------------------------------------------------------------------------
+IMPORT_QUEUE_ENABLED = False
+RQ_QUEUES = {}
+
+
+# ---------------------------------------------------------------------------
 # Test-only password hasher
 # ---------------------------------------------------------------------------
 #

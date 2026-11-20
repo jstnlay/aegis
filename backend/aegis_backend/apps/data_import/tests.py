@@ -133,7 +133,8 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase, TransactionTestCase
+from django.test import TestCase, TransactionTestCase, override_settings
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 from unittest import mock
@@ -3926,3 +3927,185 @@ class ImportTemplateApiTest(DataImportApiBase):
     def test_template_requires_authentication(self):
         resp = self.client.get("/api/v1/data-import/templates/grades/")
         self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+# ---------------------------------------------------------------------------
+# Phase 5 — the import queue, its fallback, and the reaper
+# ---------------------------------------------------------------------------
+
+
+class ImportQueueTest(SimpleTestCase):
+    """
+    Which path a large import takes, and what happens when the queue cannot
+    take it.
+
+    No Redis is involved: the queue is replaced by a stub, because what is
+    under test is this module's decision-making — enqueue or thread — not RQ.
+    """
+
+    def _job_id(self):
+        return "11111111-1111-1111-1111-111111111111"
+
+    def test_no_queue_is_configured_in_this_environment(self):
+        from apps.data_import import runner
+
+        self.assertFalse(settings.IMPORT_QUEUE_ENABLED)
+        self.assertIsNone(runner._import_queue())
+
+    def test_without_a_queue_the_job_runs_in_the_web_process(self):
+        from apps.data_import import runner
+
+        with mock.patch.object(runner._executor, "submit") as submit:
+            runner.run_in_background(self._job_id(), ["student_id"])
+
+        submit.assert_called_once()
+        args = submit.call_args[0]
+        self.assertIs(args[0], runner.process_job)
+        self.assertEqual(args[1], self._job_id())
+
+    def test_a_queued_job_is_not_also_run_in_the_web_process(self):
+        from apps.data_import import runner
+
+        queue = mock.Mock()
+        with mock.patch.object(runner, "_import_queue", return_value=queue):
+            with mock.patch.object(runner._executor, "submit") as submit:
+                runner.run_in_background(self._job_id(), ["student_id"])
+
+        queue.enqueue.assert_called_once_with(
+            runner.process_job, self._job_id(), ["student_id"]
+        )
+        submit.assert_not_called()
+
+    def test_a_queue_that_refuses_the_job_falls_back_to_the_web_process(self):
+        """Redis being down costs durability, not the import."""
+        from apps.data_import import runner
+
+        queue = mock.Mock()
+        queue.enqueue.side_effect = ConnectionError("redis is gone")
+        with mock.patch.object(runner, "_import_queue", return_value=queue):
+            with mock.patch.object(runner._executor, "submit") as submit:
+                runner.run_in_background(self._job_id(), ["student_id"])
+
+        submit.assert_called_once()
+
+    def test_enqueue_reports_success_and_failure(self):
+        from apps.data_import import runner
+
+        queue = mock.Mock()
+        with mock.patch.object(runner, "_import_queue", return_value=queue):
+            self.assertTrue(runner.enqueue_job(self._job_id(), ["student_id"]))
+
+        with mock.patch.object(runner, "_import_queue", return_value=None):
+            self.assertFalse(runner.enqueue_job(self._job_id(), ["student_id"]))
+
+    @override_settings(IMPORT_QUEUE_ENABLED=True)
+    def test_the_flag_alone_does_not_invent_a_queue(self):
+        """
+        With the queue switched on but RQ_QUEUES empty there is still nowhere
+        to enqueue, and the job must not be lost to that mistake.
+        """
+        from apps.data_import import runner
+
+        self.assertIsNone(runner._import_queue())
+
+
+class StaleImportJobTest(TestCase):
+    """
+    A job whose queued work vanished becomes terminal instead of being polled
+    forever (D6).
+
+    The row's ``updated_at`` is written directly because ``auto_now`` would
+    overwrite it on ``save()``; it is the only clock the reaper has.
+    """
+
+    def setUp(self):
+        self.admin_user = User.objects.create_user(
+            email="admin_stale@test.com", password="pass12345",
+            first_name="Ad", last_name="Min", role="admin",
+        )
+
+    def _job(self, status=JobStatus.PROCESSING, age=None):
+        job = ImportJob.objects.create(
+            uploaded_by=self.admin_user,
+            file="imports/stale.csv",
+            file_type=FileType.CSV,
+            import_type=ImportType.GRADES,
+            status=status,
+        )
+        if age is not None:
+            ImportJob.objects.filter(pk=job.pk).update(
+                updated_at=timezone.now() - age
+            )
+        return job
+
+    def test_a_job_that_stopped_without_finishing_is_failed(self):
+        from apps.data_import.runner import STALE_JOB_AFTER, reap_stale_jobs
+
+        job = self._job(age=STALE_JOB_AFTER + dt.timedelta(minutes=1))
+
+        self.assertEqual(reap_stale_jobs(), 1)
+        job.refresh_from_db()
+        self.assertEqual(job.status, JobStatus.FAILED)
+        self.assertEqual(job.error_log[-1]["code"], ImportErrorCode.JOB_QUEUE_LOST)
+        self.assertIsNotNone(job.completed_at)
+
+    def test_a_job_that_is_still_running_is_left_alone(self):
+        from apps.data_import.runner import reap_stale_jobs
+
+        job = self._job()
+
+        self.assertEqual(reap_stale_jobs(), 0)
+        job.refresh_from_db()
+        self.assertEqual(job.status, JobStatus.PROCESSING)
+
+    def test_a_finished_job_is_never_touched(self):
+        from apps.data_import.runner import STALE_JOB_AFTER, reap_stale_jobs
+
+        job = self._job(status=JobStatus.COMPLETED, age=STALE_JOB_AFTER * 10)
+
+        self.assertEqual(reap_stale_jobs(), 0)
+        job.refresh_from_db()
+        self.assertEqual(job.status, JobStatus.COMPLETED)
+
+    def test_reaping_twice_changes_nothing(self):
+        from apps.data_import.runner import STALE_JOB_AFTER, reap_stale_jobs
+
+        job = self._job(age=STALE_JOB_AFTER + dt.timedelta(minutes=1))
+
+        self.assertEqual(reap_stale_jobs(), 1)
+        self.assertEqual(reap_stale_jobs(), 0)
+        job.refresh_from_db()
+        self.assertEqual(len(job.error_log), 1)
+
+
+class StaleImportJobApiTest(TestCase):
+    """The endpoint the client polls is where the lost job turns terminal."""
+
+    def setUp(self):
+        self.admin_user = User.objects.create_user(
+            email="admin_stale_api@test.com", password="pass12345",
+            first_name="Ad", last_name="Min", role="admin",
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.admin_user)
+
+    def test_polling_a_lost_job_returns_a_failed_job(self):
+        from apps.data_import.runner import STALE_JOB_AFTER
+
+        job = ImportJob.objects.create(
+            uploaded_by=self.admin_user,
+            file="imports/lost.csv",
+            file_type=FileType.CSV,
+            import_type=ImportType.GRADES,
+            status=JobStatus.PROCESSING,
+        )
+        ImportJob.objects.filter(pk=job.pk).update(
+            updated_at=timezone.now() - STALE_JOB_AFTER - dt.timedelta(minutes=1)
+        )
+
+        resp = self.client.get(f"/api/v1/data-import/jobs/{job.pk}/")
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.json()["status"], JobStatus.FAILED)
+        job.refresh_from_db()
+        self.assertEqual(job.error_log[-1]["code"], ImportErrorCode.JOB_QUEUE_LOST)

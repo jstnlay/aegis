@@ -22,3 +22,11 @@ cryptography>=42,<51
 # Web Push (Phase 4): encrypts the payload for one browser endpoint and
 # signs the request with the deployment's VAPID key.
 pywebpush>=2.0,<3.0
+
+# Import queue (Phase 5). A large import is handed to an RQ queue on Redis and
+# executed by a separate worker process (`manage.py rqworker imports`, see
+# render.yaml), so a redeploy or a sleeping instance cannot lose it. A
+# deployment turns the queue on with IMPORT_QUEUE_ENABLED; without it, or
+# without a reachable Redis, the import still runs in a thread in the web
+# process, so this is a dependency of durability, not of importing.
+django-rq>=3,<4

@@ -11,9 +11,10 @@ Locked design decisions:
   library in use.
 - Uploaded files are untrusted input; size and format are validated
   before any parsing.
-- V1 adds no task queue (no Celery/Redis): a small file finishes in the
-  upload request, a larger one in the in-process worker pool. See spec
-  G.8 / ASM-04.
+- A small file finishes in the upload request; a larger one is handed to an
+  RQ queue on Redis and run by a separate worker process (Phase 5). The
+  in-process worker pool remains the fallback when the deployment has no
+  queue or Redis cannot be reached. See spec G.8 / ASM-04.
 """
 
 
@@ -180,6 +181,9 @@ class ImportErrorCode:
     ROW_NOT_PROCESSED = "ROW_NOT_PROCESSED"
     JOB_INVALID_STATE = "JOB_INVALID_STATE"
     INTERNAL_PIPELINE_ERROR = "INTERNAL_PIPELINE_ERROR"
+    #: The job stopped without finishing and no worker is running it — the
+    #: queued work was lost (for example Redis expired the job key). Phase 5.
+    JOB_QUEUE_LOST = "JOB_QUEUE_LOST"
     # XLSX-specific error codes
     INVALID_WORKBOOK = "INVALID_WORKBOOK"
     MULTIPLE_WORKSHEETS = "MULTIPLE_WORKSHEETS"

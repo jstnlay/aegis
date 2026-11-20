@@ -35,6 +35,10 @@ THIRD_PARTY_APPS = [
     "rest_framework_simplejwt",
     "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
+    # Phase 5: registers `manage.py rqworker` and defines RQ_QUEUES for the
+    # import queue below. The queue is off unless a deployment switches it on,
+    # so the app being installed costs nothing when it is unused.
+    "django_rq",
 ]
 
 LOCAL_APPS = [
@@ -198,6 +202,55 @@ def _default_cache():
 
 
 CACHES = {"default": _default_cache()}
+
+# ---------------------------------------------------------------------------
+# Import queue (Phase 5)
+# ---------------------------------------------------------------------------
+#
+# A large import (above IMPORT_SYNC_ROW_LIMIT) used to run in a thread inside
+# the web process, where a redeploy — or an instance that Render put to sleep —
+# ended it with the job row still saying `processing`. It is now handed to an
+# RQ queue on the Redis instance REDIS_URL already names, and a second Render
+# service runs `manage.py rqworker imports`.
+#
+# Two settings, for two different questions:
+#
+#   IMPORT_QUEUE_ENABLED  "does this deployment serve the queue?" Off by
+#                         default, so a development machine or a test run
+#                         never pushes a job into a Redis nobody serves, where
+#                         it would sit in `processing` until the reaper fails
+#                         it. `runner.py` runs the import in a worker thread
+#                         whenever this is off, or the queue is unreachable, or
+#                         django-rq is missing.
+#   RQ_QUEUES            where the queue lives. Built from REDIS_URL so the web
+#                         process and the worker cannot disagree about it, and
+#                         always defined: django-rq refuses to import without
+#                         the setting, and an empty dict is how it is told this
+#                         deployment has no queue.
+#
+# DEFAULT_TIMEOUT: a 20,000-row upload (the cap) is roughly four minutes at the
+# measured rate. RQ's default is 180 s, which would stop the worker mid-import
+# and leave the job `processing` over half-written rows. One hour clears the
+# worst case with room to spare.
+#
+# DEFAULT_RESULT_TTL: 0 — nothing reads an import job's return value, because
+# the ImportJob row is the result. Dropping it immediately keeps the keyspace
+# small on the free Redis tier.
+# ---------------------------------------------------------------------------
+
+IMPORT_QUEUE_ENABLED = config("IMPORT_QUEUE_ENABLED", default=False, cast=bool)
+
+RQ_QUEUES = (
+    {
+        "imports": {
+            "URL": REDIS_URL,
+            "DEFAULT_TIMEOUT": 3600,
+            "DEFAULT_RESULT_TTL": 0,
+        }
+    }
+    if REDIS_URL
+    else {}
+)
 
 # ---------------------------------------------------------------------------
 # Custom User Model

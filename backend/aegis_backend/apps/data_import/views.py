@@ -48,7 +48,7 @@ from .exports import (
     safe_export_filename,
 )
 from .models import ImportJob, ImportRecord
-from .runner import process_records, run_in_background
+from .runner import process_records, reap_stale_jobs, run_in_background
 from .serializers import (
     ImportJobCreateSerializer,
     ImportJobSerializer,
@@ -153,6 +153,12 @@ class ImportJobViewSet(viewsets.ModelViewSet):
                 {"detail": "Not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
+        if job.status in (JobStatus.PENDING, JobStatus.PROCESSING):
+            # This endpoint is what the client polls, so it is also where a job
+            # that lost its queued work becomes terminal. Without this the
+            # client would poll a job no process will ever finish.
+            if reap_stale_jobs():
+                job.refresh_from_db()
         serializer = self.get_serializer(job)
         return Response(serializer.data)
 
