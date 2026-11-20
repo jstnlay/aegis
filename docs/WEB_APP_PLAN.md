@@ -481,6 +481,14 @@ a database that was already seeded, because Playwright loads the config in the
 worker *after* starting the servers — the delete now happens inside the
 server's own command chain, which runs once.
 
+The full backend suite is also green with Phase 5 and Phase 7 in place: 2325
+tests, `OK`, 1535 s. Django's Sentry init was checked twice, because the two
+paths fail differently: with `SENTRY_DSN` set and the SDK absent it logs the
+warning and the app still boots; with the SDK importable, the built client
+reports `release=deadbeefcafe` (the `RENDER_GIT_COMMIT` used for the check),
+`environment=production`, `traces_sample_rate=0.0`, `send_default_pii=False`,
+`max_request_body_size="never"` and `DjangoIntegration` installed.
+
 **Tasks**
 
 1. Add Playwright end-to-end coverage over one path per role: sign in, land
