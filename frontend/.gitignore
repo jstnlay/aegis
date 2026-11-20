@@ -20,6 +20,12 @@ dist-ssr
 # Smoke render output (built with esbuild)
 scripts/.smoke.cjs
 
+# Playwright (Phase 7). The database, traces, screenshots and HTML report are
+# all per-run artifacts keyed to the local checkout.
+.e2e/
+playwright-report/
+test-results/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
