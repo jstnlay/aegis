@@ -16,9 +16,10 @@ from __future__ import annotations
 
 import logging
 import re
+from datetime import date
 from typing import Any
 
-from apps.chatbot.policies import parse_message
+from apps.chatbot.policies import _month_name, parse_message
 from apps.chatbot.retrieval import retrieve
 from apps.chatbot.taxonomy import ChatIntent, UrgencyLevel
 
@@ -323,19 +324,23 @@ def _message_fingerprint(text: str) -> str:
 # ---------------------------------------------------------------------------
 
 def get_student_grade_summary(
-    user, student_profile, subject: str | None = None
+    user,
+    student_profile,
+    subject: str | None = None,
+    period: str | None = None,
 ) -> dict[str, Any] | None:
     """
     Authorized grade summary for the student.
 
     `subject` narrows the summary to one subject, so "what is my grade in
     Math?" answers about Math instead of averaging every subject into one
-    number that answers a question nobody asked.
+    number that answers a question nobody asked. `period` narrows it to a
+    named quarter.
 
     Only accessible if the caller is authorized. Returns minimal,
     role-safe data.
     """
-    from apps.academics.models import Grade
+    from apps.academics.models import Grade, GradingPeriod
     from django.db.models import Avg
 
     if not check_can_read_student_data(user, student_profile.user):
@@ -356,11 +361,38 @@ def get_student_grade_summary(
         grades = grades.filter(
             subject_assignment__subject__name__icontains=subject[:4]
         )
+
+    period_label = None
+    if period:
+        order = int(period)
+        grades = grades.filter(grading_period__order=order)
+        # A school can carry the same quarter name in more than one academic
+        # year. Answer for the latest year the student actually has grades in,
+        # so an old year is never reported as the current quarter.
+        latest_year = (
+            grades.order_by("-grading_period__academic_year__start_date")
+            .values_list("grading_period__academic_year__start_date", flat=True)
+            .first()
+        )
+        if latest_year is not None:
+            grades = grades.filter(
+                grading_period__academic_year__start_date=latest_year
+            )
+        period_label = (
+            grades.values_list("grading_period__name", flat=True).first()
+            or GradingPeriod.objects.filter(order=order)
+            .order_by("-academic_year__start_date")
+            .values_list("name", flat=True)
+            .first()
+            or f"quarter {order}"
+        )
+
     avg = grades.aggregate(avg=Avg("score"))["avg"]
 
     return {
         "student_name": student_profile.user.get_full_name(),
         "subject": subject or None,
+        "period": period_label,
         # `is not None`: a student whose finalized grades average 0 has an
         # average. Truthiness reported it as "no grades to average".
         "average": round(float(avg), 2) if avg is not None else None,
@@ -368,14 +400,98 @@ def get_student_grade_summary(
     }
 
 
-def get_student_attendance_summary(user, student_profile) -> dict[str, Any] | None:
-    """Authorized attendance summary."""
+def get_student_attendance_summary(
+    user,
+    student_profile,
+    date_value: str | None = None,
+    month_value: str | None = None,
+    period_value: str | None = None,
+) -> dict[str, Any] | None:
+    """
+    Authorized attendance summary.
+
+    A named day, month or quarter narrows the count instead of reporting the
+    term total for a question about one date. A day without a year (`MM-DD`)
+    matches the student's record in whatever year it was recorded.
+    """
     from apps.attendance.models import AttendanceRecord
+    from apps.academics.models import GradingPeriod
 
     if not check_can_read_student_data(user, student_profile.user):
         return None
 
     records = AttendanceRecord.objects.filter(student=student_profile)
+    scope: str | None = None
+
+    if date_value:
+        if len(date_value) == 10:
+            day = date.fromisoformat(date_value)
+            records = records.filter(date=day)
+            scope = f"{day.day} {_month_name(day.month)} {day.year}"
+        else:
+            month, day = int(date_value[:2]), int(date_value[3:])
+            matching = records.filter(date__month=month, date__day=day)
+            recorded_year = (
+                matching.order_by("-date").values_list("date__year", flat=True).first()
+            )
+            if recorded_year:
+                # One day exists in many years. The student means the recorded
+                # one, so the latest year is used and named in the reply.
+                records = matching.filter(date__year=recorded_year)
+                scope = f"{day} {_month_name(month)} {recorded_year}"
+            else:
+                records = matching
+                scope = f"{day} {_month_name(month)}"
+    elif month_value:
+        month_text, _, year_text = month_value.partition(":")
+        month = int(month_text)
+        if year_text:
+            # A year the question names is honoured. Replacing it with the
+            # latest recorded year would answer about a different September.
+            year = int(year_text)
+        else:
+            year = (
+                records.filter(date__month=month)
+                .order_by("-date")
+                .values_list("date__year", flat=True)
+                .first()
+            )
+        if year is None:
+            records = records.none()
+            scope = _month_name(month)
+        else:
+            records = records.filter(date__year=year, date__month=month)
+            scope = f"{_month_name(month)} {year}"
+    elif period_value:
+        order = int(period_value)
+        grading_period = None
+        # The latest academic year that actually holds one of the student's
+        # attendance days. Requiring the newest record itself to fall inside
+        # the quarter failed whenever the term had ended, and reported "no
+        # record" for a quarter the student clearly attended.
+        for candidate in (
+            GradingPeriod.objects.filter(order=order)
+            .select_related("academic_year")
+            .order_by("-academic_year__start_date")
+        ):
+            if records.filter(
+                date__gte=candidate.start_date, date__lte=candidate.end_date
+            ).exists():
+                grading_period = candidate
+                break
+        if grading_period is None:
+            # The student has no record inside a quarter of that order. Saying
+            # "nothing recorded" is honest; falling back to the term total
+            # would answer a different question.
+            records = records.none()
+            scope = f"quarter {order}"
+        else:
+            records = records.filter(
+                date__gte=grading_period.start_date,
+                date__lte=grading_period.end_date,
+            )
+            scope = grading_period.name
+
     total = records.count()
     present = records.filter(status="present").count()
     late = records.filter(status="late").count()
@@ -387,6 +503,7 @@ def get_student_attendance_summary(user, student_profile) -> dict[str, Any] | No
         "late_days": late,
         "absent_days": total - present - late,
         "attendance_rate": round((present + late) / total, 4) if total else None,
+        "scope": scope,
     }
 
 
@@ -716,6 +833,19 @@ def _named_subject(entities) -> str | None:
     return None
 
 
+def _time_filters(entities) -> tuple[str | None, str | None, str | None]:
+    """The day, month and quarter a question names, if any."""
+    date_value = month_value = period_value = None
+    for entity in entities:
+        if entity.entity_type == "date" and date_value is None:
+            date_value = entity.value
+        elif entity.entity_type == "month" and month_value is None:
+            month_value = entity.value
+        elif entity.entity_type == "period" and period_value is None:
+            period_value = entity.value
+    return date_value, month_value, period_value
+
+
 def _record_subject(user, summary: dict) -> str:
     """
     "You have" for the student, the student's name for everyone else.
@@ -919,34 +1049,36 @@ def _deterministic_reply(user, intent: ChatIntent, entities, context, data=None)
                 "average I can report. I only read grades a teacher has finalized; "
                 "ask your teacher if a grade is missing."
             )
+        period = summary.get("period")
+        where = f" in {period}" if period else ""
         if not summary["grade_count"] or summary["average"] is None:
             if summary.get("subject"):
                 return (
                     f"{_record_subject(user, summary)} no finalized "
-                    f"{summary['subject']} grade yet. Only a grade a teacher has "
-                    "finalized appears here."
+                    f"{summary['subject']} grade{where} yet. Only a grade a "
+                    "teacher has finalized appears here."
                 )
             return (
-                f"{_record_subject(user, summary)} no finalized grades yet, so "
-                "there is no average to report. One appears here once a teacher "
+                f"{_record_subject(user, summary)} no finalized grades{where} yet, "
+                "so there is no average to report. One appears here once a teacher "
                 "finalizes the first grade."
             )
         if summary.get("subject"):
             if summary["grade_count"] == 1:
                 return (
                     f"{_record_subject(user, summary)} a finalized "
-                    f"{summary['subject']} grade of {summary['average']:.2f}. "
+                    f"{summary['subject']} grade of {summary['average']:.2f}{where}. "
                     "Open Grades to see the detail."
                 )
             return (
                 f"{_record_subject(user, summary)} {summary['grade_count']} "
-                f"finalized {summary['subject']} grades, averaging "
+                f"finalized {summary['subject']} grades{where}, averaging "
                 f"{summary['average']:.2f}. Open Grades to see the detail."
             )
         return (
             f"{_record_subject(user, summary)} {summary['grade_count']} finalized "
-            f"grade(s), averaging {summary['average']:.2f}. Open Grades to see each "
-            "subject."
+            f"grade(s){where}, averaging {summary['average']:.2f}. Open Grades to see "
+            "each subject."
         )
     if intent in (ChatIntent.ASK_ATTENDANCE, ChatIntent.ASK_ATTENDANCE_STATUS):
         summary = data.get("attendance_summary")
@@ -955,10 +1087,35 @@ def _deterministic_reply(user, intent: ChatIntent, entities, context, data=None)
                 "I don't have attendance records for that student. If you expected "
                 "some, ask the school office whether attendance has been encoded."
             )
+        scope = summary.get("scope")
         if not summary["total_days"]:
+            if scope:
+                return (
+                    f"I don't have an attendance record for {scope}. If you "
+                    "expected one, ask the school office whether attendance has "
+                    "been encoded."
+                )
             return (
                 f"{_record_subject(user, summary)} no recorded attendance days yet."
             )
+        if scope and summary["total_days"] == 1:
+            # A question about one day is answered about that day, not with the
+            # term total. A late arrival is still a day attended, but the day
+            # itself is reported as late.
+            status = (
+                "present"
+                if summary["present_days"]
+                else "late"
+                if summary["late_days"]
+                else "absent"
+            )
+            actor = (
+                "You"
+                if user.role == "student"
+                else summary.get("student_name") or "That student"
+            )
+            verb = "were" if user.role == "student" else "was"
+            return f"{actor} {verb} marked {status} on {scope}."
         # A late arrival is a day the student was in school; counting it as an
         # absence would report a child who attended as a child who did not.
         attended = summary["present_days"] + summary["late_days"]
@@ -967,9 +1124,10 @@ def _deterministic_reply(user, intent: ChatIntent, entities, context, data=None)
             if summary["attendance_rate"] is not None
             else ""
         )
+        within = f" in {scope}" if scope else ""
         return (
             f"{_record_subject(user, summary)} attended {attended} of "
-            f"{summary['total_days']} recorded days{rate}: "
+            f"{summary['total_days']} recorded days{within}{rate}: "
             f"{summary['present_days']} present, {summary['late_days']} late, "
             f"{summary['absent_days']} absent."
         )
@@ -1072,15 +1230,26 @@ def handle_message(
         # which child rather than answer about the wrong one.
         target = resolve_target_student(user)
         if target is not None:
+            _date, _month, period = _time_filters(entities)
             summary = get_student_grade_summary(
-                user, target, subject=_named_subject(entities)
+                user,
+                target,
+                subject=_named_subject(entities),
+                period=period,
             )
             if summary:
                 data["grade_summary"] = summary
     elif intent in (ChatIntent.ASK_ATTENDANCE, ChatIntent.ASK_ATTENDANCE_STATUS):
         target = resolve_target_student(user)
         if target is not None:
-            summary = get_student_attendance_summary(user, target)
+            date_value, month_value, period = _time_filters(entities)
+            summary = get_student_attendance_summary(
+                user,
+                target,
+                date_value=date_value,
+                month_value=month_value,
+                period_value=period,
+            )
             if summary:
                 data["attendance_summary"] = summary
     elif intent == ChatIntent.ASK_LEARNING_RESOURCE:

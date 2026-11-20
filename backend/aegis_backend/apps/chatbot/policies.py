@@ -12,6 +12,7 @@ INTENT and URGENCY are separate (D25).
 from __future__ import annotations
 
 import re
+from datetime import date, timedelta
 from typing import Any
 
 from apps.chatbot.taxonomy import (
@@ -287,6 +288,151 @@ TOPIC_KEYWORDS = {
 }
 
 
+# Time references. The assistant answers a record question about the day,
+# month or quarter the student named instead of an all-time average: "was I
+# absent on November 1?" must not be answered with the term total.
+MONTH_NUMBERS = {
+    "january": 1,
+    "february": 2,
+    "march": 3,
+    "april": 4,
+    "may": 5,
+    "june": 6,
+    "july": 7,
+    "august": 8,
+    "september": 9,
+    "october": 10,
+    "november": 11,
+    "december": 12,
+}
+_MONTH_ALTERNATION = "|".join(MONTH_NUMBERS)
+_ISO_DATE = re.compile(r"\b(\d{4})-(\d{2})-(\d{2})\b")
+_DAY_MONTH = re.compile(
+    rf"\b(\d{{1,2}})(?:st|nd|rd|th)?\s+(?:of\s+)?({_MONTH_ALTERNATION})\b"
+    r"(?:\s*,?\s*(\d{4}))?"
+)
+_MONTH_DAY = re.compile(
+    rf"\b({_MONTH_ALTERNATION})\s+(\d{{1,2}})(?:st|nd|rd|th)?\b"
+    r"(?:\s*,?\s*(\d{4}))?"
+)
+_MONTH_YEAR = re.compile(rf"\b({_MONTH_ALTERNATION})\s*,?\s*(\d{{4}})\b")
+_MONTH_ONLY = re.compile(
+    rf"\b(?:in|during|for|of|last|this|since|about)\s+({_MONTH_ALTERNATION})\b"
+)
+_RELATIVE_DAY = re.compile(r"\b(today|yesterday)\b")
+_QUARTER = re.compile(
+    r"\b(first|second|third|fourth|1st|2nd|3rd|4th)\s+(?:quarter|grading)\b"
+    r"|\bq([1-4])\b"
+)
+_QUARTER_NUMBERS = {
+    "first": 1,
+    "1st": 1,
+    "second": 2,
+    "2nd": 2,
+    "third": 3,
+    "3rd": 3,
+    "fourth": 4,
+    "4th": 4,
+}
+
+
+def _month_name(number: int) -> str:
+    """Locale-independent month name, so the reply does not depend on LANG."""
+    for name, value in MONTH_NUMBERS.items():
+        if value == number:
+            return name.capitalize()
+    return f"month {number}"
+
+
+def _safe_date(year: int, month: int, day: int):
+    try:
+        return date(year, month, day)
+    except ValueError:
+        return None
+
+
+def _extract_time_entities(text: str) -> list[ChatEntity]:
+    """
+    Extract the date, month or quarter the question names.
+
+    A day without a year is emitted as `MM-DD`, so the lookup can match the
+    student's record in whatever year it was recorded instead of guessing the
+    year from today's date.
+    """
+    lower = text.lower()
+    entities: list[ChatEntity] = []
+    claimed: list[tuple[int, int]] = []
+
+    def free(span: tuple[int, int]) -> bool:
+        return not any(start < span[1] and span[0] < end for start, end in claimed)
+
+    for match in _ISO_DATE.finditer(lower):
+        parsed = _safe_date(int(match.group(1)), int(match.group(2)), int(match.group(3)))
+        if parsed and free(match.span()):
+            entities.append(ChatEntity("date", parsed.isoformat()))
+            claimed.append(match.span())
+
+    for match in _DAY_MONTH.finditer(lower):
+        if not free(match.span()):
+            continue
+        day = int(match.group(1))
+        month = MONTH_NUMBERS[match.group(2)]
+        year = int(match.group(3)) if match.group(3) else None
+        value = (
+            _safe_date(year, month, day).isoformat()
+            if year and _safe_date(year, month, day)
+            else f"{month:02d}-{day:02d}"
+        )
+        entities.append(ChatEntity("date", value))
+        claimed.append(match.span())
+
+    for match in _MONTH_DAY.finditer(lower):
+        if not free(match.span()):
+            continue
+        month = MONTH_NUMBERS[match.group(1)]
+        day = int(match.group(2))
+        year = int(match.group(3)) if match.group(3) else None
+        value = (
+            _safe_date(year, month, day).isoformat()
+            if year and _safe_date(year, month, day)
+            else f"{month:02d}-{day:02d}"
+        )
+        entities.append(ChatEntity("date", value))
+        claimed.append(match.span())
+
+    for match in _RELATIVE_DAY.finditer(lower):
+        if not free(match.span()):
+            continue
+        offset = 1 if match.group(1) == "yesterday" else 0
+        entities.append(
+            ChatEntity("date", (date.today() - timedelta(days=offset)).isoformat())
+        )
+        claimed.append(match.span())
+
+    for match in _MONTH_YEAR.finditer(lower):
+        if not free(match.span()):
+            continue
+        month = MONTH_NUMBERS[match.group(1)]
+        entities.append(ChatEntity("month", f"{month}:{match.group(2)}"))
+        claimed.append(match.span())
+
+    for match in _MONTH_ONLY.finditer(lower):
+        if not free(match.span()):
+            continue
+        entities.append(ChatEntity("month", str(MONTH_NUMBERS[match.group(1)])))
+        claimed.append(match.span())
+
+    for match in _QUARTER.finditer(lower):
+        if not free(match.span()):
+            continue
+        word = match.group(1) or f"q{match.group(2)}"
+        order = _QUARTER_NUMBERS.get(word) or int(word[1:])
+        entities.append(ChatEntity("period", str(order)))
+        claimed.append(match.span())
+
+    return entities
+
+
 def _extract_subject_entities(text: str) -> list[ChatEntity]:
     """Extract subject entities from message text."""
     entities = []
@@ -312,6 +458,7 @@ def _extract_entities(text: str) -> list[ChatEntity]:
     entities = []
     entities.extend(_extract_subject_entities(text))
     entities.extend(_extract_topic_entities(text))
+    entities.extend(_extract_time_entities(text))
     return entities
 
 

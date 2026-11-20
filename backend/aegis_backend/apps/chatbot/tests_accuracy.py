@@ -384,6 +384,66 @@ class LearningResourceAnswerTest(AccuracyBase):
         self.assertNotIn("Algebra Practice Set", resp.data["reply"])
 
 
+class TimeScopedAnswerTest(AccuracyBase):
+    """
+    A question about a day, month or quarter is answered about that scope.
+
+    The reported bug was an all-time number replacing the specific answer:
+    "was I absent on November 1?" returned the term total. These tests pin the
+    scope into the sentence, and pin the no-record answer to the named date
+    instead of the term average.
+    """
+
+    def test_a_named_day_reports_that_day(self):
+        resp = self.ask("Was I present on June 11?")
+        self.assertEqual(resp.data["intent"], "ask_attendance")
+        self.assertIn("You were marked present on 11 June 2024", resp.data["reply"])
+        self.assertNotIn("3 of 3", resp.data["reply"])
+
+    def test_a_late_day_is_reported_as_late(self):
+        resp = self.ask("Was I late on June 12?")
+        self.assertIn("You were marked late on 12 June 2024", resp.data["reply"])
+
+    def test_a_day_with_no_record_is_named_not_averaged(self):
+        resp = self.ask("Was I absent on June 20?")
+        self.assertIn(
+            "I don't have an attendance record for 20 June", resp.data["reply"]
+        )
+        self.assertNotIn("3 of 3", resp.data["reply"])
+
+    def test_an_iso_date_is_answered(self):
+        resp = self.ask("Was I present on 2024-06-11?")
+        self.assertIn("You were marked present on 11 June 2024", resp.data["reply"])
+
+    def test_a_named_month_counts_only_that_month(self):
+        resp = self.ask("How many days was I present in June?")
+        self.assertIn("in June 2024", resp.data["reply"])
+        self.assertIn("attended 3 of 3", resp.data["reply"])
+        self.assertIn("2 present, 1 late, 0 absent", resp.data["reply"])
+
+    def test_a_named_month_and_year_are_honoured(self):
+        resp = self.ask("Was I present in June 2025?")
+        self.assertIn(
+            "I don't have an attendance record for June 2025", resp.data["reply"]
+        )
+        self.assertNotIn("3 of 3", resp.data["reply"])
+
+    def test_a_named_quarter_counts_only_that_quarter(self):
+        resp = self.ask("How many days was I present in the first quarter?")
+        self.assertIn("in 1st Quarter", resp.data["reply"])
+        self.assertIn("attended 3 of 3", resp.data["reply"])
+
+    def test_a_grade_question_about_a_quarter_names_the_quarter(self):
+        resp = self.ask("What is my grade in Math in the first quarter?")
+        self.assertEqual(resp.data["intent"], "ask_grade")
+        self.assertIn("88.00 in 1st Quarter", resp.data["reply"])
+
+    def test_a_quarter_with_no_grade_is_named_missing(self):
+        resp = self.ask("What is my grade in Math in the second quarter?")
+        self.assertIn("no finalized Mathematics grade in quarter 2", resp.data["reply"])
+        self.assertNotIn("88.00", resp.data["reply"])
+
+
 class ParentResolutionTest(AccuracyBase):
     """A parent with a record that could be two children is asked which."""
 
