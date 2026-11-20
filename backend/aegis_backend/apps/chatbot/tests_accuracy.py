@@ -203,6 +203,26 @@ class AccuracyBase(TestCase):
             "/api/v1/chatbot/message/", {"message": message}, format="json"
         )
 
+    def add_grade(self, name, code, score):
+        """A finalized grade in another subject, for the same student."""
+        subject = Subject.objects.create(
+            name=name, code=code, grade_level=self.grade_level
+        )
+        assignment = SubjectAssignment.objects.create(
+            subject=subject,
+            section=self.section,
+            academic_year=self.academic_year,
+            faculty=self.faculty_profile,
+        )
+        Grade.objects.create(
+            student=self.student,
+            subject_assignment=assignment,
+            grading_period=self.period,
+            score=Decimal(score),
+            status="finalized",
+            encoded_by=self.faculty_profile,
+        )
+
 
 class GradeAnswerTest(AccuracyBase):
     """A grade question is answered with the student's grade."""
@@ -212,7 +232,7 @@ class GradeAnswerTest(AccuracyBase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data["intent"], "ask_grade")
         self.assertIn("88.00", resp.data["reply"])
-        self.assertIn("1 finalized grade", resp.data["reply"])
+        self.assertIn("Mathematics", resp.data["reply"])
 
     def test_reply_no_longer_falls_through_to_the_generic_tail(self):
         resp = self.ask("What is my grade in Math?")
@@ -232,6 +252,63 @@ class GradeAnswerTest(AccuracyBase):
     def test_performance_question_is_answered_from_the_same_record(self):
         resp = self.ask("How am I doing academically?")
         self.assertIn("88.00", resp.data["reply"])
+
+
+class GradeSubjectAnswerTest(AccuracyBase):
+    """
+    A grade question that names a subject answers that subject.
+
+    The reported bug: "What is my grade in Math?" replied "You have 8
+    finalized grade(s), averaging 73.50" — the mean of every subject, which is
+    a number the student never asked for and cannot act on. The parser already
+    extracted the subject; only the query ignored it.
+    """
+
+    def test_the_named_subject_is_answered_not_the_overall_mean(self):
+        self.add_grade("English", "ENG-7", "95")
+        resp = self.ask("What is my grade in Math?")
+        self.assertIn("88.00", resp.data["reply"])
+        self.assertNotIn("95.00", resp.data["reply"])
+        # 91.50 is the mean of 88 and 95. Reporting it would answer a question
+        # that was not asked.
+        self.assertNotIn("91.50", resp.data["reply"])
+
+    def test_a_subject_with_no_finalized_grade_is_named_as_missing(self):
+        resp = self.ask("What is my grade in Science?")
+        self.assertIn("no finalized Science grade", resp.data["reply"])
+        self.assertNotIn("88.00", resp.data["reply"])
+
+    def test_a_question_without_a_subject_still_reports_the_average(self):
+        self.add_grade("English", "ENG-7", "95")
+        resp = self.ask("What is my grade?")
+        self.assertIn("2 finalized", resp.data["reply"])
+        self.assertIn("91.50", resp.data["reply"])
+
+    def test_a_subject_row_named_math_still_matches(self):
+        # The parser canonicalises to "Mathematics"; a school may have named
+        # the row "Math 7". The student must still get the grade.
+        self.subject.name = "Math 7"
+        self.subject.save(update_fields=["name"])
+        resp = self.ask("What is my grade in Math?")
+        self.assertIn("88.00", resp.data["reply"])
+        self.assertNotIn("no finalized", resp.data["reply"])
+
+
+class ClassPerformanceSubjectTest(AccuracyBase):
+    """A class question naming a subject averages that subject only."""
+
+    def test_a_named_subject_narrows_the_class_average(self):
+        self.add_grade("English", "ENG-7", "95")
+        resp = self.ask("how is my class performing in Math?", self.faculty_user)
+        self.assertEqual(resp.data["intent"], "ask_class_performance")
+        self.assertIn("in Mathematics", resp.data["reply"])
+        self.assertIn("88.0", resp.data["reply"])
+        self.assertNotIn("91.5", resp.data["reply"])
+
+    def test_without_a_subject_every_subject_counts(self):
+        self.add_grade("English", "ENG-7", "95")
+        resp = self.ask("how is my class performing?", self.faculty_user)
+        self.assertIn("91.5", resp.data["reply"])
 
 
 class AttendanceAnswerTest(AccuracyBase):
@@ -275,6 +352,27 @@ class LearningResourceAnswerTest(AccuracyBase):
         LearningItem.objects.all().delete()
         resp = self.ask("Do you have a module for Algebra?")
         self.assertIn("don't have an approved learning resource", resp.data["reply"])
+
+    def test_the_same_title_is_listed_once(self):
+        # A re-run import can leave duplicate rows, and each grade level has
+        # its own Subject row, so the copies point at different subject ids
+        # under the same name. One module is one resource, not three.
+        other_subject = Subject.objects.create(
+            name="Mathematics", code="MATH-8", grade_level=self.grade_level
+        )
+        for subject in (self.subject, other_subject):
+            LearningItem.objects.create(
+                item_type=LearningItem.ItemType.LEARNING_RESOURCE,
+                title="Algebra Practice Set",
+                subject=subject,
+                topic="Algebra",
+                lifecycle_status=LearningItem.LifecycleStatus.APPROVED,
+                is_active=True,
+            )
+        resp = self.ask("Do you have a module for Algebra?")
+        self.assertEqual(
+            resp.data["reply"].count("Algebra Practice Set"), 1, resp.data["reply"]
+        )
 
     def test_an_unrelated_question_offers_nothing(self):
         # The lookup is relevance-filtered now, so a question naming nothing in

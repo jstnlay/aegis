@@ -322,9 +322,15 @@ def _message_fingerprint(text: str) -> str:
 # Controlled data access functions (approved tools)
 # ---------------------------------------------------------------------------
 
-def get_student_grade_summary(user, student_profile) -> dict[str, Any] | None:
+def get_student_grade_summary(
+    user, student_profile, subject: str | None = None
+) -> dict[str, Any] | None:
     """
     Authorized grade summary for the student.
+
+    `subject` narrows the summary to one subject, so "what is my grade in
+    Math?" answers about Math instead of averaging every subject into one
+    number that answers a question nobody asked.
 
     Only accessible if the caller is authorized. Returns minimal,
     role-safe data.
@@ -340,10 +346,21 @@ def get_student_grade_summary(user, student_profile) -> dict[str, Any] | None:
         score__isnull=False,
         status="finalized",
     )
+    if subject:
+        # The parser canonicalises "math" to "Mathematics", while a school may
+        # name the subject row "Math 7" or "Mathematics". A four-letter prefix
+        # matches both, so the student is not told they have no grade because
+        # the label differs from the canonical name.
+        # shortcut: prefix match is not an alias table, so a subject named "AP"
+        # would need one; upgrade if schools name subjects freely.
+        grades = grades.filter(
+            subject_assignment__subject__name__icontains=subject[:4]
+        )
     avg = grades.aggregate(avg=Avg("score"))["avg"]
 
     return {
         "student_name": student_profile.user.get_full_name(),
+        "subject": subject or None,
         # `is not None`: a student whose finalized grades average 0 has an
         # average. Truthiness reported it as "no grades to average".
         "average": round(float(avg), 2) if avg is not None else None,
@@ -398,18 +415,33 @@ def get_learning_resources(user, subject=None, limit=5, query=None) -> list[dict
     elif query:
         queryset = _filter_items_by_query(queryset, query)
 
-    items = queryset[:limit]
-    return [
-        {
-            "title": item.title,
-            "item_type": item.item_type,
-            "subject": item.subject.name if item.subject else None,
-            "topic": item.topic,
-            "source_type": item.source_type,
-            "source_id": item.source_id,
-        }
-        for item in items
-    ]
+    items = queryset.order_by("title", "id")
+    rows: list[dict[str, Any]] = []
+    seen: set[tuple[str, Any]] = set()
+    for item in items:
+        # The CMS import can leave several rows with the same title (a re-run
+        # of a seed or a sync). Listing "Concept review module — Mathematics"
+        # three times is not three resources, so the reply shows it once.
+        key = (
+            item.title.strip().lower(),
+            (item.subject.name if item.subject else "").strip().lower(),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        rows.append(
+            {
+                "title": item.title,
+                "item_type": item.item_type,
+                "subject": item.subject.name if item.subject else None,
+                "topic": item.topic,
+                "source_type": item.source_type,
+                "source_id": item.source_id,
+            }
+        )
+        if len(rows) >= limit:
+            break
+    return rows
 
 
 def _filter_items_by_query(queryset, query: str):
@@ -498,12 +530,16 @@ def get_at_risk_students(user, limit=5) -> dict[str, Any] | None:
     return {"total": total, "students": students}
 
 
-def get_class_performance(user) -> dict[str, Any] | None:
+def get_class_performance(
+    user, subject: str | None = None
+) -> dict[str, Any] | None:
     """
     Finalized grade average for the caller's class or for all sections.
 
     Faculty are scoped to their own sections. Guidance and admin read the
-    school aggregate. Students and parents get ``None``.
+    school aggregate. Students and parents get ``None``. A named subject
+    narrows the average to that subject, so "how is my class performing in
+    Math?" is not answered with the mean of every subject.
     """
     from django.db.models import Avg
 
@@ -513,6 +549,13 @@ def get_class_performance(user) -> dict[str, Any] | None:
         return None
 
     grades = Grade.objects.filter(score__isnull=False, status="finalized")
+    if subject:
+        # Same prefix rule as the student's own grade summary: the parser
+        # canonicalises "math" to "Mathematics" while a subject row may read
+        # "Math 7".
+        grades = grades.filter(
+            subject_assignment__subject__name__icontains=subject[:4]
+        )
     if user.role == "faculty":
         grades = grades.filter(
             student__enrollments__section__in=_faculty_sections(user)
@@ -523,6 +566,7 @@ def get_class_performance(user) -> dict[str, Any] | None:
         "average": round(float(average), 2) if average is not None else None,
         "grade_count": grades.count(),
         "student_count": grades.values("student_id").distinct().count(),
+        "subject": subject or None,
     }
 
 
@@ -664,6 +708,14 @@ def _draft_assessment_items(user, topic: str) -> list[dict]:
     return result["drafts"]
 
 
+def _named_subject(entities) -> str | None:
+    """The subject the question names, if any. Canonical name, not the word."""
+    for entity in entities:
+        if entity.entity_type == "subject":
+            return entity.value
+    return None
+
+
 def _record_subject(user, summary: dict) -> str:
     """
     "You have" for the student, the student's name for everyone else.
@@ -803,6 +855,8 @@ def _deterministic_reply(user, intent: ChatIntent, entities, context, data=None)
                 "to report."
             )
         scope = "your class" if user.role == "faculty" else "all sections"
+        if performance.get("subject"):
+            scope = f"{scope} in {performance['subject']}"
         return (
             f"Across {scope}, {performance['student_count']} student(s) have "
             f"{performance['grade_count']} finalized grade(s) averaging "
@@ -866,10 +920,28 @@ def _deterministic_reply(user, intent: ChatIntent, entities, context, data=None)
                 "ask your teacher if a grade is missing."
             )
         if not summary["grade_count"] or summary["average"] is None:
+            if summary.get("subject"):
+                return (
+                    f"{_record_subject(user, summary)} no finalized "
+                    f"{summary['subject']} grade yet. Only a grade a teacher has "
+                    "finalized appears here."
+                )
             return (
                 f"{_record_subject(user, summary)} no finalized grades yet, so "
                 "there is no average to report. One appears here once a teacher "
                 "finalizes the first grade."
+            )
+        if summary.get("subject"):
+            if summary["grade_count"] == 1:
+                return (
+                    f"{_record_subject(user, summary)} a finalized "
+                    f"{summary['subject']} grade of {summary['average']:.2f}. "
+                    "Open Grades to see the detail."
+                )
+            return (
+                f"{_record_subject(user, summary)} {summary['grade_count']} "
+                f"finalized {summary['subject']} grades, averaging "
+                f"{summary['average']:.2f}. Open Grades to see the detail."
             )
         return (
             f"{_record_subject(user, summary)} {summary['grade_count']} finalized "
@@ -1000,7 +1072,9 @@ def handle_message(
         # which child rather than answer about the wrong one.
         target = resolve_target_student(user)
         if target is not None:
-            summary = get_student_grade_summary(user, target)
+            summary = get_student_grade_summary(
+                user, target, subject=_named_subject(entities)
+            )
             if summary:
                 data["grade_summary"] = summary
     elif intent in (ChatIntent.ASK_ATTENDANCE, ChatIntent.ASK_ATTENDANCE_STATUS):
@@ -1010,18 +1084,18 @@ def handle_message(
             if summary:
                 data["attendance_summary"] = summary
     elif intent == ChatIntent.ASK_LEARNING_RESOURCE:
-        subject = None
-        for e in entities:
-            if e.entity_type == "subject":
-                subject = e.value
-        resources = get_learning_resources(user, subject=subject, query=message)
+        resources = get_learning_resources(
+            user, subject=_named_subject(entities), query=message
+        )
         data["resources"] = resources
     elif intent == ChatIntent.ASK_AT_RISK_STUDENTS:
         summary = get_at_risk_students(user)
         if summary is not None:
             data["at_risk_students"] = summary
     elif intent == ChatIntent.ASK_CLASS_PERFORMANCE:
-        performance = get_class_performance(user)
+        performance = get_class_performance(
+            user, subject=_named_subject(entities)
+        )
         if performance is not None:
             data["class_performance"] = performance
     elif intent == ChatIntent.ASK_CONSULTATION_SUMMARY:
