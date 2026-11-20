@@ -1,11 +1,11 @@
 # AEGIS: from website to web application
 
-**Status: Phase 1 (production posture), Phase 2 (installable app shell), Phase 3
-(live data), Phase 4 (push, backend and frontend) and Phase 6 (mobile payload)
-are built and deployed. Phase 5 (background work) is blocked by D6; Phase 7
-(proof and observability) is not built.** The install prompt, offline page and
-recovery were verified in Chrome. The two-browser notification check and the
-push delivery check on a real device are still outstanding.
+**Status: Phases 1–6 are built. Phases 1, 2, 3, 4 and 6 are deployed; Phase 5's
+worker and cron services are defined in `render.yaml` and need creating in the
+Render dashboard. Phase 7 (proof and observability) is not built.** The install
+prompt, offline page and recovery were verified in Chrome. The two-browser
+notification check and the push delivery check on a real device are still
+outstanding.
 
 **Scope.** How the deployed AEGIS stops being "a website that happens to have
 pages behind a login" and becomes an application a parent or a student opens
@@ -330,6 +330,21 @@ subscription ownership; manual device check on Chrome Android and iOS 16.4+
 
 ### Phase 5 — Background work
 
+**Built (2026-11-20).** Large imports go to an RQ queue named `imports` on the
+Redis instance `REDIS_URL` already names, and a second Render service
+(`aegis-worker`, `python manage.py rqworker imports`) executes them. The
+enqueue is switched on per deployment by `IMPORT_QUEUE_ENABLED`; when it is
+off, when django-rq is missing, or when Redis cannot take the job, the import
+runs in the worker thread in the web process exactly as it did before, so a
+Redis outage costs the durability guarantee and not the import. A job that
+stopped without finishing — the free Redis tier expiring its key is the case
+D6 asks about — is failed with error code `JOB_QUEUE_LOST` by the poll
+endpoint itself after 30 idle minutes, instead of leaving the uploader polling
+a job no process will ever finish. `run_risk_computation` runs on a Render
+cron service (`aegis-risk-recompute`, `0 18 * * *` UTC = 02:00 Asia/Manila)
+rather than during a deploy, so a score is no longer a side effect of a
+release. The job endpoint, its payload and the frontend polling are unchanged.
+
 Imports and risk recomputation stop being side effects of a deploy.
 
 **Tasks**
@@ -451,7 +466,7 @@ deployed URL.
 | D3 | **Sending identity for push and mail.** Web push shows the app's own name; email needs a verified sender. | **`AEGIS — HIS CARE CHRISTIAN INSTITUTE`.** Email still needs a provider-verified address (e.g. `no-reply@<school-domain>`) passed as `DEFAULT_FROM_EMAIL` with this display name; push labels itself with the installed app name. | Closed — the sender address is an ops value, not a code value |
 | D4 | **Hosting tier.** Phase 5 needs a worker service and a scheduler. | **Vercel and Render stay.** A worker is a separate Render service from the same image; another provider is acceptable if Render's sleep behaviour or price does not work. | Closed, with the escape hatch named |
 | D5 | **Domain and certificate.** The app is installed from `*.vercel.app` today. A school domain makes the install feel real. | Unanswered. | Open — does not block any phase |
-| D6 | **Redis durability.** The shared throttle cache is a Render Redis instance. If it sits on the free tier it can expire after a period of inactivity, which silently turns the rate limits back to per-process without failing anything. | **To be tested.** The procedure is in §5.1 below. | Open — gates Phase 5 only |
+| D6 | **Redis durability.** The shared throttle cache is a Render Redis instance. If it sits on the free tier it can expire after a period of inactivity, which silently turns the rate limits back to per-process without failing anything. | **The instance is on the free tier, and the queue is built to survive it.** The import queue still runs on that Redis — it is the instance that already exists, and the paid tier buys durability we can add later without a code change. What the free tier costs is the *broker*, never the import: the enqueue falls back to the pre-Phase-5 in-process worker thread whenever Redis cannot take the job, and a job whose Redis key vanished is failed by the reaper (`JOB_QUEUE_LOST`) instead of leaving the uploader polling a job no process will finish. See §5.1 for what the free tier means for the *cache*, which is a separate question. | Closed — Phase 5 built on these terms |
 
 **What the closed answers change in this plan**
 
@@ -461,17 +476,32 @@ deployed URL.
   never stores an API response.
 - D4 turns Phase 5's worker from "a hypothetical paid service" into "a second
   service on the host we already use".
+- D6 adds the fallback and the reaper to Phase 5. Without it, a free Redis
+  expiring mid-import would leave a job `processing` for good, and an import
+  accepted just before Redis went quiet would never run at all.
 
-### 5.1 Testing Redis durability (D6)
+### 5.1 What the free Redis tier costs (D6)
 
 The question is not "is the cache shared" — that is already answered and
-verified — it is "will this instance still exist in six months". Three
-checks, in order:
+verified — it is "what breaks when this instance expires".
+
+The instance is on the free tier. Two consequences, handled differently:
+
+- **The rate limits.** An expired instance is unreachable, and the cache client
+  already treats an unreachable cache as an empty one: the request is served
+  and that window's limit is not enforced. The symptom is visible rather than
+  silent — `GET /api/v1/ready/` reports `"cache": "broken"` instead of
+  `"shared"`. Lose that warning and every limit is effectively off, so it is
+  worth watching.
+- **The import queue.** Handled in code (see D6): enqueue falls back to a
+  thread, and the reaper fails a job that stopped without finishing.
+
+The three checks below are how the state is confirmed, not a gate that has to
+pass before Phase 5 runs:
 
 1. **Read the instance's tier.** Render dashboard → the Redis service → the
    plan row and the banner above it. A free instance shows an expiry notice
-   ("this instance will be deleted on <date>" or similar). That banner is the
-   answer to the question; no test is needed for it.
+   ("this instance will be deleted on <date>" or similar).
 2. **Prove the cache is the shared one, not a silent local fallback.**
    `GET https://aegis-0pav.onrender.com/api/v1/ready/` must report
    `"cache": "shared"`. If it reports `"cache": "local"`, the `REDIS_URL`
@@ -482,10 +512,9 @@ checks, in order:
    sign-in twice in two separate processes and reports whether the second was
    throttled. Run it against the deployed configuration.
 
-**Decision rule.** If the instance is free and shows an expiry date, Phase 5
-puts the queue on a Redis that is not going to disappear: either the paid
-instance, or a Redis inside the Supabase project the database already lives
-in. If it is already paid, D6 closes with nothing to do.
+**Upgrade path.** Moving the queue to a durable Redis is setting `REDIS_URL`
+and redeploying: the queue definition, the worker command and the fallback all
+follow that one variable. No code change.
 
 ---
 
@@ -497,7 +526,7 @@ Phase 0 decisions
    ├── Phase 2 installable shell         (do second; needs no decision)
    ├── Phase 3 live data                 (do third; needs no decision)
    ├── Phase 6 mobile payload            (no decision needed any more)
-   ├── Phase 5 background work           (needs D6 tested)
+   ├── Phase 5 background work           (D6 closed: free tier, fallback built)
    ├── Phase 4 push                      (needs D2, D3)
    └── Phase 7 proof + observability     (do last; covers everything above)
 ```
@@ -525,7 +554,7 @@ can also run in parallel.
 | Phase 1 removes the QA seed from the build, so a fresh environment has no school in it | The deployed DEV/QA service loses its demo data | Apply Phase 1 to the production service only; keep the QA seeding in a separate QA blueprint or a manual command |
 | A service worker caches an API response by accident | A student row is written to disk on a shared device | The worker is configured to write nothing from `/api/*`; the Phase 2 acceptance test opens the worker storage panel and checks it |
 | Push lands on the school-branded channel without approval | Reputational problem with the panel or the school | D3 is answered before Phase 4 starts; a neutral title is the fallback |
-| The Redis instance is on the free tier and expires | The rate limits silently fall back to per-process, and the Phase 5 queue loses its broker | §5.1 decides this before Phase 5 starts; the queue goes on a Redis that is not going to disappear |
+| The Redis instance is on the free tier and expires | The rate limits fall back to per-process (visible as `"cache": "broken"` on `/api/v1/ready/`), and the Phase 5 queue loses its broker | §5.1 records the state. The limits are a Phase 1 concern; the queue is built for it — enqueue falls back to a thread in the web process, and the reaper fails a job that stopped without finishing |
 | Adding endpoints breaks the "frozen API contract" rule | Contract violation | Phase 4 adds endpoints only; no existing route, field or payload changes. The addition is recorded in `docs/BACKEND_SPECIFICATION.md` |
 | iOS does not deliver push to a browser tab | Phase 4 looks broken on iPhone | iOS 16.4+ delivers push only to a Home Screen install, which Phase 2 provides; the acceptance test uses an installed app |
 

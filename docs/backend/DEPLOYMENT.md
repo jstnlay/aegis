@@ -24,6 +24,7 @@ insecure deployment: `DJANGO_ALLOWED_HOSTS` must be non-empty,
 | `DJANGO_SECRET_KEY` | 50+ random characters; keep the existing value if already set |
 | `FIELD_ENCRYPTION_KEYS` | `python manage.py generate_encryption_key` output |
 | `REDIS_URL` | the Redis service's **Internal Redis URL** (see below) |
+| `IMPORT_QUEUE_ENABLED` | `true` on this deployment: large imports go to the `aegis-worker` service instead of a thread in the web process (see *Background work*) |
 | `AEGIS_FRONTEND_URL` | `https://aegis-frontend-neon.vercel.app` |
 | `CORS_ALLOWED_ORIGINS` | `https://aegis-frontend-neon.vercel.app` |
 | `EMAIL_BACKEND` | `core.email.BrevoEmailBackend`, `core.email.Smtp2GoEmailBackend` or `core.email.ResendEmailBackend` on the free plan (see *Outgoing mail*) |
@@ -48,10 +49,12 @@ works; without the flag the command never overwrites a tester-chosen password.
 Only the five allowlisted addresses are ever written. The variable must be set
 on the service or the build fails.
 
-`seed_qa_dataset`, `train_risk_model` and `run_risk_computation` stay out of
-the build: they write a synthetic school into the database and must only run
-by hand on a DEV/QA environment. Running an import or risk recompute on a
-schedule is Phase 5 of `docs/WEB_APP_PLAN.md`.
+`seed_qa_dataset` and `train_risk_model` stay out of the build: they write a
+synthetic school into the database, so they must only run by hand on a DEV/QA
+environment. `run_risk_computation` is also out of the build — but it is not
+left unscheduled. It runs on the `aegis-risk-recompute` cron service, so a
+score is never a side effect of a release and a deploy cannot overwrite live
+scores (Phase 5 of `docs/WEB_APP_PLAN.md`; see *Background work*).
 
 Because the Blueprint is not linked to the live service, the build command and
 health check are Dashboard settings too. In **Settings → Build & Deploy** set:
@@ -254,6 +257,63 @@ If a Redis outage occurs, the cache client is configured to treat the
 unreachable cache as empty rather than to fail the request: the API stays up
 and that window's limit is not enforced. An outage should not take the
 system down.
+
+## Background work
+
+Phase 5 of `WEB_APP_PLAN.md`. Two Render services run the same image as the web
+service; neither answers HTTP.
+
+| Service | Command | Schedule |
+| --- | --- | --- |
+| `aegis-worker` (worker) | `python manage.py rqworker imports` | always on |
+| `aegis-risk-recompute` (cron) | `python manage.py run_risk_computation` | `0 18 * * *` UTC (02:00 Asia/Manila) |
+
+**Large imports.** A file above `IMPORT_SYNC_ROW_LIMIT` rows is handed to the
+`imports` RQ queue instead of running in a thread inside the request. A
+redeploy, a crash or a sleeping instance therefore no longer ends an import
+that was already accepted, and the client keeps polling
+`GET /api/v1/data-import/jobs/{id}/` exactly as before.
+
+Turn it on per deployment with `IMPORT_QUEUE_ENABLED=true` (set on the web
+service; the queue itself is built from `REDIS_URL`, so the web process and the
+worker cannot disagree about where it lives). Both variables matter:
+
+- `IMPORT_QUEUE_ENABLED` unset, or `django-rq` missing, or no queue configured
+  → the import runs in a worker thread in the web process. That is the
+  pre-Phase-5 path, kept on purpose: a Redis outage costs the durability
+  guarantee, never the import.
+- `REDIS_URL` unset or wrong → the enqueue fails, the failure is logged, and the
+  same threaded path runs the job.
+
+**A job that stops.** Redis on the free tier expires when it is idle, which
+destroys a queued job and would leave the client polling a job no process will
+finish. The job endpoint therefore fails any job that has sat in `pending` or
+`processing` for 30 minutes (`STALE_JOB_AFTER` in
+`apps/data_import/runner.py`), with error code `JOB_QUEUE_LOST` telling the
+uploader to re-upload. The cutoff is far beyond the worst measured runtime, so
+an import that is genuinely still running is never marked failed underneath the
+worker doing it. If you raise `MAX_IMPORT_ROWS`, raise that cutoff with it.
+
+**Risk scores.** `run_risk_computation` runs on the cron service, not during a
+deploy, so a score is never a side effect of a release and never overwrites
+live data mid-deploy. The command exits 0 with a message when there is no
+trained model or no completed grading period, so a quiet run is not a failure.
+Risk alerts are dispatched from that run, so the cron service carries the same
+mail and `VAPID_*` variables as the web service; without them the scores are
+still recomputed and the in-app notification still lands.
+
+### Running the worker locally
+
+```
+cd backend/aegis_backend
+REDIS_URL=redis://127.0.0.1:6379/0 IMPORT_QUEUE_ENABLED=true python manage.py rqworker imports
+```
+
+Windows has no `fork`, so use `--worker-class rq.SimpleWorker` there. On Render
+the default worker is correct. This needs a real Redis: `scripts/fake_redis.py`
+serves the throttle cache happily, but its `CLIENT INFO` reply is not parseable
+by redis-py, so an RQ worker started against it dies before it dequeues
+anything.
 
 ## Which address the rate limits count
 
