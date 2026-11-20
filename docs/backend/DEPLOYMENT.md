@@ -201,12 +201,16 @@ Phase 4 of `WEB_APP_PLAN.md`. Push works only after both halves are set.
 
    ```
    pip install pywebpush
-   python -c "from py_vapid import Vapid; v = Vapid(); v.generate_keys(); print(v.public_key, v.private_key)"
+   python -c "import base64; from py_vapid import Vapid; from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat; b=lambda x: base64.urlsafe_b64encode(x).rstrip(b'=').decode(); v=Vapid(); v.generate_keys(); print('PUBLIC =', b(v.public_key.public_bytes(encoding=Encoding.X962, format=PublicFormat.UncompressedPoint))); print('PRIVATE=', b(v.private_key.private_numbers().private_value.to_bytes(32, 'big')))"
    ```
 
-   `public_key` is base64url of the raw uncompressed point (65 bytes); the
-   same string is what a browser needs in `applicationServerKey`.
-   `private_key` is base64url; it never leaves the server.
+   `PUBLIC` is base64url of the raw uncompressed point (65 bytes); that same
+   string is what a browser needs in `applicationServerKey`. `PRIVATE` is the
+   raw 32-byte scalar, base64url encoded; it never leaves the server.
+
+   Do not print `v.public_key` / `v.private_key` directly: on py_vapid 1.9.6
+   they are cryptography key objects, and printing them gives a repr, not a
+   key. pywebpush accepts this raw-32 form via `Vapid.from_string`.
 
 2. Render → **Environment**: set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and
    `VAPID_ADMIN_EMAIL` (a `mailto:` contact, for example the verified sender)
