@@ -1,11 +1,13 @@
 # AEGIS: from website to web application
 
-**Status: Phases 1–6 are built. Phases 1, 2, 3, 4 and 6 are deployed; Phase 5's
+**Status: Phases 1–7 are built. Phases 1, 2, 3, 4 and 6 are deployed; Phase 5's
 worker and cron services are defined in `render.yaml` and need creating in the
-Render dashboard. Phase 7 (proof and observability) is not built.** The install
-prompt, offline page and recovery were verified in Chrome. The two-browser
-notification check and the push delivery check on a real device are still
-outstanding.
+Render dashboard.** The install prompt, offline page and recovery were verified
+in Chrome. Phase 7's five role journeys, error reporting and uptime check are
+built; the journeys were verified locally against a seeded stack, and error
+reporting stays off until a DSN is set. The two-browser notification check, the
+push delivery check on a real device, and the Render dashboard work (worker and
+cron services, `VAPID_*`) are still outstanding.
 
 **Scope.** How the deployed AEGIS stops being "a website that happens to have
 pages behind a login" and becomes an application a parent or a student opens
@@ -431,6 +433,53 @@ deployed URL.
 ---
 
 ### Phase 7 — Proof and observability
+
+**Built (2026-11-20).** `frontend/e2e/role-journeys.spec.ts` drives Chromium
+through one journey per role — sign in, land on the role's *own* dashboard,
+open its core screen (admin → Users, faculty → Academics, guidance → Risk
+Alerts, student → Schedule, parent → Academic Record), sign out. The five roles
+are a table rather than five near-identical files, and each failure names the
+role. `frontend/playwright.config.ts` makes `npm run e2e` the whole command: it
+builds the frontend against `http://127.0.0.1:8001/api/v1`, starts Django on
+port 8001 with `config.settings.test` and a throwaway SQLite file that it
+deletes first, runs `migrate` and `scripts/seed_phase7_e2e.py` (so the five
+`e2e.*` accounts exist on a fresh database), and serves the build on port 4174.
+The ports are deliberately not the development ones, so a developer's own
+`runserver` against PostgreSQL is never the backend under test, and a missing
+`PHASE7_E2E_PASSWORD` fails the run instead of skipping it: a journey that
+cannot sign in proves nothing. A CI job runs it on every push, installs
+Chromium, and uploads the trace and report when a journey fails.
+
+Error reporting is env-gated on both tiers and wired to one project. Django:
+`sentry-sdk[django]` in `requirements/production.txt` plus an init block at the
+end of `config/settings/production.py` that runs only when `SENTRY_DSN` is set
+and imports the SDK *inside* the guard, so a missing package can never be what
+stops a boot; release is `RENDER_GIT_COMMIT`, `traces_sample_rate` is 0,
+`max_request_body_size="never"` and `send_default_pii=False`, because a request
+body here can be a grade entry, an assessment draft or a password change.
+Frontend: `@sentry/react` is imported dynamically in
+`src/lib/error-reporting.ts`, so a build with no `VITE_SENTRY_DSN` ships no
+Sentry code at all, and `ErrorBoundary` reports what it catches because a
+caught render error never reaches `window.onerror`. Release is
+`VERCEL_GIT_COMMIT_SHA`, compiled in by a `define` in `vite.config.ts` (Vite
+only reads `VITE_`-prefixed variables, and Vercel sets that one without the
+prefix). `render.yaml` declares `SENTRY_DSN` on the web, worker and cron
+services.
+
+CI gained the installability step, which fails on a broken manifest, a missing
+icon or a worker that lost its push import, and
+`.github/workflows/uptime.yml` probes `/api/v1/ready/` every 15 minutes, failing
+when `status` is not `ok` or the database does not answer, and printing the
+cache field without asserting it — §5.1: the free Redis degrading the rate
+limits is worth seeing and not worth a red X every quarter hour.
+
+**Verified locally (2026-11-20):** `PHASE7_E2E_PASSWORD=… npm run e2e` with
+Chromium installed ran all five journeys in 46.8 s, `5 passed`. Two bugs were
+found and fixed by running it: the seed script path was wrong (it lives in
+`backend/scripts/`), and deleting the SQLite file at config module scope wiped
+a database that was already seeded, because Playwright loads the config in the
+worker *after* starting the servers — the delete now happens inside the
+server's own command chain, which runs once.
 
 **Tasks**
 

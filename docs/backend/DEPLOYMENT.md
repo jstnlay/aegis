@@ -25,6 +25,8 @@ insecure deployment: `DJANGO_ALLOWED_HOSTS` must be non-empty,
 | `FIELD_ENCRYPTION_KEYS` | `python manage.py generate_encryption_key` output |
 | `REDIS_URL` | the Redis service's **Internal Redis URL** (see below) |
 | `IMPORT_QUEUE_ENABLED` | `true` on this deployment: large imports go to the `aegis-worker` service instead of a thread in the web process (see *Background work*) |
+| `SENTRY_DSN` | optional; the Sentry project's DSN. Unset means no error reporting (see *Error reporting*) |
+| `SENTRY_ENVIRONMENT` | optional; defaults to `production` |
 | `AEGIS_FRONTEND_URL` | `https://aegis-frontend-neon.vercel.app` |
 | `CORS_ALLOWED_ORIGINS` | `https://aegis-frontend-neon.vercel.app` |
 | `EMAIL_BACKEND` | `core.email.BrevoEmailBackend`, `core.email.Smtp2GoEmailBackend` or `core.email.ResendEmailBackend` on the free plan (see *Outgoing mail*) |
@@ -133,10 +135,62 @@ Project → Settings → Environment Variables → **Production**:
 | --- | --- |
 | `VITE_API_BASE_URL` | `https://aegis-0pav.onrender.com/api/v1` |
 | `VITE_VAPID_PUBLIC_KEY` | the same public key as Render's `VAPID_PUBLIC_KEY` |
+| `VITE_SENTRY_DSN` | optional; the same Sentry project's DSN (see *Error reporting*) |
 
 Add it for **Preview** too if preview deployments should reach the API, then
 **Redeploy**. A Vite build bakes the value in, so saving the variable is not
 enough.
+
+## Error reporting
+
+Phase 7 of `WEB_APP_PLAN.md`. Both tiers report to one Sentry project, and both
+are off until a DSN is set.
+
+| Tier | Variable | Where |
+| --- | --- | --- |
+| Django (web, worker and cron services) | `SENTRY_DSN` | Render → each service's Environment |
+| Browser | `VITE_SENTRY_DSN` | Vercel → Environment Variables |
+
+Both values are publishable, but set them in the dashboards, not in the
+repository. Left unset, nothing is reported, no Sentry code is downloaded and
+no build changes: the frontend imports `@sentry/react` dynamically, so a build
+with no DSN ships no Sentry code at all.
+
+The release is the deploy's commit — `RENDER_GIT_COMMIT` on Render,
+`VERCEL_GIT_COMMIT_SHA` on Vercel (compiled into the bundle by the `define` in
+`vite.config.ts`, because Vite only reads `VITE_`-prefixed variables). Sentry
+groups issues by release, so "did this deploy cause it" is answered without
+guessing.
+
+What is deliberately **not** sent:
+
+- Django: no PII (`send_default_pii=False`) and no request body
+  (`max_request_body_size="never"`). A body can be a grade entry, an
+  assessment draft, a password change or an import row.
+- Browser: no user identity, no cookies, no request bodies and no URL query
+  strings. The `dataCollection` block in `src/lib/error-reporting.ts` states
+  that, because the SDK's default is to collect generously.
+- Neither tier sends performance spans (`traces_sample_rate` is 0), so an error
+  report costs one event and not a sampled transaction.
+
+A render error caught by the frontend `ErrorBoundary` never reaches
+`window.onerror`, so the boundary reports it itself (`captureError`); uncaught
+errors and unhandled rejections go through the SDK's default handlers.
+
+### Uptime check
+
+`.github/workflows/uptime.yml` runs every 15 minutes and fails when
+`GET https://aegis-0pav.onrender.com/api/v1/ready/` does not answer
+`{"status":"ok","database":true,…}`. It is a scheduled workflow rather than a
+CI step on purpose: it reports on what is deployed, not on what is in a push,
+so a platform outage cannot look like a bad commit. The `cache` field is
+printed and not asserted — the Redis instance is on the free tier, and an
+expired one degrades the rate limits without failing a request
+(`WEB_APP_PLAN.md` §5.1).
+
+It is a "watch this if it goes red" check, not an alerting system: nothing has
+notification routing, so a failure is a red run in the Actions tab. Route it to
+a Sentry cron monitor or a mail step if it ever needs to wake someone.
 
 ## Web Push
 
@@ -367,3 +421,16 @@ that cannot be chosen.
 5. Sign in on `https://aegis-frontend-neon.vercel.app/`, use **Forgot
    password?**, and check that the link points at the Vercel URL and the
    mail arrives.
+6. Raise an error on purpose and watch it arrive: a page that throws in the
+   deployed frontend (with `VITE_SENTRY_DSN` set) and any 500 from the API
+   (with `SENTRY_DSN` set). The event carries the commit as its release, and
+   no request body, cookie or query string.
+7. Run the five role journeys locally, which builds the frontend, starts Django
+   on its own SQLite file and drives Chromium:
+
+   ```
+   cd frontend
+   PHASE7_E2E_PASSWORD=<the seed password> npm run e2e
+   ```
+
+   The first run needs `npx playwright install chromium`.
