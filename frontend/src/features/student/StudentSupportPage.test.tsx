@@ -7,7 +7,9 @@ import type { StudentBehavioralNote } from "@/features/student/api"
 
 const fetchAllPages = vi.hoisted(() =>
   vi.fn<
-    (url: string) => Promise<{ results: StudentBehavioralNote[]; count: number }>
+    (
+      url: string
+    ) => Promise<{ results: StudentBehavioralNote[]; count: number }>
   >()
 )
 
@@ -15,7 +17,9 @@ vi.mock("@/lib/pagination", () => ({
   fetchAllPages: fetchAllPages,
 }))
 
-function note(overrides: Partial<StudentBehavioralNote>): StudentBehavioralNote {
+function note(
+  overrides: Partial<StudentBehavioralNote>
+): StudentBehavioralNote {
   return {
     id: `bn-${Math.random().toString(36).slice(2)}`,
     student: "stu-1",

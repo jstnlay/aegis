@@ -36,12 +36,7 @@ export function AegiMark({ className }: { className?: string }) {
  */
 export function AegiMascot() {
   return (
-    <svg
-      viewBox="0 0 96 96"
-      fill="none"
-      aria-hidden="true"
-      focusable="false"
-    >
+    <svg viewBox="0 0 96 96" fill="none" aria-hidden="true" focusable="false">
       <circle cx="48" cy="52" r="34" fill="#f3e6ea" />
       <path
         d="M48 27V17"

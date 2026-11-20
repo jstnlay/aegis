@@ -69,8 +69,8 @@ export function AdminChatbotPage() {
           Chatbot Safety Console
         </h2>
         <p className="text-sm text-muted-foreground">
-          Screening, routing and the acknowledgment timer for sensitive
-          chatbot messages.
+          Screening, routing and the acknowledgment timer for sensitive chatbot
+          messages.
         </p>
       </div>
 
@@ -203,7 +203,9 @@ function FalsePositiveFeedback() {
                   <TableCell>{row.severity}</TableCell>
                   <TableCell>{row.categories.join(", ") || "—"}</TableCell>
                   <TableCell>{row.note || "—"}</TableCell>
-                  <TableCell>{new Date(row.created_at).toLocaleString()}</TableCell>
+                  <TableCell>
+                    {new Date(row.created_at).toLocaleString()}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -265,7 +267,10 @@ function KeywordManager() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <form onSubmit={handleCreate} className="flex flex-wrap items-end gap-3">
+        <form
+          onSubmit={handleCreate}
+          className="flex flex-wrap items-end gap-3"
+        >
           <div className="space-y-1.5">
             <Label htmlFor="keyword-term">Term</Label>
             <Input
@@ -282,7 +287,9 @@ function KeywordManager() {
               className="h-9 rounded-md border border-input bg-background px-2 text-sm"
               value={matchType}
               onChange={(event) =>
-                setMatchType(event.target.value as "keyword" | "phrase" | "regex")
+                setMatchType(
+                  event.target.value as "keyword" | "phrase" | "regex"
+                )
               }
             >
               <option value="keyword">Whole word</option>
@@ -553,19 +560,27 @@ function KnowledgeManager() {
         )}
 
         {createDocument.isError ? (
-          <ErrorNote message={normalizeApiError(createDocument.error).message} />
+          <ErrorNote
+            message={normalizeApiError(createDocument.error).message}
+          />
         ) : null}
         {updateDocument.isError ? (
-          <ErrorNote message={normalizeApiError(updateDocument.error).message} />
+          <ErrorNote
+            message={normalizeApiError(updateDocument.error).message}
+          />
         ) : null}
         {deleteDocument.isError ? (
-          <ErrorNote message={normalizeApiError(deleteDocument.error).message} />
+          <ErrorNote
+            message={normalizeApiError(deleteDocument.error).message}
+          />
         ) : null}
 
         {documentsQuery.isLoading ? (
           <p className="text-sm text-muted-foreground">Loading documents…</p>
         ) : documentsQuery.isError ? (
-          <ErrorNote message={normalizeApiError(documentsQuery.error).message} />
+          <ErrorNote
+            message={normalizeApiError(documentsQuery.error).message}
+          />
         ) : documents.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             No documents yet. The assistant can only answer school questions

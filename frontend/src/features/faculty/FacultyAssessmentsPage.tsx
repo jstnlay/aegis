@@ -315,7 +315,11 @@ function NewAssessmentDialog({
  * approves it. So this dialog promises exactly one thing — a draft nobody has
  * approved yet — and the approval control lives on the assessment card.
  */
-function GenerateDraftDialog({ students }: { students: FacultyTargetStudent[] }) {
+function GenerateDraftDialog({
+  students,
+}: {
+  students: FacultyTargetStudent[]
+}) {
   const generate = useGenerateAssessmentDraft()
 
   const [open, setOpen] = useState(false)
@@ -329,7 +333,8 @@ function GenerateDraftDialog({ students }: { students: FacultyTargetStudent[] })
 
   const topicBlank = topic.trim().length === 0
   const parsedCount = Number(count)
-  const countInvalid = !Number.isInteger(parsedCount) || parsedCount < 1 || parsedCount > 20
+  const countInvalid =
+    !Number.isInteger(parsedCount) || parsedCount < 1 || parsedCount > 20
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -360,8 +365,7 @@ function GenerateDraftDialog({ students }: { students: FacultyTargetStudent[] })
           <DialogTitle>Generate an AI draft</DialogTitle>
           <DialogDescription>
             The assistant writes the questions. You read them before anything
-            reaches a student — the server will not publish an unapproved
-            draft.
+            reaches a student — the server will not publish an unapproved draft.
           </DialogDescription>
         </DialogHeader>
 
@@ -387,14 +391,18 @@ function GenerateDraftDialog({ students }: { students: FacultyTargetStudent[] })
               <Select
                 value={questionType}
                 onValueChange={(value) =>
-                  setQuestionType(value as "multiple_choice" | "likert" | "essay")
+                  setQuestionType(
+                    value as "multiple_choice" | "likert" | "essay"
+                  )
                 }
               >
                 <SelectTrigger id="faculty-draft-type">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="multiple_choice">Multiple choice</SelectItem>
+                  <SelectItem value="multiple_choice">
+                    Multiple choice
+                  </SelectItem>
                   <SelectItem value="likert">Likert scale</SelectItem>
                   <SelectItem value="essay">Essay</SelectItem>
                 </SelectContent>
@@ -562,9 +570,7 @@ function CompletionBlock({ assessment }: { assessment: FacultyAssessment }) {
     return <Skeleton className="h-12 w-full" aria-hidden="true" />
   }
   if (completion.isError) {
-    return (
-      <ErrorNote message={normalizeApiError(completion.error).message} />
-    )
+    return <ErrorNote message={normalizeApiError(completion.error).message} />
   }
 
   const data = completion.data
@@ -1068,139 +1074,141 @@ export function FacultyAssessmentsPage() {
                   assessment.ai_generated &&
                   assessment.review_status !== "approved"
                 return (
-                <div
-                  key={assessment.id}
-                  data-assessment-id={assessment.id}
-                  className="space-y-3 rounded-md border border-border p-4"
-                >
-                  <div className="space-y-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="font-semibold">{assessment.title}</h3>
-                      <Badge variant="secondary">Academic</Badge>
-                      <Badge
-                        status={assessment.is_published ? "published" : "draft"}
-                        variant="outline"
-                        data-published={
-                          assessment.is_published ? "true" : "false"
-                        }
-                      >
-                        {assessment.is_published ? "Published" : "Draft"}
-                      </Badge>
-                      {assessment.ai_generated ? (
+                  <div
+                    key={assessment.id}
+                    data-assessment-id={assessment.id}
+                    className="space-y-3 rounded-md border border-border p-4"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="font-semibold">{assessment.title}</h3>
+                        <Badge variant="secondary">Academic</Badge>
                         <Badge
-                          variant={
-                            assessment.review_status === "approved"
-                              ? "default"
-                              : "destructive"
+                          status={
+                            assessment.is_published ? "published" : "draft"
+                          }
+                          variant="outline"
+                          data-published={
+                            assessment.is_published ? "true" : "false"
                           }
                         >
-                          {assessment.review_status === "approved"
-                            ? "AI draft · approved"
-                            : "AI draft · needs review"}
+                          {assessment.is_published ? "Published" : "Draft"}
                         </Badge>
+                        {assessment.ai_generated ? (
+                          <Badge
+                            variant={
+                              assessment.review_status === "approved"
+                                ? "default"
+                                : "destructive"
+                            }
+                          >
+                            {assessment.review_status === "approved"
+                              ? "AI draft · approved"
+                              : "AI draft · needs review"}
+                          </Badge>
+                        ) : null}
+                      </div>
+                      {assessment.description ? (
+                        <p className="text-sm text-muted-foreground">
+                          {assessment.description}
+                        </p>
                       ) : null}
-                    </div>
-                    {assessment.description ? (
-                      <p className="text-sm text-muted-foreground">
-                        {assessment.description}
+                      <p className="text-xs text-muted-foreground">
+                        {assessment.question_count} question
+                        {assessment.question_count === 1 ? "" : "s"}
+                        {assessment.time_limit_minutes === null
+                          ? " · no time limit"
+                          : ` · ${assessment.time_limit_minutes} min limit`}
+                        {assessment.deadline
+                          ? ` · due ${assessment.deadline}`
+                          : ""}
                       </p>
-                    ) : null}
-                    <p className="text-xs text-muted-foreground">
-                      {assessment.question_count} question
-                      {assessment.question_count === 1 ? "" : "s"}
-                      {assessment.time_limit_minutes === null
-                        ? " · no time limit"
-                        : ` · ${assessment.time_limit_minutes} min limit`}
-                      {assessment.deadline
-                        ? ` · due ${assessment.deadline}`
-                        : ""}
-                    </p>
-                  </div>
+                    </div>
 
-                  <div className="flex flex-wrap items-center gap-2">
-                    {/* One button per card, so the bare verb gave them all the
+                    <div className="flex flex-wrap items-center gap-2">
+                      {/* One button per card, so the bare verb gave them all the
                         same accessible name. The label names the assessment and
                         still contains the visible "Deploy" (WCAG 2.5.3). */}
-                    {!assessment.is_published ? (
-                      /*
-                       * The server 400s a draft without questions, so the
-                       * control is withheld until one exists and the reason is
-                       * stated in text instead of left to a failed request.
-                       *
-                       * The same is true of the review gate: `deploy` refuses
-                       * an AI draft that nobody has approved, so the button is
-                       * disabled and the reason is stated.
-                       */
-                      <>
-                        <Button
-                          type="button"
-                          size="sm"
-                          disabled={
-                            deploy.isPending ||
-                            assessment.question_count === 0 ||
-                            blockedByReview
-                          }
-                          aria-label={
-                            deploy.isPending &&
+                      {!assessment.is_published ? (
+                        /*
+                         * The server 400s a draft without questions, so the
+                         * control is withheld until one exists and the reason is
+                         * stated in text instead of left to a failed request.
+                         *
+                         * The same is true of the review gate: `deploy` refuses
+                         * an AI draft that nobody has approved, so the button is
+                         * disabled and the reason is stated.
+                         */
+                        <>
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={
+                              deploy.isPending ||
+                              assessment.question_count === 0 ||
+                              blockedByReview
+                            }
+                            aria-label={
+                              deploy.isPending &&
+                              deploy.variables?.id === assessment.id
+                                ? `Deploying ${assessment.title}`
+                                : `Deploy ${assessment.title}`
+                            }
+                            onClick={() => deploy.mutate({ id: assessment.id })}
+                          >
+                            {deploy.isPending &&
                             deploy.variables?.id === assessment.id
-                              ? `Deploying ${assessment.title}`
-                              : `Deploy ${assessment.title}`
-                          }
-                          onClick={() => deploy.mutate({ id: assessment.id })}
-                        >
-                          {deploy.isPending &&
-                          deploy.variables?.id === assessment.id
-                            ? "Deploying…"
-                            : "Deploy"}
-                        </Button>
-                        {assessment.question_count === 0 ? (
-                          <p className="text-xs text-muted-foreground">
-                            Add at least one question before deploying.
-                          </p>
-                        ) : null}
-                        {blockedByReview ? (
-                          <p className="text-xs text-muted-foreground">
-                            This AI draft needs a human review and an approval
-                            before it can be deployed.
-                          </p>
-                        ) : null}
-                      </>
-                    ) : (
-                      /* `role="status"`: a successful deploy was previously only
+                              ? "Deploying…"
+                              : "Deploy"}
+                          </Button>
+                          {assessment.question_count === 0 ? (
+                            <p className="text-xs text-muted-foreground">
+                              Add at least one question before deploying.
+                            </p>
+                          ) : null}
+                          {blockedByReview ? (
+                            <p className="text-xs text-muted-foreground">
+                              This AI draft needs a human review and an approval
+                              before it can be deployed.
+                            </p>
+                          ) : null}
+                        </>
+                      ) : (
+                        /* `role="status"`: a successful deploy was previously only
                          conveyed by the button turning into plain text, which is
                          not an announcement. */
-                      <span
-                        role="status"
-                        className="text-xs text-muted-foreground"
-                      >
-                        Deployed. The server blocks a second deploy.
-                      </span>
+                        <span
+                          role="status"
+                          className="text-xs text-muted-foreground"
+                        >
+                          Deployed. The server blocks a second deploy.
+                        </span>
+                      )}
+                    </div>
+
+                    {assessment.ai_generated &&
+                    assessment.review_status !== "approved" &&
+                    !assessment.is_published ? (
+                      <ReviewControls assessment={assessment} />
+                    ) : null}
+
+                    <QuestionsBlock assessment={assessment} />
+
+                    <CompletionBlock assessment={assessment} />
+
+                    {resultsQuery.isLoading ? (
+                      <Skeleton className="h-16 w-full" />
+                    ) : resultsQuery.isError ? (
+                      <ErrorNote
+                        message={normalizeApiError(resultsQuery.error).message}
+                      />
+                    ) : (
+                      <ResultsForAssessment
+                        assessment={assessment}
+                        results={resultsByAssessment.get(assessment.id) ?? []}
+                      />
                     )}
                   </div>
-
-                  {assessment.ai_generated &&
-                  assessment.review_status !== "approved" &&
-                  !assessment.is_published ? (
-                    <ReviewControls assessment={assessment} />
-                  ) : null}
-
-                  <QuestionsBlock assessment={assessment} />
-
-                  <CompletionBlock assessment={assessment} />
-
-                  {resultsQuery.isLoading ? (
-                    <Skeleton className="h-16 w-full" />
-                  ) : resultsQuery.isError ? (
-                    <ErrorNote
-                      message={normalizeApiError(resultsQuery.error).message}
-                    />
-                  ) : (
-                    <ResultsForAssessment
-                      assessment={assessment}
-                      results={resultsByAssessment.get(assessment.id) ?? []}
-                    />
-                  )}
-                </div>
                 )
               })}
             </div>

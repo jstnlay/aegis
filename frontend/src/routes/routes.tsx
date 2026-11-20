@@ -54,7 +54,10 @@ const LandingPage = lazyPage(
   () => import("@/routes/pages/LandingPage"),
   "LandingPage"
 )
-const LoginPage = lazyPage(() => import("@/routes/pages/LoginPage"), "LoginPage")
+const LoginPage = lazyPage(
+  () => import("@/routes/pages/LoginPage"),
+  "LoginPage"
+)
 const SchoolPage = lazyPage(
   () => import("@/routes/pages/SchoolPage"),
   "SchoolPage"

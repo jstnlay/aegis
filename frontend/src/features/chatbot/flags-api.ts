@@ -29,11 +29,7 @@ import { apiClient } from "@/lib/api"
 export type FlagSeverity = "low" | "medium" | "high" | "critical"
 
 export type FlagStatus =
-  | "open"
-  | "acknowledged"
-  | "under_review"
-  | "resolved"
-  | "false_positive"
+  "open" | "acknowledged" | "under_review" | "resolved" | "false_positive"
 
 /** The full flag, as Guidance and admin see it. */
 export interface ChatFlag {
@@ -228,7 +224,9 @@ export function useChatFlag(flagId: string | undefined) {
   return useQuery({
     queryKey: ["chatbot", "flag", flagId],
     queryFn: async () => {
-      const { data } = await apiClient.get<ChatFlag>(`/chatbot/flags/${flagId}/`)
+      const { data } = await apiClient.get<ChatFlag>(
+        `/chatbot/flags/${flagId}/`
+      )
       return data
     },
     enabled: Boolean(flagId),
@@ -336,10 +334,10 @@ export function useEscalateStaleFlags() {
   const queryClient = useQueryClient()
   return useMutation<{ escalated: number; ids: string[] }, Error, void>({
     mutationFn: async () => {
-      const { data } = await apiClient.post<{ escalated: number; ids: string[] }>(
-        "/chatbot/admin/escalate/",
-        {}
-      )
+      const { data } = await apiClient.post<{
+        escalated: number
+        ids: string[]
+      }>("/chatbot/admin/escalate/", {})
       return data
     },
     onSuccess: () => {

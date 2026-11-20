@@ -1325,7 +1325,9 @@ export interface CmsResourceInput {
 }
 
 function invalidateCmsQueries(queryClient: ReturnType<typeof useQueryClient>) {
-  void queryClient.invalidateQueries({ queryKey: ["admin", "cms-announcements"] })
+  void queryClient.invalidateQueries({
+    queryKey: ["admin", "cms-announcements"],
+  })
   void queryClient.invalidateQueries({ queryKey: ["admin", "cms-resources"] })
   void queryClient.invalidateQueries({ queryKey: ["cms"] })
 }

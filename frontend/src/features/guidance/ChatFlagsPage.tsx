@@ -61,7 +61,9 @@ export function ChatFlagsPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2">
-        <h2 className="text-2xl font-bold text-foreground">Chat Support Flags</h2>
+        <h2 className="text-2xl font-bold text-foreground">
+          Chat Support Flags
+        </h2>
         <p className="text-sm text-muted-foreground">
           Sensitive chatbot messages, routed by severity. Critical and high
           flags reach faculty without the message text; Guidance sees the
@@ -161,7 +163,9 @@ export function ChatFlagsPage() {
                     <TableCell>{flag.source}</TableCell>
                     <TableCell>{formatDate(flag.created_at)}</TableCell>
                     <TableCell>
-                      {flag.escalation_due_at ? formatDate(flag.escalation_due_at) : "—"}
+                      {flag.escalation_due_at
+                        ? formatDate(flag.escalation_due_at)
+                        : "—"}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -172,7 +176,10 @@ export function ChatFlagsPage() {
       )}
 
       {selectedId ? (
-        <FlagDetail flagId={selectedId} onClose={() => setSelectedId(undefined)} />
+        <FlagDetail
+          flagId={selectedId}
+          onClose={() => setSelectedId(undefined)}
+        />
       ) : null}
     </div>
   )
@@ -233,7 +240,10 @@ function FlagDetail({
   if (flagQuery.isError || !flag) {
     return (
       <ErrorNote
-        message={normalizeApiError(flagQuery.error ?? new Error("Flag not found.")).message}
+        message={
+          normalizeApiError(flagQuery.error ?? new Error("Flag not found."))
+            .message
+        }
       />
     )
   }
@@ -257,7 +267,9 @@ function FlagDetail({
               {flag.student_name ?? "Unknown student"}
             </CardTitle>
             <CardDescription>
-              {flag.categories.length > 0 ? flag.categories.join(", ") : "No categories"}{" "}
+              {flag.categories.length > 0
+                ? flag.categories.join(", ")
+                : "No categories"}{" "}
               · detected by {flag.source}
               {flag.manual_review ? " · needs manual review" : ""}
             </CardDescription>
@@ -271,7 +283,9 @@ function FlagDetail({
       <CardContent className="space-y-4">
         <section className="space-y-2">
           <h3 className="text-sm font-semibold">Student message</h3>
-          <p className="rounded-md bg-muted px-3 py-2 text-sm">{flag.message}</p>
+          <p className="rounded-md bg-muted px-3 py-2 text-sm">
+            {flag.message}
+          </p>
           {flag.reply ? (
             <p className="rounded-md border border-border px-3 py-2 text-sm text-muted-foreground">
               {flag.reply}
@@ -400,7 +414,8 @@ function FlagDetail({
           <ul className="space-y-1 text-xs text-muted-foreground">
             {flag.actions.map((action) => (
               <li key={action.id}>
-                {formatDate(action.created_at)} · {action.action.replace("_", " ")}
+                {formatDate(action.created_at)} ·{" "}
+                {action.action.replace("_", " ")}
                 {action.actor_name ? ` · ${action.actor_name}` : ""}
                 {action.note ? ` · ${action.note}` : ""}
               </li>

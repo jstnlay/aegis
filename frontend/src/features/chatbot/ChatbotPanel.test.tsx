@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -115,7 +121,11 @@ describe("ChatbotPanel", () => {
         intent: "ask_attendance",
         urgency: "normal",
         data: {
-          attendance_summary: { present_days: 16, late_days: 2, absent_days: 2 },
+          attendance_summary: {
+            present_days: 16,
+            late_days: 2,
+            absent_days: 2,
+          },
         },
       },
     })
@@ -236,21 +246,14 @@ describe("ChatbotPanel", () => {
 
   it("names the assistant Aegi", () => {
     renderPanel()
-    expect(
-      screen.getByRole("heading", { name: "Aegi" })
-    ).toBeInTheDocument()
-    expect(
-      screen.getByText(/Your AEGIS school assistant/)
-    ).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "Aegi" })).toBeInTheDocument()
+    expect(screen.getByText(/Your AEGIS school assistant/)).toBeInTheDocument()
   })
 
   it("lists saved chats and opens one", async () => {
     mockGet({
       "/chatbot/threads/": {
-        results: [
-          { ...THREAD, id: "t2", title: "Science help" },
-          THREAD,
-        ],
+        results: [{ ...THREAD, id: "t2", title: "Science help" }, THREAD],
       },
       "/chatbot/threads/t1/": THREAD_DETAIL,
     })

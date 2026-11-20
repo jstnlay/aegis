@@ -524,16 +524,17 @@ describe("PH11.8 guidance routes", () => {
    * gained an endpoint in PH11 (TC-ADM-10), and the one operation with none —
    * deletion — is omitted rather than advertised.
    */
-  it.each([
-    ["/app/admin/attendance", /Read-only view/i],
-  ])("states the unsupported operations at %s", async (path, marker) => {
-    authState.user = makeUser("admin")
-    renderAt(path as string)
+  it.each([["/app/admin/attendance", /Read-only view/i]])(
+    "states the unsupported operations at %s",
+    async (path, marker) => {
+      authState.user = makeUser("admin")
+      renderAt(path as string)
 
-    expect(
-      await screen.findByText(marker as RegExp, undefined, LAZY_ROUTE_WAIT)
-    ).toBeInTheDocument()
-  })
+      expect(
+        await screen.findByText(marker as RegExp, undefined, LAZY_ROUTE_WAIT)
+      ).toBeInTheDocument()
+    }
+  )
 
   it("shows no unavailable-operations card on the users screen", async () => {
     authState.user = makeUser("admin")

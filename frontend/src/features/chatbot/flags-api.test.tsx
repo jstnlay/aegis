@@ -99,7 +99,11 @@ describe("guidance flag inbox", () => {
 describe("notice and history", () => {
   it("posts the accepted version to the notice endpoint", async () => {
     mockedPost.mockResolvedValueOnce({
-      data: { detail: "Notice accepted.", version: "2026-11-01", accepted_at: "now" },
+      data: {
+        detail: "Notice accepted.",
+        version: "2026-11-01",
+        accepted_at: "now",
+      },
     })
 
     const { result } = renderHook(() => useAcceptNotice(), {

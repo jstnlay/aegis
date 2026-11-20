@@ -358,8 +358,7 @@ function NewUserDialog() {
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState(EMPTY_STAFF_FORM)
 
-  const needsEmployeeId =
-    form.role === "faculty" || form.role === "guidance"
+  const needsEmployeeId = form.role === "faculty" || form.role === "guidance"
 
   const canSubmit =
     form.email.trim().length > 0 &&
@@ -376,8 +375,8 @@ function NewUserDialog() {
         <DialogHeader>
           <DialogTitle>Create an account</DialogTitle>
           <DialogDescription>
-            The role profile is written with the account, so the person lands
-            on a working page. A one-time link that lets them set their own
+            The role profile is written with the account, so the person lands on
+            a working page. A one-time link that lets them set their own
             password is emailed to them, so no password is chosen here and none
             travels by email. Add students with "Add student"; parents join
             through the invitation flow.
@@ -467,9 +466,7 @@ function NewUserDialog() {
             label="Role"
             id="new-user-role"
             value={form.role}
-            onChange={(value) =>
-              setForm({ ...form, role: value as StaffRole })
-            }
+            onChange={(value) => setForm({ ...form, role: value as StaffRole })}
             options={STAFF_ROLES.map((role) => ({
               value: role,
               label: USER_ROLE_LABELS[role],

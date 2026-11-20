@@ -309,7 +309,9 @@ export function ChatbotPanel({
       const turnId = response.data.chat_message_id ?? nextMessageId("u")
       setMessages((current) => [
         ...current.map((entry) =>
-          entry.id === userMessage.id ? { ...entry, id: `h-${turnId}-u` } : entry,
+          entry.id === userMessage.id
+            ? { ...entry, id: `h-${turnId}-u` }
+            : entry
         ),
         {
           id: `h-${turnId}-a`,
@@ -448,8 +450,8 @@ export function ChatbotPanel({
                       {thread.title || "Untitled chat"}
                     </span>
                     <span className="aegis-chat-history-meta">
-                      {threadDate(thread.updated_at)} ·{" "}
-                      {thread.message_count} message
+                      {threadDate(thread.updated_at)} · {thread.message_count}{" "}
+                      message
                       {thread.message_count === 1 ? "" : "s"}
                     </span>
                   </button>
@@ -780,7 +782,8 @@ function ResponseDetail({ response }: { response: ChatResponse }) {
       {attendance ? (
         <p>
           Present: {attendance.present_days ?? "—"} · Late:{" "}
-          {attendance.late_days ?? "—"} · Absent: {attendance.absent_days ?? "—"}
+          {attendance.late_days ?? "—"} · Absent:{" "}
+          {attendance.absent_days ?? "—"}
         </p>
       ) : null}
 
@@ -831,8 +834,8 @@ function ResponseDetail({ response }: { response: ChatResponse }) {
       */}
       {flag ? (
         <p className="flex items-center gap-1 font-medium">
-          <ShieldAlert aria-hidden="true" />
-          A guidance counselor has been notified.
+          <ShieldAlert aria-hidden="true" />A guidance counselor has been
+          notified.
         </p>
       ) : response.escalated ? (
         <Badge variant="destructive">Notified Guidance</Badge>
