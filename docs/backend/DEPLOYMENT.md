@@ -24,7 +24,7 @@ insecure deployment: `DJANGO_ALLOWED_HOSTS` must be non-empty,
 | `DJANGO_SECRET_KEY` | 50+ random characters; keep the existing value if already set |
 | `FIELD_ENCRYPTION_KEYS` | `python manage.py generate_encryption_key` output |
 | `REDIS_URL` | the Redis service's **Internal Redis URL** (see below) |
-| `IMPORT_QUEUE_ENABLED` | `true` on this deployment: large imports go to the `aegis-worker` service instead of a thread in the web process (see *Background work*) |
+| `IMPORT_QUEUE_ENABLED` | `false` on this deployment. `true` would hand a large import to the `aegis-worker` queue service, which is not deployed (Render's free plan has no background workers); with `false` the import runs in a worker thread in the web process (see *Background work*) |
 | `SENTRY_DSN` | optional; the Sentry project's DSN. Unset means no error reporting (see *Error reporting*) |
 | `SENTRY_ENVIRONMENT` | optional; defaults to `production` |
 | `AEGIS_FRONTEND_URL` | `https://aegis-frontend-neon.vercel.app` |
@@ -42,28 +42,29 @@ insecure deployment: `DJANGO_ALLOWED_HOSTS` must be non-empty,
 | `GEMINI_API_KEY` | the assistant's model key (see *The assistant's answers* below) |
 | `GEMINI_API_KEYS` | optional comma-separated fallback keys |
 
-The build command is `pip install`, `migrate`, then
-`provision_qa_accounts --reset-password`. The five shared DEV/QA logins are
-provisioned on every deploy: the free plan has no shell, so a manual run is not
-available, and the QA accounts must exist for a demo. `--reset-password` makes
-each account accept `QA_SHARED_PASSWORD`, so the documented password always
-works; without the flag the command never overwrites a tester-chosen password.
-Only the five allowlisted addresses are ever written. The variable must be set
-on the service or the build fails.
+The build command is `pip install`, `migrate`,
+`provision_qa_accounts --reset-password`, then `run_risk_computation`. The five
+shared DEV/QA logins are provisioned on every deploy: the free plan has no shell,
+so a manual run is not available, and the QA accounts must exist for a demo.
+`--reset-password` makes each account accept `QA_SHARED_PASSWORD`, so the
+documented password always works; without the flag the command never overwrites
+a tester-chosen password. Only the five allowlisted addresses are ever written.
+The variable must be set on the service or the build fails.
 
 `seed_qa_dataset` and `train_risk_model` stay out of the build: they write a
 synthetic school into the database, so they must only run by hand on a DEV/QA
-environment. `run_risk_computation` is also out of the build — but it is not
-left unscheduled. It runs on the `aegis-risk-recompute` cron service, so a
-score is never a side effect of a release and a deploy cannot overwrite live
-scores (Phase 5 of `docs/WEB_APP_PLAN.md`; see *Background work*).
+environment. `run_risk_computation` runs in the build because this deployment
+has no cron service to run it nightly (Phase 5 of `docs/WEB_APP_PLAN.md`; see
+*Background work* for what that tradeoff costs and how to undo it). It exits 0
+with a message when there is no trained model or no completed grading period, so
+a quiet run is not a failed deploy.
 
 Because the Blueprint is not linked to the live service, the build command and
 health check are Dashboard settings too. In **Settings → Build & Deploy** set:
 
 | Setting | Value |
 | --- | --- |
-| Build Command | `pip install -r ../requirements/production.txt && python manage.py migrate && python manage.py provision_qa_accounts --reset-password` |
+| Build Command | `pip install -r ../requirements/production.txt && python manage.py migrate && python manage.py provision_qa_accounts --reset-password && python manage.py run_risk_computation` |
 | Health Check Path | `/api/v1/health/` |
 
 Without this step the old build command keeps seeding the database even after
@@ -148,7 +149,7 @@ are off until a DSN is set.
 
 | Tier | Variable | Where |
 | --- | --- | --- |
-| Django (web, worker and cron services) | `SENTRY_DSN` | Render → each service's Environment |
+| Django (the web service) | `SENTRY_DSN` | Render → Environment |
 | Browser | `VITE_SENTRY_DSN` | Vercel → Environment Variables |
 
 Both values are publishable, but set them in the dashboards, not in the
@@ -209,9 +210,9 @@ Phase 4 of `WEB_APP_PLAN.md`. Push works only after both halves are set.
 
 2. Render → **Environment**: set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and
    `VAPID_ADMIN_EMAIL` (a `mailto:` contact, for example the verified sender)
-   on **both** services that send push: `aegis` (a notification created by a
-   web request) and `aegis-risk-recompute` (the nightly risk alerts). The same
-   pair on each. Save and redeploy.
+   on the `aegis` web service. It is the only service that sends push: a
+   notification is pushed from the request path, and the risk alerts go out
+   from the build command, which runs on this same service. Save and redeploy.
 3. Vercel → **Environment Variables**: set `VITE_VAPID_PUBLIC_KEY` to the
    same public key. Vite bakes it into the build, so redeploy the frontend.
 4. The sender shown by every provider is `AEGIS — HIS CARE CHRISTIAN INSTITUTE`
@@ -316,64 +317,68 @@ system down.
 
 ## Background work
 
-Phase 5 of `WEB_APP_PLAN.md`. Two Render services run the same image as the web
-service; neither answers HTTP.
+Phase 5 of `WEB_APP_PLAN.md` designed two extra Render services, neither of
+which answers HTTP:
 
 | Service | Command | Schedule |
 | --- | --- | --- |
 | `aegis-worker` (worker) | `python manage.py rqworker imports` | always on |
 | `aegis-risk-recompute` (cron) | `python manage.py run_risk_computation` | `0 18 * * *` UTC (02:00 Asia/Manila) |
 
-**Creating them.** The Blueprint is not linked to the live account (see
-*Production cutover*), so `render.yaml` does not create these services — add
-each by hand and give it the environment values listed under its own block in
-`render.yaml`:
+**Neither is deployed**, and that is the decision, not an oversight. Render
+grants free instances only to web services, static sites, Postgres and Key Value
+— *"Other service types don't support Free instances"* — and a background worker
+starts at about $7/month while a cron job carries a $1/month minimum. This
+deployment is free, so it runs without them. The commands and the queue code
+they exercise are left in place and still covered by the test suite, so
+reinstating them means adding two services, not changing the application.
 
-1. **New + → Worker**: name `aegis-worker`, repository `jstnlay/aegis`, branch
-   `master`, root directory `backend/aegis_backend`, build
-   `pip install -r ../requirements/production.txt`, start
-   `python manage.py rqworker imports`.
-2. **New + → Cron Job**: name `aegis-risk-recompute`, same repository, branch,
-   root directory and build, start `python manage.py run_risk_computation`,
-   schedule `0 18 * * *`.
-3. Copy the secrets each one needs from the web service (`DJANGO_SECRET_KEY`,
-   `FIELD_ENCRYPTION_KEYS`, `DATABASE_USER`, `DATABASE_PASSWORD`, and for the
-   cron the mail and `VAPID_*` values). Both must not migrate: the web service
-   owns migrations.
+What stands in for them:
 
-**Large imports.** A file above `IMPORT_SYNC_ROW_LIMIT` rows is handed to the
-`imports` RQ queue instead of running in a thread inside the request. A
-redeploy, a crash or a sleeping instance therefore no longer ends an import
-that was already accepted, and the client keeps polling
-`GET /api/v1/data-import/jobs/{id}/` exactly as before.
+| Was | Is |
+| --- | --- |
+| A large import handed to the `imports` queue | `IMPORT_QUEUE_ENABLED=false`: the import runs in a worker thread in the web process |
+| Risk scores recomputed nightly by the cron | `run_risk_computation` in the web service's build command, so scores refresh on each deploy |
 
-Turn it on per deployment with `IMPORT_QUEUE_ENABLED=true` (set on the web
-service; the queue itself is built from `REDIS_URL`, so the web process and the
-worker cannot disagree about where it lives). Both variables matter:
+**Large imports.** A file above `IMPORT_SYNC_ROW_LIMIT` (200 rows,
+`apps/data_import/constants.py`) runs in a thread inside the web process, not in
+the request: the POST still answers immediately and the client polls
+`GET /api/v1/data-import/jobs/{id}/` exactly as before. What the queue bought
+was durability — with a thread, a redeploy, a crash or a Render restart ends an
+import that was already accepted, and the job row stays `processing`. That is
+the cost of running without the worker.
 
-- `IMPORT_QUEUE_ENABLED` unset, or `django-rq` missing, or no queue configured
-  → the import runs in a worker thread in the web process. That is the
-  pre-Phase-5 path, kept on purpose: a Redis outage costs the durability
-  guarantee, never the import.
-- `REDIS_URL` unset or wrong → the enqueue fails, the failure is logged, and the
-  same threaded path runs the job.
-
-**A job that stops.** Redis on the free tier expires when it is idle, which
-destroys a queued job and would leave the client polling a job no process will
-finish. The job endpoint therefore fails any job that has sat in `pending` or
-`processing` for 30 minutes (`STALE_JOB_AFTER` in
+**A job that stops.** The job endpoint fails any job that has sat in `pending`
+or `processing` for 30 minutes (`STALE_JOB_AFTER` in
 `apps/data_import/runner.py`), with error code `JOB_QUEUE_LOST` telling the
-uploader to re-upload. The cutoff is far beyond the worst measured runtime, so
-an import that is genuinely still running is never marked failed underneath the
-worker doing it. If you raise `MAX_IMPORT_ROWS`, raise that cutoff with it.
+uploader to re-upload, so a stuck job is never a client polling forever. With
+the queue off, that also covers a thread killed by a restart between polls. The
+cutoff is far beyond the worst measured runtime, so an import that is genuinely
+still running is never marked failed underneath the worker doing it. If you
+raise `MAX_IMPORT_ROWS`, raise that cutoff with it.
 
-**Risk scores.** `run_risk_computation` runs on the cron service, not during a
-deploy, so a score is never a side effect of a release and never overwrites
-live data mid-deploy. The command exits 0 with a message when there is no
-trained model or no completed grading period, so a quiet run is not a failure.
-Risk alerts are dispatched from that run, so the cron service carries the same
-mail and `VAPID_*` variables as the web service; without them the scores are
-still recomputed and the in-app notification still lands.
+**Risk scores.** `run_risk_computation` runs in the build command (see
+*Production cutover*). A score therefore refreshes on each deploy rather than
+every night, and a deploy rewrites every score: with one web service and no cron
+that is the tradeoff, and the command is safe to run because it exits 0 with a
+message when there is no trained model or no completed grading period. Risk
+alerts dispatched from that run use the same mail and `VAPID_*` variables as the
+service it runs on; without them the scores are still recomputed and only the
+in-app notification lands.
+
+**Reinstating Phase 5.** Add the two services back and switch the queue on:
+create **New + → Worker** named `aegis-worker` (repository `jstnlay/aegis`,
+branch `master`, root directory `backend/aegis_backend`, build
+`pip install -r ../requirements/production.txt`, start
+`python manage.py rqworker imports`) and **New + → Cron Job** named
+`aegis-risk-recompute` (same repository, branch, root and build, start
+`python manage.py run_risk_computation`, schedule `0 18 * * *`); give each the
+environment from the matching `render.yaml` block (the earlier revisions of this
+file and of `render.yaml` in git history list them in full); then set
+`IMPORT_QUEUE_ENABLED=true` on the web service and drop `run_risk_computation`
+from its build command. Neither service may migrate: the web service owns
+migrations.
+
 
 ### Running the worker locally
 

@@ -24,9 +24,12 @@ cryptography>=42,<51
 pywebpush>=2.0,<3.0
 
 # Import queue (Phase 5). A large import is handed to an RQ queue on Redis and
-# executed by a separate worker process (`manage.py rqworker imports`, see
-# render.yaml), so a redeploy or a sleeping instance cannot lose it. A
-# deployment turns the queue on with IMPORT_QUEUE_ENABLED; without it, or
-# without a reachable Redis, the import still runs in a thread in the web
-# process, so this is a dependency of durability, not of importing.
+# executed by a separate worker process (`manage.py rqworker imports`), so a
+# redeploy or a sleeping instance cannot lose it. A deployment turns the queue
+# on with IMPORT_QUEUE_ENABLED; without it, or without a reachable Redis, the
+# import still runs in a thread in the web process, so this is a dependency of
+# durability, not of importing. The thread path is the one this deployment uses:
+# it is on Render's free plan, which gives no background worker, so the queue
+# stays off and the dependency is only exercised by the tests and by anyone who
+# pays for the worker (see docs/WEB_APP_PLAN.md, Phase 5).
 django-rq>=3,<4

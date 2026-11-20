@@ -1,13 +1,17 @@
 # AEGIS: from website to web application
 
-**Status: Phases 1–7 are built. Phases 1, 2, 3, 4 and 6 are deployed; Phase 5's
-worker and cron services are defined in `render.yaml` and need creating in the
-Render dashboard.** The install prompt, offline page and recovery were verified
-in Chrome. Phase 7's five role journeys, error reporting and uptime check are
-built; the journeys were verified locally against a seeded stack, and error
-reporting stays off until a DSN is set. The two-browser notification check, the
-push delivery check on a real device, and the Render dashboard work (worker and
-cron services, `VAPID_*`) are still outstanding.
+**Status: Phases 1–7 are built and deployed; Phase 5 ships without its two
+services.** Phases 1, 2, 3, 4, 6 and 7 are deployed. Render's free plan offers no
+background worker and no cron job, and the paid pair was declined, so Phase 5's
+`aegis-worker` and `aegis-risk-recompute` are not deployed: imports run in the
+documented worker thread, the risk recompute runs in the web service's build
+command, and the queue code, its switch and the reaper stay in place for when
+the worker is paid for (see the Phase 5 status note and D4). The install prompt,
+offline page and recovery were verified in Chrome. Phase 7's five role journeys,
+error reporting and uptime check are built and green in CI; error reporting
+stays off until a DSN is set. The two-browser notification check, the push
+delivery check on a real device, and the remaining dashboard work (`VAPID_*`, a
+verified sender, a Sentry project, D5's domain) are still outstanding.
 
 **Scope.** How the deployed AEGIS stops being "a website that happens to have
 pages behind a login" and becomes an application a parent or a student opens
@@ -97,8 +101,10 @@ Render web service (gunicorn, production settings)
         │        ├── Redis                          shared throttle cache + job queue
         │        └── Strapi (Render)                content, media in Supabase Storage
         │
-        └── background worker (separate service, same image)
+        └── background worker (separate service, same image) — Phase 5, not deployed
                  · import jobs      · risk recompute      · push delivery
+                 (this deployment instead runs the import in a worker thread in
+                  the web process and the risk recompute in its build command)
 ```
 
 Two invariants:
@@ -376,6 +382,19 @@ Imports and risk recomputation stop being side effects of a deploy.
 **Verification:** backend tests for the queue path; manual redeploy during a
 large import.
 
+**Status on this deployment (2026-11-21).** Render's free plan has no background
+worker and no cron job — free instances are web services, static sites and data
+stores only — and the paid pair (about $8/month) was declined. So the two
+services are not deployed: `render.yaml` no longer declares them,
+`IMPORT_QUEUE_ENABLED` is `false` on the web service, and
+`run_risk_computation` runs in that service's build command. The third criterion
+holds unchanged, and the second holds only at deploy time. **The first criterion
+is not met on this deployment:** without the worker, a redeploy mid-job still
+ends the import, which is the pre-Phase-5 behaviour. The queue, the fallback and
+the reaper stay in the code and under test, so paying for the worker later means
+two service definitions and one variable, not a rework — the escape hatch D4
+named.
+
 **Files:** `backend/aegis_backend/apps/data_import/runner.py`,
 `backend/aegis_backend/apps/data_import/apps.py`,
 `backend/requirements/production.txt`, `render.yaml`.
@@ -532,9 +551,9 @@ the live deployment, which answered
 | D1 | **Offline student data.** §A.9 of the approved spec says "No offline access" and "Internet connection required at all times". | **Not in scope, and it stays that way.** The limitation was signed off before this plan existed, so it is not reopened. The service worker caches the shell and static assets only; no API response is ever cached. | Closed |
 | D2 | **Push notification scope.** Panel correction #16 asks what is needed and is applicable; §L OQ-7 asks whether in-app plus email is enough for v1. | **All notification types.** Grade posted, attendance threshold, behaviour, assessments, risk alerts, interventions, announcements, consultations, maintenance — same fan-out as in-app and email, one extra channel. | Closed |
 | D3 | **Sending identity for push and mail.** Web push shows the app's own name; email needs a verified sender. | **`AEGIS — HIS CARE CHRISTIAN INSTITUTE`.** Email still needs a provider-verified address (e.g. `no-reply@<school-domain>`) passed as `DEFAULT_FROM_EMAIL` with this display name; push labels itself with the installed app name. | Closed — the sender address is an ops value, not a code value |
-| D4 | **Hosting tier.** Phase 5 needs a worker service and a scheduler. | **Vercel and Render stay.** A worker is a separate Render service from the same image; another provider is acceptable if Render's sleep behaviour or price does not work. | Closed, with the escape hatch named |
+| D4 | **Hosting tier.** Phase 5 needs a worker service and a scheduler. | **Vercel and Render stay.** A worker is a separate Render service from the same image; another provider is acceptable if Render's sleep behaviour or price does not work. Outcome (2026-11-21): Render's free plan offers neither a background worker nor a cron job, and the paid pair was declined, so the deployment runs both jobs without those services — imports in the documented worker thread, the risk recompute in the build command — and the two service blocks were dropped from `render.yaml`. The escape hatch stays named and unused. | Closed |
 | D5 | **Domain and certificate.** The app is installed from `*.vercel.app` today. A school domain makes the install feel real. | Unanswered. | Open — does not block any phase |
-| D6 | **Redis durability.** The shared throttle cache is a Render Redis instance. If it sits on the free tier it can expire after a period of inactivity, which silently turns the rate limits back to per-process without failing anything. | **The instance is on the free tier, and the queue is built to survive it.** The import queue still runs on that Redis — it is the instance that already exists, and the paid tier buys durability we can add later without a code change. What the free tier costs is the *broker*, never the import: the enqueue falls back to the pre-Phase-5 in-process worker thread whenever Redis cannot take the job, and a job whose Redis key vanished is failed by the reaper (`JOB_QUEUE_LOST`) instead of leaving the uploader polling a job no process will finish. See §5.1 for what the free tier means for the *cache*, which is a separate question. | Closed — Phase 5 built on these terms |
+| D6 | **Redis durability.** The shared throttle cache is a Render Redis instance. If it sits on the free tier it can expire after a period of inactivity, which silently turns the rate limits back to per-process without failing anything. | **The instance is on the free tier, and the queue is built to survive it.** The import queue was built on that Redis — it is the instance that already exists, and the paid tier buys durability we can add later without a code change (the queue itself is off on this deployment; see D4's outcome). What the free tier costs is the *broker*, never the import: the enqueue falls back to the pre-Phase-5 in-process worker thread whenever Redis cannot take the job, and a job whose Redis key vanished is failed by the reaper (`JOB_QUEUE_LOST`) instead of leaving the uploader polling a job no process will finish. See §5.1 for what the free tier means for the *cache*, which is a separate question. | Closed — Phase 5 built on these terms |
 
 **What the closed answers change in this plan**
 
