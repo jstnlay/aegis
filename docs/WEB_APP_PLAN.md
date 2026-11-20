@@ -489,6 +489,17 @@ reports `release=deadbeefcafe` (the `RENDER_GIT_COMMIT` used for the check),
 `environment=production`, `traces_sample_rate=0.0`, `send_default_pii=False`,
 `max_request_body_size="never"` and `DjangoIntegration` installed.
 
+**CI is green (2026-11-20)** on `637f19c`: Frontend 1m59s (Lint, Format check,
+Type check, Tests, Build, Installability check), End-to-end 1m36s with the five
+journeys passing in 27.6 s on the runner, Backend 9m32s. Getting there needed
+two extra commits, both repo hygiene rather than Phase 7 work: `check-pwa.mjs`
+was itself unformatted, and thirteen files from the chatbot feature were
+failing the Format check that runs before Type check, Tests and Build in the
+frontend job — so nothing else in that job had run on `master` since those
+landed. The uptime workflow was dispatched by hand and passed in 7 s against
+the live deployment, which answered
+`{"status":"ok","database":true,"cache":"shared"}`.
+
 **Tasks**
 
 1. Add Playwright end-to-end coverage over one path per role: sign in, land
