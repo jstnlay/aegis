@@ -146,6 +146,19 @@ services:
       - key: SUPABASE_S3_SECRET_KEY
         sync: false
 
+      # Web Push (Phase 4). A notification this service creates is pushed from
+      # the request path (`apps/notifications/events.py` calls the push helper
+      # synchronously), so the web service needs the same pair as the
+      # risk-recompute cron below — without it, push is skipped here and only
+      # the cron's alerts would ever reach a device. Declared without values:
+      # the pair lives in the Render dashboard only.
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_ADMIN_EMAIL
+        sync: false
+
       # Shared throttle cache and outgoing mail (see docs/backend/DEPLOYMENT.md).
       # REDIS_URL points at the Render Redis service; without it the rate limits
       # are enforced per gunicorn worker. EMAIL_BACKEND selects the delivery
@@ -349,6 +362,8 @@ services:
       - key: VAPID_PUBLIC_KEY
         sync: false
       - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_ADMIN_EMAIL
         sync: false
       # The alert email links back into the deployed frontend.
       - key: AEGIS_FRONTEND_URL

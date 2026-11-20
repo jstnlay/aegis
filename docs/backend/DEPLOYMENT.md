@@ -208,8 +208,10 @@ Phase 4 of `WEB_APP_PLAN.md`. Push works only after both halves are set.
    `private_key` is base64url; it never leaves the server.
 
 2. Render → **Environment**: set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and
-   `VAPID_ADMIN_EMAIL` (a `mailto:` contact, for example the verified sender).
-   Save and redeploy.
+   `VAPID_ADMIN_EMAIL` (a `mailto:` contact, for example the verified sender)
+   on **both** services that send push: `aegis` (a notification created by a
+   web request) and `aegis-risk-recompute` (the nightly risk alerts). The same
+   pair on each. Save and redeploy.
 3. Vercel → **Environment Variables**: set `VITE_VAPID_PUBLIC_KEY` to the
    same public key. Vite bakes it into the build, so redeploy the frontend.
 4. The sender shown by every provider is `AEGIS — HIS CARE CHRISTIAN INSTITUTE`
@@ -321,6 +323,23 @@ service; neither answers HTTP.
 | --- | --- | --- |
 | `aegis-worker` (worker) | `python manage.py rqworker imports` | always on |
 | `aegis-risk-recompute` (cron) | `python manage.py run_risk_computation` | `0 18 * * *` UTC (02:00 Asia/Manila) |
+
+**Creating them.** The Blueprint is not linked to the live account (see
+*Production cutover*), so `render.yaml` does not create these services — add
+each by hand and give it the environment values listed under its own block in
+`render.yaml`:
+
+1. **New + → Worker**: name `aegis-worker`, repository `jstnlay/aegis`, branch
+   `master`, root directory `backend/aegis_backend`, build
+   `pip install -r ../requirements/production.txt`, start
+   `python manage.py rqworker imports`.
+2. **New + → Cron Job**: name `aegis-risk-recompute`, same repository, branch,
+   root directory and build, start `python manage.py run_risk_computation`,
+   schedule `0 18 * * *`.
+3. Copy the secrets each one needs from the web service (`DJANGO_SECRET_KEY`,
+   `FIELD_ENCRYPTION_KEYS`, `DATABASE_USER`, `DATABASE_PASSWORD`, and for the
+   cron the mail and `VAPID_*` values). Both must not migrate: the web service
+   owns migrations.
 
 **Large imports.** A file above `IMPORT_SYNC_ROW_LIMIT` rows is handed to the
 `imports` RQ queue instead of running in a thread inside the request. A
