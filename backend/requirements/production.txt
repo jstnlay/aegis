@@ -23,3 +23,10 @@ django-redis>=5,<7
 # changes for a deployment that has not configured storage.
 django-storages>=1.14,<2.0
 boto3>=1.35,<2.0
+
+# Error reporting (Phase 7). Off unless the deployment sets SENTRY_DSN, so this
+# is listed in production only: a local run, a test run and a deployment with
+# no Sentry project all start with nothing installed and nothing reported.
+# The Django extra pulls the integration that turns an unhandled view exception
+# into an event with the request, the user role and the release attached.
+sentry-sdk[django]>=2,<3

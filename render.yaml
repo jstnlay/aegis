@@ -201,6 +201,14 @@ services:
       - key: IMPORT_QUEUE_ENABLED
         value: "true"
 
+      # Error reporting (Phase 7). A Sentry DSN, so an unhandled exception in
+      # production shows up with its traceback, its release and its request
+      # instead of only in the service log. Leave it unset and reporting is off.
+      - key: SENTRY_DSN
+        sync: false
+      - key: SENTRY_ENVIRONMENT
+        value: production
+
   # Import worker (Phase 5). The same image as the web service, run as a
   # worker: a redeploy, a crash or a sleeping instance no longer ends an import
   # that was already accepted, and the job row stops being a side effect of a
@@ -255,6 +263,12 @@ services:
       # Where the jobs come from: the same Redis the web service caches on.
       - key: REDIS_URL
         sync: false
+      # Error reporting (Phase 7): a worker crash is exactly the event nobody
+      # is watching a log for.
+      - key: SENTRY_DSN
+        sync: false
+      - key: SENTRY_ENVIRONMENT
+        value: production
 
   # Scheduled risk recomputation (Phase 5, D9). Scores used to be recomputed
   # only while deploying, which meant a student's score was as old as the last
@@ -339,6 +353,12 @@ services:
       # The alert email links back into the deployed frontend.
       - key: AEGIS_FRONTEND_URL
         value: https://aegis-frontend-neon.vercel.app
+      # Error reporting (Phase 7). A cron run has no request and no viewer; an
+      # exception here is otherwise only in a log nobody opens.
+      - key: SENTRY_DSN
+        sync: false
+      - key: SENTRY_ENVIRONMENT
+        value: production
 
   # Strapi 5 CMS service (Phase 7). Content authoring happens in the Strapi
   # admin panel; AEGIS only ever reads it (see cms/config/middlewares.ts):

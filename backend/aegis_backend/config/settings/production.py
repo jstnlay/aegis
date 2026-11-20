@@ -167,3 +167,50 @@ REST_FRAMEWORK["DEFAULT_RENDERER_CLASSES"] = [  # noqa: F405
 EMAIL_BACKEND = _env_config(
     "EMAIL_BACKEND", default="django.core.mail.backends.smtp.EmailBackend"
 )
+
+# ---------------------------------------------------------------------------
+# Error reporting (Phase 7)
+# ---------------------------------------------------------------------------
+#
+# Off until the deployment sets SENTRY_DSN, so a local run, a test run and a
+# deployment that has not created a Sentry project yet all start with no
+# outbound reporting. The SDK is imported inside the guard rather than at the
+# top: production.txt is the only requirements file that installs it, and a
+# missing package must never be what stops the app from booting.
+#
+# release: the commit Render built, so an error names the deploy it came from.
+# Render sets RENDER_GIT_COMMIT; without it the release is unknown, which the
+# SDK accepts.
+#
+# max_request_body_size="never": a request body can be a grade entry, an
+# assessment draft, a password change or an import row. None of that belongs in
+# a third-party project, and none of it is needed to debug a stack trace.
+#
+# traces_sample_rate=0.0: errors only. Per-request latency is already visible
+# in Render's metrics, so spans here would be cost without a question to
+# answer.
+# ---------------------------------------------------------------------------
+
+SENTRY_DSN = _env_config("SENTRY_DSN", default="")
+
+if SENTRY_DSN:
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.django import DjangoIntegration
+    except ImportError:
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "SENTRY_DSN is set but sentry-sdk is not installed, so errors are "
+            "not reported. Install requirements/production.txt."
+        )
+    else:
+        sentry_sdk.init(
+            dsn=SENTRY_DSN,
+            integrations=[DjangoIntegration()],
+            release=_env_config("RENDER_GIT_COMMIT", default="") or None,
+            environment=_env_config("SENTRY_ENVIRONMENT", default="production"),
+            traces_sample_rate=0.0,
+            send_default_pii=False,
+            max_request_body_size="never",
+        )
