@@ -8,10 +8,13 @@ documented worker thread, the risk recompute runs in the web service's build
 command, and the queue code, its switch and the reaper stay in place for when
 the worker is paid for (see the Phase 5 status note and D4). The install prompt,
 offline page and recovery were verified in Chrome. Phase 7's five role journeys,
-error reporting and uptime check are built and green in CI; error reporting
-stays off until a DSN is set. The two-browser notification check, the push
-delivery check on a real device, and the remaining dashboard work (`VAPID_*`, a
-verified sender, a Sentry project, D5's domain) are still outstanding.
+error reporting and uptime check are built and green in CI. The dashboard work
+is done: `VAPID_*` are set on the web service and `VITE_VAPID_PUBLIC_KEY` is
+compiled into the deployed bundle, mail goes out through Brevo with a verified
+sender, and both Sentry projects receive events. What remains is verification
+and one decision: the two-browser notification check, the push delivery check
+on a real device, a real recipient observed receiving a notification mail, and
+D5's domain.
 
 **Scope.** How the deployed AEGIS stops being "a website that happens to have
 pages behind a login" and becomes an application a parent or a student opens
@@ -482,8 +485,7 @@ Sentry code at all, and `ErrorBoundary` reports what it catches because a
 caught render error never reaches `window.onerror`. Release is
 `VERCEL_GIT_COMMIT_SHA`, compiled in by a `define` in `vite.config.ts` (Vite
 only reads `VITE_`-prefixed variables, and Vercel sets that one without the
-prefix). `render.yaml` declares `SENTRY_DSN` on the web, worker and cron
-services.
+prefix). `render.yaml` declares `SENTRY_DSN` on the web service.
 
 CI gained the installability step, which fails on a broken manifest, a missing
 icon or a worker that lost its push import, and
