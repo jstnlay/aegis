@@ -9,10 +9,15 @@ import { OfflineGate } from "@/features/pwa/OfflineGate"
 // menu exists. The event fires once; a listener mounted with the menu is late.
 import "@/features/pwa/install-prompt"
 import { AuthProvider } from "@/features/auth/AuthContext"
+import { initErrorReporting } from "@/lib/error-reporting"
 import { queryClient } from "@/lib/queryClient"
 import { router } from "@/routes/router"
 
 import "./index.css"
+
+// Fire-and-forget, and a no-op unless VITE_SENTRY_DSN is set: the SDK loads in
+// its own chunk, so the render below is never waiting on it.
+initErrorReporting()
 
 const container = document.getElementById("root")
 

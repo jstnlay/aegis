@@ -1,6 +1,7 @@
 import { Component, createRef, type ErrorInfo, type ReactNode } from "react"
 
 import { Button } from "@/components/ui/button"
+import { captureError } from "@/lib/error-reporting"
 
 /**
  * Application-level error boundary.
@@ -70,6 +71,9 @@ export class ErrorBoundary extends Component<
       error,
       info.componentStack
     )
+    // A caught render error never reaches window.onerror, so the last-resort
+    // boundary is the only place it can be reported (no-op without a DSN).
+    captureError(error)
   }
 
   componentDidUpdate(prevProps: ErrorBoundaryProps): void {

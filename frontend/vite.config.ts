@@ -55,6 +55,17 @@ export default defineConfig({
       "@": fileURLToPath(new URL("./src", import.meta.url)),
     },
   },
+  /*
+   * The deploy's commit SHA, so a frontend error names the release it came
+   * from. Vite only exposes `VITE_`-prefixed variables to the bundle and Vercel
+   * sets this one without the prefix, so it is compiled in here. Locally it is
+   * "dev" (see src/vite-env.d.ts).
+   */
+  define: {
+    __AEGIS_RELEASE__: JSON.stringify(
+      process.env.VERCEL_GIT_COMMIT_SHA ?? "dev"
+    ),
+  },
   server: {
     port: 5173,
     host: "127.0.0.1",

@@ -16,12 +16,14 @@
     "preview": "vite preview",
     "test": "vitest run",
     "check:pwa": "node scripts/check-pwa.mjs",
+    "e2e": "playwright test",
     "smoke": "esbuild scripts/smoke.tsx --bundle --platform=node --format=cjs --define:import.meta.env={} --outfile=scripts/.smoke.cjs --jsx=automatic --alias:@=./src --log-level=warning && node scripts/.smoke.cjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",
     "@fontsource-variable/plus-jakarta-sans": "^5.3.0",
     "@hookform/resolvers": "^5.9.1",
+    "@sentry/react": "^11.16.0",
     "@tanstack/react-query": "^5.102.8",
     "axios": "^1.20.0",
     "class-variance-authority": "^0.7.1",
@@ -41,6 +43,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.65.1",
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
