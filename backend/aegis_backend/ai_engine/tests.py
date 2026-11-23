@@ -224,8 +224,8 @@ class AIEngineTestBase(TestCase):
             )
 
     def add_attendance(self, student, section, total, present, late=0):
-        """Add attendance records for a student."""
-        start = date(2024, 6, 11)
+        """Add attendance records inside Q2, the period the command tests score."""
+        start = date(2024, 9, 1)
         for i in range(total):
             status = "present"
             if i >= present:
@@ -1289,10 +1289,7 @@ class TrainRiskModelCommandTest(AIEngineTestBase):
     """
 
     def _seed_students(self, count=15):
-        """Enough varied students for the labeler to produce all three classes."""
-        from ai_engine.feature_engine import compute_student_features
-
-        datasets = []
+        """Enough varied students for the quarterly rule to produce all classes."""
         for i in range(count):
             user = User.objects.create_user(
                 email=f"train{i}@ai.test", password="pass12345",
@@ -1323,12 +1320,12 @@ class TrainRiskModelCommandTest(AIEngineTestBase):
                 (self.sa_math, self.gp_q2, Decimal(str(scores[0]))),
                 (self.sa_eng, self.gp_q2, Decimal(str(scores[1]))),
                 (self.sa_sci, self.gp_q2, Decimal(str(scores[2]))),
+                # Previous quarter is required for the Q2 grade trend.
+                (self.sa_math, self.gp_q1, Decimal(str(scores[0]))),
+                (self.sa_eng, self.gp_q1, Decimal(str(scores[1]))),
+                (self.sa_sci, self.gp_q1, Decimal(str(scores[2]))),
             ])
             self.add_attendance(sp, self.section, 10, present)
-            datasets.append(compute_student_features(
-                sp, [self.gp_q1, self.gp_q2], self.academic_year
-            ))
-        return datasets
 
     def test_trains_and_persists_a_model(self):
         """
@@ -1353,7 +1350,7 @@ class TrainRiskModelCommandTest(AIEngineTestBase):
         self.assertEqual(artifact.n_samples, 15)
         self.assertEqual(artifact.academic_year, self.academic_year)
 
-        loaded = load_stored_model("v1")
+        loaded = load_stored_model("quarterly_v1_q2")
         self.assertIsNotNone(loaded, "stored model could not be loaded")
         model, metadata = loaded
         self.assertIsNotNone(model)
@@ -1511,55 +1508,11 @@ class RunRiskComputationCommandTest(AIEngineTestBase):
     TypeError on the first student with data and no test ever invoked it.
     """
 
-    def train_and_save_model(self, path):
-        """Train on this class's fixtures and persist to `path`."""
-        from ai_engine.feature_engine import compute_student_features
-        from ai_engine.labeler import rule_based_label
-        from ai_engine.risk_scorer import save_model, train
-
-        datasets = []
-        for i in range(15):
-            user = User.objects.create_user(
-                email=f"cmd{i}@ai.test", password="pass12345",
-                first_name=f"Cmd{i}", last_name="Student", role="student",
-            )
-            sp = StudentProfile.objects.create(
-                user=user,
-                student_id=f"CM{i:04d}",
-                grade_level=self.grade_level,
-                section=self.section,
-                enrollment_date=date(2024, 6, 10),
-            )
-            Enrollment.objects.create(
-                student=sp, section=self.section,
-                academic_year=self.academic_year,
-                date_enrolled=date(2024, 6, 10), is_active=True,
-            )
-            high = i % 3 == 0
-            scores = (
-                [92, 90, 88] if high else
-                ([75, 72, 70] if i % 3 == 1 else [60, 58, 62])
-            )
-            self.add_grades(sp, [
-                (self.sa_math, self.gp_q2, Decimal(str(scores[0]))),
-                (self.sa_eng, self.gp_q2, Decimal(str(scores[1]))),
-                (self.sa_sci, self.gp_q2, Decimal(str(scores[2]))),
-            ])
-            self.add_attendance(sp, self.section, 10, 10 if high else 6)
-
-            features = compute_student_features(
-                sp, [self.gp_q1, self.gp_q2], self.academic_year
-            )
-            features["label"] = rule_based_label(features)
-            datasets.append(features)
-
-        model, metadata = train(datasets)
-        save_model(model, metadata, path=path)
-
-    def test_missing_model_refuses_to_compute(self):
+    def test_missing_model_still_computes_the_rule_score(self):
         """
-        With no stored model the command reports and stops rather than
-        fabricating a score.
+        The guide runs the trained model "if available". A missing artifact
+        makes only the model category and index unavailable; the rule result
+        is still computed and stored.
         """
         import io
 
@@ -1567,6 +1520,7 @@ class RunRiskComputationCommandTest(AIEngineTestBase):
 
         from apps.guidance.models import RiskModelArtifact
 
+        self._seed_for_command()
         RiskScore.objects.all().delete()
         RiskModelArtifact.objects.all().delete()
 
@@ -1574,15 +1528,18 @@ class RunRiskComputationCommandTest(AIEngineTestBase):
         call_command("run_risk_computation", stdout=out, stderr=err)
 
         self.assertIn("train_risk_model", err.getvalue())
-        # No fabricated rows: nothing was written.
-        self.assertEqual(RiskScore.objects.count(), 0)
+        self.assertGreater(
+            RiskScore.objects.filter(
+                computation_status="ready", model_version="quarterly_rule_v1"
+            ).count(),
+            0,
+        )
 
     def test_inactive_artifact_is_not_loaded(self):
         """
         A superseded artifact must not be scored, even when it is the only one
-        left in the table.
+        left in the table. The rule score still runs.
         """
-        import io
         from io import StringIO
 
         from django.core.management import call_command
@@ -1600,17 +1557,19 @@ class RunRiskComputationCommandTest(AIEngineTestBase):
         call_command("run_risk_computation", stdout=StringIO(), stderr=err)
 
         self.assertIn("train_risk_model", err.getvalue())
-        self.assertEqual(
-            RiskScore.objects.filter(computation_status="ready").count(), 0
+        self.assertGreater(
+            RiskScore.objects.filter(
+                computation_status="ready", model_version="quarterly_rule_v1"
+            ).count(),
+            0,
         )
 
     def test_unreadable_artifact_is_treated_as_absent(self):
         """
-        A corrupt or incompatible artifact cannot be scored with. Treating it
-        as absent is correct; substituting a fallback would fabricate a risk
-        level.
+        A corrupt artifact cannot be scored with. Treating it as absent is
+        correct; the rule score is still available and the model result is
+        flagged unavailable rather than fabricated.
         """
-        import io
         from io import StringIO
 
         from django.core.management import call_command
@@ -1628,8 +1587,11 @@ class RunRiskComputationCommandTest(AIEngineTestBase):
         call_command("run_risk_computation", stdout=StringIO(), stderr=err)
 
         self.assertIn("train_risk_model", err.getvalue())
-        self.assertEqual(
-            RiskScore.objects.filter(computation_status="ready").count(), 0
+        self.assertGreater(
+            RiskScore.objects.filter(
+                computation_status="ready", model_version="quarterly_rule_v1"
+            ).count(),
+            0,
         )
 
     def _seed_for_command(self):
@@ -1659,6 +1621,10 @@ class RunRiskComputationCommandTest(AIEngineTestBase):
                 (self.sa_math, self.gp_q2, Decimal(str(scores[0]))),
                 (self.sa_eng, self.gp_q2, Decimal(str(scores[1]))),
                 (self.sa_sci, self.gp_q2, Decimal(str(scores[2]))),
+                # Q2 trend needs the previous quarter's averages.
+                (self.sa_math, self.gp_q1, Decimal(str(scores[0]))),
+                (self.sa_eng, self.gp_q1, Decimal(str(scores[1]))),
+                (self.sa_sci, self.gp_q1, Decimal(str(scores[2]))),
             ])
             self.add_attendance(sp, self.section, 10, 10 if i % 3 == 0 else 5)
 

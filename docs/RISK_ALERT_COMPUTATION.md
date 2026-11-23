@@ -4,6 +4,15 @@ Purpose: a self-contained, checkable description of how a student's risk level a
 risk alert are produced. Written for external/domain review. Every number here is a
 value currently in the code, not an aspiration.
 
+> **Superseded for the pilot pipeline.** `train_risk_model` and
+> `run_risk_computation` now use the quarterly computation in
+> `ai_engine/quarterly_risk.py`, which follows
+> `AEGIS_Developer_Implementation_Guide.md`. The stage table and thresholds below
+> describe the earlier at-risk/binary pipeline (`ai_engine/at_risk.py`,
+> `ai_engine/feature_engine.py`, `ai_engine/risk_scorer.py`,
+> `ai_engine/labeler.py`), which is still used by `run_at_risk_alerts` and its
+> tests. The alert trigger in section 5 already matches the pilot policy.
+
 Code paths (all under `backend/aegis_backend/`):
 
 | Stage | File | Function |

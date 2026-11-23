@@ -1,31 +1,42 @@
 """
-Scheduled batch risk computation (PH9 D9 primary trigger).
+Quarterly batch risk computation (pilot scoring version ``quarterly_v1``).
 
-Computes risk scores for all active students and integrates them into
-RiskScore + RiskAlert (+ notifications).
+For one completed quarter it computes, per active student, the guide's measured
+inputs, the rule score and label, and, when an applicable, complete model is
+available, the model category and Risk Index. Every result is stored as a
+RiskScore; a RiskAlert follows the pilot notification policy (no prior alert,
+category change, or a 10-point same-category index move).
 
-Run via Celery beat / cron:
     python manage.py run_risk_computation
+    python manage.py run_risk_computation --dry-run
+    python manage.py run_risk_computation --quarter-id <uuid>
 
-Requires a trained model on disk (ai_engine/saved_models/decision_tree_v1.pkl).
-Write one with `python manage.py train_risk_model`. When the model is absent this
-command refuses to run rather than inventing a score: an unfitted estimator would
-raise, and a fabricated 0 would read as real risk data.
+The rule result is available without a model. A missing or unusable tree makes
+only the model category and index unavailable; it does not suppress the rule
+result.
 """
 
 import logging
 
 from django.core.management.base import BaseCommand
 
-from ai_engine.feature_engine import compute_student_features
+from ai_engine.quarterly_risk import (
+    build_prediction,
+    compute_quarter_inputs,
+    held_result,
+    load_model_for_quarter,
+    model_version_for_quarter,
+    predict,
+    resolve_quarter,
+    score_rule,
+)
 from ai_engine.risk_service import integrate_risk_result
-from ai_engine.risk_scorer import load_stored_model, predict_single
 
 logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
-    help = "Run scheduled batch risk computation for all active students."
+    help = "Run the quarterly pilot risk computation for active students."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -35,15 +46,28 @@ class Command(BaseCommand):
             help="Restrict to a specific academic year (id).",
         )
         parser.add_argument(
+            "--quarter-id",
+            type=str,
+            default=None,
+            help="Grading period UUID to process (defaults to latest completed).",
+        )
+        parser.add_argument(
+            "--quarter",
+            type=int,
+            default=None,
+            help="Quarter order (1-4) to process.",
+        )
+        parser.add_argument(
             "--dry-run",
             action="store_true",
             help="Compute but do not persist or notify.",
         )
 
     def handle(self, *args, **options):
-        from apps.accounts.models import StudentProfile
-        from apps.academics.models import AcademicYear, GradingPeriod
         from datetime import date
+
+        from apps.academics.models import AcademicYear
+        from apps.accounts.models import StudentProfile
 
         academic_year = None
         if options.get("academic_year_id"):
@@ -63,100 +87,105 @@ class Command(BaseCommand):
             )
             return
 
-        # Completed grading periods (periods whose end_date is in the past)
-        today = date.today()
-        completed_periods = GradingPeriod.objects.filter(
-            academic_year=academic_year,
-            end_date__lte=today,
-        ).order_by("order")
-
-        if not completed_periods.exists():
-            self.stdout.write(
-                "No completed grading periods; skipping risk computation."
+        quarter = resolve_quarter(
+            academic_year,
+            quarter_id=options.get("quarter_id"),
+            order=options.get("quarter"),
+        )
+        if quarter is None:
+            self.stderr.write(
+                f"No completed quarter found for {academic_year.name}; "
+                "cannot compute risk."
+            )
+            return
+        if quarter.end_date > date.today():
+            self.stderr.write(
+                f"{quarter.name} has not ended yet; the guide processes "
+                "completed quarters only."
             )
             return
 
-        # A trained estimator is required. Never fall back to a placeholder.
-        stored = load_stored_model()
+        stored = load_model_for_quarter(quarter.order)
         if stored is None:
             self.stderr.write(
-                "No active risk model is stored. Run "
-                "`manage.py train_risk_model` first; refusing to compute risk "
-                "without one."
+                f"No active model for Q{quarter.order}. The rule score and "
+                "label will still be computed; the model category and Risk "
+                f"Index stay unavailable. Train one with "
+                f"`manage.py train_risk_model --quarter-id {quarter.id}`."
             )
-            return
-        model, _metadata = stored
+            model = None
+            metadata = {}
+        else:
+            model, metadata = stored
 
-        if academic_year.id != getattr(_metadata.get("academic_year_id"), "hex", None):
-            # Not fatal. A model trained on last year's cohort still produces a
-            # score, but the operator should know which year it learned from.
-            trained_year = _metadata.get("academic_year_name")
-            if trained_year and trained_year != academic_year.name:
-                self.stderr.write(
-                    f"Warning: the stored model was trained against "
-                    f"{trained_year}, not {academic_year.name}."
-                )
-
-        # All active students (optionally scoped by academic year via enrollment)
         students = StudentProfile.objects.filter(is_active=True)
-
         self.stdout.write(
-            f"Computing risk for {students.count()} students across "
-            f"{completed_periods.count()} completed period(s) of "
-            f"{academic_year.name}."
+            f"Computing Q{quarter.order} ({quarter.name}) of "
+            f"{academic_year.name} for {students.count()} student(s)."
         )
 
         processed = 0
         alerts = 0
-        insufficient = 0
+        held = 0
         dry_run = options.get("dry_run", False)
 
         for student in students:
-            features = compute_student_features(
-                student, list(completed_periods), academic_year
-            )
+            inputs = compute_quarter_inputs(student, quarter)
 
-            if features.get("computation_status") == "insufficient_data":
+            if inputs.get("computation_status") != "ready":
+                held += 1
+                processed += 1
                 if not dry_run:
+                    held_prediction = held_result(
+                        inputs,
+                        "missing required record(s): "
+                        + ", ".join(inputs.get("missing") or []),
+                    )
                     integrate_risk_result(
                         student,
-                        {
-                            "computation_status": "insufficient_data",
-                            "risk_level": None,
-                            "risk_score": None,
-                            "explanation": {},
-                        },
-                        model_version="v1",
-                        feature_snapshot=features,
+                        held_prediction,
+                        model_version=held_prediction["model_version"],
+                        feature_snapshot=inputs,
                         dispatch_notifications=False,
                     )
-                insufficient += 1
-                processed += 1
                 continue
 
-            prediction = predict_single(model, features, "v1")
-
-            if not dry_run:
-                result = integrate_risk_result(
-                    student,
-                    prediction,
-                    model_version="v1",
-                    feature_snapshot=features,
-                    dispatch_notifications=True,
-                )
-                if result.state_changed:
-                    alerts += 1
+            rule = score_rule(inputs)
+            if model is None:
+                model_result = {
+                    "model_status": "unavailable",
+                    "reason": "no_model_for_quarter",
+                    "model_version": model_version_for_quarter(quarter.order),
+                }
             else:
+                model_result = predict(model, metadata, inputs)
+
+            prediction = build_prediction(inputs, rule, model_result)
+            processed += 1
+
+            if dry_run:
                 self.stdout.write(
                     f"  (dry-run) {student.user.get_full_name()}: "
-                    f"{prediction.get('risk_level')} "
-                    f"score={prediction.get('risk_score')}"
+                    f"rule={rule['label']} S={rule['score']} "
+                    f"model={model_result.get('category')} "
+                    f"index={model_result.get('index')} "
+                    f"source={prediction['category_source']}"
                 )
-            processed += 1
+                continue
+
+            result = integrate_risk_result(
+                student,
+                prediction,
+                model_version=prediction["model_version"],
+                feature_snapshot=inputs,
+                dispatch_notifications=True,
+            )
+            if result.state_changed:
+                alerts += 1
 
         self.stdout.write(
             self.style.SUCCESS(
-                f"Done: {processed} processed, {alerts} actionable alerts, "
-                f"{insufficient} insufficient-data."
+                f"Done Q{quarter.order}: {processed} processed, {alerts} "
+                f"actionable alerts, {held} held for missing required records."
             )
         )
